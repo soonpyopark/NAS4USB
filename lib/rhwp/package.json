@@ -1,0 +1,14 @@
+{
+  "name": "@educowork/rhwp",
+  "version": "0.7.17",
+  "private": true,
+  "type": "module",
+  "description": "Adapter for @rhwp/editor (https://github.com/edwardkim/rhwp)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/edwardkim/rhwp.git"
+  },
+  "dependencies": {
+    "@rhwp/editor": "^0.7.17"
+  }
+}

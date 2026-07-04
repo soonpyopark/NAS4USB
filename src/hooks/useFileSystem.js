@@ -1,0 +1,110 @@
+import { useCallback, useEffect, useState } from 'react';
+import { joinRelativePath, readFileAsBase64 } from '../lib/fsPaths.js';
+import { buildNewFileContent, resolveNewFileName } from '../lib/files/newFileFactory.js';
+import { convertHwpBase64ToHwpx, isHwpFileName, toHwpxFileName } from '@educowork/rhwp/hwpConvert.js';
+
+export function useFileSystem(currentPath) {
+  const [entries, setEntries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const result = await window.educowork.fs.readDir(currentPath);
+      setEntries(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to read directory');
+      setEntries([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [currentPath]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  const mkdir = useCallback(
+    async (name) => {
+      await window.educowork.fs.mkdir(joinRelativePath(currentPath, name));
+    },
+    [currentPath],
+  );
+
+  const createFile = useCallback(
+    async (name, base64 = '') => {
+      await window.educowork.fs.writeFile(joinRelativePath(currentPath, name), base64);
+    },
+    [currentPath],
+  );
+
+  const createNewTypedFile = useCallback(
+    async (type) => {
+      const existingNames = entries.map((entry) => entry.name);
+      const fileName = resolveNewFileName(existingNames, type);
+      const base64 = await buildNewFileContent(type);
+      await createFile(fileName, base64);
+      return fileName;
+    },
+    [createFile, entries],
+  );
+
+  const remove = useCallback(async (relativePath) => {
+    await window.educowork.fs.delete(relativePath);
+  }, []);
+
+  const rename = useCallback(async (fromRelative, toRelative) => {
+    await window.educowork.fs.rename(fromRelative, toRelative);
+  }, []);
+
+  const copyTo = useCallback(async (fromRelative, toRelative) => {
+    await window.educowork.fs.copy(fromRelative, toRelative);
+  }, []);
+
+  const moveTo = useCallback(async (fromRelative, toRelative) => {
+    await window.educowork.fs.move(fromRelative, toRelative);
+  }, []);
+
+  const uploadFiles = useCallback(
+    async (/** @type {File[]} */ files) => {
+      for (const file of files) {
+        let base64 = await readFileAsBase64(file);
+        let targetName = file.name;
+
+        if (isHwpFileName(file.name)) {
+          base64 = await convertHwpBase64ToHwpx(base64, file.name);
+          targetName = toHwpxFileName(file.name);
+        }
+
+        await window.educowork.fs.writeFile(joinRelativePath(currentPath, targetName), base64);
+      }
+    },
+    [currentPath],
+  );
+
+  const stat = useCallback(async (relativePath) => window.educowork.fs.stat(relativePath), []);
+
+  const openInSystem = useCallback(async (relativePath) => {
+    await window.educowork.fs.openPath(relativePath);
+  }, []);
+
+  return {
+    entries,
+    loading,
+    error,
+    refresh,
+    mkdir,
+    createFile,
+    createNewTypedFile,
+    remove,
+    rename,
+    copyTo,
+    moveTo,
+    uploadFiles,
+    stat,
+    openInSystem,
+  };
+}

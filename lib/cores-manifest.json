@@ -1,0 +1,11 @@
+{
+  "updatedAt": "2026-07-04T14:30:00.000Z",
+  "cores": {
+    "rhwp": {
+      "version": "0.7.17",
+      "updatedAt": "2026-07-04T12:10:00.000Z",
+      "method": "npm",
+      "repository": "https://github.com/edwardkim/rhwp"
+    }
+  }
+}
