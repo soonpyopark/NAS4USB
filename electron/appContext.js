@@ -33,12 +33,15 @@ export function getTempPath() {
 }
 
 export function resolvePortablePath(relativePath = '') {
-  const dataRoot = getDataRoot();
+  const dataRoot = path.resolve(getDataRoot());
   const normalized = path.normalize(relativePath || '.');
   const absolute = path.resolve(dataRoot, normalized);
-  if (!absolute.startsWith(dataRoot)) {
+  const relative = path.relative(dataRoot, absolute);
+
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
     throw new Error('Path traversal is not allowed.');
   }
+
   return absolute;
 }
 

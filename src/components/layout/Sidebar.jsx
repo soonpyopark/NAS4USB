@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import ContextMenu from '../explorer/ContextMenu.jsx';
 import FilePropertiesDialog from '../explorer/FilePropertiesDialog.jsx';
 import NewFileDialog from '../explorer/NewFileDialog.jsx';
+import NewFolderDialog from '../explorer/NewFolderDialog.jsx';
 import DirectoryTree from './DirectoryTree.jsx';
 import SidebarToolbar from './SidebarToolbar.jsx';
 import { useDirectoryTree } from '../../hooks/useDirectoryTree.js';
@@ -28,6 +29,7 @@ export default function Sidebar({
   const [propertiesEntry, setPropertiesEntry] = useState(null);
   const [propertiesStat, setPropertiesStat] = useState(null);
   const [newFileDialogOpen, setNewFileDialogOpen] = useState(false);
+  const [newFolderDialogOpen, setNewFolderDialogOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
   const uploadInputRef = useRef(null);
@@ -42,10 +44,12 @@ export default function Sidebar({
     setSearchQuery('');
   }, [currentPath]);
 
-  const handleCreateFolder = async () => {
-    const name = window.prompt('새 폴더 이름');
-    if (!name?.trim()) return;
-    await fs.mkdir(name.trim());
+  const handleCreateFolder = () => {
+    setNewFolderDialogOpen(true);
+  };
+
+  const handleCreateFolderConfirm = async (name) => {
+    await fs.createFolder(name);
     await tree.expandPath(currentPath);
     await notifyChange();
   };
@@ -277,6 +281,12 @@ export default function Sidebar({
         open={newFileDialogOpen}
         onClose={() => setNewFileDialogOpen(false)}
         onSelect={handleCreateTypedFile}
+      />
+
+      <NewFolderDialog
+        open={newFolderDialogOpen}
+        onClose={() => setNewFolderDialogOpen(false)}
+        onConfirm={handleCreateFolderConfirm}
       />
     </aside>
   );

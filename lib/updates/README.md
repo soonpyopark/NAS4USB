@@ -4,6 +4,7 @@
 
 | 코어 | GitHub | npm |
 |------|--------|-----|
-| HWPX (rhwp) | https://github.com/edwardkim/rhwp | `@rhwp/editor` |
+| HWPX (rhwp) | https://github.com/edwardkim/rhwp | `@rhwp/core`, `@rhwp/editor` |
+| Spreadsheet (FortuneSheet) | https://github.com/ruilisi/fortune-sheet | `@fortune-sheet/react` |
 
-어댑터 코드: `lib/rhwp/`
+어댑터 코드: `lib/rhwp/`, `src/lib/xlsx/`

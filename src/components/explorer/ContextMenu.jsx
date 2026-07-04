@@ -1,4 +1,35 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+
+const VIEWPORT_PADDING = 8;
+
+/**
+ * @param {number} x
+ * @param {number} y
+ * @param {number} width
+ * @param {number} height
+ */
+function resolveMenuPosition(x, y, width, height) {
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+
+  let left = x;
+  let top = y;
+
+  if (left + width > viewportWidth - VIEWPORT_PADDING) {
+    left = x - width;
+  }
+  if (top + height > viewportHeight - VIEWPORT_PADDING) {
+    top = y - height;
+  }
+
+  const maxLeft = Math.max(VIEWPORT_PADDING, viewportWidth - width - VIEWPORT_PADDING);
+  const maxTop = Math.max(VIEWPORT_PADDING, viewportHeight - height - VIEWPORT_PADDING);
+
+  return {
+    left: Math.min(Math.max(VIEWPORT_PADDING, left), maxLeft),
+    top: Math.min(Math.max(VIEWPORT_PADDING, top), maxTop),
+  };
+}
 
 /**
  * @param {{
@@ -10,6 +41,18 @@ import { useEffect, useRef } from 'react';
  */
 export default function ContextMenu({ x, y, items, onClose }) {
   const menuRef = useRef(null);
+  const [position, setPosition] = useState(() => ({ left: x, top: y }));
+
+  useLayoutEffect(() => {
+    const menu = menuRef.current;
+    if (!menu) {
+      setPosition({ left: x, top: y });
+      return;
+    }
+
+    const { width, height } = menu.getBoundingClientRect();
+    setPosition(resolveMenuPosition(x, y, width, height));
+  }, [x, y, items]);
 
   useEffect(() => {
     const handlePointerDown = (event) => {
@@ -35,7 +78,7 @@ export default function ContextMenu({ x, y, items, onClose }) {
     <div
       ref={menuRef}
       className="fixed z-50 min-w-[180px] rounded-lg border border-nas-border bg-white py-1 shadow-lg"
-      style={{ left: x, top: y }}
+      style={{ left: position.left, top: position.top }}
       role="menu"
     >
       {items.map((item) => (

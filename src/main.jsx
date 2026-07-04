@@ -13,10 +13,7 @@ root.render(
 );
 
 initEducowork()
-  .then(async () => {
-    const { preloadWb4sEditor } = await import('@educowork/wb4s');
-    void preloadWb4sEditor();
-
+  .then(() => {
     root.render(
       <React.StrictMode>
         <App />

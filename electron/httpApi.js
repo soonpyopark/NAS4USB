@@ -10,6 +10,7 @@ import * as fsService from './fsService.js';
 import {
   closeWorkspace,
   commitWorkspace,
+  renameWorkspace,
   openWorkspace,
   readWorkspaceFile,
   writeWorkspaceFile,
@@ -155,6 +156,16 @@ export async function handleHttpApiRequest(req, res) {
     if (method === 'POST' && url.pathname === '/api/workspace/commit') {
       const body = await readJsonBody(req);
       sendJson(res, 200, await commitWorkspace(body.sessionId, getDataRoot()));
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/workspace/rename') {
+      const body = await readJsonBody(req);
+      sendJson(
+        res,
+        200,
+        await renameWorkspace(body.sessionId, body.relativePath, getDataRoot()),
+      );
       return true;
     }
 

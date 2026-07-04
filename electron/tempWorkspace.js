@@ -68,6 +68,53 @@ export async function commitWorkspace(sessionId, dataRoot) {
   return { relativePath: session.relativePath };
 }
 
+export async function renameWorkspace(sessionId, newRelativePath, dataRoot) {
+  const session = getSession(sessionId);
+  const normalized = newRelativePath.replace(/\\/g, '/');
+
+  if (session.relativePath === normalized) {
+    return {
+      relativePath: session.relativePath,
+      fileName: path.basename(session.relativePath),
+    };
+  }
+
+  const oldDestination = path.join(dataRoot, session.relativePath);
+  const newDestination = path.join(dataRoot, normalized);
+  await fs.mkdir(path.dirname(newDestination), { recursive: true });
+  await fs.copyFile(session.workingPath, newDestination);
+
+  try {
+    await fs.unlink(oldDestination);
+  } catch (error) {
+    if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')) {
+      throw error;
+    }
+  }
+
+  const newFileName = path.basename(normalized);
+  const newWorkingPath = path.join(session.sessionDir, newFileName);
+  if (session.workingPath !== newWorkingPath) {
+    await fs.rename(session.workingPath, newWorkingPath);
+    session.workingPath = newWorkingPath;
+  }
+
+  session.relativePath = normalized;
+  session.dirty = false;
+
+  await fs.writeFile(
+    path.join(session.sessionDir, '.meta.json'),
+    JSON.stringify({
+      relativePath: normalized,
+      fileName: newFileName,
+      openedAt: new Date().toISOString(),
+    }),
+    'utf8',
+  );
+
+  return { relativePath: normalized, fileName: newFileName };
+}
+
 export async function closeWorkspace(sessionId) {
   const session = sessions.get(sessionId);
   if (!session) return false;

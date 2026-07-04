@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { joinRelativePath, readFileAsBase64 } from '../lib/fsPaths.js';
+import { joinRelativePath, readFileAsBase64, resolveUniqueName, validateFolderName } from '../lib/fsPaths.js';
 import { buildNewFileContent, resolveNewFileName } from '../lib/files/newFileFactory.js';
 import { convertHwpBase64ToHwpx, isHwpFileName, toHwpxFileName } from '@educowork/rhwp/hwpConvert.js';
 
@@ -32,6 +32,21 @@ export function useFileSystem(currentPath) {
       await window.educowork.fs.mkdir(joinRelativePath(currentPath, name));
     },
     [currentPath],
+  );
+
+  const createFolder = useCallback(
+    async (name) => {
+      const validation = validateFolderName(name);
+      if (!validation.ok) {
+        throw new Error(validation.error);
+      }
+
+      const existingNames = entries.filter((entry) => entry.isDirectory).map((entry) => entry.name);
+      const folderName = resolveUniqueName(existingNames, validation.name);
+      await window.educowork.fs.mkdir(joinRelativePath(currentPath, folderName));
+      return folderName;
+    },
+    [currentPath, entries],
   );
 
   const createFile = useCallback(
@@ -97,6 +112,7 @@ export function useFileSystem(currentPath) {
     error,
     refresh,
     mkdir,
+    createFolder,
     createFile,
     createNewTypedFile,
     remove,

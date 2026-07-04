@@ -5,6 +5,7 @@ import FileExplorerToolbar from './FileExplorerToolbar.jsx';
 import FileList from './FileList.jsx';
 import FilePropertiesDialog from './FilePropertiesDialog.jsx';
 import NewFileDialog from './NewFileDialog.jsx';
+import NewFolderDialog from './NewFolderDialog.jsx';
 import { useFileClipboard } from '../../hooks/useFileClipboard.js';
 import { useFileSelection } from '../../hooks/useFileSelection.js';
 import { useFileSystem } from '../../hooks/useFileSystem.js';
@@ -22,8 +23,7 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
     loading,
     error,
     refresh,
-    mkdir,
-    createFile,
+    createFolder,
     createNewTypedFile,
     remove,
     rename,
@@ -54,6 +54,7 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
   const [propertiesEntry, setPropertiesEntry] = useState(null);
   const [propertiesStat, setPropertiesStat] = useState(null);
   const [newFileDialogOpen, setNewFileDialogOpen] = useState(false);
+  const [newFolderDialogOpen, setNewFolderDialogOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [lastSelectedPath, setLastSelectedPath] = useState(null);
 
@@ -93,10 +94,12 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
     onNavigate(getParentPath(currentPath));
   };
 
-  const handleCreateFolder = async () => {
-    const name = window.prompt('새 폴더 이름');
-    if (!name?.trim()) return;
-    await mkdir(name.trim());
+  const handleCreateFolder = () => {
+    setNewFolderDialogOpen(true);
+  };
+
+  const handleCreateFolderConfirm = async (name) => {
+    await createFolder(name);
     await refreshAll();
   };
 
@@ -423,6 +426,12 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
         open={newFileDialogOpen}
         onClose={() => setNewFileDialogOpen(false)}
         onSelect={handleCreateTypedFile}
+      />
+
+      <NewFolderDialog
+        open={newFolderDialogOpen}
+        onClose={() => setNewFolderDialogOpen(false)}
+        onConfirm={handleCreateFolderConfirm}
       />
     </div>
   );

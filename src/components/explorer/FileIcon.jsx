@@ -73,7 +73,7 @@ export default function FileIcon({ entry, className = 'h-5 w-5' }) {
     return <WhiteboardSvg className={`${className} ${ICON_COLORS.wb4s}`} />;
   }
 
-  if (entry.extension === 'xlsx') {
+  if (entry.extension === 'xlsx' || entry.extension === 'xls') {
     return <SheetSvg className={`${className} ${ICON_COLORS.xlsx}`} />;
   }
 

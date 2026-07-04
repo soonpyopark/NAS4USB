@@ -1,6 +1,7 @@
 import { applyDeltaToString, computeTextDiff } from '../textDiff.js';
 
 const LOCAL_ORIGIN = Symbol('educowork-local-editor');
+const SEED_ORIGIN = 'seed';
 
 /**
  * @param {unknown} result
@@ -17,9 +18,13 @@ async function awaitSetTextResult(result) {
  *
  * @param {import('yjs').Doc} ydoc
  * @param {{ getText: () => string, setText: (text: string, origin?: string) => void | Promise<void>, onChange: (cb: (text: string, origin?: string) => void) => () => void }} editor
- * @param {{ fieldName?: string, initialText?: string, synced?: boolean }} [options]
+ * @param {{ fieldName?: string, initialText?: string, synced?: boolean, deferSeedUntilSync?: boolean }} [options]
  */
-export function bindTextEditor(ydoc, editor, { fieldName = 'content', initialText = '', synced = true } = {}) {
+export function bindTextEditor(
+  ydoc,
+  editor,
+  { fieldName = 'content', initialText = '', synced = true, deferSeedUntilSync = false } = {},
+) {
   const ytext = ydoc.getText(fieldName);
   const meta = ydoc.getMap('meta');
   const useFullReplace = fieldName === 'documentBase64';
@@ -71,28 +76,34 @@ export function bindTextEditor(ydoc, editor, { fieldName = 'content', initialTex
         ytext.insert(0, initialText);
       }
       meta.set(`${fieldName}:seeded`, true);
-    }, 'seed');
+    }, SEED_ORIGIN);
   };
 
-  if (ytext.length > 0) {
-    const remoteText = ytext.toString();
-    if (initialText && remoteText.length === 0) {
-      ydoc.transact(() => {
-        if (ytext.length > 0) {
-          ytext.delete(0, ytext.length);
-        }
-        ytext.insert(0, initialText);
-        meta.set(`${fieldName}:seeded`, true);
-      }, 'seed');
-      void applyRemoteText(initialText);
-    } else {
-      void applyRemoteText(remoteText);
+  const bootstrapFromYjs = () => {
+    if (ytext.length > 0) {
+      void applyRemoteText(ytext.toString());
+      return;
     }
-  } else if (initialText && editor.getText() !== initialText) {
-    void applyRemoteText(initialText);
-  }
 
-  seedFromFile();
+    seedFromFile();
+
+    if (ytext.length > 0) {
+      void applyRemoteText(ytext.toString());
+      return;
+    }
+
+    if (initialText && editor.getText() !== initialText) {
+      void applyRemoteText(initialText);
+    }
+  };
+
+  if (deferSeedUntilSync) {
+    if (initialText && editor.getText() !== initialText) {
+      void applyRemoteText(initialText);
+    }
+  } else {
+    bootstrapFromYjs();
+  }
 
   const unobserveEditor = editor.onChange((text, origin) => {
     if (origin === 'yjs' || applyingRemote) return;
@@ -103,7 +114,9 @@ export function bindTextEditor(ydoc, editor, { fieldName = 'content', initialTex
   });
 
   const observeYText = (event) => {
-    if (event.transaction.origin === LOCAL_ORIGIN) return;
+    if (event.transaction.origin === LOCAL_ORIGIN || event.transaction.origin === SEED_ORIGIN) {
+      return;
+    }
 
     const nextText = applyDeltaToString(localText, event.delta);
     if (nextText === localText) return;
@@ -115,15 +128,7 @@ export function bindTextEditor(ydoc, editor, { fieldName = 'content', initialTex
 
   return {
     resync() {
-      if (ytext.length > 0) {
-        void applyRemoteText(ytext.toString());
-        return;
-      }
-
-      seedFromFile();
-      if (ytext.length > 0) {
-        void applyRemoteText(ytext.toString());
-      }
+      bootstrapFromYjs();
     },
 
     destroy() {

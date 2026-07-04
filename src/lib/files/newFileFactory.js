@@ -1,5 +1,5 @@
 import JSZip from 'jszip';
-import { createEmptyWb4sDocument, utf8ToBase64 } from '../../../lib/wb4s/wb4sDocument.js';
+import { createEmptyWb4sDocument, utf8ToBase64 } from '../../wb4s/document.js';
 import { bytesToBase64 } from '../bytes.js';
 import { resolveUniqueName } from '../fsPaths.js';
 

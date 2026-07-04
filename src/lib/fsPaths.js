@@ -6,6 +6,30 @@ export function joinRelativePath(currentPath, name) {
   return currentPath === '.' ? name : `${currentPath}/${name}`;
 }
 
+const INVALID_FOLDER_NAME_PATTERN = /[<>:"/\\|?*\u0000-\u001f]/g;
+
+/**
+ * @param {string} name
+ * @returns {{ ok: true, name: string } | { ok: false, error: string }}
+ */
+export function validateFolderName(name) {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    return { ok: false, error: '폴더 이름을 입력해 주세요.' };
+  }
+
+  const sanitized = trimmed.replace(INVALID_FOLDER_NAME_PATTERN, '').replace(/[. ]+$/g, '');
+  if (!sanitized) {
+    return { ok: false, error: '사용할 수 없는 문자가 포함되어 있습니다.' };
+  }
+
+  if (sanitized === '.' || sanitized === '..') {
+    return { ok: false, error: '사용할 수 없는 폴더 이름입니다.' };
+  }
+
+  return { ok: true, name: sanitized };
+}
+
 /**
  * @param {string} relativePath
  */

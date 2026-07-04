@@ -24,6 +24,8 @@ contextBridge.exposeInMainWorld('educowork', {
     read: (sessionId) => ipcRenderer.invoke('workspace:read', sessionId),
     write: (sessionId, base64) => ipcRenderer.invoke('workspace:write', sessionId, base64),
     commit: (sessionId) => ipcRenderer.invoke('workspace:commit', sessionId),
+    rename: (sessionId, relativePath) =>
+      ipcRenderer.invoke('workspace:rename', sessionId, relativePath),
     close: (sessionId) => ipcRenderer.invoke('workspace:close', sessionId),
   },
 

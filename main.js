@@ -20,6 +20,7 @@ import {
   readWorkspaceFile,
   writeWorkspaceFile,
   commitWorkspace,
+  renameWorkspace,
   closeWorkspace,
   cleanupAllSessions,
 } from './electron/tempWorkspace.js';
@@ -137,6 +138,10 @@ ipcMain.handle('workspace:read', async (_event, sessionId) => readWorkspaceFile(
 ipcMain.handle('workspace:write', async (_event, sessionId, base64) => writeWorkspaceFile(sessionId, base64));
 
 ipcMain.handle('workspace:commit', async (_event, sessionId) => commitWorkspace(sessionId, getDataRoot()));
+
+ipcMain.handle('workspace:rename', async (_event, sessionId, newRelativePath) =>
+  renameWorkspace(sessionId, newRelativePath, getDataRoot()),
+);
 
 ipcMain.handle('workspace:close', async (_event, sessionId) => closeWorkspace(sessionId));
 

@@ -1,0 +1,120 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --app-header-padding-y: 0.75rem;
+  --app-header-padding-x: 1.5rem;
+  --app-header-content-height: 32px;
+  --app-header-min-height: calc(var(--app-header-padding-y) * 2 + var(--app-header-content-height));
+}
+
+html.wb4s-embed-mode,
+html.wb4s-embed-mode body,
+html.wb4s-embed-mode #root,
+html.wb4s-embed-mode .app-shell,
+html.wb4s-embed-mode .app.editor {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+body {
+  font-family:
+    'Segoe UI',
+    system-ui,
+    -apple-system,
+    sans-serif;
+  background: #eef1f6;
+  color: #1a1a2e;
+  -webkit-font-smoothing: antialiased;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input,
+textarea,
+[contenteditable='true'],
+.canvas-text-editor {
+  -webkit-touch-callout: default;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Embed bundle does not import Gallery.css — keep confirm dialogs as fixed overlays. */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.32);
+  padding: 1rem;
+}
+
+.modal-dialog {
+  width: 100%;
+  max-width: 420px;
+  background: #ffffff;
+  border-radius: 4px;
+  padding: 1.5rem 1.75rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+}
+
+.modal-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 0.75rem;
+  line-height: 1.3;
+}
+
+.modal-body {
+  font-size: 0.875rem;
+  color: #605e5c;
+  line-height: 1.5;
+  margin: 0 0 1.5rem;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.modal-btn {
+  min-width: 80px;
+  padding: 0.375rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.modal-btn--primary {
+  background: #0078d4;
+  color: #ffffff;
+  border-color: #0078d4;
+}
+
+.modal-btn--primary:hover {
+  background: #106ebe;
+  border-color: #106ebe;
+}
+
+.modal-btn--secondary {
+  background: #ffffff;
+  color: #323130;
+  border-color: #8a8886;
+}
+
+.modal-btn--secondary:hover {
+  background: #f3f2f1;
+}

@@ -61,3 +61,31 @@ export function normalizeWb4sDocument(text) {
   }
   return createEmptyWb4sDocument();
 }
+
+/**
+ * @param {string} fileName
+ */
+export function getWb4sFileStem(fileName) {
+  return String(fileName).replace(/\.wb4s$/i, '');
+}
+
+/**
+ * @param {string} title
+ */
+export function titleToWb4sFileName(title) {
+  const trimmed = String(title ?? '').trim() || '제목 없음';
+  const safe = trimmed.replace(/[\\/:*?"<>|]/g, '_').replace(/[. ]+$/g, '');
+  return `${safe || '제목 없음'}.wb4s`;
+}
+
+/**
+ * @param {string} json
+ * @param {string} title
+ */
+export function wb4sDocumentWithTitle(json, title) {
+  const normalized = normalizeWb4sDocument(json);
+  const parsed = JSON.parse(normalized);
+  parsed.title = title;
+  parsed.exportedAt = new Date().toISOString();
+  return JSON.stringify(parsed, null, 2);
+}

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useUserProfile } from '../../hooks/useUserProfile.js';
 import { loadSyncHost, saveSyncHost } from '../../lib/syncHost.js';
+import { APP_VERSION } from '../../../shared/constants.js';
 
 function SyncBadge({ syncInfo, loading }) {
   if (loading) {
@@ -116,22 +117,18 @@ function UserNameField({ loading, saving, displayName, onChange, onCommit, onKey
   );
 }
 
-export default function TopBar({
-  syncInfo,
-  infoLoading,
-  departments,
-  departmentsLoading,
-  selectedDepartment,
-  onHome,
-  onDepartmentChange,
-}) {
+export default function TopBar({ syncInfo, infoLoading, onHome }) {
   const [updating, setUpdating] = useState(false);
   const [updateResult, setUpdateResult] = useState(null);
   const userProfile = useUserProfile();
 
   const handleEditorUpdate = async () => {
     const confirmed = window.confirm(
-      'HWPX(rhwp) 에디터 코어를 USB에 업데이트할까요?\n\nGit submodule 또는 lib/updates/ 패키지를 사용합니다.',
+      '에디터 코어를 USB에 업데이트할까요?\n\n' +
+        '- HWPX (rhwp): npm @rhwp/core, @rhwp/editor\n' +
+        '- 화이트보드 (wb4s): Git submodule / vendor\n' +
+        '- 엑셀 (FortuneSheet): npm @fortune-sheet/react\n\n' +
+        'Git submodule 또는 lib/updates/ 패키지를 사용하는 코어는 해당 방식으로 반영됩니다.',
     );
     if (!confirmed) return;
 
@@ -178,24 +175,14 @@ export default function TopBar({
             <HomeIcon className="h-4 w-4" />
           </button>
 
-          <label className="sr-only" htmlFor="department-select">
-            부서 선택
-          </label>
-          <select
-            id="department-select"
-            value={selectedDepartment ?? ''}
-            onChange={(event) => onDepartmentChange(event.target.value)}
-            disabled={departmentsLoading}
-            className="h-8 min-w-[132px] max-w-[180px] rounded-md border border-nas-border bg-white px-2 text-sm text-slate-700 outline-none transition-colors hover:border-slate-300 focus:border-nas-accent focus:ring-1 focus:ring-nas-accent disabled:cursor-wait disabled:opacity-60"
-          >
-            <option value="">{departmentsLoading ? '불러오는 중…' : '부서 선택'}</option>
-            {departments.map((code) => (
-              <option key={code} value={code}>
-                {code}
-              </option>
-            ))}
-          </select>
+          <div className="flex min-w-0 items-baseline gap-2">
+            <span className="truncate text-sm font-semibold text-slate-800">USB Storage</span>
+            <span className="shrink-0 text-xs font-medium text-slate-400">v{APP_VERSION}</span>
+          </div>
+        </div>
 
+        <div className="flex items-center gap-2">
+          <SyncBadge syncInfo={syncInfo} loading={infoLoading} />
           <UserNameField
             loading={userProfile.loading}
             saving={userProfile.saving}
@@ -204,16 +191,12 @@ export default function TopBar({
             onCommit={userProfile.handleCommit}
             onKeyDown={userProfile.handleKeyDown}
           />
-        </div>
-
-        <div className="flex items-center gap-2">
-          <SyncBadge syncInfo={syncInfo} loading={infoLoading} />
           <button
             type="button"
             className="inline-flex items-center rounded-md border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-700 transition-colors hover:border-sky-300 hover:bg-sky-100 disabled:cursor-wait disabled:opacity-50"
             onClick={handleEditorUpdate}
             disabled={updating}
-            title="rhwp 코어를 USB(lib/)에 반영"
+            title="HWPX · WB4S · FortuneSheet 코어를 USB에 반영"
           >
             {updating ? '업데이트 중…' : '에디터 업데이트'}
           </button>

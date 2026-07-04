@@ -1,4 +1,4 @@
-/** @typedef {'rhwp' | 'wb4s'} EditorCoreId */
+/** @typedef {'rhwp' | 'wb4s' | 'fortune-sheet'} EditorCoreId */
 
 /** @typedef {Object} EditorCoreDefinition
  * @property {EditorCoreId} id
@@ -7,7 +7,8 @@
  * @property {string} submodulePath
  * @property {string} updatePackageDir
  * @property {string} repositoryUrl
- * @property {string} npmPackage
+ * @property {string | null} [npmPackage]
+ * @property {string[]} [npmPackages]
  */
 
 /** @type {EditorCoreDefinition[]} */
@@ -20,15 +21,26 @@ export const EDITOR_CORES = [
     updatePackageDir: 'lib/updates/rhwp',
     repositoryUrl: 'https://github.com/edwardkim/rhwp',
     npmPackage: '@rhwp/editor',
+    npmPackages: ['@rhwp/core', '@rhwp/editor'],
   },
   {
     id: 'wb4s',
     label: 'Whiteboard (.wb4s)',
-    libDir: 'lib/wb4s',
+    libDir: 'src/wb4s',
     submodulePath: '.cache/wb4s-src',
     updatePackageDir: 'vendor/wb4s-educowork-overlay',
     repositoryUrl: 'https://github.com/soonpyopark/WhiteBoard4Share',
     npmPackage: null,
+  },
+  {
+    id: 'fortune-sheet',
+    label: 'Spreadsheet (.xlsx/.xls)',
+    libDir: 'src/lib/xlsx',
+    submodulePath: 'src/lib/xlsx',
+    updatePackageDir: 'lib/updates/fortune-sheet',
+    repositoryUrl: 'https://github.com/ruilisi/fortune-sheet',
+    npmPackage: '@fortune-sheet/react',
+    npmPackages: ['@fortune-sheet/react'],
   },
 ];
 

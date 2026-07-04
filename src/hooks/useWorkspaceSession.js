@@ -62,6 +62,12 @@ export function useWorkspaceSession(relativePath) {
     return window.educowork.workspace.commit(id);
   }, []);
 
+  const rename = useCallback(async (newRelativePath) => {
+    const id = sessionRef.current;
+    if (!id) throw new Error('Workspace session is not ready.');
+    return window.educowork.workspace.rename(id, newRelativePath);
+  }, []);
+
   const close = useCallback(async () => {
     const id = sessionRef.current;
     if (!id) return;
@@ -77,6 +83,7 @@ export function useWorkspaceSession(relativePath) {
     readBinary,
     writeBinary,
     commit,
+    rename,
     close,
     ready: Boolean(sessionId) && !loading,
   };

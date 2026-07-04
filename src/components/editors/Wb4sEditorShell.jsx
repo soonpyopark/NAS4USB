@@ -1,34 +1,41 @@
-import { useEffect, useRef, useState } from 'react';
-import EditorModal from './EditorModal.jsx';
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { useYjsSession } from '../../hooks/useYjsSession.js';
-import { useAwarenessPeerCount } from '../../hooks/useAwarenessPeerCount.js';
 import { useWorkspaceSession } from '../../hooks/useWorkspaceSession.js';
-import { getLanWsEndpoints, getSyncServerUrl } from '../../sync/buildWsUrl.js';
-import { loadWb4sModule } from '../../lib/wb4s/loadWb4s.js';
-import { base64ToUtf8, normalizeWb4sDocument, utf8ToBase64 } from '../../../lib/wb4s/wb4sDocument.js';
+import { getSyncServerUrl } from '../../sync/buildWsUrl.js';
+import {
+  base64ToUtf8,
+  getWb4sFileStem,
+  normalizeWb4sDocument,
+  titleToWb4sFileName,
+  utf8ToBase64,
+  wb4sDocumentWithTitle,
+} from '../../wb4s/document.js';
 import { loadUserDisplayName } from '../../lib/userProfile.js';
+import { getParentPath, joinRelativePath, resolveUniqueName } from '../../lib/fsPaths.js';
 
-const WB4S_VERSION = '1.0.2';
+const Wb4sEditorView = lazy(() => import('../../wb4s/Wb4sEditorView.jsx'));
 
-export default function Wb4sEditorShell({ relativePath, fileName, syncInfo, onClose }) {
+export default function Wb4sEditorShell({ relativePath, fileName, syncInfo, onClose, onRenamed }) {
   const workspace = useWorkspaceSession(relativePath);
-  const { status, synced, roomId, provider } = useYjsSession(relativePath, syncInfo, {
+  const collabPathRef = useRef(relativePath);
+  const relativePathRef = useRef(relativePath);
+  const fileNameRef = useRef(fileName);
+  const { roomId } = useYjsSession(collabPathRef.current, syncInfo, {
     syncReady: syncInfo != null,
   });
-  const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [contentReady, setContentReady] = useState(false);
   const [editorReady, setEditorReady] = useState(false);
-  const [collabReady, setCollabReady] = useState(false);
   const [userName, setUserName] = useState('사용자');
-  const [remotePeerCount, setRemotePeerCount] = useState(0);
-  const mountRef = useRef(null);
-  const editorRef = useRef(null);
+  const exportApiRef = useRef(null);
   const documentJsonRef = useRef('');
+  const closingRef = useRef(false);
+
+  relativePathRef.current = relativePath;
+  fileNameRef.current = fileName;
 
   useEffect(() => {
     let cancelled = false;
-    void loadWb4sModule();
     loadUserDisplayName().then((name) => {
       if (!cancelled) setUserName(name || '사용자');
     });
@@ -43,14 +50,14 @@ export default function Wb4sEditorShell({ relativePath, fileName, syncInfo, onCl
     let cancelled = false;
     setContentReady(false);
     setEditorReady(false);
-    setCollabReady(false);
     setLoadError(null);
+    exportApiRef.current = null;
 
     async function loadContent() {
       try {
         const base64 = await workspace.readBinary();
         if (cancelled) return;
-        const text = base64 ? base64ToUtf8(base64) : createEmptyFallback();
+        const text = base64 ? base64ToUtf8(base64) : createEmptyFallback(fileNameRef.current);
         documentJsonRef.current = normalizeWb4sDocument(text);
         setContentReady(true);
       } catch (err) {
@@ -67,154 +74,130 @@ export default function Wb4sEditorShell({ relativePath, fileName, syncInfo, onCl
     };
   }, [workspace.ready, workspace.sessionId, workspace.readBinary]);
 
-  useEffect(() => {
-    if (!contentReady) return undefined;
+  const handleEditorReady = useCallback((api) => {
+    exportApiRef.current = api;
+    setEditorReady(true);
+  }, []);
 
-    let cancelled = false;
-    let retryTimer = null;
-    let mountAttempts = 0;
+  const saveToHost = useCallback(async (titleOverride) => {
+    if (!workspace.ready || !exportApiRef.current) return;
+    const json = exportApiRef.current.exportDocument();
+    const normalized = titleOverride
+      ? wb4sDocumentWithTitle(json, titleOverride)
+      : normalizeWb4sDocument(json);
+    const base64 = utf8ToBase64(normalized);
+    await workspace.writeBinary(base64);
+    await workspace.commit();
+    documentJsonRef.current = normalized;
+  }, [workspace]);
 
-    async function mountEditor() {
-      if (cancelled || !mountRef.current) return;
-
-      try {
-        const wb4s = await loadWb4sModule();
-        if (cancelled || !mountRef.current) return;
-
-        mountRef.current.innerHTML = '';
-        const editor = await wb4s.mount(mountRef.current, {
-          fileName,
-          relativePath,
-          documentJson: documentJsonRef.current,
-          roomId,
-          syncServerUrl: getSyncServerUrl(syncInfo),
-          userName,
-          onLoadError: (err) => {
-            if (!cancelled) setLoadError(err.message);
-          },
-          onCollabStatus: (collabStatus) => {
-            if (cancelled) return;
-            setRemotePeerCount(Math.max(0, Number(collabStatus.remotePeerCount) || 0));
-            setCollabReady(Boolean(collabStatus.isReady && collabStatus.isSynced));
-          },
-        });
-
-        if (cancelled) {
-          editor.destroy?.();
-          return;
-        }
-
-        editorRef.current = editor;
-        setEditorReady(true);
-        setCollabReady(true);
-      } catch (err) {
-        if (!cancelled) {
-          setLoadError(err instanceof Error ? err.message : 'Failed to mount wb4s editor');
-        }
-      }
-    }
-
-    function tryMount() {
-      if (cancelled) return;
-      if (mountRef.current) {
-        void mountEditor();
-        return;
-      }
-      mountAttempts += 1;
-      if (mountAttempts > 40) {
-        setLoadError('wb4s 마운트 영역을 준비하지 못했습니다.');
-        return;
-      }
-      retryTimer = window.setTimeout(tryMount, 50);
-    }
-
-    tryMount();
-
-    return () => {
-      cancelled = true;
-      if (retryTimer) window.clearTimeout(retryTimer);
-      editorRef.current?.destroy?.();
-      editorRef.current = null;
-    };
-  }, [contentReady, fileName, relativePath, roomId, syncInfo, userName]);
-
-  const handleSave = async () => {
-    if (!workspace.ready || !editorRef.current) return;
-    setSaving(true);
+  const handleSaveToHost = useCallback(async () => {
     try {
-      const json = await editorRef.current.exportDocumentJson();
-      const base64 = utf8ToBase64(normalizeWb4sDocument(json));
-      await workspace.writeBinary(base64);
-      await workspace.commit();
-      documentJsonRef.current = json;
+      await saveToHost();
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Save failed');
-    } finally {
-      setSaving(false);
+      throw err;
     }
-  };
+  }, [saveToHost]);
 
-  const handleClose = async () => {
-    editorRef.current?.destroy?.();
+  const handleRenameTitle = useCallback(async (nextTitle) => {
+    try {
+      const trimmedTitle = nextTitle.trim() || '제목 없음';
+      const currentStem = getWb4sFileStem(fileNameRef.current);
+      if (trimmedTitle === currentStem) {
+        await saveToHost(trimmedTitle);
+        return;
+      }
+
+      const parent = getParentPath(relativePathRef.current);
+      const dirEntries = await window.educowork.fs.readDir(parent === '.' ? '.' : parent);
+      const existingNames = dirEntries
+        .map((entry) => entry.name)
+        .filter((name) => name !== fileNameRef.current);
+      const nextFileName = resolveUniqueName(existingNames, titleToWb4sFileName(trimmedTitle));
+      const nextRelativePath =
+        parent === '.' ? nextFileName : joinRelativePath(parent, nextFileName);
+
+      await saveToHost(trimmedTitle);
+      const result = await workspace.rename(nextRelativePath);
+
+      relativePathRef.current = result.relativePath;
+      fileNameRef.current = result.fileName;
+      onRenamed?.({ relativePath: result.relativePath, name: result.fileName });
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Rename failed');
+      throw err;
+    }
+  }, [onRenamed, saveToHost, workspace]);
+
+  const handleClose = useCallback(async () => {
+    if (closingRef.current) return;
+    closingRef.current = true;
+
+    try {
+      if (workspace.ready && exportApiRef.current) {
+        await saveToHost();
+      }
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Save failed');
+      closingRef.current = false;
+      return;
+    }
+
+    exportApiRef.current = null;
     await workspace.close();
     onClose();
-  };
+  }, [onClose, saveToHost, workspace]);
 
-  const peerCount = useAwarenessPeerCount(provider);
-  const iframePeerCount = remotePeerCount;
-  const effectiveRemotePeers = Math.max(
-    iframePeerCount,
-    peerCount != null ? Math.max(0, peerCount - 1) : 0,
-  );
-  const lanEndpoints = getLanWsEndpoints(syncInfo, roomId).join(' · ');
   const isLoading = !loadError && (workspace.loading || !contentReady || !editorReady);
 
   return (
-    <EditorModal
-      title={fileName}
-      subtitle={`WB4S · room ${roomId} · ${lanEndpoints}`}
-      status={status}
-      synced={synced && collabReady}
-      peerCount={peerCount != null ? peerCount + iframePeerCount : iframePeerCount + 1}
-      saving={saving}
-      onSave={handleSave}
-      onClose={handleClose}
-    >
+    <div className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-white">
       {(workspace.error || loadError) && (
-        <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
+        <div className="absolute left-4 right-4 top-4 z-20 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700 shadow-sm">
           {workspace.error || loadError}
         </div>
       )}
 
-      <div className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs text-nas-muted">
-        {loadError
-          ? 'WhiteBoard4Share 로드 실패'
-          : editorRef.current
-            ? effectiveRemotePeers > 0
-              ? `WhiteBoard4Share ${WB4S_VERSION} · LAN 협업 편집 (협업자 ${effectiveRemotePeers}명 · room ${roomId})`
-              : `WhiteBoard4Share ${WB4S_VERSION} · 화이트보드 LAN 협업 · room ${roomId} · USB 저장 시 .wb4s 유지`
-            : `WhiteBoard4Share ${WB4S_VERSION} · 편집기 초기화 중…`}
-      </div>
-
       <div className="relative flex min-h-0 flex-1 flex-col">
         {isLoading && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-white/80 text-sm text-nas-muted">
-            <span>화이트보드 로드 및 WhiteBoard4Share 마운트 중…</span>
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-white text-sm text-nas-muted">
+            <span>화이트보드 편집기 준비 중…</span>
           </div>
         )}
 
-        <div ref={mountRef} className="min-h-0 flex-1 overflow-hidden" />
+        {contentReady && (
+          <Suspense
+            fallback={
+              <div className="flex flex-1 items-center justify-center text-sm text-nas-muted">
+                WhiteBoard4Share 모듈 로드 중…
+              </div>
+            }
+          >
+            <Wb4sEditorView
+              documentJson={documentJsonRef.current}
+              roomId={roomId}
+              syncServerUrl={getSyncServerUrl(syncInfo)}
+              userName={userName}
+              onReady={handleEditorReady}
+              onSaveToHost={handleSaveToHost}
+              onRenameTitle={handleRenameTitle}
+              onClose={handleClose}
+            />
+          </Suspense>
+        )}
       </div>
-    </EditorModal>
+    </div>
   );
 }
 
-function createEmptyFallback() {
+function createEmptyFallback(fileName) {
+  const stem = getWb4sFileStem(fileName) || '제목 없음';
   return JSON.stringify({
     format: 'whiteboard4share',
     version: 1,
     exportedAt: new Date().toISOString(),
-    title: '제목 없음',
+    title: stem,
     paths: [],
     images: [],
     texts: [],

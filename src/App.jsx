@@ -4,18 +4,19 @@ import BrowserOnlyNotice from './components/layout/BrowserOnlyNotice.jsx';
 import FileExplorer from './components/explorer/FileExplorer.jsx';
 import HwpxEditorShell from './components/editors/HwpxEditorShell.jsx';
 import Wb4sEditorShell from './components/editors/Wb4sEditorShell.jsx';
+import XlsxEditorShell from './components/editors/XlsxEditorShell.jsx';
 import TextEditorShell from './components/editors/TextEditorShell.jsx';
 import AudioPlayerShell from './components/editors/AudioPlayerShell.jsx';
 import VideoPlayerShell from './components/editors/VideoPlayerShell.jsx';
 import { useAppInfo } from './hooks/useAppInfo.js';
-import { useDepartments } from './hooks/useDepartments.js';
-import { getDepartmentFromPath } from './lib/departments.js';
 import { hasEducoworkApi } from './lib/runtime.js';
 import { AUDIO_EXTENSIONS, VIDEO_EXTENSIONS } from './lib/media/mediaTypes.js';
 
 const OPENABLE_EXTENSIONS = {
   hwpx: 'hwpx',
   wb4s: 'wb4s',
+  xlsx: 'xlsx',
+  xls: 'xlsx',
   txt: 'text',
   md: 'text',
   ...Object.fromEntries(AUDIO_EXTENSIONS.map((ext) => [ext, 'audio'])),
@@ -24,12 +25,9 @@ const OPENABLE_EXTENSIONS = {
 
 function EduCoworkApp() {
   const { paths, syncInfo, loading: infoLoading } = useAppInfo();
-  const { departments, loading: departmentsLoading, refresh: refreshDepartments } = useDepartments();
   const [currentPath, setCurrentPath] = useState('.');
   const [openEditor, setOpenEditor] = useState(null);
   const [fsRevision, setFsRevision] = useState(0);
-
-  const selectedDepartment = getDepartmentFromPath(currentPath);
 
   const handleOpenFile = useCallback(async (entry) => {
     const viewerType = OPENABLE_EXTENSIONS[entry.extension];
@@ -58,22 +56,13 @@ function EduCoworkApp() {
     setCurrentPath('.');
   }, []);
 
-  const handleDepartmentChange = useCallback((code) => {
-    if (!code) {
-      setCurrentPath('.');
-      return;
-    }
-    setCurrentPath(code);
-  }, []);
-
   const handleFsChanged = useCallback(() => {
-    refreshDepartments();
     setFsRevision((value) => value + 1);
-  }, [refreshDepartments]);
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (event) => {
-      if (event.key === 'Escape' && openEditor) {
+      if (event.key === 'Escape' && openEditor && openEditor.type !== 'wb4s') {
         setOpenEditor(null);
       }
     };
@@ -90,11 +79,7 @@ function EduCoworkApp() {
         infoLoading={infoLoading}
         currentPath={currentPath}
         onNavigate={setCurrentPath}
-        departments={departments}
-        departmentsLoading={departmentsLoading}
-        selectedDepartment={selectedDepartment}
         onHome={handleHome}
-        onDepartmentChange={handleDepartmentChange}
         onOpenFile={handleOpenFile}
         onFsChanged={handleFsChanged}
       >
@@ -118,6 +103,16 @@ function EduCoworkApp() {
 
       {openEditor?.type === 'wb4s' && (
         <Wb4sEditorShell
+          relativePath={openEditor.relativePath}
+          fileName={openEditor.name}
+          syncInfo={syncInfo}
+          onClose={handleCloseEditor}
+          onRenamed={handleFsChanged}
+        />
+      )}
+
+      {openEditor?.type === 'xlsx' && (
+        <XlsxEditorShell
           relativePath={openEditor.relativePath}
           fileName={openEditor.name}
           syncInfo={syncInfo}

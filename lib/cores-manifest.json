@@ -1,11 +1,20 @@
 {
-  "updatedAt": "2026-07-04T14:30:00.000Z",
+  "updatedAt": "2026-07-04T16:50:29.124Z",
   "cores": {
     "rhwp": {
-      "version": "0.7.17",
-      "updatedAt": "2026-07-04T12:10:00.000Z",
-      "method": "npm",
-      "repository": "https://github.com/edwardkim/rhwp"
+      "version": "@rhwp/core@0.7.17, @rhwp/editor@0.7.17",
+      "updatedAt": "2026-07-04T16:50:29.124Z",
+      "method": "npm"
+    },
+    "wb4s": {
+      "version": "not-installed",
+      "updatedAt": "2026-07-04T16:50:29.124Z",
+      "method": "local-package"
+    },
+    "fortune-sheet": {
+      "version": "@fortune-sheet/react@1.0.4",
+      "updatedAt": "2026-07-04T16:50:29.124Z",
+      "method": "npm"
     }
   }
 }

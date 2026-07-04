@@ -68,10 +68,52 @@ function runCommand(cwd, args) {
 }
 
 /**
+ * @param {import('../shared/editorCores.js').EditorCoreDefinition} core
+ */
+function getNpmPackages(core) {
+  if (Array.isArray(core.npmPackages) && core.npmPackages.length > 0) {
+    return core.npmPackages;
+  }
+  if (core.npmPackage) {
+    return [core.npmPackage];
+  }
+  return [];
+}
+
+/**
+ * @param {string} appPath
+ * @param {string} packageName
+ */
+async function readNpmPackageVersion(appPath, packageName) {
+  const packagePath = path.join(appPath, 'node_modules', packageName, 'package.json');
+  try {
+    const raw = await fs.readFile(packagePath, 'utf8');
+    const parsed = JSON.parse(raw);
+    return parsed.version ?? 'unknown';
+  } catch {
+    return 'not-installed';
+  }
+}
+
+/**
  * @param {string} appPath
  * @param {import('../shared/editorCores.js').EditorCoreDefinition} core
  */
 async function readCoreVersion(appPath, core) {
+  const npmPackages = getNpmPackages(core);
+  if (npmPackages.length > 0) {
+    const versions = [];
+    for (const packageName of npmPackages) {
+      const version = await readNpmPackageVersion(appPath, packageName);
+      if (version !== 'not-installed') {
+        versions.push(`${packageName}@${version}`);
+      }
+    }
+    if (versions.length > 0) {
+      return versions.join(', ');
+    }
+  }
+
   const packagePath = path.join(appPath, core.libDir, 'package.json');
   try {
     const raw = await fs.readFile(packagePath, 'utf8');
@@ -149,6 +191,16 @@ async function updateCoreViaGit(appPath, core) {
 
 /**
  * @param {string} appPath
+ * @param {string[]} packageNames
+ */
+async function updateCoreViaNpm(appPath, packageNames) {
+  const args = ['npm', 'install', ...packageNames.map((name) => `${name}@latest`)];
+  await runCommand(appPath, args);
+  return 'npm';
+}
+
+/**
+ * @param {string} appPath
  * @param {import('../shared/editorCores.js').EditorCoreDefinition} core
  */
 async function updateCoreViaLocalPackage(appPath, core) {
@@ -171,20 +223,50 @@ async function updateCoreViaLocalPackage(appPath, core) {
 async function updateSingleCore(appPath, core) {
   /** @type {string|null} */
   let method = null;
+  const npmPackages = getNpmPackages(core);
+  /** @type {Error[]} */
+  const npmErrors = [];
+
+  if (npmPackages.length > 0) {
+    try {
+      method = await updateCoreViaNpm(appPath, npmPackages);
+      const version = await readCoreVersion(appPath, core);
+      return {
+        id: core.id,
+        label: core.label,
+        success: true,
+        method,
+        version,
+        message: `${core.label} ${version} 반영 완료`,
+      };
+    } catch (error) {
+      if (error instanceof Error) {
+        npmErrors.push(error);
+      }
+      if (core.id === 'fortune-sheet') {
+        throw npmErrors[0] ?? new Error('Fortune Sheet npm 업데이트 실패');
+      }
+    }
+  }
 
   if ((await isGitRepository(appPath)) && (await pathExists(appPath, '.gitmodules'))) {
     try {
       method = await updateCoreViaGit(appPath, core);
     } catch (gitError) {
       if (!(await pathExists(appPath, core.updatePackageDir))) {
+        if (npmErrors.length > 0) {
+          throw npmErrors[0];
+        }
         throw gitError;
       }
       method = await updateCoreViaLocalPackage(appPath, core);
     }
   } else if (await pathExists(appPath, core.updatePackageDir)) {
     method = await updateCoreViaLocalPackage(appPath, core);
+  } else if (npmErrors.length > 0) {
+    throw npmErrors[0];
   } else {
-    throw new Error('Git submodule 또는 lib/updates 패키지가 필요합니다.');
+    throw new Error('Git submodule, lib/updates 패키지, 또는 npm 패키지가 필요합니다.');
   }
 
   const version = await readCoreVersion(appPath, core);
@@ -194,7 +276,7 @@ async function updateSingleCore(appPath, core) {
     success: true,
     method,
     version,
-    message: `${core.label} v${version} 반영 완료`,
+    message: `${core.label} ${version} 반영 완료`,
   };
 }
 

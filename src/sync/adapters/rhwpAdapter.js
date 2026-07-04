@@ -141,6 +141,7 @@ export function bindRhwpEditor(ydoc, editor, options = {}) {
     ...options,
     fieldName,
     initialText: initialContent,
+    deferSeedUntilSync: Boolean(options.provider),
   });
   const awarenessCleanup = options.provider ? bindRhwpAwareness(options.provider, editor) : null;
 
@@ -157,6 +158,9 @@ export function bindRhwpEditor(ydoc, editor, options = {}) {
       if (isSynced) binder.resync();
     };
     options.provider.on('sync', onSync);
+    if (options.provider.synced) {
+      binder.resync();
+    }
     return () => {
       options.provider.off('sync', onSync);
       cleanup();

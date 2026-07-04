@@ -9,25 +9,13 @@ export default function DesktopShell({
   infoLoading,
   currentPath,
   onNavigate,
-  departments,
-  departmentsLoading,
-  selectedDepartment,
   onHome,
-  onDepartmentChange,
   onOpenFile,
   onFsChanged,
 }) {
   return (
     <div className="flex h-full flex-col bg-slate-100">
-      <TopBar
-        syncInfo={syncInfo}
-        infoLoading={infoLoading}
-        departments={departments}
-        departmentsLoading={departmentsLoading}
-        selectedDepartment={selectedDepartment}
-        onHome={onHome}
-        onDepartmentChange={onDepartmentChange}
-      />
+      <TopBar syncInfo={syncInfo} infoLoading={infoLoading} onHome={onHome} />
 
       <div className="flex min-h-0 flex-1">
         <Sidebar

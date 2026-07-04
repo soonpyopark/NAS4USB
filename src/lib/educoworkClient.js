@@ -100,6 +100,11 @@ export function createHttpEducoworkClient() {
           method: 'POST',
           body: JSON.stringify({ sessionId }),
         }),
+      rename: (sessionId, relativePath) =>
+        apiFetch('/workspace/rename', {
+          method: 'POST',
+          body: JSON.stringify({ sessionId, relativePath }),
+        }),
       close: (sessionId) =>
         apiFetch('/workspace/close', {
           method: 'POST',

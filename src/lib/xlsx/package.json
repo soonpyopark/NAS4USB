@@ -1,0 +1,14 @@
+{
+  "name": "@educowork/xlsx",
+  "version": "1.0.4",
+  "private": true,
+  "type": "module",
+  "description": "Fortune Sheet adapter for EduCowork xlsx/xls editing",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ruilisi/fortune-sheet.git"
+  },
+  "dependencies": {
+    "@fortune-sheet/react": "^1.0.4"
+  }
+}
