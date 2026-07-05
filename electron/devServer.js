@@ -7,6 +7,8 @@ import { WebSocketServer } from 'ws';
 import { getSyncHostname, getSyncPort } from './syncServer.js';
 import { handleHttpApiRequest } from './httpApi.js';
 import { getLocalIPv4Addresses } from './syncServer.js';
+import { readEnvFile } from './envConfig.js';
+import { parseAllowedHosts } from '../shared/viteHosts.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -75,6 +77,9 @@ export async function startDevServer() {
 
   const syncPort = getSyncPort();
   const server = http.createServer();
+  const projectRoot = path.resolve(__dirname, '..');
+  const fileEnv = readEnvFile(projectRoot);
+  const allowedHosts = parseAllowedHosts(fileEnv.ALLOWED_HOSTS ?? process.env.ALLOWED_HOSTS);
 
   const vite = await createViteServer({
     configFile: path.resolve(__dirname, '../vite.config.js'),
@@ -82,6 +87,7 @@ export async function startDevServer() {
       port: syncPort,
       strictPort: true,
       host: getSyncHostname() === '0.0.0.0' ? true : getSyncHostname(),
+      allowedHosts,
       middlewareMode: { server },
       hmr: {
         port: syncPort + 21670,
@@ -115,6 +121,7 @@ export async function startDevServer() {
   await listenWithRetry(server, listenHost, syncPort);
 
   console.log(`[dev] Vite + Y.js unified server on http://${listenHost}:${syncPort}`);
+  console.log(`[dev] allowedHosts: ${allowedHosts === true ? 'all (*)' : allowedHosts.join(', ')}`);
   console.log(`[sync] LAN addresses: ${getLocalIPv4Addresses().join(', ') || 'none'}`);
 
   devRuntime = { server, wss, vite };

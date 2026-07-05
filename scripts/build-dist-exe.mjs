@@ -1,69 +1,45 @@
-import { spawnSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { DEFAULT_DEPARTMENT_CODE } from '../shared/constants.js';
+import {
+  buildRenderer,
+  findUnpackedDir,
+  moveFolder,
+  packagePlatform,
+  pathExists,
+  projectRoot,
+  seedPortableData,
+} from './build-dist-common.mjs';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const projectRoot = path.resolve(__dirname, '..');
-const usbRoot = path.join(projectRoot, 'usb');
-const winUnpacked = path.join(usbRoot, 'win-unpacked');
-const portableDir = path.join(usbRoot, 'EduCowork');
+const stagingDir = path.join(projectRoot, '.dist-build', 'win');
+const portableDir = path.join(projectRoot, 'exe');
 
-function run(command, args, options = {}) {
-  const result = spawnSync(command, args, {
-    cwd: projectRoot,
-    stdio: 'inherit',
-    shell: process.platform === 'win32',
-    ...options,
-  });
-
-  if (result.status !== 0) {
-    process.exit(result.status ?? 1);
-  }
-}
-
-async function pathExists(target) {
-  try {
-    await fs.access(target);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function copyFileIfMissing(from, to) {
-  if (await pathExists(to)) return;
-  await fs.copyFile(from, to);
-}
-
-async function moveFolder(from, to) {
-  await fs.rm(to, { recursive: true, force: true });
-
-  for (let attempt = 0; attempt < 5; attempt++) {
-    try {
-      await fs.rename(from, to);
-      return;
-    } catch (err) {
-      if (err.code !== 'EPERM' && err.code !== 'EBUSY') throw err;
-      if (attempt === 4) break;
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-    }
+async function applyPortableExeIcon(portableDirPath) {
+  const icoPath = path.join(projectRoot, 'build', 'icon.ico');
+  if (!(await pathExists(icoPath))) {
+    console.warn('[build:dist:exe] build/icon.ico not found — skipping exe icon');
+    return;
   }
 
-  await fs.cp(from, to, { recursive: true });
-  await fs.rm(from, { recursive: true, force: true });
+  const entries = await fs.readdir(portableDirPath);
+  const exeName = entries.find(
+    (name) => name.toLowerCase().endsWith('.exe') && !name.toLowerCase().includes('uninstall'),
+  );
+  if (!exeName) {
+    console.warn('[build:dist:exe] main exe not found — skipping exe icon');
+    return;
+  }
+
+  const { rcedit } = await import('rcedit');
+  const exePath = path.join(portableDirPath, exeName);
+  await rcedit(exePath, { icon: icoPath });
+  console.log(`[build:dist:exe] Applied NAS4USB icon → ${exeName}`);
 }
 
 async function finalizePortableFolder() {
-  if (!(await pathExists(winUnpacked))) {
-    throw new Error(`빌드 출력을 찾을 수 없습니다: ${winUnpacked}`);
-  }
-
+  const winUnpacked = await findUnpackedDir(stagingDir, /^win-/);
   await moveFolder(winUnpacked, portableDir);
+  await seedPortableData(portableDir);
 
-  await fs.mkdir(path.join(portableDir, 'data', DEFAULT_DEPARTMENT_CODE), { recursive: true });
-  await copyFileIfMissing(path.join(projectRoot, '.env.example'), path.join(portableDir, '.env.example'));
   await fs.copyFile(
     path.join(projectRoot, 'scripts', 'allow-firewall-inbound.bat'),
     path.join(portableDir, 'allow-firewall-inbound.bat'),
@@ -71,11 +47,11 @@ async function finalizePortableFolder() {
 
   await applyPortableExeIcon(portableDir);
 
-  const readme = `EduCowork USB Portable
-======================
+  const readme = `NAS4USB USB Portable (Windows)
+================================
 
 1. 이 폴더 전체를 USB 등에 복사합니다.
-2. EduCowork.exe 를 실행합니다.
+2. NAS4USB.exe 를 실행합니다.
 3. LAN 공동 편집 시 .env.example 을 .env 로 복사해 PORT / HOSTNAME 을 설정합니다.
 4. Windows 방화벽 허용: allow-firewall-inbound.bat (관리자 실행)
 
@@ -86,36 +62,13 @@ exe 와 같은 폴더를 유지해 주세요.
 `;
 
   await fs.writeFile(path.join(portableDir, 'README-USB.txt'), readme, 'utf8');
-
-  console.log(`\n[build:dist:exe] USB portable folder ready → ${portableDir}`);
+  console.log(`\n[build:dist:exe] Windows portable folder ready → ${portableDir}`);
 }
 
-async function applyPortableExeIcon(portableDir) {
-  const icoPath = path.join(projectRoot, 'build', 'icon.ico');
-  if (!(await pathExists(icoPath))) {
-    console.warn('[build:dist:exe] build/icon.ico not found — skipping exe icon');
-    return;
-  }
-
-  const entries = await fs.readdir(portableDir);
-  const exeName = entries.find(
-    (name) => name.toLowerCase().endsWith('.exe') && !name.toLowerCase().includes('uninstall'),
-  );
-  if (!exeName) {
-    console.warn('[build:dist:exe] main exe not found — skipping exe icon');
-    return;
-  }
-
-  const { rcedit } = await import('rcedit');
-  const exePath = path.join(portableDir, exeName);
-  await rcedit(exePath, { icon: icoPath });
-  console.log(`[build:dist:exe] Applied NAS4USB icon → ${exeName}`);
+if (process.platform !== 'win32') {
+  console.warn('[build:dist:exe] Windows 빌드는 Windows에서 실행하는 것을 권장합니다.');
 }
 
-console.log('[build:dist:exe] Building renderer…');
-run('npm', ['run', 'build']);
-
-console.log('[build:dist:exe] Packaging Electron (folder layout, not single exe)…');
-run('npx', ['electron-builder', '--win', 'dir']);
-
+buildRenderer();
+packagePlatform('--win', stagingDir);
 await finalizePortableFolder();

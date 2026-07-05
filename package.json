@@ -15,6 +15,7 @@
     "sync:wb4s-src": "node scripts/sync-wb4s-src.mjs",
     "build": "npm run prepare:icons && npm run build:rhwp-studio && npm run prepare:wb4s-src && vite build",
     "build:dist:exe": "npm run prepare:icons && node scripts/build-dist-exe.mjs",
+    "build:dist:mac": "npm run prepare:icons && node scripts/build-dist-mac.mjs",
     "start": "npm run build && electron .",
     "preview": "vite preview --port 3008 --strictPort"
   },
@@ -61,7 +62,7 @@
     "productName": "NAS4USB",
     "icon": "build/icon.png",
     "directories": {
-      "output": "usb"
+      "output": ".dist-build"
     },
     "files": [
       "main.js",
@@ -99,6 +100,15 @@
           "arch": [
             "x64"
           ]
+        }
+      ]
+    },
+    "mac": {
+      "icon": "build/icon.png",
+      "category": "public.app-category.productivity",
+      "target": [
+        {
+          "target": "dir"
         }
       ]
     }

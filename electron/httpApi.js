@@ -39,6 +39,8 @@ import {
   restorePath,
   trashPath,
 } from './trashService.js';
+import { streamFile } from './mediaStream.js';
+import { getAudioMimeType, getVideoMimeType, isAudioExtension, isVideoExtension } from '../src/lib/media/mediaTypes.js';
 
 /**
  * @param {import('node:http').ServerResponse} res
@@ -158,6 +160,18 @@ export async function handleHttpApiRequest(req, res) {
         'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`,
       });
       res.end(buffer);
+      return true;
+    }
+
+    if (method === 'GET' && url.pathname === '/api/fs/stream') {
+      const relativePath = url.searchParams.get('path') ?? '';
+      const extension = path.extname(relativePath).slice(1).toLowerCase();
+      const contentType = isVideoExtension(extension)
+        ? getVideoMimeType(extension)
+        : isAudioExtension(extension)
+          ? getAudioMimeType(extension)
+          : 'application/octet-stream';
+      await streamFile(req, res, relativePath, contentType);
       return true;
     }
 

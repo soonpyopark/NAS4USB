@@ -1,5 +1,5 @@
 import ViewerModal from './ViewerModal.jsx';
-import { useMediaObjectUrl } from '../../hooks/useMediaObjectUrl.js';
+import { useMediaStream } from '../../hooks/useMediaStream.js';
 import { getVideoMimeType } from '../../lib/media/mediaTypes.js';
 
 /**
@@ -7,18 +7,13 @@ import { getVideoMimeType } from '../../lib/media/mediaTypes.js';
  */
 export default function VideoPlayerShell({ relativePath, fileName, extension, onClose, allowClose = true, fullscreen = false }) {
   const mimeType = getVideoMimeType(extension);
-  const { workspace, objectUrl, loadError, loading } = useMediaObjectUrl(relativePath, mimeType);
-
-  const handleClose = async () => {
-    await workspace.close();
-    onClose();
-  };
+  const { streamUrl, loadError, loading, bufferedPercent, mediaHandlers } = useMediaStream(relativePath);
 
   return (
     <ViewerModal
       title={fileName}
       subtitle={`영상 · ${extension.toUpperCase()} · ${mimeType}`}
-      onClose={handleClose}
+      onClose={onClose}
       allowClose={allowClose}
       fullscreen={fullscreen}
     >
@@ -28,14 +23,21 @@ export default function VideoPlayerShell({ relativePath, fileName, extension, on
 
       <div className="relative flex min-h-0 flex-1 items-center justify-center bg-black p-4">
         {loading && (
-          <p className="absolute inset-0 flex items-center justify-center text-sm text-slate-300">영상 로드 중…</p>
+          <p className="absolute inset-0 z-10 flex items-center justify-center text-sm text-slate-300">
+            {bufferedPercent > 0 ? `버퍼링 중… ${bufferedPercent}%` : '영상 준비 중…'}
+          </p>
         )}
 
-        {!loading && objectUrl && (
-          <video controls autoPlay playsInline className="max-h-full max-w-full rounded-md" src={objectUrl}>
-            이 브라우저는 해당 영상 형식을 지원하지 않습니다.
-          </video>
-        )}
+        <video
+          controls
+          autoPlay
+          playsInline
+          className="max-h-full max-w-full rounded-md"
+          src={streamUrl}
+          {...mediaHandlers}
+        >
+          이 브라우저는 해당 영상 형식을 지원하지 않습니다.
+        </video>
       </div>
     </ViewerModal>
   );

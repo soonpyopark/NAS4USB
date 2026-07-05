@@ -1,6 +1,9 @@
 node_modules/
 dist/
 .cache/
+.dist-build/
+exe/
+mac/
 usb/
 *.log
 .DS_Store
