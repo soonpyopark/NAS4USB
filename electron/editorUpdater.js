@@ -220,7 +220,52 @@ async function updateCoreViaLocalPackage(appPath, core) {
  * @param {string} appPath
  * @param {import('../shared/editorCores.js').EditorCoreDefinition} core
  */
+async function updateWb4sCore(appPath, core) {
+  const { syncWb4sEngine, buildWb4sEditorBundle } = await import('../scripts/wb4s-engine.mjs');
+
+  /** @type {string} */
+  let method;
+
+  try {
+    method = await syncWb4sEngine(appPath, { strategy: 'git', force: true });
+  } catch (gitError) {
+    if (!(await pathExists(appPath, core.updatePackageDir))) {
+      throw gitError;
+    }
+    method = await syncWb4sEngine(appPath, { strategy: 'local-package', force: true });
+  }
+
+  try {
+    await buildWb4sEditorBundle(appPath);
+    method = `${method}+build`;
+  } catch (buildError) {
+    console.warn(
+      `[editor-update] wb4s embed build skipped: ${
+        buildError instanceof Error ? buildError.message : buildError
+      }`,
+    );
+  }
+
+  const version = await readCoreVersion(appPath, core);
+  return {
+    id: core.id,
+    label: core.label,
+    success: true,
+    method,
+    version,
+    message: `${core.label} ${version} 반영 완료`,
+  };
+}
+
+/**
+ * @param {string} appPath
+ * @param {import('../shared/editorCores.js').EditorCoreDefinition} core
+ */
 async function updateSingleCore(appPath, core) {
+  if (core.id === 'wb4s') {
+    return updateWb4sCore(appPath, core);
+  }
+
   /** @type {string|null} */
   let method = null;
   const npmPackages = getNpmPackages(core);

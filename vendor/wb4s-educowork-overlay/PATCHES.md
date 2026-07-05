@@ -1,11 +1,11 @@
 # EduCowork patches on WhiteBoard4Share
 
-These files differ from upstream on purpose. After merging a new upstream release into
-`vendor/whiteboard4share/`, copy this overlay onto the vendor tree:
+These files differ from upstream on purpose. After syncing upstream into
+`.cache/wb4s-src/`, copy this overlay onto the engine tree (or run `npm run prepare:wb4s-src`):
 
 ```powershell
-Copy-Item vendor/wb4s-educowork-overlay/src/components/EditorView.tsx vendor/whiteboard4share/src/components/EditorView.tsx -Force
-Copy-Item vendor/wb4s-educowork-overlay/src/components/Toolbar.tsx vendor/whiteboard4share/src/components/Toolbar.tsx -Force
+Copy-Item vendor/wb4s-educowork-overlay/src/components/EditorView.tsx .cache/wb4s-src/src/components/EditorView.tsx -Force
+Copy-Item vendor/wb4s-educowork-overlay/src/components/Toolbar.tsx .cache/wb4s-src/src/components/Toolbar.tsx -Force
 ```
 
 ## EditorView.tsx

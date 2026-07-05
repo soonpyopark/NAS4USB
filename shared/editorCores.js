@@ -9,6 +9,7 @@
  * @property {string} repositoryUrl
  * @property {string | null} [npmPackage]
  * @property {string[]} [npmPackages]
+ * @property {string} [overlayDir]
  */
 
 /** @type {EditorCoreDefinition[]} */
@@ -26,9 +27,10 @@ export const EDITOR_CORES = [
   {
     id: 'wb4s',
     label: 'Whiteboard (.wb4s)',
-    libDir: 'src/wb4s',
-    submodulePath: 'vendor/whiteboard4share',
-    updatePackageDir: 'vendor/wb4s-educowork-overlay',
+    libDir: '.cache/wb4s-src',
+    submodulePath: '.cache/wb4s-src',
+    updatePackageDir: 'lib/updates/wb4s',
+    overlayDir: 'vendor/wb4s-educowork-overlay',
     repositoryUrl: 'https://github.com/soonpyopark/WhiteBoard4Share',
     npmPackage: null,
   },

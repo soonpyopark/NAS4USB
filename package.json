@@ -5,17 +5,17 @@
   "main": "main.js",
   "type": "module",
   "scripts": {
-    "dev": "npm run prepare:wb4s-deps && electron .",
+    "dev": "npm run prepare:wb4s-src && electron .",
     "dev:stop": "node scripts/dev-process.mjs stop",
     "dev:restart": "node scripts/dev-process.mjs restart",
     "prepare:icons": "node scripts/prepare-app-icon.mjs",
-    "prepare:wb4s-deps": "node scripts/prepare-wb4s-deps.mjs",
-    "prepare:wb4s-src": "node scripts/prepare-wb4s-deps.mjs",
+    "prepare:wb4s-deps": "node scripts/prepare-wb4s-src.mjs",
+    "prepare:wb4s-src": "node scripts/prepare-wb4s-src.mjs",
     "build:rhwp-studio": "node scripts/build-rhwp-studio.mjs",
     "build:wb4s-editor": "node scripts/build-wb4s-editor.mjs",
     "sync:wb4s-upstream": "node scripts/sync-wb4s-upstream.mjs",
     "sync:wb4s-src": "node scripts/sync-wb4s-upstream.mjs",
-    "build": "npm run prepare:icons && npm run build:rhwp-studio && npm run prepare:wb4s-deps && vite build",
+    "build": "npm run prepare:icons && npm run build:rhwp-studio && npm run build:wb4s-editor && npm run prepare:wb4s-src && vite build",
     "build:dist:exe": "npm run prepare:icons && node scripts/build-dist-exe.mjs",
     "build:dist:mac": "npm run prepare:icons && node scripts/build-dist-mac.mjs",
     "start": "npm run build && electron .",
@@ -71,6 +71,8 @@
       "preload.cjs",
       "electron/**/*",
       "shared/**/*",
+      "scripts/wb4s-engine.mjs",
+      "scripts/wb4s-upstream.mjs",
       "dist/**/*",
       "package.json"
     ],
@@ -79,6 +81,13 @@
       {
         "from": "lib",
         "to": "lib",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "public/wb4s-editor",
+        "to": "public/wb4s-editor",
         "filter": [
           "**/*"
         ]
