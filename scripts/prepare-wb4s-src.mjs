@@ -2,16 +2,19 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
+import {
+  WB4S_REPO,
+  WB4S_SYNC_EXCLUDE_DIRS,
+  WB4S_UPSTREAM_VERSION,
+  getWb4sCacheSrc,
+  getWb4sSiblingSrc,
+} from './wb4s-upstream.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
-const wb4sSrc = path.join(root, '.cache', 'wb4s-src');
+const wb4sSrc = getWb4sCacheSrc(root);
 const overlayDir = path.join(root, 'vendor', 'wb4s-educowork-overlay');
-const siblingSrc = path.resolve(root, '..', 'WhiteBoard4Share v1.0.2');
-const WB4S_REPO = 'https://github.com/soonpyopark/WhiteBoard4Share.git';
-
-/** @type {readonly string[]} */
-const SYNC_EXCLUDE_DIRS = ['node_modules', 'dist', 'exe', '.git', 'electron-dist', 'electron'];
+const siblingSrc = getWb4sSiblingSrc(root);
 
 function run(cwd, command, args, { shell = false } = {}) {
   return new Promise((resolve, reject) => {
@@ -37,6 +40,15 @@ async function pathExists(target) {
   }
 }
 
+async function readPackageVersion(targetDir) {
+  try {
+    const raw = await fs.readFile(path.join(targetDir, 'package.json'), 'utf8');
+    return JSON.parse(raw).version ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function copyDir(src, dest, { excludeDirs = [] } = {}) {
   await fs.mkdir(dest, { recursive: true });
   const entries = await fs.readdir(src, { withFileTypes: true });
@@ -55,23 +67,37 @@ async function copyDir(src, dest, { excludeDirs = [] } = {}) {
 async function syncFromSibling() {
   console.log(`[wb4s-src] syncing source from ${siblingSrc} …`);
   await fs.rm(wb4sSrc, { recursive: true, force: true });
-  await copyDir(siblingSrc, wb4sSrc, { excludeDirs: [...SYNC_EXCLUDE_DIRS] });
+  await copyDir(siblingSrc, wb4sSrc, { excludeDirs: [...WB4S_SYNC_EXCLUDE_DIRS] });
 }
 
 async function cloneUpstream() {
-  console.log(`[wb4s-src] cloning ${WB4S_REPO} …`);
+  console.log(`[wb4s-src] cloning ${WB4S_REPO} (v${WB4S_UPSTREAM_VERSION}) …`);
   await fs.mkdir(path.dirname(wb4sSrc), { recursive: true });
+  await fs.rm(wb4sSrc, { recursive: true, force: true });
   await run(root, 'git', ['clone', '--depth', '1', WB4S_REPO, wb4sSrc]);
 }
 
 async function ensureWb4sSource() {
-  if (await pathExists(path.join(wb4sSrc, 'package.json'))) {
+  const currentVersion = await readPackageVersion(wb4sSrc);
+  if (currentVersion === WB4S_UPSTREAM_VERSION) {
     return;
   }
 
+  if (currentVersion && currentVersion !== WB4S_UPSTREAM_VERSION) {
+    console.log(
+      `[wb4s-src] upgrading ${currentVersion} → ${WB4S_UPSTREAM_VERSION} …`,
+    );
+  }
+
   if (await pathExists(path.join(siblingSrc, 'package.json'))) {
-    await syncFromSibling();
-    return;
+    const siblingVersion = await readPackageVersion(siblingSrc);
+    if (siblingVersion === WB4S_UPSTREAM_VERSION) {
+      await syncFromSibling();
+      return;
+    }
+    console.warn(
+      `[wb4s-src] sibling version is ${siblingVersion ?? 'unknown'}, expected ${WB4S_UPSTREAM_VERSION}; cloning from GitHub …`,
+    );
   }
 
   await cloneUpstream();
@@ -88,20 +114,35 @@ async function applyEducoworkOverlay() {
 }
 
 async function ensureDependencies() {
-  const marker = path.join(wb4sSrc, 'node_modules', 'xlsx-js-style');
-  if (await pathExists(marker)) {
+  const pkgPath = path.join(wb4sSrc, 'package.json');
+  const nodeModules = path.join(wb4sSrc, 'node_modules');
+  const lockPath = path.join(wb4sSrc, 'package-lock.json');
+
+  if (!(await pathExists(nodeModules))) {
+    console.log('[wb4s-src] npm install …');
+    await run(wb4sSrc, 'npm', ['install'], { shell: process.platform === 'win32' });
     return;
   }
 
-  console.log('[wb4s-src] npm install …');
-  await run(wb4sSrc, 'npm', ['install'], { shell: process.platform === 'win32' });
+  const [pkgStat, lockStat, nodeStat] = await Promise.all([
+    fs.stat(pkgPath),
+    pathExists(lockPath).then((ok) => (ok ? fs.stat(lockPath) : null)),
+    fs.stat(nodeModules),
+  ]);
+
+  const pkgNewer = pkgStat.mtimeMs > nodeStat.mtimeMs;
+  const lockNewer = lockStat && lockStat.mtimeMs > nodeStat.mtimeMs;
+  if (pkgNewer || lockNewer) {
+    console.log('[wb4s-src] npm install (package changed) …');
+    await run(wb4sSrc, 'npm', ['install'], { shell: process.platform === 'win32' });
+  }
 }
 
 async function main() {
   await ensureWb4sSource();
   await applyEducoworkOverlay();
   await ensureDependencies();
-  console.log(`[wb4s-src] ready → ${wb4sSrc}`);
+  console.log(`[wb4s-src] ready → ${wb4sSrc} (v${WB4S_UPSTREAM_VERSION})`);
 }
 
 main().catch((err) => {

@@ -4,7 +4,7 @@ import FortuneSheetGrid from './FortuneSheetGrid.jsx';
 import { useYjsSession } from '../../hooks/useYjsSession.js';
 import { useAwarenessPeerCount } from '../../hooks/useAwarenessPeerCount.js';
 import { useWorkspaceSession } from '../../hooks/useWorkspaceSession.js';
-import { bindFortuneSheetEditor } from '../../sync/adapters/xlsxAdapter.js';
+import { bindFortuneSheetEditor, setWorkbookSnapshot } from '../../sync/adapters/xlsxAdapter.js';
 import { getLanWsEndpoints } from '../../sync/buildWsUrl.js';
 import { parseSpreadsheetBase64, buildSpreadsheetBase64 } from '../../lib/xlsx/xlsxIO.js';
 
@@ -18,31 +18,50 @@ export default function XlsxEditorShell({ relativePath, fileName, syncInfo, onCl
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [initialSheets, setInitialSheets] = useState(null);
+  const [diskRevision, setDiskRevision] = useState('');
   const [sheetSummary, setSheetSummary] = useState('Sheet1');
   const [editorHandle, setEditorHandle] = useState(null);
   const [bound, setBound] = useState(false);
   const unbindRef = useRef(null);
+  const diskRevisionRef = useRef('');
+  diskRevisionRef.current = diskRevision;
+
+  useEffect(() => {
+    setInitialSheets(null);
+    setEditorHandle(null);
+    setBound(false);
+    setLoadError(null);
+    setDiskRevision('');
+  }, [relativePath]);
 
   useEffect(() => {
     if (!workspace.ready) return undefined;
 
     let cancelled = false;
-    setInitialSheets(null);
-    setEditorHandle(null);
-    setBound(false);
     setLoadError(null);
 
     async function loadContent() {
       try {
         const base64 = await workspace.readBinary();
         if (cancelled) return;
+
+        let nextDiskRevision = '';
+        try {
+          const statInfo = await window.educowork.fs.stat(relativePath);
+          nextDiskRevision = statInfo?.modifiedAt ?? '';
+        } catch {
+          // diskRevision is optional; load should still succeed.
+        }
+
         const parsed = await parseSpreadsheetBase64(base64);
+        if (cancelled) return;
         setSheetSummary(
           parsed.sheetNames.length > 1
             ? `${parsed.sheetNames.length} sheets`
             : parsed.sheetName,
         );
         setInitialSheets(parsed.sheets);
+        setDiskRevision(nextDiskRevision);
       } catch (err) {
         if (!cancelled) {
           setLoadError(err instanceof Error ? err.message : 'Failed to load spreadsheet');
@@ -55,17 +74,25 @@ export default function XlsxEditorShell({ relativePath, fileName, syncInfo, onCl
     return () => {
       cancelled = true;
     };
-  }, [workspace.ready, workspace.sessionId, workspace.readBinary]);
+  }, [workspace.ready, workspace.sessionId, workspace.readBinary, relativePath]);
 
   useEffect(() => {
     if (!editorHandle || !doc || initialSheets == null) return undefined;
 
     unbindRef.current?.();
-    unbindRef.current = bindFortuneSheetEditor(doc, editorHandle, {
-      initialSheets,
-      provider,
-    });
-    setBound(true);
+    unbindRef.current = null;
+    setBound(false);
+
+    try {
+      unbindRef.current = bindFortuneSheetEditor(doc, editorHandle, {
+        initialSheets,
+        provider,
+        diskRevision: diskRevisionRef.current,
+      });
+      setBound(true);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Failed to bind spreadsheet editor');
+    }
 
     return () => {
       unbindRef.current?.();
@@ -79,9 +106,16 @@ export default function XlsxEditorShell({ relativePath, fileName, syncInfo, onCl
     setSaving(true);
     try {
       const bookType = fileName.toLowerCase().endsWith('.xls') ? 'biff8' : 'xlsx';
-      const base64 = buildSpreadsheetBase64(editorHandle.getSheets(), { bookType });
+      const sheets = editorHandle.getSheets();
+      const base64 = buildSpreadsheetBase64(sheets, { bookType });
       await workspace.writeBinary(base64);
       await workspace.commit();
+      const statInfo = await window.educowork.fs.stat(relativePath);
+      const nextDiskRevision = statInfo?.modifiedAt ?? '';
+      setDiskRevision(nextDiskRevision);
+      if (doc) {
+        setWorkbookSnapshot(doc, sheets, { diskRevision: nextDiskRevision });
+      }
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Save failed');
     } finally {
@@ -99,7 +133,7 @@ export default function XlsxEditorShell({ relativePath, fileName, syncInfo, onCl
   const peerCount = useAwarenessPeerCount(provider);
   const remotePeerCount = peerCount != null ? Math.max(0, peerCount - 1) : null;
   const lanEndpoints = getLanWsEndpoints(syncInfo, roomId).join(' · ');
-  const isLoading = !loadError && (workspace.loading || initialSheets == null || !editorHandle);
+  const isLoading = !loadError && !workspace.error && (workspace.loading || initialSheets == null || !editorHandle);
   const waitingSync = Boolean(editorHandle) && Boolean(doc) && !bound;
 
   return (

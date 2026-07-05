@@ -8,6 +8,7 @@ import { isTrashPath } from './trashPaths.js';
  *   isInTrashView?: boolean,
  *   onOpen: (entry: { relativePath: string, isDirectory: boolean }) => void,
  *   onOpenSystem: (entry: { relativePath: string, isDirectory: boolean }) => void,
+ *   onUpload?: (targetPath: string) => void,
  *   onCopy: () => void,
  *   onCut: () => void,
  *   onMove: () => void,
@@ -20,6 +21,8 @@ import { isTrashPath } from './trashPaths.js';
  *   onProperties: () => void,
  *   onDownload?: () => void,
  *   canDownload?: boolean,
+ *   canEditOpen?: boolean,
+ *   isAdminLoggedIn?: boolean,
  * }} options
  */
 export function buildEntryContextMenuItems({
@@ -29,6 +32,7 @@ export function buildEntryContextMenuItems({
   isInTrashView = false,
   onOpen,
   onOpenSystem,
+  onUpload,
   onCopy,
   onCut,
   onMove,
@@ -41,10 +45,23 @@ export function buildEntryContextMenuItems({
   onProperties,
   onDownload,
   canDownload = false,
+  canEditOpen = true,
+  isAdminLoggedIn = true,
 }) {
   const showTrashMenu = Boolean(entry && isTrashPath(entry.relativePath));
 
   if (showTrashMenu) {
+    if (!isAdminLoggedIn) {
+      return [
+        {
+          id: 'properties',
+          label: '속성',
+          disabled: targetCount !== 1,
+          onClick: onProperties,
+        },
+      ];
+    }
+
     return [
       {
         id: 'restore',
@@ -68,21 +85,60 @@ export function buildEntryContextMenuItems({
     ];
   }
 
-  const pasteTarget = entry?.isDirectory ? entry.relativePath : null;
+  if (!isAdminLoggedIn) {
+    if (entry?.isDirectory) {
+      return [
+        {
+          id: 'open',
+          label: '폴더 열기',
+          disabled: !entry,
+          onClick: () => entry && onOpen(entry),
+        },
+        {
+          id: 'open-system',
+          label: '시스템에서 열기',
+          disabled: !entry,
+          onClick: () => entry && onOpenSystem(entry),
+        },
+        {
+          id: 'properties',
+          label: '속성',
+          disabled: targetCount !== 1,
+          onClick: onProperties,
+        },
+      ];
+    }
 
-  const items = [
-    {
-      id: 'open',
-      label: entry?.isDirectory ? '폴더 열기' : '편집 / 열기',
-      disabled: !entry,
-      onClick: () => entry && onOpen(entry),
-    },
-    {
-      id: 'open-system',
-      label: '시스템에서 열기',
-      disabled: !entry || entry.isDirectory,
-      onClick: () => entry && onOpenSystem(entry),
-    },
+    return [
+      {
+        id: 'open',
+        label: '편집 열기',
+        disabled: !entry || !canEditOpen,
+        onClick: () => entry && onOpen(entry),
+      },
+      {
+        id: 'open-system',
+        label: '시스템에서 열기',
+        disabled: !entry || entry.isDirectory,
+        onClick: () => entry && onOpenSystem(entry),
+      },
+      {
+        id: 'download',
+        label: '다운로드',
+        disabled: !onDownload || !canDownload,
+        onClick: () => onDownload?.(),
+      },
+      {
+        id: 'properties',
+        label: '속성',
+        disabled: targetCount !== 1,
+        onClick: onProperties,
+      },
+    ];
+  }
+
+  const pasteTarget = entry?.isDirectory ? entry.relativePath : null;
+  const sharedItems = [
     { id: 'copy', label: '복사', disabled: targetCount === 0, onClick: onCopy },
     { id: 'cut', label: '잘라내기', disabled: targetCount === 0, onClick: onCut },
     { id: 'move', label: '이동', disabled: targetCount === 0, onClick: onMove },
@@ -106,7 +162,7 @@ export function buildEntryContextMenuItems({
     },
     {
       id: 'delete',
-      label: '휴지통으로 이동',
+      label: '휴지통으로',
       danger: true,
       disabled: targetCount === 0,
       onClick: onDelete,
@@ -119,16 +175,57 @@ export function buildEntryContextMenuItems({
     },
   ];
 
-  if (onDownload) {
-    items.splice(4, 0, {
-      id: 'download',
-      label: '다운로드',
-      disabled: !canDownload,
-      onClick: onDownload,
-    });
+  if (entry?.isDirectory) {
+    return [
+      {
+        id: 'open',
+        label: '폴더 열기',
+        disabled: !entry,
+        onClick: () => entry && onOpen(entry),
+      },
+      {
+        id: 'open-system',
+        label: '시스템에서 열기',
+        disabled: !entry,
+        onClick: () => entry && onOpenSystem(entry),
+      },
+      {
+        id: 'upload',
+        label: '업로드',
+        disabled: !entry || !onUpload,
+        onClick: () => entry && onUpload?.(entry.relativePath),
+      },
+      {
+        id: 'download',
+        label: '다운로드',
+        disabled: !onDownload || !canDownload,
+        onClick: () => onDownload?.(),
+      },
+      ...sharedItems,
+    ];
   }
 
-  return items;
+  return [
+    {
+      id: 'open',
+      label: '편집 열기',
+      disabled: !entry || !canEditOpen,
+      onClick: () => entry && onOpen(entry),
+    },
+    {
+      id: 'open-system',
+      label: '시스템에서 열기',
+      disabled: !entry || entry.isDirectory,
+      onClick: () => entry && onOpenSystem(entry),
+    },
+    {
+      id: 'download',
+      label: '다운로드',
+      disabled: !onDownload || !canDownload,
+      onClick: () => onDownload?.(),
+    },
+    ...sharedItems,
+  ];
 }
 
 /**
@@ -142,6 +239,7 @@ export function buildEntryContextMenuItems({
  *   onPaste: (targetPath: string) => void,
  *   onRefresh: () => void,
  *   onEmptyTrash?: () => void,
+ *   isAdminLoggedIn?: boolean,
  * }} options
  */
 export function buildBackgroundContextMenuItems({
@@ -154,7 +252,12 @@ export function buildBackgroundContextMenuItems({
   onPaste,
   onRefresh,
   onEmptyTrash,
+  isAdminLoggedIn = true,
 }) {
+  if (!isAdminLoggedIn) {
+    return [];
+  }
+
   const showTrashMenu = isTrashPath(targetPath);
 
   if (showTrashMenu) {

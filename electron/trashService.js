@@ -110,8 +110,48 @@ async function syncMetadataMoveTree(fromRelative, toRelative, portableRoot) {
 /**
  * @param {string} [portableRoot]
  */
-export async function getTrashMap(portableRoot = getPortableRoot()) {
+async function syncTrashIndexWithDisk(portableRoot) {
+  await ensureTrashFolder();
+
   const store = await loadIndex(portableRoot);
+  let changed = false;
+
+  try {
+    const diskEntries = await fsService.readDir(TRASH_FOLDER);
+    const indexedKeys = new Set(Object.keys(store.items));
+
+    for (const entry of diskEntries) {
+      indexedKeys.delete(entry.relativePath);
+      if (store.items[entry.relativePath]) continue;
+
+      store.items[entry.relativePath] = {
+        originalPath: getBaseName(entry.relativePath),
+        deletedAt: entry.inaccessible ? new Date().toISOString() : entry.modifiedAt,
+        isDirectory: entry.isDirectory,
+      };
+      changed = true;
+    }
+
+    for (const stalePath of indexedKeys) {
+      delete store.items[stalePath];
+      changed = true;
+    }
+  } catch {
+    return store;
+  }
+
+  if (changed) {
+    await saveIndex(portableRoot, store);
+  }
+
+  return store;
+}
+
+/**
+ * @param {string} [portableRoot]
+ */
+export async function getTrashMap(portableRoot = getPortableRoot()) {
+  const store = await syncTrashIndexWithDisk(portableRoot);
   return store.items;
 }
 

@@ -1,12 +1,4 @@
-/**
- * @param {{ visibility?: string, viewRestricted?: boolean } | undefined} record
- */
-function normalizeFileAccessRecord(record) {
-  return {
-    visibility: record?.visibility === 'private' ? 'private' : 'public',
-    viewRestricted: Boolean(record?.viewRestricted),
-  };
-}
+import { normalizeFileAccessRecord } from '../../shared/fileAccessVisibility.js';
 
 /**
  * @param {string} relativePath

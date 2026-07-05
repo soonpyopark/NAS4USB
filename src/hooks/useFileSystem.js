@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { joinRelativePath, readFileAsBase64, resolveUniqueName, validateFolderName } from '../lib/fsPaths.js';
-import { filterTrashFromEntries } from '../lib/trashPaths.js';
+import { filterTrashFromEntries, isFsNotFoundError, isTrashPath } from '../lib/trashPaths.js';
 import { buildNewFileContent, resolveNewFileName } from '../lib/files/newFileFactory.js';
 import { convertHwpBase64ToHwpx, isHwpFileName, toHwpxFileName } from '@educowork/rhwp/hwpConvert.js';
 
@@ -17,8 +17,13 @@ export function useFileSystem(currentPath) {
       const result = await window.educowork.fs.readDir(currentPath);
       setEntries(filterTrashFromEntries(result, currentPath));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to read directory');
-      setEntries([]);
+      if (isFsNotFoundError(err)) {
+        setEntries([]);
+        setError(null);
+      } else {
+        setError(err instanceof Error ? err.message : 'Failed to read directory');
+        setEntries([]);
+      }
     } finally {
       setLoading(false);
     }
@@ -102,6 +107,10 @@ export function useFileSystem(currentPath) {
 
   const uploadFiles = useCallback(
     async (/** @type {File[]} */ files) => {
+      if (isTrashPath(currentPath)) {
+        throw new Error('휴지통에는 파일을 추가할 수 없습니다.');
+      }
+
       for (const file of files) {
         let base64 = await readFileAsBase64(file);
         let targetName = file.name;

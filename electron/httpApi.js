@@ -17,7 +17,17 @@ import {
   writeWorkspaceFile,
 } from './tempWorkspace.js';
 import { getEditorCoresStatus, updateEditorCores } from './editorUpdater.js';
-import { loginAdmin } from './authService.js';
+import { loginAdmin, isValidAdminSession, revokeAdminSession } from './authService.js';
+import {
+  assertAdminAuthenticated,
+  assertCanAccessFile,
+  assertCanEditFile,
+  pathExistsWithAccessFilter,
+  readDirWithAccessFilter,
+  readFileBase64WithAccessFilter,
+  statPathWithAccessFilter,
+} from './fileAccessGuard.js';
+import { filterFileAccessMap } from '../shared/fileAccessVisibility.js';
 import {
   createShareLink,
   getShareMap,
@@ -41,6 +51,7 @@ import {
 } from './trashService.js';
 import { streamFile } from './mediaStream.js';
 import { getAudioMimeType, getVideoMimeType, isAudioExtension, isVideoExtension } from '../src/lib/media/mediaTypes.js';
+import { handleFsEventsRequest, notifyFsChanged, getFsRevision } from './fsNotifyService.js';
 
 /**
  * @param {import('node:http').ServerResponse} res
@@ -67,6 +78,28 @@ async function readJsonBody(req) {
 
 /**
  * @param {import('node:http').IncomingMessage} req
+ */
+function getAdminToken(req) {
+  const header = req.headers['x-admin-token'];
+  return typeof header === 'string' ? header.trim() : '';
+}
+
+/**
+ * @param {import('node:http').IncomingMessage} req
+ */
+function isAdminAuthenticated(req) {
+  return isValidAdminSession(getAdminToken(req));
+}
+
+/**
+ * @param {URL} url
+ */
+function getShareTokenFromQuery(url) {
+  return url.searchParams.get('share')?.trim() || undefined;
+}
+
+/**
+ * @param {import('node:http').IncomingMessage} req
  * @param {import('node:http').ServerResponse} res
  * @returns {Promise<boolean>} true if request was handled
  */
@@ -89,14 +122,34 @@ export async function handleHttpApiRequest(req, res) {
       return true;
     }
 
+    if (url.pathname === '/api/fs/events') {
+      handleFsEventsRequest(req, res);
+      return true;
+    }
+
+    if (method === 'GET' && url.pathname === '/api/fs/revision') {
+      sendJson(res, 200, { revision: getFsRevision() });
+      return true;
+    }
+
     if (method === 'GET' && url.pathname === '/api/fs/readDir') {
-      sendJson(res, 200, await fsService.readDir(url.searchParams.get('path') ?? '.'));
+      sendJson(
+        res,
+        200,
+        await readDirWithAccessFilter(
+          url.searchParams.get('path') ?? '.',
+          isAdminAuthenticated(req),
+          getPortableRoot(),
+        ),
+      );
       return true;
     }
 
     if (method === 'POST' && url.pathname === '/api/fs/mkdir') {
       const body = await readJsonBody(req);
-      sendJson(res, 200, await fsService.mkdir(body.path));
+      const result = await fsService.mkdir(body.path);
+      notifyFsChanged();
+      sendJson(res, 200, result);
       return true;
     }
 
@@ -104,7 +157,9 @@ export async function handleHttpApiRequest(req, res) {
       const body = await readJsonBody(req);
       await syncSharePathDelete(body.path, getPortableRoot());
       await syncFileAccessDelete(body.path, getPortableRoot());
-      sendJson(res, 200, await fsService.deletePath(body.path));
+      const result = await fsService.deletePath(body.path);
+      notifyFsChanged();
+      sendJson(res, 200, result);
       return true;
     }
 
@@ -112,29 +167,51 @@ export async function handleHttpApiRequest(req, res) {
       const body = await readJsonBody(req);
       await syncSharePathRename(body.from, body.to, getPortableRoot());
       await syncFileAccessRename(body.from, body.to, getPortableRoot());
-      sendJson(res, 200, await fsService.renamePath(body.from, body.to));
+      const result = await fsService.renamePath(body.from, body.to);
+      notifyFsChanged();
+      sendJson(res, 200, result);
       return true;
     }
 
     if (method === 'GET' && url.pathname === '/api/fs/exists') {
-      sendJson(res, 200, await fsService.pathExists(url.searchParams.get('path') ?? ''));
+      sendJson(
+        res,
+        200,
+        await pathExistsWithAccessFilter(
+          url.searchParams.get('path') ?? '',
+          isAdminAuthenticated(req),
+          getShareTokenFromQuery(url),
+        ),
+      );
       return true;
     }
 
     if (method === 'GET' && url.pathname === '/api/fs/readFile') {
-      sendJson(res, 200, await fsService.readFileBase64(url.searchParams.get('path') ?? ''));
+      sendJson(
+        res,
+        200,
+        await readFileBase64WithAccessFilter(
+          url.searchParams.get('path') ?? '',
+          isAdminAuthenticated(req),
+          getShareTokenFromQuery(url),
+        ),
+      );
       return true;
     }
 
     if (method === 'POST' && url.pathname === '/api/fs/writeFile') {
       const body = await readJsonBody(req);
-      sendJson(res, 200, await fsService.writeFileBase64(body.path, body.base64 ?? ''));
+      const result = await fsService.writeFileBase64(body.path, body.base64 ?? '');
+      notifyFsChanged();
+      sendJson(res, 200, result);
       return true;
     }
 
     if (method === 'POST' && url.pathname === '/api/fs/copy') {
       const body = await readJsonBody(req);
-      sendJson(res, 200, await fsService.copyPath(body.from, body.to));
+      const result = await fsService.copyPath(body.from, body.to);
+      notifyFsChanged();
+      sendJson(res, 200, result);
       return true;
     }
 
@@ -142,17 +219,28 @@ export async function handleHttpApiRequest(req, res) {
       const body = await readJsonBody(req);
       await syncSharePathRename(body.from, body.to, getPortableRoot());
       await syncFileAccessRename(body.from, body.to, getPortableRoot());
-      sendJson(res, 200, await fsService.movePath(body.from, body.to));
+      const result = await fsService.movePath(body.from, body.to);
+      notifyFsChanged();
+      sendJson(res, 200, result);
       return true;
     }
 
     if (method === 'GET' && url.pathname === '/api/fs/stat') {
-      sendJson(res, 200, await fsService.statPath(url.searchParams.get('path') ?? ''));
+      sendJson(
+        res,
+        200,
+        await statPathWithAccessFilter(
+          url.searchParams.get('path') ?? '',
+          isAdminAuthenticated(req),
+          getShareTokenFromQuery(url),
+        ),
+      );
       return true;
     }
 
     if (method === 'GET' && url.pathname === '/api/fs/download') {
       const relativePath = url.searchParams.get('path') ?? '';
+      await assertCanAccessFile(relativePath, isAdminAuthenticated(req), getShareTokenFromQuery(url));
       const buffer = await fsService.readFileBuffer(relativePath);
       const fileName = path.basename(relativePath);
       res.writeHead(200, {
@@ -165,6 +253,7 @@ export async function handleHttpApiRequest(req, res) {
 
     if (method === 'GET' && url.pathname === '/api/fs/stream') {
       const relativePath = url.searchParams.get('path') ?? '';
+      await assertCanAccessFile(relativePath, isAdminAuthenticated(req), getShareTokenFromQuery(url));
       const extension = path.extname(relativePath).slice(1).toLowerCase();
       const contentType = isVideoExtension(extension)
         ? getVideoMimeType(extension)
@@ -177,6 +266,8 @@ export async function handleHttpApiRequest(req, res) {
 
     if (method === 'POST' && url.pathname === '/api/workspace/open') {
       const body = await readJsonBody(req);
+      const shareToken = body.shareToken || getShareTokenFromQuery(url);
+      await assertCanAccessFile(body.relativePath, isAdminAuthenticated(req), shareToken);
       sendJson(
         res,
         200,
@@ -192,22 +283,43 @@ export async function handleHttpApiRequest(req, res) {
 
     if (method === 'POST' && url.pathname === '/api/workspace/write') {
       const body = await readJsonBody(req);
+      const session = getSession(body.sessionId ?? '');
+      await assertCanEditFile(
+        session.relativePath,
+        isAdminAuthenticated(req),
+        getShareTokenFromQuery(url),
+      );
       sendJson(res, 200, await writeWorkspaceFile(body.sessionId, body.base64 ?? ''));
       return true;
     }
 
     if (method === 'POST' && url.pathname === '/api/workspace/commit') {
       const body = await readJsonBody(req);
-      sendJson(res, 200, await commitWorkspace(body.sessionId, getDataRoot()));
+      const session = getSession(body.sessionId ?? '');
+      await assertCanEditFile(
+        session.relativePath,
+        isAdminAuthenticated(req),
+        getShareTokenFromQuery(url),
+      );
+      const result = await commitWorkspace(body.sessionId, getDataRoot());
+      notifyFsChanged();
+      sendJson(res, 200, result);
       return true;
     }
 
     if (method === 'POST' && url.pathname === '/api/workspace/rename') {
       const body = await readJsonBody(req);
-      const fromPath = getSession(body.sessionId).relativePath;
+      const session = getSession(body.sessionId ?? '');
+      await assertCanEditFile(
+        session.relativePath,
+        isAdminAuthenticated(req),
+        getShareTokenFromQuery(url),
+      );
+      const fromPath = session.relativePath;
       const result = await renameWorkspace(body.sessionId, body.relativePath, getDataRoot());
       await syncSharePathRename(fromPath, result.relativePath, getPortableRoot());
       await syncFileAccessRename(fromPath, result.relativePath, getPortableRoot());
+      notifyFsChanged();
       sendJson(res, 200, result);
       return true;
     }
@@ -234,20 +346,33 @@ export async function handleHttpApiRequest(req, res) {
       return true;
     }
 
+    if (method === 'POST' && url.pathname === '/api/auth/logout') {
+      revokeAdminSession(getAdminToken(req));
+      sendJson(res, 200, { success: true });
+      return true;
+    }
+
     if (method === 'GET' && url.pathname === '/api/share/map') {
+      assertAdminAuthenticated(isAdminAuthenticated(req));
       sendJson(res, 200, await getShareMap(getPortableRoot()));
       return true;
     }
 
     if (method === 'POST' && url.pathname === '/api/share/create') {
+      assertAdminAuthenticated(isAdminAuthenticated(req));
       const body = await readJsonBody(req);
-      sendJson(res, 200, await createShareLink(body.path, getPortableRoot()));
+      const result = await createShareLink(body.path, getPortableRoot());
+      notifyFsChanged();
+      sendJson(res, 200, result);
       return true;
     }
 
     if (method === 'POST' && url.pathname === '/api/share/revoke') {
+      assertAdminAuthenticated(isAdminAuthenticated(req));
       const body = await readJsonBody(req);
-      sendJson(res, 200, await revokeShareLink(body.path, getPortableRoot()));
+      const result = await revokeShareLink(body.path, getPortableRoot());
+      notifyFsChanged();
+      sendJson(res, 200, result);
       return true;
     }
 
@@ -257,17 +382,35 @@ export async function handleHttpApiRequest(req, res) {
     }
 
     if (method === 'GET' && url.pathname === '/api/file-access/map') {
-      sendJson(res, 200, await getFileAccessMap(getPortableRoot()));
+      const accessMap = await getFileAccessMap(getPortableRoot());
+      sendJson(res, 200, filterFileAccessMap(accessMap, isAdminAuthenticated(req)));
+      return true;
+    }
+
+    if (method === 'GET' && url.pathname === '/api/file-access/can-edit') {
+      const relativePath = url.searchParams.get('path') ?? '';
+      try {
+        await assertCanEditFile(relativePath, isAdminAuthenticated(req), getShareTokenFromQuery(url));
+        sendJson(res, 200, { canEdit: true });
+      } catch (error) {
+        sendJson(res, 200, {
+          canEdit: false,
+          message: error instanceof Error ? error.message : '공개된 문서만 편집할 수 있습니다.',
+        });
+      }
       return true;
     }
 
     if (method === 'POST' && url.pathname === '/api/file-access/set') {
+      assertAdminAuthenticated(isAdminAuthenticated(req));
       const body = await readJsonBody(req);
-      sendJson(
-        res,
-        200,
-        await setFileAccess(body.path, { visibility: body.visibility, viewRestricted: body.viewRestricted }, getPortableRoot()),
+      const result = await setFileAccess(
+        body.path,
+        { visibility: body.visibility, viewRestricted: body.viewRestricted },
+        getPortableRoot(),
       );
+      notifyFsChanged();
+      sendJson(res, 200, result);
       return true;
     }
 
@@ -278,24 +421,32 @@ export async function handleHttpApiRequest(req, res) {
 
     if (method === 'POST' && url.pathname === '/api/trash/move') {
       const body = await readJsonBody(req);
-      sendJson(res, 200, await trashPath(body.path, getPortableRoot()));
+      const result = await trashPath(body.path, getPortableRoot());
+      notifyFsChanged();
+      sendJson(res, 200, result);
       return true;
     }
 
     if (method === 'POST' && url.pathname === '/api/trash/restore') {
       const body = await readJsonBody(req);
-      sendJson(res, 200, await restorePath(body.path, getPortableRoot()));
+      const result = await restorePath(body.path, getPortableRoot());
+      notifyFsChanged();
+      sendJson(res, 200, result);
       return true;
     }
 
     if (method === 'POST' && url.pathname === '/api/trash/empty') {
-      sendJson(res, 200, await emptyTrash(getPortableRoot()));
+      const result = await emptyTrash(getPortableRoot());
+      notifyFsChanged();
+      sendJson(res, 200, result);
       return true;
     }
 
     if (method === 'POST' && url.pathname === '/api/trash/deletePermanent') {
       const body = await readJsonBody(req);
-      sendJson(res, 200, await deletePermanent(body.path, getPortableRoot()));
+      const result = await deletePermanent(body.path, getPortableRoot());
+      notifyFsChanged();
+      sendJson(res, 200, result);
       return true;
     }
 

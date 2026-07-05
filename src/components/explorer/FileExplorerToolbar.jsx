@@ -21,6 +21,7 @@ export default function FileExplorerToolbar({
   onPaste,
   onDelete,
   onRename,
+  onDuplicate,
   onSelectAll,
   onClearSelection,
   onProperties,
@@ -28,7 +29,79 @@ export default function FileExplorerToolbar({
   isInTrashView = false,
   onEmptyTrash,
   onRestore,
+  isAdminLoggedIn = true,
 }) {
+  const sortAndViewControls = (
+    <>
+      <span className="mx-1 hidden h-4 w-px bg-nas-border sm:inline" />
+      <select
+        value={sortField}
+        onChange={(event) => onSortFieldChange(event.target.value)}
+        className="h-8 rounded-md border border-nas-border bg-white px-2 text-[10pt]"
+      >
+        <option value="name">이름</option>
+        <option value="modifiedAt">수정일</option>
+        <option value="size">크기</option>
+        <option value="type">종류</option>
+      </select>
+      <button type="button" className="nas-btn-ghost px-2" onClick={onToggleSortDirection}>
+        {sortDirection === 'asc' ? '↑' : '↓'}
+      </button>
+      <div className="flex rounded-md border border-nas-border p-0.5">
+        <button
+          type="button"
+          className={`rounded px-2 py-1 text-[10pt] ${viewMode === 'list' ? 'bg-slate-100 font-medium' : ''}`}
+          onClick={() => onViewModeChange('list')}
+        >
+          목록
+        </button>
+        <button
+          type="button"
+          className={`rounded px-2 py-1 text-[10pt] ${viewMode === 'grid' ? 'bg-slate-100 font-medium' : ''}`}
+          onClick={() => onViewModeChange('grid')}
+        >
+          아이콘
+        </button>
+      </div>
+    </>
+  );
+
+  if (!isAdminLoggedIn) {
+    return (
+      <div className="flex flex-wrap items-center gap-2 border-b border-nas-border px-4 py-3">
+        <div className="flex flex-wrap items-center gap-1">
+          <button type="button" className="nas-btn-ghost" onClick={onNavigateUp} title="상위 폴더">
+            상위
+          </button>
+          <button type="button" className="nas-btn-ghost" onClick={onRefresh} title="F5">
+            새로고침
+          </button>
+          <span className="mx-1 hidden h-4 w-px bg-nas-border sm:inline" />
+          <button type="button" className="nas-btn-ghost" onClick={onSelectAll}>
+            전체 선택
+          </button>
+          <button
+            type="button"
+            className="nas-btn-ghost"
+            disabled={!hasSelection}
+            onClick={onClearSelection}
+          >
+            선택 해제
+          </button>
+          <button
+            type="button"
+            className="nas-btn-ghost"
+            disabled={!canShowProperties}
+            onClick={onProperties}
+          >
+            속성
+          </button>
+          {sortAndViewControls}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-nas-border px-4 py-3">
       <div className="flex flex-wrap items-center gap-1">
@@ -69,6 +142,9 @@ export default function FileExplorerToolbar({
             <button type="button" className="nas-btn-ghost" disabled={!canRename} onClick={onRename}>
               이름 변경
             </button>
+            <button type="button" className="nas-btn-ghost" disabled={!canRename} onClick={onDuplicate}>
+              복제
+            </button>
           </>
         )}
         {isInTrashView && (
@@ -108,36 +184,7 @@ export default function FileExplorerToolbar({
         >
           속성
         </button>
-        <span className="mx-1 hidden h-4 w-px bg-nas-border lg:inline" />
-        <select
-          value={sortField}
-          onChange={(event) => onSortFieldChange(event.target.value)}
-          className="hidden h-8 rounded-md border border-nas-border bg-white px-2 text-[10pt] lg:inline"
-        >
-          <option value="name">이름</option>
-          <option value="modifiedAt">수정일</option>
-          <option value="size">크기</option>
-          <option value="type">종류</option>
-        </select>
-        <button type="button" className="nas-btn-ghost hidden px-2 lg:inline-flex" onClick={onToggleSortDirection}>
-          {sortDirection === 'asc' ? '↑' : '↓'}
-        </button>
-        <div className="flex rounded-md border border-nas-border p-0.5">
-          <button
-            type="button"
-            className={`rounded px-2 py-1 text-[10pt] ${viewMode === 'list' ? 'bg-slate-100 font-medium' : ''}`}
-            onClick={() => onViewModeChange('list')}
-          >
-            목록
-          </button>
-          <button
-            type="button"
-            className={`rounded px-2 py-1 text-[10pt] ${viewMode === 'grid' ? 'bg-slate-100 font-medium' : ''}`}
-            onClick={() => onViewModeChange('grid')}
-          >
-            아이콘
-          </button>
-        </div>
+        {sortAndViewControls}
       </div>
     </div>
   );

@@ -18,7 +18,9 @@ import { useShareLinks } from '../../hooks/useShareLinks.js';
 import { useFileAccess } from '../../hooks/useFileAccess.js';
 import { useTrash } from '../../hooks/useTrash.js';
 import { useFileDropZone } from '../../hooks/useFileDropZone.js';
+import { useAdminAuthContext } from '../../context/AdminAuthContext.jsx';
 import FileDropOverlay from '../common/FileDropOverlay.jsx';
+import EditorUpdateButton from './EditorUpdateButton.jsx';
 import {
   openShareLinkForEntry,
   revokeShareLinkForEntry,
@@ -33,9 +35,10 @@ import {
   resolveUniqueName,
 } from '../../lib/fsPaths.js';
 import { resolveFileEntryStatus } from '../../lib/fileEntryStatus.js';
+import { canOpenFileForEdit, VIEW_OPEN_DENIED_MESSAGE } from '../../lib/fileEditAccess.js';
 import { downloadFileEntries } from '../../lib/downloadEntries.js';
 import { moveEntries } from '../../lib/moveEntries.js';
-import { isTrashPath, TRASH_FOLDER } from '../../lib/trashPaths.js';
+import { isTrashPath, isTrashSubfolder, TRASH_FOLDER } from '../../lib/trashPaths.js';
 import {
   createFolderAtPath,
   createNewTypedFileAtPath,
@@ -51,7 +54,7 @@ export default function Sidebar({
   syncInfo,
 }) {
   const [searchQuery, setSearchQuery] = useState('');
-  const tree = useDirectoryTree(currentPath);
+  const tree = useDirectoryTree(currentPath, fsRevision);
   const fs = useFileSystem(currentPath);
   const { confirm: appConfirm, alert: appAlert, dialog: confirmDialog } = useAppConfirm();
   const { results: searchResults, searching, truncated, isActive: isSearchActive } = useFileSearch(
@@ -61,6 +64,7 @@ export default function Sidebar({
   const { hasClipboard, copyEntries, cutEntries, pasteEntries } = useFileClipboard();
   const { shareMap, refreshShareMap } = useShareLinks();
   const { accessMap, refreshAccessMap, setFileAccess } = useFileAccess();
+  const { isAdminLoggedIn } = useAdminAuthContext();
   const { count: trashCount, refresh: refreshTrash } = useTrash(fsRevision);
 
   const isInTrashView = isTrashPath(currentPath);
@@ -101,7 +105,8 @@ export default function Sidebar({
     void fs.refresh();
     void refreshShareMap();
     void refreshAccessMap();
-  }, [fsRevision, tree.refreshTree, fs.refresh, refreshShareMap, refreshAccessMap]);
+    void refreshTrash();
+  }, [fsRevision, tree.refreshTree, fs.refresh, refreshShareMap, refreshAccessMap, refreshTrash]);
 
   const openCreateFolderDialog = (targetPath = currentPath) => {
     if (isTrashPath(targetPath)) return;
@@ -155,7 +160,8 @@ export default function Sidebar({
   };
 
   const { isFileDragOver, dropZoneProps } = useFileDropZone(
-    isInTrashView ? async () => {} : (files) => handleUploadFiles(files, currentPath),
+    (files) => handleUploadFiles(files, currentPath),
+    { enabled: !isInTrashView },
   );
 
   const handleDownload = async (entry = downloadTarget) => {
@@ -282,8 +288,23 @@ export default function Sidebar({
       confirmVariant: 'danger',
     });
     if (!confirmed) return;
+
+    const wasInTrashSubfolder = isTrashSubfolder(currentPath);
+    if (wasInTrashSubfolder) {
+      skipRevisionRefreshRef.current = true;
+      onNavigate(TRASH_FOLDER);
+    }
+
     await fs.emptyTrash();
-    await notifyChange();
+    await tree.refreshTree();
+    await refreshShareMap();
+    await refreshAccessMap();
+    await refreshTrash();
+    onFsChanged?.();
+
+    if (!wasInTrashSubfolder) {
+      await fs.refresh();
+    }
   };
 
   const handleDuplicate = async (entry) => {
@@ -376,6 +397,11 @@ export default function Sidebar({
     }
   };
 
+  const handleShareLinkRevoke = async () => {
+    if (!shareLinkDialog?.entry) return;
+    await revokeShareLinkForEntry({ entry: shareLinkDialog.entry, refreshShareMap });
+  };
+
   const handleOpen = (entry) => {
     if (entry.isDirectory) {
       onNavigate(entry.relativePath);
@@ -385,7 +411,15 @@ export default function Sidebar({
       window.alert('휴지통에 있는 파일은 복원한 뒤 열어 주세요.');
       return;
     }
+    if (!canOpenFileForEdit(entry.relativePath, accessMap, isAdminLoggedIn)) {
+      window.alert(VIEW_OPEN_DENIED_MESSAGE);
+      return;
+    }
     onOpenFile(entry);
+  };
+
+  const handleOpenFileFromTree = (entry) => {
+    handleOpen(entry);
   };
 
   const openContextMenu = (event, entry, targetPath = currentPath) => {
@@ -412,6 +446,7 @@ export default function Sidebar({
         hasClipboard,
         onOpen: handleOpen,
         onOpenSystem: (entry) => fs.openInSystem(entry.relativePath),
+        onUpload: contextTarget?.isDirectory ? triggerUpload : undefined,
         onCopy: () => copyEntries([contextTarget]),
         onCut: () => cutEntries([contextTarget]),
         onMove: () => handleMove(contextTarget),
@@ -424,6 +459,10 @@ export default function Sidebar({
         onProperties: () => handleShowProperties(contextTarget),
         onDownload: () => handleDownload(contextTarget),
         canDownload: Boolean(contextTarget && !contextTarget.isDirectory),
+        canEditOpen: contextTarget
+          ? canOpenFileForEdit(contextTarget.relativePath, accessMap, isAdminLoggedIn)
+          : false,
+        isAdminLoggedIn,
       })
     : buildBackgroundContextMenuItems({
         targetPath: contextTargetPath,
@@ -435,12 +474,13 @@ export default function Sidebar({
         onPaste: () => handlePaste(contextTargetPath),
         onRefresh: notifyChange,
         onEmptyTrash: handleEmptyTrash,
+        isAdminLoggedIn,
       });
 
   return (
     <aside
-      className="relative flex w-full min-w-0 flex-1 flex-col bg-nas-sidebar text-slate-200 md:w-72 md:flex-none md:shrink-0"
-      {...(isInTrashView ? {} : dropZoneProps)}
+      className="relative flex h-full w-full min-h-0 min-w-0 flex-col bg-nas-sidebar text-slate-200"
+      {...dropZoneProps}
     >
       {!isInTrashView && isFileDragOver && (
         <FileDropOverlay message="여기에 파일을 놓으면 업로드" variant="dark" />
@@ -466,7 +506,7 @@ export default function Sidebar({
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
           placeholder="폴더·파일 검색…"
-          className="h-8 w-full rounded-md border border-slate-600 bg-slate-800 px-3 text-[10pt] text-slate-100 placeholder:text-slate-500 outline-none focus:border-nas-accent"
+          className="h-8 w-full rounded-md border border-slate-600 bg-[#efefef] px-3 text-[10pt] text-slate-800 placeholder:text-slate-500 outline-none focus:border-nas-accent"
         />
       </div>
 
@@ -477,7 +517,7 @@ export default function Sidebar({
           truncated={truncated}
           currentPath={currentPath}
           onNavigate={onNavigate}
-          onOpenFile={onOpenFile}
+          onOpenFile={handleOpenFileFromTree}
           onContextMenu={openContextMenu}
         />
       ) : (
@@ -490,7 +530,7 @@ export default function Sidebar({
             loadingPaths={tree.loadingPaths}
             onToggleExpand={tree.toggleExpand}
             onNavigate={onNavigate}
-            onOpenFile={onOpenFile}
+            onOpenFile={handleOpenFileFromTree}
             onContextMenu={openContextMenu}
             onBackgroundContextMenu={(event, targetPath = currentPath) =>
               openContextMenu(event, null, targetPath)
@@ -503,6 +543,21 @@ export default function Sidebar({
         <button
           type="button"
           onClick={() => onNavigate(TRASH_FOLDER)}
+          onDragEnter={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+          onDragOver={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (event.dataTransfer) {
+              event.dataTransfer.dropEffect = 'none';
+            }
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
           className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-[10pt] transition-colors ${
             currentPath === TRASH_FOLDER || currentPath.startsWith(`${TRASH_FOLDER}/`)
               ? 'bg-nas-accent text-white'
@@ -521,7 +576,12 @@ export default function Sidebar({
         </button>
       </div>
 
-      <div className="border-t border-slate-700 px-4 py-3 text-xs text-slate-400">USB 포터블 모드</div>
+      <div className="border-t border-slate-700 px-2 py-2">
+        <div className={`flex items-center gap-2${isAdminLoggedIn ? '' : ' px-1'}`}>
+          <span className="min-w-0 flex-1 truncate text-xs text-slate-400">USB 포터블 모드</span>
+          {isAdminLoggedIn && <EditorUpdateButton />}
+        </div>
+      </div>
 
       <input
         ref={uploadInputRef}
@@ -535,7 +595,7 @@ export default function Sidebar({
         }}
       />
 
-      {contextMenu && (
+      {contextMenu && contextItems.length > 0 && (
         <ContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
@@ -549,6 +609,7 @@ export default function Sidebar({
           entry={propertiesEntry}
           statInfo={propertiesStat}
           fileStatus={propertiesEntryStatus}
+          isAdminLoggedIn={isAdminLoggedIn}
           accessSaving={propertiesSaving}
           onChangePrivate={handlePropertiesPrivateChange}
           onChangeViewRestricted={handlePropertiesViewRestrictedChange}
@@ -583,6 +644,7 @@ export default function Sidebar({
         open={Boolean(shareLinkDialog)}
         url={shareLinkDialog?.url ?? ''}
         fileName={shareLinkDialog?.fileName}
+        onRevoke={shareLinkDialog?.entry ? handleShareLinkRevoke : undefined}
         onClose={() => setShareLinkDialog(null)}
       />
 

@@ -1,8 +1,13 @@
+import { getShareTokenFromUrl } from '../shareAccess.js';
+
 /**
  * @param {string} relativePath
  */
 export function buildMediaStreamUrl(relativePath) {
-  return `/api/fs/stream?path=${encodeURIComponent(relativePath)}`;
+  const params = new URLSearchParams({ path: relativePath });
+  const shareToken = getShareTokenFromUrl();
+  if (shareToken) params.set('share', shareToken);
+  return `/api/fs/stream?${params.toString()}`;
 }
 
 /**

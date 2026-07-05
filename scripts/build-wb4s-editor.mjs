@@ -2,17 +2,20 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
+import {
+  WB4S_REPO,
+  WB4S_SYNC_EXCLUDE_DIRS,
+  WB4S_UPSTREAM_VERSION,
+  getWb4sCacheSrc,
+  getWb4sSiblingSrc,
+} from './wb4s-upstream.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
-const wb4sSrc = path.join(root, '.cache', 'wb4s-src');
+const wb4sSrc = getWb4sCacheSrc(root);
 const overlayDir = path.join(root, 'vendor', 'wb4s-educowork-overlay');
-const siblingSrc = path.resolve(root, '..', 'WhiteBoard4Share v1.0.2');
+const siblingSrc = getWb4sSiblingSrc(root);
 const publicOut = path.join(root, 'public', 'wb4s-editor');
-const WB4S_REPO = 'https://github.com/soonpyopark/WhiteBoard4Share.git';
-
-/** @type {readonly string[]} */
-const SYNC_EXCLUDE_DIRS = ['node_modules', 'dist', 'exe', '.git', 'electron-dist', 'electron'];
 
 function run(cwd, command, args, { shell = false } = {}) {
   return new Promise((resolve, reject) => {
@@ -38,6 +41,15 @@ async function pathExists(target) {
   }
 }
 
+async function readPackageVersion(targetDir) {
+  try {
+    const raw = await fs.readFile(path.join(targetDir, 'package.json'), 'utf8');
+    return JSON.parse(raw).version ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function copyDir(src, dest, { excludeDirs = [] } = {}) {
   await fs.mkdir(dest, { recursive: true });
   const entries = await fs.readdir(src, { withFileTypes: true });
@@ -56,23 +68,28 @@ async function copyDir(src, dest, { excludeDirs = [] } = {}) {
 async function syncFromSibling() {
   console.log(`[wb4s-editor] syncing source from ${siblingSrc} …`);
   await fs.rm(wb4sSrc, { recursive: true, force: true });
-  await copyDir(siblingSrc, wb4sSrc, { excludeDirs: [...SYNC_EXCLUDE_DIRS] });
+  await copyDir(siblingSrc, wb4sSrc, { excludeDirs: [...WB4S_SYNC_EXCLUDE_DIRS] });
 }
 
 async function cloneUpstream() {
-  console.log(`[wb4s-editor] cloning ${WB4S_REPO} …`);
+  console.log(`[wb4s-editor] cloning ${WB4S_REPO} (v${WB4S_UPSTREAM_VERSION}) …`);
   await fs.mkdir(path.dirname(wb4sSrc), { recursive: true });
+  await fs.rm(wb4sSrc, { recursive: true, force: true });
   await run(root, 'git', ['clone', '--depth', '1', WB4S_REPO, wb4sSrc]);
 }
 
 async function ensureWb4sSource() {
-  if (await pathExists(path.join(wb4sSrc, 'package.json'))) {
+  const currentVersion = await readPackageVersion(wb4sSrc);
+  if (currentVersion === WB4S_UPSTREAM_VERSION) {
     return;
   }
 
   if (await pathExists(path.join(siblingSrc, 'package.json'))) {
-    await syncFromSibling();
-    return;
+    const siblingVersion = await readPackageVersion(siblingSrc);
+    if (siblingVersion === WB4S_UPSTREAM_VERSION) {
+      await syncFromSibling();
+      return;
+    }
   }
 
   await cloneUpstream();

@@ -9,8 +9,11 @@ import TextEditorShell from './components/editors/TextEditorShell.jsx';
 import AudioPlayerShell from './components/editors/AudioPlayerShell.jsx';
 import VideoPlayerShell from './components/editors/VideoPlayerShell.jsx';
 import { ShareLinkError, ShareLinkLoading } from './components/share/ShareLinkScreen.jsx';
+import { AdminAuthProvider } from './context/AdminAuthContext.jsx';
 import { useAppInfo } from './hooks/useAppInfo.js';
+import { useFsChangeSync } from './hooks/useFsChangeSync.js';
 import { hasEducoworkApi } from './lib/runtime.js';
+import { getShareTokenFromUrl } from './lib/shareAccess.js';
 import { AUDIO_EXTENSIONS, VIDEO_EXTENSIONS } from './lib/media/mediaTypes.js';
 
 const OPENABLE_EXTENSIONS = {
@@ -23,10 +26,6 @@ const OPENABLE_EXTENSIONS = {
   ...Object.fromEntries(AUDIO_EXTENSIONS.map((ext) => [ext, 'audio'])),
   ...Object.fromEntries(VIDEO_EXTENSIONS.map((ext) => [ext, 'video'])),
 };
-
-function getShareTokenFromUrl() {
-  return new URLSearchParams(window.location.search).get('share')?.trim() || null;
-}
 
 /**
  * @param {{
@@ -124,7 +123,7 @@ function OpenEditorLayer({ openEditor, syncInfo, allowClose, fullscreen = false,
 }
 
 function EduCoworkApp() {
-  const shareToken = useMemo(() => getShareTokenFromUrl(), []);
+  const shareToken = useMemo(() => getShareTokenFromUrl() || null, []);
   const isShareMode = Boolean(shareToken);
 
   const { paths, syncInfo, loading: infoLoading } = useAppInfo();
@@ -134,7 +133,7 @@ function EduCoworkApp() {
   const [shareStatus, setShareStatus] = useState(isShareMode ? 'loading' : 'idle');
   const [shareError, setShareError] = useState('');
 
-  const handleOpenFile = useCallback(async (entry, { fromShare = false } = {}) => {
+  const handleOpenFile = useCallback(async (entry) => {
     const viewerType = OPENABLE_EXTENSIONS[entry.extension];
     if (viewerType) {
       setOpenEditor({
@@ -146,7 +145,7 @@ function EduCoworkApp() {
       return true;
     }
 
-    if (fromShare) {
+    if (isShareMode) {
       throw new Error('이 파일 형식은 공유 링크로 미리볼 수 없습니다.');
     }
 
@@ -172,6 +171,8 @@ function EduCoworkApp() {
     setFsRevision((value) => value + 1);
   }, []);
 
+  useFsChangeSync(handleFsChanged);
+
   const handleEditorRenamed = useCallback((entry) => {
     if (entry?.relativePath && entry?.name) {
       setOpenEditor((prev) => {
@@ -189,6 +190,15 @@ function EduCoworkApp() {
     }
     handleFsChanged();
   }, [handleFsChanged]);
+
+  useEffect(() => {
+    if (!shareToken || !window.educowork?.auth?.bindShareToken) return undefined;
+
+    void window.educowork.auth.bindShareToken(shareToken);
+    return () => {
+      void window.educowork.auth.bindShareToken('');
+    };
+  }, [shareToken]);
 
   useEffect(() => {
     if (!shareToken || !window.educowork?.share?.resolve) return undefined;
@@ -209,7 +219,7 @@ function EduCoworkApp() {
           return;
         }
 
-        await handleOpenFile(entry, { fromShare: true });
+        await handleOpenFile(entry);
         if (cancelled) return;
 
         setShareStatus('ready');
@@ -260,7 +270,7 @@ function EduCoworkApp() {
   }
 
   return (
-    <>
+    <AdminAuthProvider onAuthChange={handleFsChanged}>
       <DesktopShell
         paths={paths}
         syncInfo={syncInfo}
@@ -289,7 +299,7 @@ function EduCoworkApp() {
         onClose={handleCloseEditor}
         onRenamed={handleEditorRenamed}
       />
-    </>
+    </AdminAuthProvider>
   );
 }
 

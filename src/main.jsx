@@ -2,14 +2,24 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import { initEducowork } from './lib/initEducowork.js';
-import { APP_NAME } from '../shared/constants.js';
+import { APP_ICON_URL, APP_NAME } from '../shared/constants.js';
 import './styles/index.css';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 
 root.render(
-  <div className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-300">
-    {APP_NAME} 연결 중…
+  <div className="flex min-h-screen items-center justify-center bg-[#0a1a33] px-6">
+    <div className="flex items-center gap-[18px]">
+      <img
+        className="h-[68px] w-[68px] shrink-0 rounded-[14px] bg-white object-contain"
+        src={APP_ICON_URL}
+        alt=""
+      />
+      <div className="flex flex-col gap-1">
+        <h1 className="m-0 text-[22px] font-bold leading-tight tracking-tight text-white">{APP_NAME}</h1>
+        <p className="m-0 text-[11px] text-[#8fa0b8]">연결 중…</p>
+      </div>
+    </div>
   </div>,
 );
 

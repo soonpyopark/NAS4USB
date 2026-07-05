@@ -42,7 +42,7 @@ export default function EditorUpdateButton() {
     <>
       <button
         type="button"
-        className="inline-flex h-8 shrink-0 items-center rounded-md border border-sky-200 bg-sky-50 px-2.5 text-[10pt] font-medium leading-none text-sky-700 transition-colors hover:border-sky-300 hover:bg-sky-100 disabled:cursor-wait disabled:opacity-50"
+        className="inline-flex h-7 shrink-0 items-center rounded-md border border-slate-600 bg-slate-800 px-2.5 text-[10pt] font-medium leading-none text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-700 disabled:cursor-wait disabled:opacity-50"
         onClick={() => setConfirmOpen(true)}
         disabled={updating}
         title="HWPX · WB4S · FortuneSheet 코어를 USB에 반영"

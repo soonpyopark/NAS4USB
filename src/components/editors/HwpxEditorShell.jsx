@@ -8,6 +8,7 @@ import { getLanWsEndpoints } from '../../sync/buildWsUrl.js';
 import { loadRhwpModule } from '../../lib/rhwp/loadRhwp.js';
 
 const RHWP_VERSION = '0.7.17';
+const MOUNT_TIMEOUT_MS = 200_000;
 
 export default function HwpxEditorShell({ relativePath, fileName, syncInfo, onClose, allowClose = true, fullscreen = false }) {
   const workspace = useWorkspaceSession(relativePath);
@@ -16,6 +17,7 @@ export default function HwpxEditorShell({ relativePath, fileName, syncInfo, onCl
   });
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState(null);
+  const [loadingStatus, setLoadingStatus] = useState('');
   const [contentReady, setContentReady] = useState(false);
   const [editorReady, setEditorReady] = useState(false);
   const [editorHandle, setEditorHandle] = useState(null);
@@ -32,6 +34,7 @@ export default function HwpxEditorShell({ relativePath, fileName, syncInfo, onCl
     setEditorReady(false);
     setEditorHandle(null);
     setLoadError(null);
+    setLoadingStatus('');
 
     async function loadContent() {
       try {
@@ -63,6 +66,8 @@ export default function HwpxEditorShell({ relativePath, fileName, syncInfo, onCl
     async function mountEditor() {
       if (cancelled || !mountRef.current) return;
 
+      setLoadingStatus('rhwp-studio 초기화 중…');
+
       try {
         const rhwp = await loadRhwpModule();
         if (cancelled || !mountRef.current) return;
@@ -71,14 +76,35 @@ export default function HwpxEditorShell({ relativePath, fileName, syncInfo, onCl
         }
 
         mountRef.current.innerHTML = '';
-        const editor = await rhwp.mount(mountRef.current, {
+        const mountPromise = rhwp.mount(mountRef.current, {
           fileName,
           relativePath,
           hwpxBase64: hwpxBase64Ref.current,
           onLoadError: (err) => {
             if (!cancelled) setLoadError(err.message);
           },
+          onStudioStatus: (text) => {
+            if (!cancelled && text) setLoadingStatus(text);
+          },
         });
+
+        let timeoutId = null;
+        const timeoutPromise = new Promise((_, reject) => {
+          timeoutId = window.setTimeout(() => {
+            reject(
+              new Error(
+                'HWPX 로드 시간이 초과되었습니다. 문서가 크거나 rhwp-studio 초기화가 지연되었을 수 있습니다. 탭을 닫았다가 다시 열어 주세요.',
+              ),
+            );
+          }, MOUNT_TIMEOUT_MS);
+        });
+
+        let editor;
+        try {
+          editor = await Promise.race([mountPromise, timeoutPromise]);
+        } finally {
+          if (timeoutId) window.clearTimeout(timeoutId);
+        }
         if (cancelled) {
           editor.destroy?.();
           return;
@@ -86,6 +112,7 @@ export default function HwpxEditorShell({ relativePath, fileName, syncInfo, onCl
 
         setEditorHandle(editor);
         setEditorReady(true);
+        setLoadingStatus('');
       } catch (err) {
         if (!cancelled) {
           setLoadError(err instanceof Error ? err.message : 'Failed to mount rhwp');
@@ -203,8 +230,10 @@ export default function HwpxEditorShell({ relativePath, fileName, syncInfo, onCl
       <div className="relative flex min-h-0 flex-1 flex-col">
         {isLoading && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-white/80 text-sm text-nas-muted">
-            <span>HWPX 로드 및 rhwp-studio 마운트 중…</span>
-            <span className="text-xs text-slate-400">큰 문서는 최대 3분까지 걸릴 수 있습니다.</span>
+            <span>{loadingStatus || 'HWPX 로드 및 rhwp-studio 마운트 중…'}</span>
+            <span className="text-xs text-slate-400">
+              WASM 초기화·문서 렌더링 중입니다. 큰 문서는 최대 3분까지 걸릴 수 있습니다.
+            </span>
           </div>
         )}
 

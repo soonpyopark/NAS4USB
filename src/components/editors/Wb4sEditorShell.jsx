@@ -1,7 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
-import { useYjsSession } from '../../hooks/useYjsSession.js';
 import { useWorkspaceSession } from '../../hooks/useWorkspaceSession.js';
 import { getSyncServerUrl } from '../../sync/buildWsUrl.js';
+import { toRoomId } from '../../sync/roomId.js';
 import {
   base64ToUtf8,
   getWb4sFileStem,
@@ -17,12 +17,9 @@ const Wb4sEditorView = lazy(() => import('../../wb4s/Wb4sEditorView.jsx'));
 
 export default function Wb4sEditorShell({ relativePath, fileName, syncInfo, onClose, onRenamed, allowClose = true }) {
   const workspace = useWorkspaceSession(relativePath);
-  const collabPathRef = useRef(relativePath);
   const relativePathRef = useRef(relativePath);
   const fileNameRef = useRef(fileName);
-  const { roomId } = useYjsSession(collabPathRef.current, syncInfo, {
-    syncReady: syncInfo != null,
-  });
+  const roomId = toRoomId(relativePath);
   const [loadError, setLoadError] = useState(null);
   const [contentReady, setContentReady] = useState(false);
   const [editorReady, setEditorReady] = useState(false);
@@ -123,7 +120,6 @@ export default function Wb4sEditorShell({ relativePath, fileName, syncInfo, onCl
 
       relativePathRef.current = result.relativePath;
       fileNameRef.current = result.fileName;
-      collabPathRef.current = result.relativePath;
       onRenamed?.({ relativePath: result.relativePath, name: result.fileName });
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Rename failed');

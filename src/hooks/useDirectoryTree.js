@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { sortEntries } from '../lib/fsPaths.js';
-import { filterTrashFromEntries } from '../lib/trashPaths.js';
+import { filterTrashFromEntries, isFsNotFoundError } from '../lib/trashPaths.js';
 
 /**
  * @param {string} currentPath
+ * @param {number} [fsRevision]
  */
-export function useDirectoryTree(currentPath) {
+export function useDirectoryTree(currentPath, fsRevision = 0) {
   const [expandedPaths, setExpandedPaths] = useState(() => new Set(['.']));
   const [childrenMap, setChildrenMap] = useState({});
   const [loadingPaths, setLoadingPaths] = useState(() => new Set());
@@ -18,6 +19,21 @@ export function useDirectoryTree(currentPath) {
       const sorted = filterTrashFromEntries(sortEntries(entries, 'name', 'asc'), relativePath);
       setChildrenMap((prev) => ({ ...prev, [relativePath]: sorted }));
       return sorted;
+    } catch (err) {
+      if (isFsNotFoundError(err)) {
+        setChildrenMap((prev) => {
+          const next = { ...prev };
+          delete next[relativePath];
+          return next;
+        });
+        setExpandedPaths((prev) => {
+          const next = new Set(prev);
+          next.delete(relativePath);
+          return next;
+        });
+        return [];
+      }
+      throw err;
     } finally {
       setLoadingPaths((prev) => {
         const next = new Set(prev);
@@ -55,22 +71,46 @@ export function useDirectoryTree(currentPath) {
   );
 
   const refreshTree = useCallback(async () => {
-    const pathsToReload = ['.', ...Array.from(expandedPaths)];
-    const uniquePaths = [...new Set(pathsToReload)];
+    const pathsToReload = ['.', currentPath, ...Array.from(expandedPaths)];
+    const uniquePaths = [...new Set(pathsToReload.filter(Boolean))];
 
     const nextEntries = await Promise.all(
       uniquePaths.map(async (path) => {
-        const entries = await window.educowork.fs.readDir(path);
-        return [path, filterTrashFromEntries(sortEntries(entries, 'name', 'asc'), path)];
+        try {
+          const entries = await window.educowork.fs.readDir(path);
+          return [path, filterTrashFromEntries(sortEntries(entries, 'name', 'asc'), path)];
+        } catch (err) {
+          if (isFsNotFoundError(err)) return [path, null];
+          throw err;
+        }
       }),
     );
 
-    setChildrenMap((prev) => ({
-      ...prev,
-      ...Object.fromEntries(nextEntries),
-    }));
+    setChildrenMap((prev) => {
+      const next = { ...prev };
+      for (const [path, entries] of nextEntries) {
+        if (entries === null) {
+          delete next[path];
+        } else {
+          next[path] = entries;
+        }
+      }
+      return next;
+    });
+    setExpandedPaths((prev) => {
+      const next = new Set(prev);
+      for (const [path, entries] of nextEntries) {
+        if (entries === null) next.delete(path);
+      }
+      return next;
+    });
     setTreeVersion((value) => value + 1);
-  }, [expandedPaths]);
+  }, [currentPath, expandedPaths]);
+
+  useEffect(() => {
+    if (fsRevision === 0) return;
+    void refreshTree();
+  }, [fsRevision, refreshTree]);
 
   const collapseAll = useCallback(() => {
     setExpandedPaths(new Set(['.']));

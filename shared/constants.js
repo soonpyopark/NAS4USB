@@ -7,6 +7,9 @@ export const APP_VERSION = '1.0.1';
 /** Application display name. */
 export const APP_NAME = 'NAS4USB';
 
+/** Splash / about screen blog link. */
+export const APP_BLOG_URL = 'https://note4all.tistory.com';
+
 /** Top bar / window title with subtitle. */
 export const APP_NAME_LONG = 'NAS4USB';
 

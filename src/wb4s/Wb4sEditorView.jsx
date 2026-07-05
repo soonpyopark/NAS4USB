@@ -4,6 +4,7 @@ import { EmbedDeptSessionProvider } from '@wb4s-engine/context/DeptSessionContex
 import { parseWhiteboardFileText } from '@wb4s-engine/lib/whiteboard/whiteboardFile.ts';
 import '@wb4s-engine/index.css';
 import '@wb4s-engine/App.css';
+import '@wb4s-engine/embed-tools-mobile.css';
 
 /**
  * EduCowork native WhiteBoard4Share editor (no iframe mount).

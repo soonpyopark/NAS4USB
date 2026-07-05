@@ -7,7 +7,7 @@ import { buildShareLinkUrl } from './shareLink.js';
  *   shareMap: Record<string, { token?: string }>,
  *   refreshShareMap: () => Promise<void>,
  * }} options
- * @returns {Promise<{ url: string, fileName?: string }>}
+ * @returns {Promise<{ url: string, fileName?: string, entry: { relativePath: string, name?: string } }>}
  */
 export async function openShareLinkForEntry({ entry, syncInfo, shareMap, refreshShareMap }) {
   if (!window.educowork?.share?.create) {
@@ -24,6 +24,7 @@ export async function openShareLinkForEntry({ entry, syncInfo, shareMap, refresh
   return {
     url: buildShareLinkUrl(token, syncInfo),
     fileName: entry.name,
+    entry,
   };
 }
 

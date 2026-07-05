@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { useAdminAuth } from '../../hooks/useAdminAuth.js';
+import { AppAlertDialog } from '../common/AppModal.jsx';
+import { useAdminAuthContext } from '../../context/AdminAuthContext.jsx';
 
 function EyeIcon({ className }) {
   return (
@@ -22,7 +23,7 @@ function EyeOffIcon({ className }) {
 }
 
 export default function AdminLoginForm() {
-  const { adminId, isLoggedIn, login, logout, loggingIn, error, clearError } = useAdminAuth();
+  const { adminId, isLoggedIn, login, logout, loggingIn, error, clearError } = useAdminAuthContext();
   const [id, setId] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -44,7 +45,9 @@ export default function AdminLoginForm() {
         <button
           type="button"
           className="h-8 rounded-md bg-nas-accent px-2.5 text-[10pt] font-medium text-white transition-colors hover:bg-blue-600"
-          onClick={logout}
+          onClick={() => {
+            void logout();
+          }}
         >
           로그아웃
         </button>
@@ -53,7 +56,8 @@ export default function AdminLoginForm() {
   }
 
   return (
-    <form className="flex items-center gap-1.5" onSubmit={handleSubmit}>
+    <>
+      <form className="flex items-center gap-1.5" onSubmit={handleSubmit}>
       <label className="sr-only" htmlFor="admin-id">
         아이디
       </label>
@@ -106,12 +110,14 @@ export default function AdminLoginForm() {
       >
         {loggingIn ? '…' : '로그인'}
       </button>
-
-      {error && (
-        <span className="max-w-[10rem] truncate text-[10pt] text-red-600" title={error}>
-          {error}
-        </span>
-      )}
     </form>
+
+      <AppAlertDialog
+        open={Boolean(error)}
+        title="로그인"
+        body={error}
+        onClose={clearError}
+      />
+    </>
   );
 }

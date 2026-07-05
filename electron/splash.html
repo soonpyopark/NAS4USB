@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <title>NAS4USB</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #0a1a33;
+        user-select: none;
+        -webkit-user-select: none;
+        font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif;
+      }
+
+      .splash {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        height: 100%;
+        padding: 18px 22px;
+        box-sizing: border-box;
+      }
+
+      .logo {
+        width: 68px;
+        height: 68px;
+        flex-shrink: 0;
+        object-fit: contain;
+        border-radius: 14px;
+        background: #ffffff;
+        pointer-events: none;
+      }
+
+      .content {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 5px;
+        min-width: 0;
+      }
+
+      .title {
+        margin: 0;
+        font-size: 22px;
+        font-weight: 700;
+        color: #ffffff;
+        line-height: 1.15;
+        letter-spacing: -0.02em;
+        pointer-events: none;
+      }
+
+      .meta {
+        margin: 0;
+        font-size: 11px;
+        font-weight: 400;
+        color: #8fa0b8;
+        line-height: 1.25;
+        pointer-events: none;
+      }
+
+      .url {
+        margin: 0;
+        font-size: 11px;
+        font-weight: 400;
+        color: #a8b4c4;
+        line-height: 1.25;
+        text-decoration: none;
+        cursor: pointer;
+        width: fit-content;
+      }
+
+      .url:hover {
+        color: #d4deea;
+        text-decoration: underline;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="splash">
+      <img class="logo" src="splash-icon.png" alt="" />
+      <div class="content">
+        <h1 class="title" id="app-title">NAS4USB</h1>
+        <p class="meta" id="about-meta" hidden></p>
+        <a class="url" id="blog-url" href="https://note4all.tistory.com">https://note4all.tistory.com</a>
+      </div>
+    </div>
+    <script>
+      const params = new URLSearchParams(window.location.search);
+
+      const title = params.get('title');
+      if (title) {
+        document.title = title;
+        const titleEl = document.getElementById('app-title');
+        if (titleEl) titleEl.textContent = title;
+      }
+
+      const blogUrl = params.get('blog');
+      if (blogUrl) {
+        const blogEl = document.getElementById('blog-url');
+        if (blogEl) {
+          blogEl.textContent = blogUrl;
+          blogEl.href = blogUrl;
+        }
+      }
+
+      const mode = params.get('mode');
+      const version = params.get('version');
+      const author = params.get('author');
+      if (mode === 'about') {
+        const metaEl = document.getElementById('about-meta');
+        if (metaEl) {
+          const parts = [];
+          if (version) parts.push('v' + version);
+          if (author) parts.push(author);
+          if (parts.length > 0) {
+            metaEl.textContent = parts.join(' · ');
+            metaEl.hidden = false;
+          }
+        }
+        document.body.title = '클릭하면 닫힙니다';
+        document.body.addEventListener('click', (event) => {
+          if (event.target.closest('#blog-url')) return;
+          window.close();
+        });
+        document.addEventListener('keydown', (event) => {
+          if (event.key === 'Escape') window.close();
+        });
+      }
+    </script>
+  </body>
+</html>

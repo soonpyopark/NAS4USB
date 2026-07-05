@@ -1,7 +1,8 @@
-import { app, BrowserWindow, ipcMain, Menu, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, Menu, nativeImage, shell, Tray } from 'electron';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { APP_NAME } from './shared/constants.js';
+import { APP_BLOG_URL, APP_NAME, APP_VERSION } from './shared/constants.js';
 import { resolveAppIconPath } from './electron/appIcon.js';
 import {
   ensureDataRoot,
@@ -35,7 +36,17 @@ import {
   writeWorkspaceFile,
 } from './electron/tempWorkspace.js';
 import { getEditorCoresStatus, updateEditorCores } from './electron/editorUpdater.js';
-import { loginAdmin } from './electron/authService.js';
+import { loginAdmin, isValidAdminSession, revokeAdminSession } from './electron/authService.js';
+import {
+  assertAdminAuthenticated,
+  assertCanAccessFile,
+  assertCanEditFile,
+  pathExistsWithAccessFilter,
+  readDirWithAccessFilter,
+  readFileBase64WithAccessFilter,
+  statPathWithAccessFilter,
+} from './electron/fileAccessGuard.js';
+import { filterFileAccessMap } from './shared/fileAccessVisibility.js';
 import {
   createShareLink,
   getShareMap,
@@ -57,6 +68,7 @@ import {
   restorePath,
   trashPath,
 } from './electron/trashService.js';
+import { notifyFsChanged } from './electron/fsNotifyService.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = !app.isPackaged;
@@ -70,6 +82,89 @@ if (!gotSingleInstanceLock) {
 let activeServerInfo = null;
 
 let mainWindow = null;
+/** @type {import('electron').BrowserWindow | null} */
+let splashWindow = null;
+/** @type {import('electron').Tray | null} */
+let tray = null;
+let isQuitting = false;
+
+function resolveElectronDir() {
+  return path.join(__dirname, 'electron');
+}
+
+function setupSplashExternalLinks(window) {
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    void shell.openExternal(url);
+    return { action: 'deny' };
+  });
+
+  window.webContents.on('will-navigate', (event, url) => {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      event.preventDefault();
+      void shell.openExternal(url);
+    }
+  });
+}
+
+function showSplashWindow(mode) {
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    if (mode === 'loading') {
+      return;
+    }
+    splashWindow.close();
+    splashWindow = null;
+  }
+
+  const iconPath = resolveAppIconPath();
+
+  splashWindow = new BrowserWindow({
+    width: 400,
+    height: mode === 'about' ? 130 : 110,
+    frame: false,
+    alwaysOnTop: mode === 'loading',
+    skipTaskbar: mode === 'loading',
+    resizable: false,
+    center: true,
+    show: false,
+    backgroundColor: '#0a1a33',
+    ...(iconPath ? { icon: iconPath } : {}),
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+    },
+  });
+
+  splashWindow.setMenu(null);
+  void splashWindow.loadFile(path.join(resolveElectronDir(), 'splash.html'), {
+    query: {
+      mode,
+      title: APP_NAME,
+      blog: APP_BLOG_URL,
+      version: APP_VERSION,
+    },
+  });
+
+  setupSplashExternalLinks(splashWindow);
+
+  splashWindow.once('ready-to-show', () => {
+    splashWindow?.show();
+  });
+
+  splashWindow.on('closed', () => {
+    splashWindow = null;
+  });
+}
+
+function createSplashWindow() {
+  showSplashWindow('loading');
+}
+
+function closeSplashWindow() {
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    splashWindow.close();
+  }
+  splashWindow = null;
+}
 
 function createMainWindow() {
   const iconPath = resolveAppIconPath();
@@ -82,6 +177,7 @@ function createMainWindow() {
     title: APP_NAME,
     backgroundColor: '#0f172a',
     autoHideMenuBar: true,
+    show: false,
     ...(iconPath ? { icon: iconPath } : {}),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -94,6 +190,11 @@ function createMainWindow() {
   mainWindow.setMenuBarVisibility(false);
   mainWindow.setMenu(null);
 
+  mainWindow.once('ready-to-show', () => {
+    closeSplashWindow();
+    mainWindow?.show();
+  });
+
   const appUrl =
     activeServerInfo?.appUrl ?? `http://127.0.0.1:${activeServerInfo?.port ?? getSyncPort()}`;
 
@@ -102,6 +203,13 @@ function createMainWindow() {
   if (isDev) {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   }
+
+  mainWindow.on('close', (event) => {
+    if (!isQuitting) {
+      event.preventDefault();
+      mainWindow?.hide();
+    }
+  });
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -127,6 +235,113 @@ async function shutdownServer() {
     stopSyncServer();
   }
   activeServerInfo = null;
+  updateTrayMenu();
+}
+
+function resolveTrayIcon() {
+  const candidates = [
+    resolveAppIconPath(),
+    path.join(resolveElectronDir(), 'splash-icon.png'),
+  ].filter(Boolean);
+
+  for (const iconPath of candidates) {
+    if (!fs.existsSync(iconPath)) continue;
+    const image = nativeImage.createFromPath(iconPath);
+    if (image.isEmpty()) continue;
+    return image.resize({ width: 16, height: 16 });
+  }
+
+  return nativeImage.createEmpty();
+}
+
+function buildTrayMenu() {
+  const serverRunning = activeServerInfo != null;
+
+  return Menu.buildFromTemplate([
+    {
+      label: 'Stop Server',
+      enabled: serverRunning,
+      click: () => {
+        void stopServerFromTray();
+      },
+    },
+    {
+      label: 'Start Server',
+      enabled: !serverRunning,
+      click: () => {
+        void startServerFromTray();
+      },
+    },
+    { type: 'separator' },
+    {
+      label: 'About',
+      click: () => {
+        showSplashWindow('about');
+      },
+    },
+    {
+      label: 'Exit',
+      click: () => {
+        quitFromTray();
+      },
+    },
+  ]);
+}
+
+function updateTrayMenu() {
+  if (!tray || tray.isDestroyed()) return;
+  tray.setContextMenu(buildTrayMenu());
+}
+
+async function stopServerFromTray() {
+  if (!activeServerInfo) return;
+
+  try {
+    await shutdownServer();
+    console.log('[tray] Server stopped.');
+  } catch (err) {
+    console.error('[tray] Failed to stop server:', err);
+  }
+}
+
+async function startServerFromTray() {
+  if (activeServerInfo) return;
+
+  try {
+    await ensureServer();
+    updateTrayMenu();
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      const appUrl =
+        activeServerInfo?.appUrl ?? `http://127.0.0.1:${activeServerInfo?.port ?? getSyncPort()}`;
+      await mainWindow.loadURL(appUrl);
+    }
+
+    console.log('[tray] Server started.');
+  } catch (err) {
+    console.error('[tray] Failed to start server:', err);
+  }
+}
+
+function quitFromTray() {
+  isQuitting = true;
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.removeAllListeners('close');
+    mainWindow.close();
+  }
+  app.quit();
+}
+
+function createTray() {
+  if (tray && !tray.isDestroyed()) return;
+
+  tray = new Tray(resolveTrayIcon());
+  tray.setToolTip(APP_NAME);
+  updateTrayMenu();
+
+  tray.on('double-click', () => {
+    focusMainWindow();
+  });
 }
 
 ipcMain.handle('app:getPaths', () => getAppPaths());
@@ -144,63 +359,147 @@ ipcMain.handle('sync:getInfo', async () => {
   return getSyncInfo();
 });
 
-ipcMain.handle('fs:readDir', async (_event, relativePath = '.') => fsService.readDir(relativePath));
+/** @type {Map<number, string>} */
+const adminTokenBySender = new Map();
 
-ipcMain.handle('fs:mkdir', async (_event, relativePath) => fsService.mkdir(relativePath));
+/**
+ * @param {import('electron').IpcMainInvokeEvent} event
+ */
+function isAdminFromEvent(event) {
+  const token = adminTokenBySender.get(event.sender.id);
+  return isValidAdminSession(token);
+}
+
+/** @type {Map<number, string>} */
+const shareTokenBySender = new Map();
+
+/**
+ * @param {import('electron').IpcMainInvokeEvent} event
+ */
+function getShareTokenFromEvent(event) {
+  return shareTokenBySender.get(event.sender.id);
+}
+
+ipcMain.handle('auth:bindShareToken', (event, token) => {
+  if (token) {
+    shareTokenBySender.set(event.sender.id, token);
+  } else {
+    shareTokenBySender.delete(event.sender.id);
+  }
+  return true;
+});
+
+ipcMain.handle('auth:bindToken', (event, token) => {
+  if (token && isValidAdminSession(token)) {
+    adminTokenBySender.set(event.sender.id, token);
+    return true;
+  }
+  adminTokenBySender.delete(event.sender.id);
+  return false;
+});
+
+ipcMain.handle('auth:logout', (event) => {
+  const token = adminTokenBySender.get(event.sender.id);
+  revokeAdminSession(token);
+  adminTokenBySender.delete(event.sender.id);
+  return true;
+});
+
+ipcMain.handle('fs:readDir', async (event, relativePath = '.') =>
+  readDirWithAccessFilter(relativePath, isAdminFromEvent(event), getPortableRoot()),
+);
+
+ipcMain.handle('fs:mkdir', async (_event, relativePath) => {
+  const result = await fsService.mkdir(relativePath);
+  notifyFsChanged();
+  return result;
+});
 
 ipcMain.handle('fs:rename', async (_event, fromRelative, toRelative) => {
   await syncSharePathRename(fromRelative, toRelative, getPortableRoot());
   await syncFileAccessRename(fromRelative, toRelative, getPortableRoot());
-  return fsService.renamePath(fromRelative, toRelative);
+  const result = await fsService.renamePath(fromRelative, toRelative);
+  notifyFsChanged();
+  return result;
 });
 
 ipcMain.handle('fs:delete', async (_event, relativePath) => {
   await syncSharePathDelete(relativePath, getPortableRoot());
   await syncFileAccessDelete(relativePath, getPortableRoot());
-  return fsService.deletePath(relativePath);
+  const result = await fsService.deletePath(relativePath);
+  notifyFsChanged();
+  return result;
 });
 
-ipcMain.handle('fs:openPath', async (_event, relativePath) => {
+ipcMain.handle('fs:openPath', async (event, relativePath) => {
+  await assertCanAccessFile(relativePath, isAdminFromEvent(event), getShareTokenFromEvent(event));
   const error = await shell.openPath(resolvePortablePath(relativePath));
   if (error) throw new Error(error);
   return true;
 });
 
-ipcMain.handle('fs:exists', async (_event, relativePath) => fsService.pathExists(relativePath));
-
-ipcMain.handle('fs:readFile', async (_event, relativePath) => fsService.readFileBase64(relativePath));
-
-ipcMain.handle('fs:writeFile', async (_event, relativePath, base64 = '') =>
-  fsService.writeFileBase64(relativePath, base64),
+ipcMain.handle('fs:exists', async (event, relativePath) =>
+  pathExistsWithAccessFilter(relativePath, isAdminFromEvent(event), getShareTokenFromEvent(event)),
 );
 
-ipcMain.handle('fs:copy', async (_event, fromRelative, toRelative) =>
-  fsService.copyPath(fromRelative, toRelative),
+ipcMain.handle('fs:readFile', async (event, relativePath) =>
+  readFileBase64WithAccessFilter(relativePath, isAdminFromEvent(event), getShareTokenFromEvent(event)),
 );
+
+ipcMain.handle('fs:writeFile', async (_event, relativePath, base64 = '') => {
+  const result = await fsService.writeFileBase64(relativePath, base64);
+  notifyFsChanged();
+  return result;
+});
+
+ipcMain.handle('fs:copy', async (_event, fromRelative, toRelative) => {
+  const result = await fsService.copyPath(fromRelative, toRelative);
+  notifyFsChanged();
+  return result;
+});
 
 ipcMain.handle('fs:move', async (_event, fromRelative, toRelative) => {
   await syncSharePathRename(fromRelative, toRelative, getPortableRoot());
   await syncFileAccessRename(fromRelative, toRelative, getPortableRoot());
-  return fsService.movePath(fromRelative, toRelative);
+  const result = await fsService.movePath(fromRelative, toRelative);
+  notifyFsChanged();
+  return result;
 });
 
-ipcMain.handle('fs:stat', async (_event, relativePath) => fsService.statPath(relativePath));
-
-ipcMain.handle('workspace:open', async (_event, relativePath) =>
-  openWorkspace(relativePath, getDataRoot(), getTempPath()),
+ipcMain.handle('fs:stat', async (event, relativePath) =>
+  statPathWithAccessFilter(relativePath, isAdminFromEvent(event), getShareTokenFromEvent(event)),
 );
+
+ipcMain.handle('workspace:open', async (event, relativePath, shareToken) => {
+  const token = shareToken || getShareTokenFromEvent(event);
+  await assertCanAccessFile(relativePath, isAdminFromEvent(event), token);
+  return openWorkspace(relativePath, getDataRoot(), getTempPath());
+});
 
 ipcMain.handle('workspace:read', async (_event, sessionId) => readWorkspaceFile(sessionId));
 
-ipcMain.handle('workspace:write', async (_event, sessionId, base64) => writeWorkspaceFile(sessionId, base64));
+ipcMain.handle('workspace:write', async (event, sessionId, base64) => {
+  const session = getSession(sessionId);
+  await assertCanEditFile(session.relativePath, isAdminFromEvent(event), getShareTokenFromEvent(event));
+  return writeWorkspaceFile(sessionId, base64);
+});
 
-ipcMain.handle('workspace:commit', async (_event, sessionId) => commitWorkspace(sessionId, getDataRoot()));
+ipcMain.handle('workspace:commit', async (event, sessionId) => {
+  const session = getSession(sessionId);
+  await assertCanEditFile(session.relativePath, isAdminFromEvent(event), getShareTokenFromEvent(event));
+  const result = await commitWorkspace(sessionId, getDataRoot());
+  notifyFsChanged();
+  return result;
+});
 
-ipcMain.handle('workspace:rename', async (_event, sessionId, newRelativePath) => {
-  const fromPath = getSession(sessionId).relativePath;
+ipcMain.handle('workspace:rename', async (event, sessionId, newRelativePath) => {
+  const session = getSession(sessionId);
+  await assertCanEditFile(session.relativePath, isAdminFromEvent(event), getShareTokenFromEvent(event));
+  const fromPath = session.relativePath;
   const result = await renameWorkspace(sessionId, newRelativePath, getDataRoot());
   await syncSharePathRename(fromPath, result.relativePath, getPortableRoot());
   await syncFileAccessRename(fromPath, result.relativePath, getPortableRoot());
+  notifyFsChanged();
   return result;
 });
 
@@ -214,48 +513,90 @@ ipcMain.handle('auth:login', async (_event, { id, password } = {}) =>
   loginAdmin(id, password, getPortableRoot()),
 );
 
-ipcMain.handle('share:getMap', async () => getShareMap(getPortableRoot()));
+ipcMain.handle('share:getMap', async (event) => {
+  assertAdminAuthenticated(isAdminFromEvent(event));
+  return getShareMap(getPortableRoot());
+});
 
-ipcMain.handle('share:create', async (_event, { path: relativePath } = {}) =>
-  createShareLink(relativePath, getPortableRoot()),
-);
+ipcMain.handle('share:create', async (event, { path: relativePath } = {}) => {
+  assertAdminAuthenticated(isAdminFromEvent(event));
+  const result = await createShareLink(relativePath, getPortableRoot());
+  notifyFsChanged();
+  return result;
+});
 
-ipcMain.handle('share:revoke', async (_event, { path: relativePath } = {}) =>
-  revokeShareLink(relativePath, getPortableRoot()),
-);
+ipcMain.handle('share:revoke', async (event, { path: relativePath } = {}) => {
+  assertAdminAuthenticated(isAdminFromEvent(event));
+  const result = await revokeShareLink(relativePath, getPortableRoot());
+  notifyFsChanged();
+  return result;
+});
 
 ipcMain.handle('share:resolve', async (_event, { token } = {}) =>
   resolveShareToken(token, getPortableRoot()),
 );
 
-ipcMain.handle('fileAccess:getMap', async () => getFileAccessMap(getPortableRoot()));
+ipcMain.handle('fileAccess:getMap', async (event) => {
+  const accessMap = await getFileAccessMap(getPortableRoot());
+  return filterFileAccessMap(accessMap, isAdminFromEvent(event));
+});
 
-ipcMain.handle('fileAccess:set', async (_event, { path: relativePath, visibility, viewRestricted } = {}) =>
-  setFileAccess(relativePath, { visibility, viewRestricted }, getPortableRoot()),
-);
+ipcMain.handle('fileAccess:set', async (event, { path: relativePath, visibility, viewRestricted } = {}) => {
+  assertAdminAuthenticated(isAdminFromEvent(event));
+  const result = await setFileAccess(relativePath, { visibility, viewRestricted }, getPortableRoot());
+  notifyFsChanged();
+  return result;
+});
+
+ipcMain.handle('fileAccess:canEdit', async (event, relativePath) => {
+  try {
+    await assertCanEditFile(relativePath, isAdminFromEvent(event), getShareTokenFromEvent(event));
+    return { canEdit: true };
+  } catch (error) {
+    return {
+      canEdit: false,
+      message: error instanceof Error ? error.message : '공개된 문서만 편집할 수 있습니다.',
+    };
+  }
+});
 
 ipcMain.handle('trash:getMap', async () => getTrashMap(getPortableRoot()));
 
-ipcMain.handle('trash:move', async (_event, { path: relativePath } = {}) =>
-  trashPath(relativePath, getPortableRoot()),
-);
+ipcMain.handle('trash:move', async (_event, { path: relativePath } = {}) => {
+  const result = await trashPath(relativePath, getPortableRoot());
+  notifyFsChanged();
+  return result;
+});
 
-ipcMain.handle('trash:restore', async (_event, { path: relativePath } = {}) =>
-  restorePath(relativePath, getPortableRoot()),
-);
+ipcMain.handle('trash:restore', async (_event, { path: relativePath } = {}) => {
+  const result = await restorePath(relativePath, getPortableRoot());
+  notifyFsChanged();
+  return result;
+});
 
-ipcMain.handle('trash:empty', async () => emptyTrash(getPortableRoot()));
+ipcMain.handle('trash:empty', async () => {
+  const result = await emptyTrash(getPortableRoot());
+  notifyFsChanged();
+  return result;
+});
 
-ipcMain.handle('trash:deletePermanent', async (_event, { path: relativePath } = {}) =>
-  deletePermanent(relativePath, getPortableRoot()),
-);
+ipcMain.handle('trash:deletePermanent', async (_event, { path: relativePath } = {}) => {
+  const result = await deletePermanent(relativePath, getPortableRoot());
+  notifyFsChanged();
+  return result;
+});
 
 function focusMainWindow() {
-  if (!mainWindow) {
+  if (!mainWindow || mainWindow.isDestroyed()) {
     createMainWindow();
     return;
   }
-  if (mainWindow.isMinimized()) mainWindow.restore();
+  if (!mainWindow.isVisible()) {
+    mainWindow.show();
+  }
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore();
+  }
   mainWindow.focus();
 }
 
@@ -266,6 +607,7 @@ if (gotSingleInstanceLock) {
 
   app.whenReady().then(async () => {
     Menu.setApplicationMenu(null);
+    createSplashWindow();
 
     const portableRoot = resolvePortableRoot(isDev);
     const serverEnv = resolveServerEnv(portableRoot, isDev);
@@ -288,6 +630,7 @@ if (gotSingleInstanceLock) {
     try {
       await ensureServer();
     } catch (err) {
+      closeSplashWindow();
       const message = err instanceof Error ? err.message : String(err);
       console.error(`[dev] Server startup failed: ${message}`);
       if (err instanceof Error && 'code' in err && err.code === 'EADDRINUSE') {
@@ -300,29 +643,26 @@ if (gotSingleInstanceLock) {
     }
 
     createMainWindow();
+    createTray();
+    updateTrayMenu();
 
     app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) {
-        createMainWindow();
-      }
+      focusMainWindow();
     });
   });
 }
 
 app.on('window-all-closed', () => {
-  if (isDev) {
-    console.log(
-      '[dev] Window closed — sync server keeps running. Run "npm run dev" again to reopen the UI, or "npm run dev:stop" to shut down.',
-    );
-    return;
-  }
-  if (process.platform !== 'darwin') {
-    shutdownServer();
-    app.quit();
-  }
+  // Main window hides to tray — keep the app and server running.
 });
 
 app.on('before-quit', async () => {
+  isQuitting = true;
+  closeSplashWindow();
+  if (tray && !tray.isDestroyed()) {
+    tray.destroy();
+    tray = null;
+  }
   await shutdownServer();
   await cleanupAllSessions(getTempPath());
 });

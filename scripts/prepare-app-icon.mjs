@@ -7,6 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '..');
 const buildDir = path.join(projectRoot, 'build');
 const publicDir = path.join(projectRoot, 'public');
+const electronDir = path.join(projectRoot, 'electron');
 const sourceCandidates = [
   path.join(buildDir, 'icon-source.png'),
   path.join(buildDir, 'icon-source.jpg'),
@@ -23,6 +24,11 @@ function run(command, args) {
 const source = sourceCandidates.find((candidate) => fs.existsSync(candidate));
 if (!source) {
   console.warn('[icons] build/icon-source.(png|jpg|jpeg) not found — skipping icon generation.');
+  if (fs.existsSync(path.join(publicDir, 'icon.png'))) {
+    fs.mkdirSync(electronDir, { recursive: true });
+    fs.copyFileSync(path.join(publicDir, 'icon.png'), path.join(electronDir, 'splash-icon.png'));
+    console.log('[icons] splash-icon.png ← public/icon.png');
+  }
   process.exit(0);
 }
 
@@ -58,5 +64,7 @@ const icoBuffer = execSync(`npx --yes png-to-ico ${icoInputs}`, {
 fs.writeFileSync(path.join(buildDir, 'icon.ico'), icoBuffer);
 fs.copyFileSync(path.join(buildDir, 'icon.ico'), path.join(publicDir, 'favicon.ico'));
 fs.copyFileSync(path.join(buildDir, 'icon-256.png'), path.join(publicDir, 'wb4s-editor', 'icon.png'));
+fs.mkdirSync(electronDir, { recursive: true });
+fs.copyFileSync(path.join(buildDir, 'icon-256.png'), path.join(electronDir, 'splash-icon.png'));
 
-console.log('[icons] NAS4USB icons ready → build/ + public/');
+console.log('[icons] NAS4USB icons ready → build/ + public/ + electron/splash-icon.png');

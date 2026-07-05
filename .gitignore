@@ -3,6 +3,7 @@ dist/
 .cache/
 .dist-build/
 exe/
+exe_new/
 mac/
 usb/
 *.log

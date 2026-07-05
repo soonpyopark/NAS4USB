@@ -39,6 +39,7 @@ import {
 } from '../lib/collab/publishHistory';
 import type { SceneSnapshot } from '../lib/collab/schema';
 import type { SceneWriteEvent } from '../lib/collab/scene-events';
+import { filterDeferredDrawCollabEvents } from '../lib/collab/filterCollabEvents';
 import { useYjsWhiteboard } from '../hooks/useYjsWhiteboard';
 import { useYjsWhiteboardEmbed } from '../hooks/useYjsWhiteboardEmbed';
 import { useWhiteboardPresence } from '../hooks/useWhiteboardPresence';
@@ -542,7 +543,9 @@ export function EditorView({
   const handleCollabSceneEvents = useCallback(
     (events: SceneWriteEvent[]) => {
       if (!collab.isReady || events.length === 0) return;
-      collab.publishSceneEvents(events);
+      const filtered = filterDeferredDrawCollabEvents(events, engineRef.current);
+      if (filtered.length === 0) return;
+      collab.publishSceneEvents(filtered);
     },
     [collab.isReady, collab.publishSceneEvents],
   );
@@ -576,12 +579,35 @@ export function EditorView({
     setSelectedIds([]);
     setClearConfirmOpen(false);
 
+    if (docRef.current) {
+      docRef.current = {
+        ...docRef.current,
+        paths: [],
+        images: [],
+        texts: [],
+        tables: [],
+        thumbnail: undefined,
+      };
+    }
+
     void (async () => {
       if (collab.isReady) {
         collab.shareScene();
       } else {
         collab.markUnsharedChanges();
       }
+
+      if (isEmbed && embedMode?.onSaveToHost) {
+        setSaveStatus('saving');
+        try {
+          await embedMode.onSaveToHost();
+          setSaveStatus('saved');
+        } catch {
+          setSaveStatus('error');
+        }
+        return;
+      }
+
       await flushPersist({ forceThumbnail: true });
     })();
   };
@@ -600,6 +626,9 @@ export function EditorView({
         setSaveStatus('saving');
         try {
           await embedMode.onSaveToHost();
+          if (collab.isReady) {
+            collab.shareScene();
+          }
           setSaveStatus('saved');
         } catch {
           setSaveStatus('error');
@@ -771,6 +800,9 @@ export function EditorView({
 
   const handleBack = async () => {
     if (isEmbed && embedMode?.onClose) {
+      if (collab.isReady) {
+        collab.shareScene();
+      }
       await embedMode.onClose();
       return;
     }
@@ -867,6 +899,7 @@ export function EditorView({
       <main className="workspace">
         <div className="workspace-canvas-area">
           <DrawingToolsBar
+            key={whiteboardId}
             tool={tool}
             drawSettings={drawSettings}
             eraserSettings={eraserSettings}

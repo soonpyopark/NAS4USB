@@ -7,16 +7,19 @@ import { AppModal, AppModalActions, AppModalBody, AppModalButton } from './AppMo
  *   open: boolean,
  *   url: string,
  *   fileName?: string,
+ *   onRevoke?: () => Promise<void>,
  *   onClose: () => void,
  * }} props
  */
-export default function ShareLinkModal({ open, url, fileName, onClose }) {
+export default function ShareLinkModal({ open, url, fileName, onRevoke, onClose }) {
   const inputRef = useRef(null);
   const [copied, setCopied] = useState(false);
+  const [revoking, setRevoking] = useState(false);
 
   useEffect(() => {
     if (!open) {
       setCopied(false);
+      setRevoking(false);
       return undefined;
     }
 
@@ -35,6 +38,19 @@ export default function ShareLinkModal({ open, url, fileName, onClose }) {
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
       window.alert('클립보드 복사에 실패했습니다.');
+    }
+  };
+
+  const handleRevoke = async () => {
+    if (!onRevoke) return;
+    setRevoking(true);
+    try {
+      await onRevoke();
+      onClose();
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : '공유 해제에 실패했습니다.');
+    } finally {
+      setRevoking(false);
     }
   };
 
@@ -62,10 +78,17 @@ export default function ShareLinkModal({ open, url, fileName, onClose }) {
       />
 
       <AppModalActions>
-        <AppModalButton variant="primary" onClick={handleCopy}>
+        {onRevoke && (
+          <AppModalButton disabled={revoking} onClick={handleRevoke}>
+            {revoking ? '해제 중…' : '공유해제'}
+          </AppModalButton>
+        )}
+        <AppModalButton variant="primary" onClick={handleCopy} disabled={revoking}>
           {copied ? '복사됨' : '링크 복사'}
         </AppModalButton>
-        <AppModalButton onClick={onClose}>닫기</AppModalButton>
+        <AppModalButton onClick={onClose} disabled={revoking}>
+          닫기
+        </AppModalButton>
       </AppModalActions>
     </AppModal>
   );

@@ -1,6 +1,6 @@
 # EduCowork overlay for WhiteBoard4Share
 
-Upstream source lives in `.cache/wb4s-src` (synced from sibling `WhiteBoard4Share v1.0.2` or cloned from GitHub on first build).
+Upstream source lives in `.cache/wb4s-src` (synced from sibling `WhiteBoard4Share v1.0.3` or cloned from GitHub on first build).
 
 This folder contains EduCowork-specific changes applied on top before `npm run build:wb4s-editor`:
 

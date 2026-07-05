@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { getShareTokenFromUrl } from '../lib/shareAccess.js';
+
 /**
  * @param {string} relativePath
  */
@@ -17,7 +19,8 @@ export function useWorkspaceSession(relativePath) {
       setError(null);
 
       try {
-        const session = await window.educowork.workspace.open(relativePath);
+        const shareToken = getShareTokenFromUrl() || undefined;
+        const session = await window.educowork.workspace.open(relativePath, shareToken);
         if (cancelled) {
           await window.educowork.workspace.close(session.sessionId);
           return;

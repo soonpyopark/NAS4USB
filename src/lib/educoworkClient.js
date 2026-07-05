@@ -1,12 +1,37 @@
+import { appendShareTokenToUrl } from './shareAccess.js';
+import { createFsChangeSubscription } from './fsChangeSubscription.js';
+
 const API_PREFIX = '/api';
+
+const ADMIN_TOKEN_STORAGE_KEY = 'educowork.adminToken';
+
+function readAdminToken() {
+  try {
+    return sessionStorage.getItem(ADMIN_TOKEN_STORAGE_KEY) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * @param {string} route
+ */
+function withShareAccessQuery(route) {
+  return appendShareTokenToUrl(`${API_PREFIX}${route}`);
+}
 
 /**
  * @param {string} route
  * @param {RequestInit} [init]
  */
 async function apiFetch(route, init) {
-  const response = await fetch(`${API_PREFIX}${route}`, {
-    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+  const adminToken = readAdminToken();
+  const response = await fetch(withShareAccessQuery(route), {
+    headers: {
+      'Content-Type': 'application/json',
+      ...(adminToken ? { 'X-Admin-Token': adminToken } : {}),
+      ...(init?.headers ?? {}),
+    },
     ...init,
   });
 
@@ -42,6 +67,8 @@ export function createHttpEducoworkClient() {
       window.open(url, '_blank', 'noopener,noreferrer');
       return Promise.resolve(true);
     },
+
+    subscribeFsChanged: (callback) => createFsChangeSubscription(callback),
 
     fs: {
       readDir: (relativePath) =>
@@ -87,10 +114,10 @@ export function createHttpEducoworkClient() {
     },
 
     workspace: {
-      open: (relativePath) =>
+      open: (relativePath, shareToken) =>
         apiFetch('/workspace/open', {
           method: 'POST',
-          body: JSON.stringify({ relativePath }),
+          body: JSON.stringify({ relativePath, shareToken }),
         }),
       read: (sessionId) =>
         apiFetch(`/workspace/read?sessionId=${encodeURIComponent(sessionId)}`),
@@ -127,6 +154,13 @@ export function createHttpEducoworkClient() {
           method: 'POST',
           body: JSON.stringify({ id, password }),
         }),
+      bindToken: (token) => Promise.resolve(true),
+      bindShareToken: (token) => Promise.resolve(true),
+      logout: () =>
+        apiFetch('/auth/logout', {
+          method: 'POST',
+          body: '{}',
+        }),
     },
 
     share: {
@@ -147,6 +181,8 @@ export function createHttpEducoworkClient() {
 
     fileAccess: {
       getMap: () => apiFetch('/file-access/map'),
+      canEdit: (relativePath) =>
+        apiFetch(`/file-access/can-edit?path=${encodeURIComponent(relativePath ?? '')}`),
       set: ({ path, visibility, viewRestricted }) =>
         apiFetch('/file-access/set', {
           method: 'POST',

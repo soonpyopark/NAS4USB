@@ -45,6 +45,11 @@ async function finalizePortableFolder() {
     path.join(portableDir, 'allow-firewall-inbound.bat'),
   );
 
+  await fs.copyFile(
+    path.join(projectRoot, 'stop_server.bat'),
+    path.join(portableDir, 'stop_server.bat'),
+  );
+
   await applyPortableExeIcon(portableDir);
 
   const readme = `NAS4USB USB Portable (Windows)
@@ -54,6 +59,7 @@ async function finalizePortableFolder() {
 2. NAS4USB.exe 를 실행합니다.
 3. LAN 공동 편집 시 .env.example 을 .env 로 복사해 PORT / HOSTNAME 을 설정합니다.
 4. Windows 방화벽 허용: allow-firewall-inbound.bat (관리자 실행)
+5. 서버 중지: stop_server.bat (개발/백그라운드 서버가 남았을 때)
 
 data/ 폴더에 문서가 저장됩니다 (기본값). 다른 경로를 쓰려면 .env 에 DATA_ROOT 를 지정하세요.
 예) DATA_ROOT=data  또는  DATA_ROOT=D:/USB/educowork-data

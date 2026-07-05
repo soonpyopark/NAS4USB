@@ -22,6 +22,7 @@ function formatDate(iso) {
  *   entry: { name?: string, relativePath: string, isDirectory?: boolean, extension?: string, size?: number, modifiedAt?: string } | null,
  *   statInfo?: { name?: string, size?: number, createdAt?: string, modifiedAt?: string } | null,
  *   fileStatus?: { isPrivate: boolean, isViewRestricted: boolean, isSharing: boolean } | null,
+ *   isAdminLoggedIn?: boolean,
  *   accessSaving?: boolean,
  *   onChangePrivate?: (checked: boolean) => void,
  *   onChangeViewRestricted?: (checked: boolean) => void,
@@ -33,13 +34,20 @@ export default function FilePropertiesDialog({
   entry,
   statInfo,
   fileStatus,
+  isAdminLoggedIn = false,
   accessSaving = false,
   onChangePrivate,
   onChangeViewRestricted,
   onChangeShare,
   onClose,
 }) {
-  const showAccessOptions = Boolean(entry && !entry.isDirectory && fileStatus);
+  const canEditAccessOptions = isAdminLoggedIn;
+  const resolvedFileStatus =
+    fileStatus ??
+    (entry && !entry.isDirectory
+      ? { isPrivate: false, isViewRestricted: false, isSharing: false }
+      : null);
+  const showAccessOptions = Boolean(entry && !entry.isDirectory);
 
   return (
     <AppModal open={Boolean(entry)} onClose={onClose} title="속성">
@@ -72,35 +80,38 @@ export default function FilePropertiesDialog({
             </div>
           </dl>
 
-          {showAccessOptions && (
+          {showAccessOptions && resolvedFileStatus && (
             <div className="modal-access-options">
-              <label className="modal-access-option">
+              <label className={`modal-access-option${canEditAccessOptions ? '' : ' modal-access-option--readonly'}`}>
                 <input
                   type="checkbox"
-                  checked={fileStatus.isPrivate}
-                  disabled={accessSaving}
+                  checked={resolvedFileStatus.isPrivate}
+                  disabled={accessSaving || !canEditAccessOptions}
                   onChange={(event) => onChangePrivate?.(event.target.checked)}
                 />
                 <span>비공개</span>
               </label>
-              <label className="modal-access-option">
+              <label className={`modal-access-option${canEditAccessOptions ? '' : ' modal-access-option--readonly'}`}>
                 <input
                   type="checkbox"
-                  checked={fileStatus.isViewRestricted}
-                  disabled={accessSaving}
+                  checked={resolvedFileStatus.isViewRestricted}
+                  disabled={accessSaving || !canEditAccessOptions}
                   onChange={(event) => onChangeViewRestricted?.(event.target.checked)}
                 />
                 <span>열람제한</span>
               </label>
-              <label className="modal-access-option">
+              <label className={`modal-access-option${canEditAccessOptions ? '' : ' modal-access-option--readonly'}`}>
                 <input
                   type="checkbox"
-                  checked={fileStatus.isSharing}
-                  disabled={accessSaving}
+                  checked={resolvedFileStatus.isSharing}
+                  disabled={accessSaving || !canEditAccessOptions}
                   onChange={(event) => onChangeShare?.(event.target.checked)}
                 />
                 <span>공유</span>
               </label>
+              {!canEditAccessOptions && (
+                <p className="modal-access-hint">총괄관리자 로그인 시 변경할 수 있습니다.</p>
+              )}
             </div>
           )}
 

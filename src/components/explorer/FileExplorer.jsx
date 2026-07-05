@@ -32,11 +32,14 @@ import {
 import { resolveFileEntryStatus } from '../../lib/fileEntryStatus.js';
 import { downloadFileEntries } from '../../lib/downloadEntries.js';
 import { moveEntries } from '../../lib/moveEntries.js';
-import { isTrashPath, TRASH_FOLDER } from '../../lib/trashPaths.js';
+import { uploadFilesAtPath } from '../../lib/fsWriteActions.js';
+import { isTrashPath, isTrashSubfolder, TRASH_FOLDER } from '../../lib/trashPaths.js';
 import { useTrash } from '../../hooks/useTrash.js';
 import { useAppConfirm } from '../../hooks/useAppConfirm.jsx';
 import { useFileDropZone } from '../../hooks/useFileDropZone.js';
+import { useAdminAuthContext } from '../../context/AdminAuthContext.jsx';
 import FileDropOverlay from '../common/FileDropOverlay.jsx';
+import { canOpenFileForEdit, VIEW_OPEN_DENIED_MESSAGE } from '../../lib/fileEditAccess.js';
 
 export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFsChanged, fsRevision = 0, syncInfo }) {
   const {
@@ -72,6 +75,7 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
   const { hasClipboard, copyEntries, cutEntries, pasteEntries } = useFileClipboard();
   const { shareMap, refreshShareMap } = useShareLinks();
   const { accessMap, refreshAccessMap, setFileAccess } = useFileAccess();
+  const { isAdminLoggedIn } = useAdminAuthContext();
   const { refresh: refreshTrash } = useTrash(fsRevision);
   const { confirm: appConfirm, alert: appAlert, dialog: confirmDialog } = useAppConfirm();
 
@@ -93,6 +97,7 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
   const [lastSelectedPath, setLastSelectedPath] = useState(null);
 
   const uploadInputRef = useRef(null);
+  const uploadTargetPathRef = useRef('.');
   const containerRef = useRef(null);
   const skipRevisionRefreshRef = useRef(false);
   const keyHandlersRef = useRef({});
@@ -122,6 +127,8 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
   };
 
   const handleFileDrop = async (files) => {
+    if (isInTrashView) return;
+
     try {
       await uploadFiles(files);
       await refreshAll();
@@ -130,7 +137,9 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
     }
   };
 
-  const { isFileDragOver, dropZoneProps } = useFileDropZone(handleFileDrop);
+  const { isFileDragOver, dropZoneProps } = useFileDropZone(handleFileDrop, {
+    enabled: !isInTrashView,
+  });
 
   useEffect(() => {
     clearSelection();
@@ -184,8 +193,14 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
     }
   };
 
-  const handleUploadClick = () => {
+  const triggerUpload = (targetPath = currentPath) => {
+    if (isTrashPath(targetPath)) return;
+    uploadTargetPathRef.current = targetPath;
     uploadInputRef.current?.click();
+  };
+
+  const handleUploadClick = () => {
+    triggerUpload(currentPath);
   };
 
   const handleUploadInput = async (event) => {
@@ -193,7 +208,7 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
     event.target.value = '';
     if (!files.length) return;
     try {
-      await uploadFiles(files);
+      await uploadFilesAtPath(uploadTargetPathRef.current, files);
       await refreshAll();
     } catch (err) {
       window.alert(err instanceof Error ? err.message : '파일 업로드에 실패했습니다.');
@@ -221,6 +236,11 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
     } catch (err) {
       window.alert(err instanceof Error ? err.message : '공유 링크를 열 수 없습니다.');
     }
+  };
+
+  const handleShareLinkRevoke = async () => {
+    if (!shareLinkDialog?.entry) return;
+    await revokeShareLinkForEntry({ entry: shareLinkDialog.entry, refreshShareMap });
   };
 
   const handleRename = (entry) => {
@@ -344,8 +364,24 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
       confirmVariant: 'danger',
     });
     if (!confirmed) return;
+
+    const wasInTrashSubfolder = isTrashSubfolder(currentPath);
+    if (wasInTrashSubfolder) {
+      skipRevisionRefreshRef.current = true;
+      onNavigate(TRASH_FOLDER);
+    }
+
     await emptyTrash();
     clearSelection();
+
+    if (wasInTrashSubfolder) {
+      await refreshShareMap();
+      await refreshAccessMap();
+      await refreshTrash();
+      onFsChanged?.();
+      return;
+    }
+
     await refreshAll();
   };
 
@@ -420,6 +456,10 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
     }
     if (isInTrashView || entry.relativePath.startsWith(`${TRASH_FOLDER}/`)) {
       window.alert('휴지통에 있는 파일은 복원한 뒤 열어 주세요.');
+      return;
+    }
+    if (!canOpenFileForEdit(entry.relativePath, accessMap, isAdminLoggedIn)) {
+      window.alert(VIEW_OPEN_DENIED_MESSAGE);
       return;
     }
     onOpenFile(entry);
@@ -529,6 +569,7 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
         hasClipboard,
         onOpen: handleOpen,
         onOpenSystem: (entry) => openInSystem(entry.relativePath),
+        onUpload: contextTarget?.isDirectory ? triggerUpload : undefined,
         onCopy: () => handleCopy(contextTarget),
         onCut: () => handleCut(contextTarget),
         onMove: () => handleMove(contextTarget),
@@ -541,6 +582,10 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
         onProperties: () => handleShowProperties(contextTarget),
         onDownload: () => handleDownload(contextTarget),
         canDownload: contextTargets.some((target) => !target.isDirectory),
+        canEditOpen: contextTarget
+          ? canOpenFileForEdit(contextTarget.relativePath, accessMap, isAdminLoggedIn)
+          : false,
+        isAdminLoggedIn,
       })
     : buildBackgroundContextMenuItems({
         targetPath: contextTargetPath,
@@ -552,6 +597,7 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
         onPaste: handlePaste,
         onRefresh: refreshAll,
         onEmptyTrash: handleEmptyTrash,
+        isAdminLoggedIn,
       });
 
   keyHandlersRef.current = {
@@ -615,7 +661,7 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
       {...dropZoneProps}
       onContextMenu={(event) => openContextMenu(event, null)}
     >
-      {isFileDragOver && <FileDropOverlay />}
+      {!isInTrashView && isFileDragOver && <FileDropOverlay />}
       <div className="flex items-center gap-3 border-b border-nas-border px-4 py-3">
         <div className="min-w-0 flex-1">
           <Breadcrumb currentPath={currentPath} onNavigate={onNavigate} />
@@ -625,7 +671,7 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
           placeholder="현재 폴더 검색…"
-          className="h-8 w-full max-w-[220px] shrink-0 rounded-md border border-nas-border px-3 text-[10pt] outline-none focus:border-nas-accent focus:ring-1 focus:ring-nas-accent"
+          className="h-8 w-full max-w-[220px] shrink-0 rounded-md border border-nas-border bg-[#efefef] px-3 text-[10pt] outline-none focus:border-nas-accent focus:ring-1 focus:ring-nas-accent"
         />
       </div>
 
@@ -655,10 +701,12 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
         onRestore={() => handleRestore()}
         onEmptyTrash={handleEmptyTrash}
         onRename={() => handleRename()}
+        onDuplicate={() => handleDuplicate()}
         onSelectAll={selectAll}
         onClearSelection={clearSelection}
         onProperties={() => handleShowProperties()}
         canShowProperties={selectedEntries.length === 1}
+        isAdminLoggedIn={isAdminLoggedIn}
       />
 
       {isInTrashView && (
@@ -689,9 +737,10 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
         onContextMenu={openContextMenu}
         onBackgroundClick={clearSelection}
         onShareLinkClick={handleShareLinkBadgeClick}
+        onPropertiesClick={handleShowProperties}
       />
 
-      {contextMenu && (
+      {contextMenu && contextItems.length > 0 && (
         <ContextMenu
           x={contextMenu.x}
           y={contextMenu.y}
@@ -705,6 +754,7 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
           entry={propertiesEntry}
           statInfo={propertiesStat}
           fileStatus={propertiesEntryStatus}
+          isAdminLoggedIn={isAdminLoggedIn}
           accessSaving={propertiesSaving}
           onChangePrivate={handlePropertiesPrivateChange}
           onChangeViewRestricted={handlePropertiesViewRestrictedChange}
@@ -739,6 +789,7 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
         open={Boolean(shareLinkDialog)}
         url={shareLinkDialog?.url ?? ''}
         fileName={shareLinkDialog?.fileName}
+        onRevoke={shareLinkDialog?.entry ? handleShareLinkRevoke : undefined}
         onClose={() => setShareLinkDialog(null)}
       />
 

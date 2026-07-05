@@ -6,8 +6,8 @@ import { copyTextToClipboard } from '../../lib/shareLink.js';
 import { buildLanAccessClipboardText } from '../../sync/buildWsUrl.js';
 import { APP_VERSION, APP_NAME_LONG } from '../../../shared/constants.js';
 import AppLogo from '../common/AppLogo.jsx';
+import SplashOverlay from '../common/SplashOverlay.jsx';
 import AdminLoginForm from './AdminLoginForm.jsx';
-import EditorUpdateButton from './EditorUpdateButton.jsx';
 
 function SyncBadge({ syncInfo, loading }) {
   const [copied, setCopied] = useState(false);
@@ -110,6 +110,7 @@ function UserNameField({ loading, saving, displayName, onChange, onCommit, onKey
 
 export default function TopBar({ syncInfo, infoLoading, onHome }) {
   const userProfile = useUserProfile();
+  const [splashOpen, setSplashOpen] = useState(false);
 
   const userNameField = (
     <UserNameField
@@ -124,17 +125,22 @@ export default function TopBar({ syncInfo, infoLoading, onHome }) {
 
   return (
     <header className="shrink-0 border-b border-nas-border bg-white px-4 py-2 min-h-12">
+      <SplashOverlay open={splashOpen} onClose={() => setSplashOpen(false)} />
       <div className="flex flex-col gap-2 lg:hidden">
         <div className="flex items-center gap-3">
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <BrandMark onHome={onHome} />
 
             <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <div className="flex min-w-0 items-baseline gap-2">
+              <button
+                type="button"
+                className="flex min-w-0 items-baseline gap-2 rounded-md text-left transition-opacity hover:opacity-80"
+                onClick={() => setSplashOpen(true)}
+                aria-label={`${APP_NAME_LONG} 정보 보기`}
+              >
                 <span className="truncate text-sm font-semibold text-slate-800">{APP_NAME_LONG}</span>
                 <span className="shrink-0 text-xs font-medium text-slate-400">v{APP_VERSION}</span>
-              </div>
-              <EditorUpdateButton />
+              </button>
             </div>
           </div>
 
@@ -152,11 +158,15 @@ export default function TopBar({ syncInfo, infoLoading, onHome }) {
           <BrandMark onHome={onHome} />
 
           <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <div className="flex min-w-0 items-baseline gap-2">
+            <button
+              type="button"
+              className="flex min-w-0 items-baseline gap-2 rounded-md text-left transition-opacity hover:opacity-80"
+              onClick={() => setSplashOpen(true)}
+              aria-label={`${APP_NAME_LONG} 정보 보기`}
+            >
               <span className="truncate text-sm font-semibold text-slate-800">{APP_NAME_LONG}</span>
               <span className="shrink-0 text-xs font-medium text-slate-400">v{APP_VERSION}</span>
-            </div>
-            <EditorUpdateButton />
+            </button>
           </div>
         </div>
 

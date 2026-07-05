@@ -1,6 +1,5 @@
 import { openExternalUrl } from '../../lib/openExternal.js';
-
-const NOTE4ALL_URL = 'https://note4all.tistory.com';
+import { APP_BLOG_URL } from '../../../shared/constants.js';
 
 function formatPath(relativePath) {
   if (relativePath === '.') return '/';
@@ -27,11 +26,11 @@ export default function StatusBar({ paths, syncInfo, currentPath }) {
         <span className="hidden truncate sm:inline">{lanHint}</span>
         <button
           type="button"
-          onClick={() => openExternalUrl(NOTE4ALL_URL)}
+          onClick={() => openExternalUrl(APP_BLOG_URL)}
           className="shrink-0 text-sky-600 transition-colors hover:text-sky-800 hover:underline"
-          title="브라우저에서 note4all.tistory.com 열기"
+          title={`브라우저에서 ${APP_BLOG_URL} 열기`}
         >
-          note4all.tistory.com
+          {APP_BLOG_URL}
         </button>
       </div>
     </footer>

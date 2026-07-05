@@ -5,6 +5,15 @@ contextBridge.exposeInMainWorld('educowork', {
   getPaths: () => ipcRenderer.invoke('app:getPaths'),
   getSyncInfo: () => ipcRenderer.invoke('sync:getInfo'),
   openExternal: (url) => ipcRenderer.invoke('app:openExternal', url),
+  subscribeFsChanged: (callback) => {
+    const handler = (_event, revision) => {
+      callback(revision);
+    };
+    ipcRenderer.on('fs:changed', handler);
+    return () => {
+      ipcRenderer.removeListener('fs:changed', handler);
+    };
+  },
 
   fs: {
     readDir: (relativePath) => ipcRenderer.invoke('fs:readDir', relativePath),
@@ -21,7 +30,7 @@ contextBridge.exposeInMainWorld('educowork', {
   },
 
   workspace: {
-    open: (relativePath) => ipcRenderer.invoke('workspace:open', relativePath),
+    open: (relativePath, shareToken) => ipcRenderer.invoke('workspace:open', relativePath, shareToken),
     read: (sessionId) => ipcRenderer.invoke('workspace:read', sessionId),
     write: (sessionId, base64) => ipcRenderer.invoke('workspace:write', sessionId, base64),
     commit: (sessionId) => ipcRenderer.invoke('workspace:commit', sessionId),
@@ -37,6 +46,9 @@ contextBridge.exposeInMainWorld('educowork', {
 
   auth: {
     login: ({ id, password }) => ipcRenderer.invoke('auth:login', { id, password }),
+    bindToken: (token) => ipcRenderer.invoke('auth:bindToken', token ?? ''),
+    bindShareToken: (token) => ipcRenderer.invoke('auth:bindShareToken', token ?? ''),
+    logout: () => ipcRenderer.invoke('auth:logout'),
   },
 
   share: {
@@ -48,6 +60,7 @@ contextBridge.exposeInMainWorld('educowork', {
 
   fileAccess: {
     getMap: () => ipcRenderer.invoke('fileAccess:getMap'),
+    canEdit: (relativePath) => ipcRenderer.invoke('fileAccess:canEdit', relativePath),
     set: ({ path, visibility, viewRestricted }) =>
       ipcRenderer.invoke('fileAccess:set', { path, visibility, viewRestricted }),
   },

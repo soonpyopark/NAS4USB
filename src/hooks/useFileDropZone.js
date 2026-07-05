@@ -8,8 +8,9 @@ function isExternalFileDrag(event) {
 
 /**
  * @param {(files: File[]) => void | Promise<void>} onDrop
+ * @param {{ enabled?: boolean }} [options]
  */
-export function useFileDropZone(onDrop) {
+export function useFileDropZone(onDrop, { enabled = true } = {}) {
   const depthRef = useRef(0);
   const [isFileDragOver, setIsFileDragOver] = useState(false);
 
@@ -18,32 +19,41 @@ export function useFileDropZone(onDrop) {
     setIsFileDragOver(false);
   }, []);
 
-  const handleDragEnter = useCallback((event) => {
-    if (!isExternalFileDrag(event)) return;
-    event.preventDefault();
-    depthRef.current += 1;
-    if (depthRef.current === 1) {
-      setIsFileDragOver(true);
-    }
-  }, []);
+  const handleDragEnter = useCallback(
+    (event) => {
+      if (!enabled || !isExternalFileDrag(event)) return;
+      event.preventDefault();
+      depthRef.current += 1;
+      if (depthRef.current === 1) {
+        setIsFileDragOver(true);
+      }
+    },
+    [enabled],
+  );
 
-  const handleDragLeave = useCallback((event) => {
-    if (!isExternalFileDrag(event)) return;
-    depthRef.current = Math.max(0, depthRef.current - 1);
-    if (depthRef.current === 0) {
-      setIsFileDragOver(false);
-    }
-  }, []);
+  const handleDragLeave = useCallback(
+    (event) => {
+      if (!enabled || !isExternalFileDrag(event)) return;
+      depthRef.current = Math.max(0, depthRef.current - 1);
+      if (depthRef.current === 0) {
+        setIsFileDragOver(false);
+      }
+    },
+    [enabled],
+  );
 
-  const handleDragOver = useCallback((event) => {
-    if (!isExternalFileDrag(event)) return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'copy';
-  }, []);
+  const handleDragOver = useCallback(
+    (event) => {
+      if (!enabled || !isExternalFileDrag(event)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'copy';
+    },
+    [enabled],
+  );
 
   const handleDrop = useCallback(
     async (event) => {
-      if (!isExternalFileDrag(event)) return;
+      if (!enabled || !isExternalFileDrag(event)) return;
       event.preventDefault();
       reset();
       const files = Array.from(event.dataTransfer.files ?? []);
@@ -51,8 +61,14 @@ export function useFileDropZone(onDrop) {
         await onDrop(files);
       }
     },
-    [onDrop, reset],
+    [enabled, onDrop, reset],
   );
+
+  useEffect(() => {
+    if (!enabled) {
+      reset();
+    }
+  }, [enabled, reset]);
 
   useEffect(() => {
     window.addEventListener('dragend', reset);

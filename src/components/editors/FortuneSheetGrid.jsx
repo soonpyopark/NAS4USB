@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Workbook } from '@fortune-sheet/react';
 import '@fortune-sheet/react/dist/index.css';
 import '../../styles/fortune-sheet.css';
+import { cloneFortuneSheets } from '../../lib/xlsx/cloneFortuneSheets.js';
 
 /**
  * @param {{
@@ -17,7 +18,7 @@ import '../../styles/fortune-sheet.css';
  * }} props
  */
 export default function FortuneSheetGrid({ initialSheets, onReady }) {
-  const [sheets, setSheets] = useState(initialSheets);
+  const [sheets, setSheets] = useState(() => cloneFortuneSheets(initialSheets));
   const sheetsRef = useRef(initialSheets);
   const applyingRemoteRef = useRef(false);
   const listenersRef = useRef(new Set());
@@ -29,17 +30,15 @@ export default function FortuneSheetGrid({ initialSheets, onReady }) {
   onReadyRef.current = onReady;
   sheetsRef.current = sheets;
 
-  const getSheets = useCallback(
-    () => workbookRef.current?.getAllSheets() ?? sheetsRef.current,
-    [],
-  );
+  const getSheets = useCallback(() => {
+    const current = workbookRef.current?.getAllSheets() ?? sheetsRef.current;
+    return cloneFortuneSheets(current);
+  }, []);
 
   const updateSheets = useCallback((nextSheets) => {
-    sheetsRef.current = nextSheets;
-    setSheets(nextSheets);
-    if (workbookRef.current) {
-      workbookRef.current.updateSheet(nextSheets);
-    }
+    const mutableSheets = cloneFortuneSheets(nextSheets);
+    sheetsRef.current = mutableSheets;
+    setSheets(mutableSheets);
   }, []);
 
   const applyOp = useCallback((ops) => {
@@ -48,8 +47,9 @@ export default function FortuneSheetGrid({ initialSheets, onReady }) {
     applyingRemoteRef.current = true;
     try {
       workbookRef.current.applyOp(ops);
-      sheetsRef.current = workbookRef.current.getAllSheets();
-      setSheets(sheetsRef.current);
+      const mutableSheets = cloneFortuneSheets(workbookRef.current.getAllSheets());
+      sheetsRef.current = mutableSheets;
+      setSheets(mutableSheets);
     } finally {
       applyingRemoteRef.current = false;
     }
@@ -78,6 +78,13 @@ export default function FortuneSheetGrid({ initialSheets, onReady }) {
   }, [applyOp, getSheets, updateSheets]);
 
   useEffect(() => {
+    const mutableSheets = cloneFortuneSheets(initialSheets);
+    sheetsRef.current = mutableSheets;
+    setSheets(mutableSheets);
+    readyRef.current = false;
+  }, [initialSheets]);
+
+  useEffect(() => {
     return () => {
       listenersRef.current.clear();
       readyRef.current = false;
@@ -87,7 +94,7 @@ export default function FortuneSheetGrid({ initialSheets, onReady }) {
   useEffect(() => {
     const timer = window.setTimeout(() => notifyReady(), 0);
     return () => window.clearTimeout(timer);
-  }, [notifyReady]);
+  }, [notifyReady, initialSheets]);
 
   const handleOp = useCallback((ops) => {
     if (applyingRemoteRef.current) return;
@@ -95,8 +102,9 @@ export default function FortuneSheetGrid({ initialSheets, onReady }) {
   }, []);
 
   const handleChange = useCallback((newData) => {
-    sheetsRef.current = newData;
-    setSheets(newData);
+    const mutableSheets = cloneFortuneSheets(newData);
+    sheetsRef.current = mutableSheets;
+    setSheets(mutableSheets);
   }, []);
 
   return (

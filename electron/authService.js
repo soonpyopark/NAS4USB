@@ -1,6 +1,34 @@
 import crypto from 'node:crypto';
 import { resolveAdminCredentials } from './envConfig.js';
 
+/** @type {Map<string, { adminId: string, createdAt: number }>} */
+const adminSessions = new Map();
+
+/**
+ * @param {string | null | undefined} token
+ */
+export function isValidAdminSession(token) {
+  if (!token || typeof token !== 'string') return false;
+  return adminSessions.has(token);
+}
+
+/**
+ * @param {string} adminId
+ */
+function createAdminSession(adminId) {
+  const token = crypto.randomBytes(24).toString('hex');
+  adminSessions.set(token, { adminId, createdAt: Date.now() });
+  return token;
+}
+
+/**
+ * @param {string | null | undefined} token
+ */
+export function revokeAdminSession(token) {
+  if (!token || typeof token !== 'string') return;
+  adminSessions.delete(token);
+}
+
 /**
  * @param {string} id
  * @param {string} password
@@ -34,5 +62,6 @@ export function loginAdmin(id, password, portableRoot) {
   }
 
   const { adminId } = resolveAdminCredentials(portableRoot);
-  return { success: true, adminId };
+  const token = createAdminSession(adminId);
+  return { success: true, adminId, token };
 }

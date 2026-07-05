@@ -1,6 +1,6 @@
 import { AppModal, AppModalActions, AppModalButton } from '../common/AppModal.jsx';
 
-function SyncStatusBadge({ status, synced, peerCount }) {
+function SyncStatusBadge({ status, synced, peerCount, className = '' }) {
   const color =
     status === 'connected'
       ? 'bg-emerald-50 text-emerald-700'
@@ -9,7 +9,9 @@ function SyncStatusBadge({ status, synced, peerCount }) {
         : 'bg-slate-100 text-slate-600';
 
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${color}`}>
+    <span
+      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${color} ${className}`}
+    >
       <span
         className={`h-1.5 w-1.5 rounded-full ${
           status === 'connected' ? 'bg-emerald-500' : status === 'connecting' ? 'bg-amber-500' : 'bg-slate-400'
@@ -42,14 +44,19 @@ export default function EditorModal({
   return (
     <AppModal open editor embedded={fullscreen} onClose={allowClose ? onClose : undefined}>
       <header className="modal-editor-header">
-        <div className="min-w-0 flex-1">
+        <div className="modal-editor-header__primary min-w-0">
           <p className="truncate text-sm font-semibold text-[#323130]">{title}</p>
           {subtitle && <p className="truncate text-xs text-[#605e5c]">{subtitle}</p>}
         </div>
 
-        <SyncStatusBadge status={status} synced={synced} peerCount={peerCount} />
+        <SyncStatusBadge
+          className="modal-editor-header__sync"
+          status={status}
+          synced={synced}
+          peerCount={peerCount}
+        />
 
-        <AppModalActions className="!mb-0 shrink-0">
+        <AppModalActions className="modal-editor-header__actions !mb-0 shrink-0">
           <AppModalButton variant="primary" onClick={onSave} disabled={saving}>
             {saving ? '저장 중…' : '작성 내용 저장'}
           </AppModalButton>

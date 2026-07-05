@@ -1,6 +1,83 @@
 import { bindCollaborationPointers, trackLocalPointer } from '../collaborationPointers.js';
 
 const LOCAL_ORIGIN = Symbol('educowork-local-fortune-sheet');
+const DISK_SNAPSHOT_ORIGIN = Symbol('educowork-disk-snapshot');
+
+/**
+ * @param {import('yjs').Map<string, unknown>} meta
+ */
+function getSnapshotDiskRevision(meta) {
+  const value = meta.get('workbook:diskRevision');
+  return typeof value === 'string' ? value : '';
+}
+
+/**
+ * @param {import('yjs').Map<string, unknown>} meta
+ * @param {string | undefined} diskRevision
+ */
+function shouldPreferDiskSheets(meta, diskRevision) {
+  if (!diskRevision) return false;
+  const snapshotRevision = getSnapshotDiskRevision(meta);
+  if (!snapshotRevision) return false;
+  return diskRevision > snapshotRevision;
+}
+
+/**
+ * @param {unknown} value
+ * @returns {value is import('@fortune-sheet/core').Sheet[]}
+ */
+function isFortuneSheetArray(value) {
+  return (
+    Array.isArray(value)
+    && value.length > 0
+    && value.every((sheet) => sheet && typeof sheet === 'object' && typeof sheet.name === 'string')
+  );
+}
+
+/**
+ * @param {{
+ *   updateSheets: (sheets: import('@fortune-sheet/core').Sheet[]) => void,
+ * }} editor
+ * @param {import('@fortune-sheet/core').Sheet[]} sheets
+ * @param {import('@fortune-sheet/core').Sheet[]} fallback
+ */
+function applySheetsSafely(editor, sheets, fallback) {
+  const primary = isFortuneSheetArray(sheets) ? sheets : null;
+  const secondary = isFortuneSheetArray(fallback) ? fallback : null;
+  const target = primary ?? secondary;
+  if (!target) return;
+
+  try {
+    editor.updateSheets(target);
+  } catch {
+    if (secondary && target !== secondary) {
+      editor.updateSheets(secondary);
+    }
+  }
+}
+
+/**
+ * @param {import('yjs').Doc} ydoc
+ * @param {import('@fortune-sheet/core').Sheet[]} sheets
+ * @param {{ diskRevision?: string }} [options]
+ */
+export function setWorkbookSnapshot(ydoc, sheets, { diskRevision } = {}) {
+  if (!isFortuneSheetArray(sheets)) return;
+
+  const snapshotMap = getWorkbookSnapshotMap(ydoc);
+  const meta = ydoc.getMap('meta');
+
+  try {
+    ydoc.transact(() => {
+      snapshotMap.set('sheets', JSON.stringify(sheets));
+      if (diskRevision) {
+        meta.set('workbook:diskRevision', diskRevision);
+      }
+    }, DISK_SNAPSHOT_ORIGIN);
+  } catch {
+    // Ignore snapshots that cannot be serialized.
+  }
+}
 
 /**
  * @param {import('y-websocket').WebsocketProvider} provider
@@ -66,9 +143,14 @@ export function getOpsArray(ydoc) {
  * @param {{
  *   initialSheets?: import('@fortune-sheet/core').Sheet[],
  *   provider?: import('y-websocket').WebsocketProvider,
+ *   diskRevision?: string,
  * }} [options]
  */
-export function bindFortuneSheetEditor(ydoc, editor, { initialSheets = [], provider } = {}) {
+export function bindFortuneSheetEditor(
+  ydoc,
+  editor,
+  { initialSheets = [], provider, diskRevision = '' } = {},
+) {
   const snapshotMap = getWorkbookSnapshotMap(ydoc);
   const yops = getOpsArray(ydoc);
   const meta = ydoc.getMap('meta');
@@ -98,34 +180,73 @@ export function bindFortuneSheetEditor(ydoc, editor, { initialSheets = [], provi
     appliedOpCount = yops.length;
   };
 
-  const seedSnapshot = () => {
-    if (snapshotMap.get('sheets')) return;
+  const seedSnapshotIfEmpty = () => {
+    if (snapshotMap.get('sheets') || !isFortuneSheetArray(initialSheets)) return;
 
-    ydoc.transact(() => {
-      if (snapshotMap.get('sheets')) return;
-      snapshotMap.set('sheets', JSON.stringify(initialSheets));
-      meta.set('workbook:seeded', true);
-    }, 'seed');
+    try {
+      ydoc.transact(() => {
+        if (snapshotMap.get('sheets')) return;
+        snapshotMap.set('sheets', JSON.stringify(initialSheets));
+        meta.set('workbook:seeded', true);
+        if (diskRevision) {
+          meta.set('workbook:diskRevision', diskRevision);
+        }
+      }, 'seed');
+    } catch {
+      // Ignore invalid seed payloads.
+    }
   };
 
   const bootstrapFromYjs = () => {
-    const snapshotRaw = snapshotMap.get('sheets');
-    if (typeof snapshotRaw === 'string' && snapshotRaw) {
-      try {
-        editor.updateSheets(JSON.parse(snapshotRaw));
-      } catch {
-        editor.updateSheets(initialSheets);
+    if (shouldPreferDiskSheets(meta, diskRevision)) {
+      applySheetsSafely(editor, initialSheets, initialSheets);
+      setWorkbookSnapshot(ydoc, initialSheets, { diskRevision });
+    } else {
+      const snapshotRaw = snapshotMap.get('sheets');
+      if (typeof snapshotRaw === 'string' && snapshotRaw) {
+        try {
+          const snapshotSheets = JSON.parse(snapshotRaw);
+          if (isFortuneSheetArray(snapshotSheets)) {
+            applySheetsSafely(editor, snapshotSheets, initialSheets);
+          } else {
+            applySheetsSafely(editor, initialSheets, initialSheets);
+            setWorkbookSnapshot(ydoc, initialSheets, { diskRevision });
+          }
+        } catch {
+          applySheetsSafely(editor, initialSheets, initialSheets);
+          setWorkbookSnapshot(ydoc, initialSheets, { diskRevision });
+        }
+      } else {
+        applySheetsSafely(editor, initialSheets, initialSheets);
+        seedSnapshotIfEmpty();
       }
-    } else if (initialSheets.length > 0) {
-      editor.updateSheets(initialSheets);
-      seedSnapshot();
     }
 
     replayRemoteOps(0);
   };
 
-  seedSnapshot();
-  bootstrapFromYjs();
+  const resyncFromYjs = () => {
+    if (shouldPreferDiskSheets(meta, diskRevision)) {
+      applySheetsSafely(editor, initialSheets, initialSheets);
+      setWorkbookSnapshot(ydoc, initialSheets, { diskRevision });
+      replayRemoteOps(0);
+      return;
+    }
+
+    replayRemoteOps(appliedOpCount);
+  };
+
+  let cancelBootstrap = () => {};
+  const runBootstrap = () => {
+    bootstrapFromYjs();
+  };
+
+  if (typeof editor.getMountElement === 'function' && !editor.getMountElement()) {
+    const raf = window.requestAnimationFrame(runBootstrap);
+    cancelBootstrap = () => window.cancelAnimationFrame(raf);
+  } else {
+    runBootstrap();
+  }
 
   const pushLocalOps = (ops) => {
     if (!Array.isArray(ops) || ops.length === 0) return;
@@ -156,9 +277,10 @@ export function bindFortuneSheetEditor(ydoc, editor, { initialSheets = [], provi
 
   const binder = {
     resync() {
-      bootstrapFromYjs();
+      resyncFromYjs();
     },
     destroy() {
+      cancelBootstrap?.();
       pointerCleanup();
       unobserveEditor();
       yops.unobserve(observeOps);
@@ -171,12 +293,16 @@ export function bindFortuneSheetEditor(ydoc, editor, { initialSheets = [], provi
     };
     provider.on('sync', onSync);
     return () => {
+      cancelBootstrap?.();
       provider.off('sync', onSync);
       binder.destroy();
     };
   }
 
-  return () => binder.destroy();
+  return () => {
+    cancelBootstrap?.();
+    binder.destroy();
+  };
 }
 
 /** @deprecated Use bindFortuneSheetEditor */

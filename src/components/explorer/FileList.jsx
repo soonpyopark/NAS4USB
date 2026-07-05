@@ -49,6 +49,7 @@ export default function FileList({
   onContextMenu,
   onBackgroundClick,
   onShareLinkClick,
+  onPropertiesClick,
 }) {
   const selectAllRef = useRef(null);
   const selectedVisibleCount = entries.filter((entry) => selectedSet.has(entry.relativePath)).length;
@@ -128,6 +129,7 @@ export default function FileList({
                   accessMap={accessMap}
                   shareMap={shareMap}
                   onShareLinkClick={onShareLinkClick}
+                  onPropertiesClick={onPropertiesClick}
                 />
               </div>
               <FileIcon entry={entry} className="h-12 w-12" />
@@ -207,6 +209,7 @@ export default function FileList({
                     accessMap={accessMap}
                     shareMap={shareMap}
                     onShareLinkClick={onShareLinkClick}
+                    onPropertiesClick={onPropertiesClick}
                   />
                 </td>
                 <td className="max-w-0 px-4 py-2">

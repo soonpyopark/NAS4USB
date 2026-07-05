@@ -8,29 +8,39 @@ const ICON_BADGE_CLASS =
 
 const STATUS_SLOT_CLASS = `inline-flex h-[18px] shrink-0 items-center gap-0.5`;
 
-function VisibilityBadge() {
+function VisibilityBadge({ onClick }) {
   return (
-    <span
-      className={`${ICON_BADGE_CLASS} bg-yellow-100 text-[8pt] text-yellow-800`}
-      title="비공개"
-      aria-label="비공개"
+    <button
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick?.();
+      }}
+      className={`${ICON_BADGE_CLASS} cursor-pointer bg-yellow-100 text-[8pt] text-yellow-800 transition-colors hover:bg-yellow-200`}
+      title="비공개 · 속성"
+      aria-label="비공개 · 속성"
     >
       비
-    </span>
+    </button>
   );
 }
 
-function ViewRestrictionBadge() {
+function ViewRestrictionBadge({ onClick }) {
   return (
-    <span
-      className={`${ICON_BADGE_CLASS} bg-rose-50 text-rose-700`}
-      title="열람 제한"
-      aria-label="열람 제한"
+    <button
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick?.();
+      }}
+      className={`${ICON_BADGE_CLASS} cursor-pointer bg-rose-50 text-rose-700 transition-colors hover:bg-rose-100`}
+      title="열람 제한 · 속성"
+      aria-label="열람 제한 · 속성"
     >
       <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
         <path d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z" />
       </svg>
-    </span>
+    </button>
   );
 }
 
@@ -64,10 +74,18 @@ function ShareLinkBadge({ onClick }) {
   );
 }
 
-export default function FileEntryStatusBadges({ entry, accessMap, shareMap, onShareLinkClick }) {
+export default function FileEntryStatusBadges({
+  entry,
+  accessMap,
+  shareMap,
+  onShareLinkClick,
+  onPropertiesClick,
+}) {
   const status = entry.isDirectory
     ? null
     : resolveFileEntryStatus(entry.relativePath, accessMap, shareMap);
+
+  const openProperties = () => onPropertiesClick?.(entry);
 
   return (
     <span
@@ -77,8 +95,8 @@ export default function FileEntryStatusBadges({ entry, accessMap, shareMap, onSh
       onClick={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}
     >
-      {status?.isPrivate && <VisibilityBadge />}
-      {status?.isViewRestricted && <ViewRestrictionBadge />}
+      {status?.isPrivate && <VisibilityBadge onClick={openProperties} />}
+      {status?.isViewRestricted && <ViewRestrictionBadge onClick={openProperties} />}
       {status?.isSharing && (
         <ShareLinkBadge onClick={() => onShareLinkClick?.(entry)} />
       )}

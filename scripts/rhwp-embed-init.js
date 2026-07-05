@@ -70,15 +70,22 @@
         display: flex !important;
         flex-shrink: 0;
       }
+      html.rhwp-embed-mode #status-bar {
+        display: flex !important;
+        flex-shrink: 0;
+      }
     `;
     document.head.appendChild(style);
   }
 
   function hideChrome() {
-    for (const id of ['menu-bar', 'status-bar', 'h-ruler', 'v-ruler', 'ruler-corner']) {
+    // 상단 메뉴바·눈금자만 숨기고, 하단 상태바(쪽/줌)는 온라인 데모와 동일하게 유지
+    for (const id of ['menu-bar', 'h-ruler', 'v-ruler', 'ruler-corner']) {
       const el = document.getElementById(id);
       if (el) el.style.display = 'none';
     }
+    const statusBar = document.getElementById('status-bar');
+    if (statusBar) statusBar.style.display = '';
     const root = document.getElementById('studio-root');
     if (root) root.classList.add('rhwp-embed');
     injectEmbedLayoutStyles();
@@ -122,7 +129,31 @@
     }
   });
 
-  /** embed 모드: 차단용 모달·토스트를 자동으로 닫는다. */
+  /** 편집용 대화상자 — 자동 닫기 금지 */
+  function isProtectedEditorDialog(overlay) {
+    if (overlay.querySelector('.tcp-dialog')) return true;
+    const title = overlay.querySelector('.dialog-title')?.textContent?.trim() ?? '';
+    if (!title) return false;
+    if (title === '표/셀 속성') return true;
+    if (title.endsWith('속성') || title.endsWith('모양')) return true;
+    if (title === '저장 확인' || title === '문서 복구') return false;
+    return false;
+  }
+
+  /** 문서 로드·초기화를 막는 확인 대화상자의 "건너뛰기" 버튼 */
+  function findEmbedSkipButton(overlay) {
+    const skipLabels = ['그대로 보기', '대체 글꼴', '나중에'];
+    const buttons = overlay.querySelectorAll('button');
+    for (const prefer of skipLabels) {
+      for (const button of buttons) {
+        const label = button.textContent?.trim() ?? '';
+        if (label.includes(prefer)) return button;
+      }
+    }
+    return null;
+  }
+
+  /** embed 모드: 문서 로드 차단용(글꼴/HWPX 경고·복구) 모달·토스트만 자동으로 닫는다. */
   function autoDismissEmbedUi() {
     const handledModals = new WeakSet();
 
@@ -138,25 +169,47 @@
       const overlays = document.querySelectorAll('.modal-overlay');
       for (const overlay of overlays) {
         if (!(overlay instanceof HTMLElement) || handledModals.has(overlay)) continue;
+        if (isProtectedEditorDialog(overlay)) continue;
 
-        const footer = overlay.querySelector('.dialog-footer');
-        if (!footer) continue;
+        const skipButton = findEmbedSkipButton(overlay);
+        if (!skipButton) continue;
 
-        const buttons = footer.querySelectorAll('.dialog-btn, button');
-        for (const button of buttons) {
-          const label = button.textContent?.trim() ?? '';
-          if (label.includes('그대로 보기') || label.includes('대체 글꼴') || label === '확인') {
-            handledModals.add(overlay);
-            button.click();
-            return;
-          }
-        }
+        handledModals.add(overlay);
+        skipButton.click();
+        return;
       }
     };
 
     const observer = new MutationObserver(tryDismiss);
     observer.observe(document.documentElement, { childList: true, subtree: true });
-    window.setInterval(tryDismiss, 250);
+    window.setInterval(tryDismiss, 100);
+
+    // loadFile 요청 직후 모달이 뜨면 즉시 닫기 (Wh → ym/Sm 대기 해제)
+    window.addEventListener('message', (event) => {
+      const data = event.data;
+      if (data?.type !== 'rhwp-request' || data.method !== 'loadFile') return;
+      for (const delay of [0, 16, 50, 120, 250, 500, 1000]) {
+        window.setTimeout(tryDismiss, delay);
+      }
+    });
+  }
+
+  /** 부모 UI에 rhwp-studio 초기화 상태를 전달한다. */
+  function publishInitStatus() {
+    if (window.parent === window) return;
+
+    const statusEl = document.getElementById('sb-message');
+    if (!statusEl) return;
+
+    const publish = () => {
+      const text = statusEl.textContent?.trim();
+      if (!text) return;
+      window.parent.postMessage({ type: 'rhwp-embed-status', text }, '*');
+    };
+
+    publish();
+    const observer = new MutationObserver(publish);
+    observer.observe(statusEl, { childList: true, characterData: true, subtree: true });
   }
 
   function bindPointerBroadcast() {
@@ -207,6 +260,7 @@
     hideChrome();
     autoDismissEmbedUi();
     bindPointerBroadcast();
+    publishInitStatus();
   }
 
   if (document.readyState === 'loading') {

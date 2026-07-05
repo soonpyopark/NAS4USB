@@ -17,7 +17,12 @@ import {
 } from '../lib/collab/doc-manager.ts';
 import { YJS_PATHS_KEY } from '../lib/collab/constants.ts';
 import { attachYdocMirror, type YdocMirror } from '../lib/collab/mirror.ts';
-import { isSceneEmpty } from '../lib/collab/schema.ts';
+import {
+  isSceneEmpty,
+  isSnapshotEmpty,
+  mergeSceneToDoc,
+  type SceneSnapshot,
+} from '../lib/collab/schema.ts';
 import type { SceneWriteEvent } from '../lib/collab/scene-events.ts';
 import { buildLocalAwarenessUser } from '../lib/collab/presence-user.ts';
 import type { YjsWhiteboardState } from './useYjsWhiteboard.ts';
@@ -51,6 +56,17 @@ function createEmbedCollabSession(
 
   return session;
 }
+
+function readServerScene(serverDoc: WhiteboardDocument): SceneSnapshot {
+  return {
+    paths: serverDoc.paths,
+    images: serverDoc.images ?? [],
+    texts: serverDoc.texts ?? [],
+    tables: serverDoc.tables ?? [],
+  };
+}
+
+const EMPTY_SCENE: SceneSnapshot = { paths: [], images: [], texts: [], tables: [] };
 
 export function useYjsWhiteboardEmbed(
   roomId: string,
@@ -146,10 +162,22 @@ export function useYjsWhiteboardEmbed(
   }, [enabled, roomId, syncServerUrl, userName, updateCounts, refreshSharedPathCount]);
 
   const bindEngine = useCallback(
-    async (engine: DrawingEngine, _serverDoc: WhiteboardDocument) => {
+    async (engine: DrawingEngine, serverDoc: WhiteboardDocument) => {
       const session = sessionRef.current;
       if (!session) return;
-      if (boundEngineRef.current === engine && bootstrappedRef.current) return;
+
+      const engineScene = captureEngineScene(engine);
+      const serverScene = readServerScene(serverDoc);
+
+      if (boundEngineRef.current === engine && bootstrappedRef.current) {
+        // Only seed from the live engine — never from stale disk metadata after clear.
+        if (!isSnapshotEmpty(engineScene) && isSceneEmpty(session.ydoc)) {
+          mirrorRef.current?.publishScene(engineScene);
+          setHasUnsharedChanges(false);
+          updateCounts(session);
+        }
+        return;
+      }
 
       mirrorRef.current?.dispose();
       const mirror = attachYdocMirror(session.ydoc, engine);
@@ -157,20 +185,27 @@ export function useYjsWhiteboardEmbed(
       boundEngineRef.current = engine;
 
       try {
-        if (!bootstrappedRef.current) {
-          await waitForCollabBootstrap(session);
-          bootstrappedRef.current = true;
+        const { hasRemotePeers } = await waitForCollabBootstrap(session);
+        bootstrappedRef.current = true;
+
+        if (!hasRemotePeers) {
+          if (isSceneEmpty(session.ydoc)) {
+            const seedScene = !isSnapshotEmpty(engineScene) ? engineScene : serverScene;
+            if (!isSnapshotEmpty(seedScene)) {
+              mergeSceneToDoc(session.ydoc, seedScene);
+            }
+          } else if (!isSnapshotEmpty(engineScene)) {
+            mirror.publishScene(engineScene);
+          } else if (isSnapshotEmpty(serverScene)) {
+            mirror.publishScene(EMPTY_SCENE);
+          }
         }
 
         await mirror.syncSharedToEngine();
         mirror.initEmptyTracking();
 
-        const engineScene = captureEngineScene(engine);
-        const hasLocalContent =
-          engineScene.paths.length > 0 ||
-          engineScene.images.length > 0 ||
-          engineScene.texts.length > 0 ||
-          engineScene.tables.length > 0;
+        const latestEngineScene = captureEngineScene(engine);
+        const hasLocalContent = !isSnapshotEmpty(latestEngineScene);
         setHasUnsharedChanges(hasLocalContent && isSceneEmpty(session.ydoc));
 
         setIsReady(true);
