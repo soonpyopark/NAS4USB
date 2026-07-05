@@ -2,13 +2,14 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import { initEducowork } from './lib/initEducowork.js';
+import { APP_NAME } from '../shared/constants.js';
 import './styles/index.css';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 
 root.render(
   <div className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-300">
-    EduCowork 연결 중…
+    {APP_NAME} 연결 중…
   </div>,
 );
 

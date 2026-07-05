@@ -1,4 +1,4 @@
-import { DEFAULT_SYNC_PORT } from '../shared/constants.js';
+import { APP_NAME, DEFAULT_SYNC_PORT } from '../shared/constants.js';
 import { createRequire } from 'node:module';
 import http from 'node:http';
 import os from 'node:os';
@@ -9,7 +9,10 @@ import { serveStaticDist } from './staticServer.js';
 const require = createRequire(import.meta.url);
 const { setupWSConnection } = require('y-websocket/bin/utils');
 
-const SYNC_PORT = DEFAULT_SYNC_PORT;
+/** @type {number} */
+let syncPort = DEFAULT_SYNC_PORT;
+/** @type {string} */
+let syncHostname = '0.0.0.0';
 
 let syncServer = null;
 let syncWss = null;
@@ -33,11 +36,23 @@ export function getLocalIPv4Addresses() {
 let staticDistRoot = null;
 
 /**
+ * @param {{ port?: number, hostname?: string }} [options]
+ */
+export function configureSyncServer(options = {}) {
+  if (options.port != null) {
+    syncPort = options.port;
+  }
+  if (options.hostname != null) {
+    syncHostname = options.hostname;
+  }
+}
+
+/**
  * @param {string} [distRoot]
  */
 export function startSyncServer(distRoot) {
   if (syncServer) {
-    return { port: SYNC_PORT, addresses: getLocalIPv4Addresses() };
+    return { port: syncPort, addresses: getLocalIPv4Addresses() };
   }
 
   staticDistRoot = distRoot ?? null;
@@ -50,7 +65,7 @@ export function startSyncServer(distRoot) {
     }
 
     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-    res.end('EduCowork sync server');
+    res.end(`${APP_NAME} sync server`);
   });
 
   syncWss = new WebSocketServer({ server: syncServer });
@@ -65,12 +80,12 @@ export function startSyncServer(distRoot) {
     });
   });
 
-  syncServer.listen(SYNC_PORT, '0.0.0.0', () => {
-    console.log(`[sync] Y.js broker listening on 0.0.0.0:${SYNC_PORT}`);
+  syncServer.listen(syncPort, syncHostname, () => {
+    console.log(`[sync] Y.js broker listening on ${syncHostname}:${syncPort}`);
     console.log(`[sync] LAN addresses: ${getLocalIPv4Addresses().join(', ') || 'none'}`);
   });
 
-  return { port: SYNC_PORT, addresses: getLocalIPv4Addresses() };
+  return { port: syncPort, addresses: getLocalIPv4Addresses() };
 }
 
 export function stopSyncServer() {
@@ -81,5 +96,9 @@ export function stopSyncServer() {
 }
 
 export function getSyncPort() {
-  return SYNC_PORT;
+  return syncPort;
+}
+
+export function getSyncHostname() {
+  return syncHostname;
 }

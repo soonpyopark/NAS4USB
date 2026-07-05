@@ -11,6 +11,7 @@ import '../../styles/fortune-sheet.css';
  *     updateSheets: (sheets: import('@fortune-sheet/core').Sheet[]) => void,
  *     applyOp: (ops: import('@fortune-sheet/core').Op[]) => void,
  *     onOp: (callback: (ops: import('@fortune-sheet/core').Op[]) => void) => () => void,
+ *     getMountElement: () => HTMLElement | null,
  *     destroy: () => void,
  *   }) => void,
  * }} props
@@ -22,6 +23,7 @@ export default function FortuneSheetGrid({ initialSheets, onReady }) {
   const listenersRef = useRef(new Set());
   const onReadyRef = useRef(onReady);
   const workbookRef = useRef(null);
+  const hostRef = useRef(null);
   const readyRef = useRef(false);
 
   onReadyRef.current = onReady;
@@ -65,6 +67,7 @@ export default function FortuneSheetGrid({ initialSheets, onReady }) {
         listenersRef.current.add(callback);
         return () => listenersRef.current.delete(callback);
       },
+      getMountElement: () => hostRef.current,
       destroy() {
         listenersRef.current.clear();
         readyRef.current = false;
@@ -97,7 +100,7 @@ export default function FortuneSheetGrid({ initialSheets, onReady }) {
   }, []);
 
   return (
-    <div className="fortune-sheet-host min-h-0 flex-1">
+    <div ref={hostRef} className="fortune-sheet-host relative min-h-0 flex-1">
       <Workbook
         ref={workbookRef}
         data={sheets}

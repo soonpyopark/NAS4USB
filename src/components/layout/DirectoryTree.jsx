@@ -1,6 +1,4 @@
-import { useMemo } from 'react';
 import FileIcon from '../explorer/FileIcon.jsx';
-import { filterEntries } from '../../lib/fsPaths.js';
 
 function Chevron({ expanded, loading }) {
   if (loading) {
@@ -59,7 +57,7 @@ function TreeNode({
     <div>
       <button
         type="button"
-        className={`flex w-full items-center gap-1 rounded-md py-1.5 pr-2 text-left text-sm transition-colors ${rowClass}`}
+        className={`flex w-full items-center gap-1 rounded-md py-1.5 pr-2 text-left text-[10pt] transition-colors ${rowClass}`}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
         onClick={handleClick}
         onContextMenu={(event) => onContextMenu(event, entry)}
@@ -100,7 +98,7 @@ function TreeNode({
           ))}
           {!isLoading && children.length === 0 && (
             <p
-              className="py-1 text-xs text-slate-500"
+              className="py-1 text-[10pt] text-slate-500"
               style={{ paddingLeft: `${(depth + 1) * 12 + 28}px` }}
             >
               비어 있음
@@ -118,23 +116,17 @@ export default function DirectoryTree({
   childrenMap,
   expandedPaths,
   loadingPaths,
-  searchQuery,
   onToggleExpand,
   onNavigate,
   onOpenFile,
   onContextMenu,
   onBackgroundContextMenu,
 }) {
-  const visibleRootEntries = useMemo(
-    () => filterEntries(rootEntries, searchQuery),
-    [rootEntries, searchQuery],
-  );
-
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-1 py-2" onContextMenu={onBackgroundContextMenu}>
       <button
         type="button"
-        className={`mb-1 flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors ${
+        className={`mb-1 flex w-full items-center gap-2 rounded-md px-3 py-2 text-[10pt] transition-colors ${
           currentPath === '.'
             ? 'bg-nas-accent text-white'
             : 'text-slate-300 hover:bg-nas-sidebarHover hover:text-white'
@@ -149,12 +141,10 @@ export default function DirectoryTree({
         <span className="truncate font-medium">data</span>
       </button>
 
-      {visibleRootEntries.length === 0 ? (
-        <p className="px-3 py-2 text-xs text-slate-500">
-          {searchQuery ? '검색 결과 없음' : '폴더가 없습니다'}
-        </p>
+      {rootEntries.length === 0 ? (
+        <p className="px-3 py-2 text-[10pt] text-slate-500">폴더가 없습니다</p>
       ) : (
-        visibleRootEntries.map((entry) => (
+        rootEntries.map((entry) => (
           <TreeNode
             key={entry.relativePath}
             entry={entry}

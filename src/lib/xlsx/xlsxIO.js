@@ -11,10 +11,10 @@ import {
 
 /**
  * @param {ArrayBuffer | Uint8Array} buffer
- * @returns {ParsedSpreadsheet}
+ * @returns {Promise<ParsedSpreadsheet>}
  */
-export function parseSpreadsheetBuffer(buffer) {
-  const sheets = xlsxBufferToFortuneSheets(buffer);
+export async function parseSpreadsheetBuffer(buffer) {
+  const sheets = await xlsxBufferToFortuneSheets(buffer);
   const sheetNames = sheets.map((sheet) => sheet.name);
   return {
     sheets,
@@ -25,8 +25,9 @@ export function parseSpreadsheetBuffer(buffer) {
 
 /**
  * @param {string} base64
+ * @returns {Promise<ParsedSpreadsheet>}
  */
-export function parseSpreadsheetBase64(base64) {
+export async function parseSpreadsheetBase64(base64) {
   if (!base64) {
     const sheets = createEmptyFortuneSheets();
     return {

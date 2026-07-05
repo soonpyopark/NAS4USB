@@ -10,7 +10,7 @@ import { parseSpreadsheetBase64, buildSpreadsheetBase64 } from '../../lib/xlsx/x
 
 const FORTUNE_SHEET_VERSION = '1.0.4';
 
-export default function XlsxEditorShell({ relativePath, fileName, syncInfo, onClose }) {
+export default function XlsxEditorShell({ relativePath, fileName, syncInfo, onClose, allowClose = true, fullscreen = false }) {
   const workspace = useWorkspaceSession(relativePath);
   const { doc, status, synced, roomId, provider } = useYjsSession(relativePath, syncInfo, {
     syncReady: syncInfo != null,
@@ -36,7 +36,7 @@ export default function XlsxEditorShell({ relativePath, fileName, syncInfo, onCl
       try {
         const base64 = await workspace.readBinary();
         if (cancelled) return;
-        const parsed = parseSpreadsheetBase64(base64);
+        const parsed = await parseSpreadsheetBase64(base64);
         setSheetSummary(
           parsed.sheetNames.length > 1
             ? `${parsed.sheetNames.length} sheets`
@@ -112,6 +112,8 @@ export default function XlsxEditorShell({ relativePath, fileName, syncInfo, onCl
       saving={saving}
       onSave={handleSave}
       onClose={handleClose}
+      allowClose={allowClose}
+      fullscreen={fullscreen}
     >
       {(workspace.error || loadError) && (
         <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
@@ -127,7 +129,7 @@ export default function XlsxEditorShell({ relativePath, fileName, syncInfo, onCl
               ? `FortuneSheet ${FORTUNE_SHEET_VERSION} · Y.js 연결 중…`
               : remotePeerCount != null && remotePeerCount > 0
                 ? `FortuneSheet ${FORTUNE_SHEET_VERSION} · LAN 협업 편집 (협업자 ${remotePeerCount}명 · 서식·시트 포함 · room ${roomId})`
-                : `FortuneSheet ${FORTUNE_SHEET_VERSION} · 스프레드시트 LAN 협업 · room ${roomId} · USB 저장 시 XLS/XLSX 유지`
+                : `FortuneSheet ${FORTUNE_SHEET_VERSION} · 스프레드시트 LAN 협업 · room ${roomId} · 작성 내용 저장 시 XLS/XLSX 유지`
             : `FortuneSheet ${FORTUNE_SHEET_VERSION} · 편집기 초기화 중…`}
       </div>
 

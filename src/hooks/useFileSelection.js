@@ -46,6 +46,22 @@ export function useFileSelection(entries) {
     setSelectedPaths(entries.map((entry) => entry.relativePath));
   }, [entries]);
 
+  const toggleSelectAllVisible = useCallback((visibleEntries) => {
+    const paths = visibleEntries.map((entry) => entry.relativePath);
+    if (paths.length === 0) return;
+
+    setSelectedPaths((prev) => {
+      const next = new Set(prev);
+      const allVisibleSelected = paths.every((path) => next.has(path));
+      if (allVisibleSelected) {
+        paths.forEach((path) => next.delete(path));
+      } else {
+        paths.forEach((path) => next.add(path));
+      }
+      return [...next];
+    });
+  }, []);
+
   return {
     selectedPaths,
     selectedSet,
@@ -55,5 +71,6 @@ export function useFileSelection(entries) {
     toggleSelection,
     selectRange,
     selectAll,
+    toggleSelectAllVisible,
   };
 }

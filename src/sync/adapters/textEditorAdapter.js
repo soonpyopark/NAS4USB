@@ -4,6 +4,38 @@ const LOCAL_ORIGIN = Symbol('educowork-local-editor');
 const SEED_ORIGIN = 'seed';
 
 /**
+ * Y.js room에 파일 내용이 반복 누적된 경우(열 때마다 2배) 파일 기준으로 복구합니다.
+ * @param {string} remoteText
+ * @param {string} fileText
+ */
+function repairAgainstFile(remoteText, fileText) {
+  if (!fileText || !remoteText || remoteText === fileText) return remoteText;
+  if (!remoteText.startsWith(fileText)) return remoteText;
+
+  let rest = remoteText;
+  let repeats = 0;
+  while (rest.startsWith(fileText)) {
+    repeats += 1;
+    rest = rest.slice(fileText.length);
+  }
+
+  return rest.length === 0 && repeats > 1 ? fileText : remoteText;
+}
+
+/**
+ * @param {import('yjs').Text} ytext
+ * @param {string} nextText
+ */
+function replaceYText(ytext, nextText) {
+  if (ytext.length > 0) {
+    ytext.delete(0, ytext.length);
+  }
+  if (nextText) {
+    ytext.insert(0, nextText);
+  }
+}
+
+/**
  * @param {unknown} result
  * @returns {Promise<void>}
  */
@@ -29,6 +61,7 @@ export function bindTextEditor(
   const meta = ydoc.getMap('meta');
   const useFullReplace = fieldName === 'documentBase64';
   let applyingRemote = false;
+  let hasBootstrapped = false;
   let localText = editor.getText();
 
   const applyRemoteText = async (nextText) => {
@@ -68,40 +101,60 @@ export function bindTextEditor(
   };
 
   const seedFromFile = () => {
-    if (!initialText) return;
+    if (!initialText || meta.get(`${fieldName}:seeded`)) return;
 
     ydoc.transact(() => {
-      if (meta.get(`${fieldName}:seeded`)) return;
-      if (ytext.length === 0) {
-        ytext.insert(0, initialText);
-      }
+      if (meta.get(`${fieldName}:seeded`) || ytext.length > 0) return;
+      ytext.insert(0, initialText);
       meta.set(`${fieldName}:seeded`, true);
     }, SEED_ORIGIN);
   };
 
+  const normalizeRemoteText = (remoteText) => repairAgainstFile(remoteText, initialText);
+
+  const repairRemoteYText = (remoteText) => {
+    const repaired = normalizeRemoteText(remoteText);
+    if (repaired === remoteText) return repaired;
+
+    ydoc.transact(() => {
+      replaceYText(ytext, repaired);
+    }, SEED_ORIGIN);
+
+    return repaired;
+  };
+
   const bootstrapFromYjs = () => {
     if (ytext.length > 0) {
-      void applyRemoteText(ytext.toString());
+      const remoteText = repairRemoteYText(ytext.toString());
+      meta.set(`${fieldName}:seeded`, true);
+      void applyRemoteText(remoteText);
       return;
     }
 
     seedFromFile();
 
-    if (ytext.length > 0) {
-      void applyRemoteText(ytext.toString());
-      return;
-    }
-
-    if (initialText && editor.getText() !== initialText) {
-      void applyRemoteText(initialText);
+    const seededText = ytext.length > 0 ? ytext.toString() : initialText;
+    if (seededText) {
+      void applyRemoteText(seededText);
     }
   };
 
-  if (deferSeedUntilSync) {
-    if (initialText && editor.getText() !== initialText) {
-      void applyRemoteText(initialText);
+  const syncFromYjs = () => {
+    if (!hasBootstrapped) {
+      hasBootstrapped = true;
+      bootstrapFromYjs();
+      return;
     }
+
+    if (ytext.length === 0) return;
+
+    void applyRemoteText(repairRemoteYText(ytext.toString()));
+  };
+
+  if (deferSeedUntilSync) {
+    localText = editor.getText();
   } else {
+    hasBootstrapped = true;
     bootstrapFromYjs();
   }
 
@@ -128,7 +181,7 @@ export function bindTextEditor(
 
   return {
     resync() {
-      bootstrapFromYjs();
+      syncFromYjs();
     },
 
     destroy() {

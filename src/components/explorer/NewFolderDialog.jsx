@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { validateFolderName } from '../../lib/fsPaths.js';
+import { AppModal, AppModalActions, AppModalBody, AppModalButton } from '../common/AppModal.jsx';
 
 /**
  * @param {{
@@ -29,8 +30,6 @@ export default function NewFolderDialog({ open, onClose, onConfirm }) {
     return () => window.clearTimeout(timer);
   }, [open]);
 
-  if (!open) return null;
-
   const handleSubmit = async (event) => {
     event.preventDefault();
 
@@ -54,44 +53,39 @@ export default function NewFolderDialog({ open, onClose, onConfirm }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
-      <div className="w-full max-w-md rounded-xl bg-white shadow-xl">
-        <form onSubmit={handleSubmit}>
-          <header className="border-b border-nas-border px-4 py-3">
-            <h2 className="text-sm font-semibold text-slate-800">새 폴더 만들기</h2>
-            <p className="text-xs text-nas-muted">현재 폴더에 하위 폴더를 추가합니다.</p>
-          </header>
+    <AppModal open={open} onClose={onClose} title="새 폴더 만들기">
+      <form onSubmit={handleSubmit}>
+        <AppModalBody>현재 폴더에 하위 폴더를 추가합니다.</AppModalBody>
 
-          <div className="space-y-2 px-4 py-4">
-            <label htmlFor="new-folder-name" className="block text-xs font-medium text-slate-600">
-              폴더 이름
-            </label>
-            <input
-              ref={inputRef}
-              id="new-folder-name"
-              type="text"
-              value={name}
-              onChange={(event) => {
-                setName(event.target.value);
-                if (error) setError('');
-              }}
-              disabled={submitting}
-              maxLength={120}
-              className="h-9 w-full rounded-md border border-nas-border px-3 text-sm outline-none focus:border-nas-accent focus:ring-1 focus:ring-nas-accent disabled:opacity-60"
-            />
-            {error && <p className="text-xs text-red-600">{error}</p>}
-          </div>
+        <div className="mb-4">
+          <label htmlFor="new-folder-name" className="mb-1 block text-xs font-medium text-[#605e5c]">
+            폴더 이름
+          </label>
+          <input
+            ref={inputRef}
+            id="new-folder-name"
+            type="text"
+            value={name}
+            onChange={(event) => {
+              setName(event.target.value);
+              if (error) setError('');
+            }}
+            disabled={submitting}
+            maxLength={120}
+            className="h-9 w-full rounded border border-[#8a8886] px-3 text-sm text-[#323130] outline-none focus:border-[#0078d4] focus:ring-1 focus:ring-[#0078d4] disabled:opacity-60"
+          />
+          {error && <p className="mt-2 text-xs text-[#d13438]">{error}</p>}
+        </div>
 
-          <footer className="flex justify-end gap-2 border-t border-nas-border px-4 py-3">
-            <button type="button" className="nas-btn-ghost" onClick={onClose} disabled={submitting}>
-              취소
-            </button>
-            <button type="submit" className="nas-btn-primary" disabled={submitting}>
-              {submitting ? '만드는 중…' : '만들기'}
-            </button>
-          </footer>
-        </form>
-      </div>
-    </div>
+        <AppModalActions>
+          <AppModalButton type="submit" variant="primary" disabled={submitting}>
+            {submitting ? '만드는 중…' : '만들기'}
+          </AppModalButton>
+          <AppModalButton onClick={onClose} disabled={submitting}>
+            취소
+          </AppModalButton>
+        </AppModalActions>
+      </form>
+    </AppModal>
   );
 }

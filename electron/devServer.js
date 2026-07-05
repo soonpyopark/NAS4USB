@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer as createViteServer } from 'vite';
 import { WebSocketServer } from 'ws';
-import { DEFAULT_SYNC_PORT } from '../shared/constants.js';
+import { getSyncHostname, getSyncPort } from './syncServer.js';
 import { handleHttpApiRequest } from './httpApi.js';
 import { getLocalIPv4Addresses } from './syncServer.js';
 
@@ -20,19 +20,72 @@ function isViteHmrUpgrade(req) {
   return pathname.startsWith('/@') || pathname === '/vite-hmr';
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * @param {import('node:http').Server} server
+ * @param {string} host
+ * @param {number} port
+ */
+function listenOnce(server, host, port) {
+  return new Promise((resolve, reject) => {
+    const onError = (err) => {
+      server.removeListener('listening', onListening);
+      reject(err);
+    };
+    const onListening = () => {
+      server.removeListener('error', onError);
+      resolve();
+    };
+    server.once('error', onError);
+    server.once('listening', onListening);
+    server.listen(port, host);
+  });
+}
+
+/**
+ * @param {import('node:http').Server} server
+ * @param {string} host
+ * @param {number} port
+ * @param {number} [retries]
+ */
+async function listenWithRetry(server, host, port, retries = 5) {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      await listenOnce(server, host, port);
+      return;
+    } catch (err) {
+      const isAddrInUse = err && typeof err === 'object' && 'code' in err && err.code === 'EADDRINUSE';
+      if (!isAddrInUse || attempt === retries - 1) {
+        throw err;
+      }
+      const waitMs = 1000 * (attempt + 1);
+      console.warn(`[dev] Port ${port} busy, retrying in ${waitMs}ms (${attempt + 1}/${retries - 1})…`);
+      await sleep(waitMs);
+    }
+  }
+}
+
 export async function startDevServer() {
   if (devRuntime) {
     return getDevServerInfo();
   }
 
+  const syncPort = getSyncPort();
   const server = http.createServer();
 
   const vite = await createViteServer({
     configFile: path.resolve(__dirname, '../vite.config.js'),
     server: {
-      port: DEFAULT_SYNC_PORT,
+      port: syncPort,
       strictPort: true,
+      host: getSyncHostname() === '0.0.0.0' ? true : getSyncHostname(),
       middlewareMode: { server },
+      hmr: {
+        port: syncPort + 21670,
+      },
     },
     appType: 'spa',
   });
@@ -58,12 +111,10 @@ export async function startDevServer() {
     });
   });
 
-  await new Promise((resolve, reject) => {
-    server.listen(DEFAULT_SYNC_PORT, '0.0.0.0', () => resolve());
-    server.on('error', reject);
-  });
+  const listenHost = getSyncHostname();
+  await listenWithRetry(server, listenHost, syncPort);
 
-  console.log(`[dev] Vite + Y.js unified server on http://0.0.0.0:${DEFAULT_SYNC_PORT}`);
+  console.log(`[dev] Vite + Y.js unified server on http://${listenHost}:${syncPort}`);
   console.log(`[sync] LAN addresses: ${getLocalIPv4Addresses().join(', ') || 'none'}`);
 
   devRuntime = { server, wss, vite };
@@ -72,9 +123,9 @@ export async function startDevServer() {
 
 export function getDevServerInfo() {
   return {
-    port: DEFAULT_SYNC_PORT,
+    port: getSyncPort(),
     addresses: getLocalIPv4Addresses(),
-    appUrl: `http://127.0.0.1:${DEFAULT_SYNC_PORT}`,
+    appUrl: `http://127.0.0.1:${getSyncPort()}`,
   };
 }
 

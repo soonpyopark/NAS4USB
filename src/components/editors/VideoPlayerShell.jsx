@@ -5,7 +5,7 @@ import { getVideoMimeType } from '../../lib/media/mediaTypes.js';
 /**
  * @param {{ relativePath: string, fileName: string, extension: string, onClose: () => void }} props
  */
-export default function VideoPlayerShell({ relativePath, fileName, extension, onClose }) {
+export default function VideoPlayerShell({ relativePath, fileName, extension, onClose, allowClose = true, fullscreen = false }) {
   const mimeType = getVideoMimeType(extension);
   const { workspace, objectUrl, loadError, loading } = useMediaObjectUrl(relativePath, mimeType);
 
@@ -15,7 +15,13 @@ export default function VideoPlayerShell({ relativePath, fileName, extension, on
   };
 
   return (
-    <ViewerModal title={fileName} subtitle={`영상 · ${extension.toUpperCase()} · ${mimeType}`} onClose={handleClose}>
+    <ViewerModal
+      title={fileName}
+      subtitle={`영상 · ${extension.toUpperCase()} · ${mimeType}`}
+      onClose={handleClose}
+      allowClose={allowClose}
+      fullscreen={fullscreen}
+    >
       {loadError && (
         <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{loadError}</div>
       )}

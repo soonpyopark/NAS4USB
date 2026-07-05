@@ -824,7 +824,7 @@ export function EditorView({
         onExportFile={handleExportFile}
         onShare={handleShare}
         hideShare={isEmbed && !embedMode?.onSaveToHost}
-        shareLabel={isEmbed ? 'USB 저장' : '작성 내용 저장'}
+        shareLabel="작성 내용 저장"
         backLabel={isEmbed ? '← 닫기' : '← 갤러리'}
         shareDisabled={
           isEmbed

@@ -38,6 +38,10 @@ export function createHttpEducoworkClient() {
 
     getPaths: () => apiFetch('/app/paths'),
     getSyncInfo: () => apiFetch('/sync/info'),
+    openExternal: (url) => {
+      window.open(url, '_blank', 'noopener,noreferrer');
+      return Promise.resolve(true);
+    },
 
     fs: {
       readDir: (relativePath) =>
@@ -115,6 +119,59 @@ export function createHttpEducoworkClient() {
     editors: {
       getStatus: () => apiFetch('/editors/status'),
       update: () => apiFetch('/editors/update', { method: 'POST', body: '{}' }),
+    },
+
+    auth: {
+      login: ({ id, password }) =>
+        apiFetch('/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({ id, password }),
+        }),
+    },
+
+    share: {
+      getMap: () => apiFetch('/share/map'),
+      create: ({ path }) =>
+        apiFetch('/share/create', {
+          method: 'POST',
+          body: JSON.stringify({ path }),
+        }),
+      revoke: ({ path }) =>
+        apiFetch('/share/revoke', {
+          method: 'POST',
+          body: JSON.stringify({ path }),
+        }),
+      resolve: ({ token }) =>
+        apiFetch(`/share/resolve?token=${encodeURIComponent(token ?? '')}`),
+    },
+
+    fileAccess: {
+      getMap: () => apiFetch('/file-access/map'),
+      set: ({ path, visibility, viewRestricted }) =>
+        apiFetch('/file-access/set', {
+          method: 'POST',
+          body: JSON.stringify({ path, visibility, viewRestricted }),
+        }),
+    },
+
+    trash: {
+      getMap: () => apiFetch('/trash/map'),
+      move: (relativePath) =>
+        apiFetch('/trash/move', {
+          method: 'POST',
+          body: JSON.stringify({ path: relativePath }),
+        }),
+      restore: (relativePath) =>
+        apiFetch('/trash/restore', {
+          method: 'POST',
+          body: JSON.stringify({ path: relativePath }),
+        }),
+      empty: () => apiFetch('/trash/empty', { method: 'POST', body: '{}' }),
+      deletePermanent: (relativePath) =>
+        apiFetch('/trash/deletePermanent', {
+          method: 'POST',
+          body: JSON.stringify({ path: relativePath }),
+        }),
     },
   };
 }

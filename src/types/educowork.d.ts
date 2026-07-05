@@ -68,6 +68,15 @@ window.educowork = {
     getStatus: () => {},
     update: () => {},
   },
+  auth: {
+    login: ({ id, password }) => {},
+  },
+  share: {
+    getMap: () => {},
+    create: ({ path }) => {},
+    revoke: ({ path }) => {},
+    resolve: ({ token }) => {},
+  },
 };
 
 export {};

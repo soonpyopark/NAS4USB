@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { loadUserDisplayName, saveUserDisplayName } from '../lib/userProfile.js';
+import {
+  loadUserDisplayName,
+  normalizeDisplayName,
+  saveUserDisplayName,
+  USER_NAME_PREFIX,
+} from '../lib/userProfile.js';
 
 export function useUserProfile() {
   const [displayName, setDisplayName] = useState('');
@@ -29,13 +34,13 @@ export function useUserProfile() {
   }, []);
 
   const persistDisplayName = useCallback(async (nextName) => {
-    const trimmed = nextName.trim();
-    draftRef.current = trimmed;
-    setDisplayName(trimmed);
+    const normalized = normalizeDisplayName(nextName);
+    draftRef.current = normalized;
+    setDisplayName(normalized);
     setSaving(true);
 
     try {
-      await saveUserDisplayName(trimmed);
+      await saveUserDisplayName(normalized);
     } finally {
       setSaving(false);
     }
@@ -47,6 +52,10 @@ export function useUserProfile() {
 
   const handleCommit = useCallback(async () => {
     const trimmed = displayName.trim();
+    if (!trimmed || trimmed === USER_NAME_PREFIX) {
+      setDisplayName(draftRef.current);
+      return;
+    }
     if (trimmed === draftRef.current) return;
     await persistDisplayName(trimmed);
   }, [displayName, persistDisplayName]);

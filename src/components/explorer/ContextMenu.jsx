@@ -92,7 +92,7 @@ export default function ContextMenu({ x, y, items, onClose }) {
             item.onClick();
             onClose();
           }}
-          className={`flex w-full px-3 py-2 text-left text-sm disabled:cursor-not-allowed disabled:opacity-40 ${
+          className={`flex w-full px-3 py-2 text-left text-[10pt] disabled:cursor-not-allowed disabled:opacity-40 ${
             item.danger ? 'text-red-600 hover:bg-red-50' : 'text-slate-700 hover:bg-slate-50'
           }`}
         >

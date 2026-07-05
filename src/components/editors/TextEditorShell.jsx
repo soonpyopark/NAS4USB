@@ -11,7 +11,7 @@ import { decodeTextBase64, encodeTextBase64 } from '../../lib/text/textIO.js';
 /**
  * @param {{ relativePath: string, fileName: string, extension: string, syncInfo: object, onClose: () => void }} props
  */
-export default function TextEditorShell({ relativePath, fileName, extension, syncInfo, onClose }) {
+export default function TextEditorShell({ relativePath, fileName, extension, syncInfo, onClose, allowClose = true, fullscreen = false }) {
   const isMarkdown = extension === 'md';
   const workspace = useWorkspaceSession(relativePath);
   const { doc, status, synced, roomId, provider } = useYjsSession(relativePath, syncInfo, {
@@ -62,7 +62,7 @@ export default function TextEditorShell({ relativePath, fileName, extension, syn
   }, [workspace.ready, workspace.sessionId, doc]);
 
   useEffect(() => {
-    if (!ready || !doc || !editorHandle) return undefined;
+    if (!ready || !doc || !editorHandle || !synced) return undefined;
 
     unbindRef.current?.();
     unbindRef.current = bindRhwpEditor(doc, editorHandle, {
@@ -79,7 +79,7 @@ export default function TextEditorShell({ relativePath, fileName, extension, syn
       editorHandle.setEditable?.(false);
       setBound(false);
     };
-  }, [ready, doc, editorHandle, provider]);
+  }, [ready, doc, editorHandle, provider, synced]);
 
   const handleEditorReady = useCallback((editor) => {
     setEditorHandle(editor);
@@ -121,6 +121,8 @@ export default function TextEditorShell({ relativePath, fileName, extension, syn
       saving={saving}
       onSave={handleSave}
       onClose={handleClose}
+      allowClose={allowClose}
+      fullscreen={fullscreen}
     >
       {(workspace.error || loadError) && (
         <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">

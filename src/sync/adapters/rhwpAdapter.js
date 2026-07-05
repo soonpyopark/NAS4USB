@@ -65,9 +65,7 @@ function bindRhwpAwareness(provider, editor) {
   const mountElement =
     surface instanceof HTMLIFrameElement
       ? surface
-      : surface instanceof HTMLTextAreaElement || surface instanceof HTMLInputElement
-        ? surface
-        : surface.closest('.relative') ?? surface.parentElement ?? surface;
+      : surface.closest('.relative') ?? surface.parentElement ?? surface;
 
   return bindCollaborationPointers(provider, mountElement, {
     subscribeLocal: (publish) => {
@@ -75,11 +73,8 @@ function bindRhwpAwareness(provider, editor) {
         return editor.onPointerMove((pointer) => publish(pointer));
       }
 
-      if (surface instanceof HTMLTextAreaElement || surface instanceof HTMLInputElement) {
-        return trackLocalPointer(surface, publish);
-      }
-
-      return () => {};
+      const trackTarget = mountElement instanceof HTMLElement ? mountElement : surface;
+      return trackLocalPointer(trackTarget, publish);
     },
   });
 }
@@ -154,12 +149,15 @@ export function bindRhwpEditor(ydoc, editor, options = {}) {
   };
 
   if (options.provider) {
+    let syncedOnce = false;
     const onSync = (isSynced) => {
-      if (isSynced) binder.resync();
+      if (!isSynced || syncedOnce) return;
+      syncedOnce = true;
+      binder.resync();
     };
     options.provider.on('sync', onSync);
     if (options.provider.synced) {
-      binder.resync();
+      onSync(true);
     }
     return () => {
       options.provider.off('sync', onSync);

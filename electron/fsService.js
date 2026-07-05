@@ -1,9 +1,29 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { TRASH_FOLDER } from '../shared/constants.js';
 import { resolvePortablePath } from './appContext.js';
 
+/**
+ * @param {string} [relativePath]
+ */
+function normalizeRelativePath(relativePath) {
+  return String(relativePath ?? '.').replace(/\\/g, '/');
+}
+
 export async function readDir(relativePath = '.') {
+  const normalized = normalizeRelativePath(relativePath);
   const absolute = resolvePortablePath(relativePath);
+
+  try {
+    await fs.access(absolute);
+  } catch (error) {
+    if (normalized === TRASH_FOLDER) {
+      await fs.mkdir(absolute, { recursive: true });
+      return [];
+    }
+    throw error;
+  }
+
   const entries = await fs.readdir(absolute, { withFileTypes: true });
 
   return Promise.all(

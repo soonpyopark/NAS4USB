@@ -1,3 +1,5 @@
+import { AppModal, AppModalActions, AppModalButton } from '../common/AppModal.jsx';
+
 function SyncStatusBadge({ status, synced, peerCount }) {
   const color =
     status === 'connected'
@@ -33,36 +35,29 @@ export default function EditorModal({
   saving,
   onSave,
   onClose,
+  allowClose = true,
+  fullscreen = false,
   children,
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-      <div className="flex h-[85vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
-        <header className="flex flex-wrap items-center gap-3 border-b border-nas-border px-4 py-3">
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold text-slate-800">{title}</p>
-            {subtitle && <p className="truncate text-xs text-nas-muted">{subtitle}</p>}
-          </div>
+    <AppModal open editor embedded={fullscreen} onClose={allowClose ? onClose : undefined}>
+      <header className="modal-editor-header">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-[#323130]">{title}</p>
+          {subtitle && <p className="truncate text-xs text-[#605e5c]">{subtitle}</p>}
+        </div>
 
-          <SyncStatusBadge status={status} synced={synced} peerCount={peerCount} />
+        <SyncStatusBadge status={status} synced={synced} peerCount={peerCount} />
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="nas-btn-primary disabled:opacity-50"
-              onClick={onSave}
-              disabled={saving}
-            >
-              {saving ? '저장 중…' : 'USB에 저장'}
-            </button>
-            <button type="button" className="nas-btn-ghost" onClick={onClose}>
-              닫기
-            </button>
-          </div>
-        </header>
+        <AppModalActions className="!mb-0 shrink-0">
+          <AppModalButton variant="primary" onClick={onSave} disabled={saving}>
+            {saving ? '저장 중…' : '작성 내용 저장'}
+          </AppModalButton>
+          {allowClose && <AppModalButton onClick={onClose}>닫기</AppModalButton>}
+        </AppModalActions>
+      </header>
 
-        <div className="flex min-h-0 flex-1 flex-col">{children}</div>
-      </div>
-    </div>
+      <div className="modal-editor-body">{children}</div>
+    </AppModal>
   );
 }

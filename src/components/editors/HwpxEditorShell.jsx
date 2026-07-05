@@ -9,7 +9,7 @@ import { loadRhwpModule } from '../../lib/rhwp/loadRhwp.js';
 
 const RHWP_VERSION = '0.7.17';
 
-export default function HwpxEditorShell({ relativePath, fileName, syncInfo, onClose }) {
+export default function HwpxEditorShell({ relativePath, fileName, syncInfo, onClose, allowClose = true, fullscreen = false }) {
   const workspace = useWorkspaceSession(relativePath);
   const { doc, status, synced, roomId, provider } = useYjsSession(relativePath, syncInfo, {
     syncReady: syncInfo != null,
@@ -179,6 +179,8 @@ export default function HwpxEditorShell({ relativePath, fileName, syncInfo, onCl
       saving={saving}
       onSave={handleSave}
       onClose={handleClose}
+      allowClose={allowClose}
+      fullscreen={fullscreen}
     >
       {(workspace.error || loadError) && (
         <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
@@ -194,7 +196,7 @@ export default function HwpxEditorShell({ relativePath, fileName, syncInfo, onCl
               ? `rhwp ${RHWP_VERSION} · rhwp-studio · Y.js 연결 중…`
               : remotePeerCount != null && remotePeerCount > 0
                 ? `rhwp ${RHWP_VERSION} · rhwp-studio · LAN 협업 편집 (협업자 ${remotePeerCount}명 · room ${roomId})`
-                : `rhwp ${RHWP_VERSION} · rhwp-studio · HWPX LAN 협업 편집 · room ${roomId} · USB 저장 시 HWPX 유지`
+                : `rhwp ${RHWP_VERSION} · rhwp-studio · HWPX LAN 협업 편집 · room ${roomId} · 작성 내용 저장 시 HWPX 유지`
             : `rhwp ${RHWP_VERSION} · rhwp-studio 초기화 중…`}
       </div>
 

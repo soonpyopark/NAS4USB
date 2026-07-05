@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { sortEntries } from '../lib/fsPaths.js';
+import { filterTrashFromEntries } from '../lib/trashPaths.js';
 
 /**
  * @param {string} currentPath
@@ -14,7 +15,7 @@ export function useDirectoryTree(currentPath) {
     setLoadingPaths((prev) => new Set(prev).add(relativePath));
     try {
       const entries = await window.educowork.fs.readDir(relativePath);
-      const sorted = sortEntries(entries, 'name', 'asc');
+      const sorted = filterTrashFromEntries(sortEntries(entries, 'name', 'asc'), relativePath);
       setChildrenMap((prev) => ({ ...prev, [relativePath]: sorted }));
       return sorted;
     } finally {
@@ -60,7 +61,7 @@ export function useDirectoryTree(currentPath) {
     const nextEntries = await Promise.all(
       uniquePaths.map(async (path) => {
         const entries = await window.educowork.fs.readDir(path);
-        return [path, sortEntries(entries, 'name', 'asc')];
+        return [path, filterTrashFromEntries(sortEntries(entries, 'name', 'asc'), path)];
       }),
     );
 

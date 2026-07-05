@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { joinRelativePath, readFileAsBase64, resolveUniqueName, validateFolderName } from '../lib/fsPaths.js';
+import { filterTrashFromEntries } from '../lib/trashPaths.js';
 import { buildNewFileContent, resolveNewFileName } from '../lib/files/newFileFactory.js';
 import { convertHwpBase64ToHwpx, isHwpFileName, toHwpxFileName } from '@educowork/rhwp/hwpConvert.js';
 
@@ -14,7 +15,7 @@ export function useFileSystem(currentPath) {
 
     try {
       const result = await window.educowork.fs.readDir(currentPath);
-      setEntries(result);
+      setEntries(filterTrashFromEntries(result, currentPath));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to read directory');
       setEntries([]);
@@ -71,6 +72,22 @@ export function useFileSystem(currentPath) {
     await window.educowork.fs.delete(relativePath);
   }, []);
 
+  const moveToTrash = useCallback(async (relativePath) => {
+    await window.educowork.trash.move(relativePath);
+  }, []);
+
+  const restoreFromTrash = useCallback(async (relativePath) => {
+    return window.educowork.trash.restore(relativePath);
+  }, []);
+
+  const emptyTrash = useCallback(async () => {
+    await window.educowork.trash.empty();
+  }, []);
+
+  const deletePermanent = useCallback(async (relativePath) => {
+    await window.educowork.trash.deletePermanent(relativePath);
+  }, []);
+
   const rename = useCallback(async (fromRelative, toRelative) => {
     await window.educowork.fs.rename(fromRelative, toRelative);
   }, []);
@@ -116,6 +133,10 @@ export function useFileSystem(currentPath) {
     createFile,
     createNewTypedFile,
     remove,
+    moveToTrash,
+    restoreFromTrash,
+    emptyTrash,
+    deletePermanent,
     rename,
     copyTo,
     moveTo,

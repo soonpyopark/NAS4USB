@@ -6,9 +6,21 @@ import FileList from './FileList.jsx';
 import FilePropertiesDialog from './FilePropertiesDialog.jsx';
 import NewFileDialog from './NewFileDialog.jsx';
 import NewFolderDialog from './NewFolderDialog.jsx';
+import MoveItemsDialog from './MoveItemsDialog.jsx';
+import ShareLinkModal from '../common/ShareLinkModal.jsx';
 import { useFileClipboard } from '../../hooks/useFileClipboard.js';
 import { useFileSelection } from '../../hooks/useFileSelection.js';
 import { useFileSystem } from '../../hooks/useFileSystem.js';
+import { useShareLinks } from '../../hooks/useShareLinks.js';
+import { useFileAccess } from '../../hooks/useFileAccess.js';
+import {
+  openShareLinkForEntry,
+  revokeShareLinkForEntry,
+} from '../../lib/shareLinkActions.js';
+import {
+  buildBackgroundContextMenuItems,
+  buildEntryContextMenuItems,
+} from '../../lib/fsContextMenu.js';
 import {
   filterEntries,
   getParentPath,
@@ -16,8 +28,14 @@ import {
   resolveUniqueName,
   sortEntries,
 } from '../../lib/fsPaths.js';
+import { resolveFileEntryStatus } from '../../lib/fileEntryStatus.js';
+import { downloadFileEntries } from '../../lib/downloadEntries.js';
+import { moveEntries } from '../../lib/moveEntries.js';
+import { isTrashPath, TRASH_FOLDER } from '../../lib/trashPaths.js';
+import { useTrash } from '../../hooks/useTrash.js';
+import { useAppConfirm } from '../../hooks/useAppConfirm.jsx';
 
-export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFsChanged, fsRevision = 0 }) {
+export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFsChanged, fsRevision = 0, syncInfo }) {
   const {
     entries,
     loading,
@@ -25,7 +43,10 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
     refresh,
     createFolder,
     createNewTypedFile,
-    remove,
+    moveToTrash,
+    restoreFromTrash,
+    emptyTrash,
+    deletePermanent,
     rename,
     copyTo,
     uploadFiles,
@@ -42,9 +63,16 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
     toggleSelection,
     selectRange,
     selectAll,
+    toggleSelectAllVisible,
   } = useFileSelection(entries);
 
   const { hasClipboard, copyEntries, cutEntries, pasteEntries } = useFileClipboard();
+  const { shareMap, refreshShareMap } = useShareLinks();
+  const { accessMap, refreshAccessMap, setFileAccess } = useFileAccess();
+  const { refresh: refreshTrash } = useTrash(fsRevision);
+  const { confirm: appConfirm, alert: appAlert, dialog: confirmDialog } = useAppConfirm();
+
+  const isInTrashView = isTrashPath(currentPath);
 
   const [viewMode, setViewMode] = useState('list');
   const [searchQuery, setSearchQuery] = useState('');
@@ -55,19 +83,37 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
   const [propertiesStat, setPropertiesStat] = useState(null);
   const [newFileDialogOpen, setNewFileDialogOpen] = useState(false);
   const [newFolderDialogOpen, setNewFolderDialogOpen] = useState(false);
+  const [shareLinkDialog, setShareLinkDialog] = useState(null);
+  const [moveDialogEntries, setMoveDialogEntries] = useState(null);
+  const [propertiesSaving, setPropertiesSaving] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [lastSelectedPath, setLastSelectedPath] = useState(null);
 
   const uploadInputRef = useRef(null);
   const containerRef = useRef(null);
+  const skipRevisionRefreshRef = useRef(false);
 
   const visibleEntries = useMemo(() => {
     const filtered = filterEntries(entries, searchQuery);
     return sortEntries(filtered, sortField, sortDirection);
   }, [entries, searchQuery, sortField, sortDirection]);
 
+  const propertiesEntryStatus = useMemo(() => {
+    if (!propertiesEntry || propertiesEntry.isDirectory) return null;
+    return resolveFileEntryStatus(propertiesEntry.relativePath, accessMap, shareMap);
+  }, [propertiesEntry, accessMap, shareMap]);
+
+  const downloadableEntries = useMemo(
+    () => selectedEntries.filter((entry) => !entry.isDirectory),
+    [selectedEntries],
+  );
+
   const refreshAll = async () => {
     await refresh();
+    await refreshShareMap();
+    await refreshAccessMap();
+    await refreshTrash();
+    skipRevisionRefreshRef.current = true;
     onFsChanged?.();
   };
 
@@ -78,10 +124,16 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
   }, [currentPath, clearSelection]);
 
   useEffect(() => {
-    if (fsRevision > 0) {
-      refresh();
+    if (fsRevision === 0) return;
+    if (skipRevisionRefreshRef.current) {
+      skipRevisionRefreshRef.current = false;
+      return;
     }
-  }, [fsRevision, refresh]);
+
+    refresh();
+    void refreshShareMap();
+    void refreshAccessMap();
+  }, [fsRevision, refresh, refreshShareMap, refreshAccessMap]);
 
   const getTargetEntries = (entry) => {
     if (entry && selectedSet.has(entry.relativePath) && selectedEntries.length > 1) {
@@ -133,6 +185,29 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
     }
   };
 
+  const handleDownload = async (entry) => {
+    const targets = entry ? getTargetEntries(entry) : downloadableEntries;
+    try {
+      await downloadFileEntries(targets);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : '다운로드에 실패했습니다.');
+    }
+  };
+
+  const handleShareLinkBadgeClick = async (entry) => {
+    try {
+      const result = await openShareLinkForEntry({
+        entry,
+        syncInfo,
+        shareMap,
+        refreshShareMap,
+      });
+      setShareLinkDialog(result);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : '공유 링크를 열 수 없습니다.');
+    }
+  };
+
   const handleDropUpload = async (event) => {
     event.preventDefault();
     setIsDragging(false);
@@ -170,12 +245,88 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
     const targets = getTargetEntries(entry);
     if (!targets.length) return;
 
-    const confirmed = window.confirm(`${targets.length}개 항목을 삭제할까요?`);
-    if (!confirmed) return;
+    if (isInTrashView) {
+      const label =
+        targets.length === 1
+          ? `"${targets[0].name}"을(를) 영구 삭제할까요?\n\n이 작업은 되돌릴 수 없습니다.`
+          : `${targets.length}개 항목을 영구 삭제할까요?\n\n이 작업은 되돌릴 수 없습니다.`;
+      const confirmed = await appConfirm({
+        title: '영구 삭제',
+        body: label,
+        confirmLabel: '영구 삭제',
+        confirmVariant: 'danger',
+      });
+      if (!confirmed) return;
 
-    for (const target of targets) {
-      await remove(target.relativePath);
+      for (const target of targets) {
+        await deletePermanent(target.relativePath);
+      }
+    } else {
+      const label =
+        targets.length === 1
+          ? `"${targets[0].name}"을(를) 휴지통으로 이동할까요?`
+          : `${targets.length}개 항목을 휴지통으로 이동할까요?`;
+      const confirmed = await appConfirm({
+        title: '휴지통으로 이동',
+        body: label,
+        confirmLabel: '휴지통으로 이동',
+        confirmVariant: 'danger',
+      });
+      if (!confirmed) return;
+
+      for (const target of targets) {
+        await moveToTrash(target.relativePath);
+      }
     }
+
+    clearSelection();
+    await refreshAll();
+  };
+
+  const handleRestore = async (entry) => {
+    const targets = getTargetEntries(entry);
+    if (!targets.length) return;
+
+    try {
+      /** @type {Array<{ restoredPath?: string }>} */
+      const results = [];
+      for (const target of targets) {
+        results.push(await restoreFromTrash(target.relativePath));
+      }
+      clearSelection();
+      await refreshAll();
+
+      if (targets.length === 1) {
+        const restoredPath = results[0]?.restoredPath;
+        await appAlert({
+          title: '복원 완료',
+          body: restoredPath
+            ? `"${targets[0].name}"을(를) 복원했습니다.\n\n위치: ${restoredPath}`
+            : `"${targets[0].name}"을(를) 복원했습니다.`,
+        });
+      } else {
+        await appAlert({
+          title: '복원 완료',
+          body: `${targets.length}개 항목을 복원했습니다.`,
+        });
+      }
+    } catch (err) {
+      await appAlert({
+        title: '복원 실패',
+        body: err instanceof Error ? err.message : '복원에 실패했습니다.',
+      });
+    }
+  };
+
+  const handleEmptyTrash = async () => {
+    const confirmed = await appConfirm({
+      title: '휴지통 비우기',
+      body: '휴지통의 모든 항목을 영구 삭제할까요?\n\n이 작업은 되돌릴 수 없습니다.',
+      confirmLabel: '휴지통 비우기',
+      confirmVariant: 'danger',
+    });
+    if (!confirmed) return;
+    await emptyTrash();
     clearSelection();
     await refreshAll();
   };
@@ -190,9 +341,42 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
     cutEntries(targets);
   };
 
-  const handlePaste = async () => {
-    const existingNames = entries.map((entry) => entry.name);
-    const pasted = await pasteEntries(currentPath, existingNames);
+  const handleMove = (entry) => {
+    const targets = getTargetEntries(entry);
+    if (!targets.length) {
+      window.alert('이동할 항목을 선택해 주세요.');
+      return;
+    }
+    setMoveDialogEntries(targets);
+  };
+
+  const handleMoveConfirm = async (destinationPath) => {
+    if (!moveDialogEntries?.length) return;
+
+    const results = await moveEntries(moveDialogEntries, destinationPath);
+
+    for (const result of results) {
+      if (currentPath === result.from || currentPath.startsWith(`${result.from}/`)) {
+        onNavigate(result.entry.isDirectory ? result.to : destinationPath);
+        break;
+      }
+    }
+
+    setMoveDialogEntries(null);
+    clearSelection();
+    await refreshAll();
+  };
+
+  const handlePaste = async (targetPath = currentPath) => {
+    let existingNames;
+    if (targetPath === currentPath) {
+      existingNames = entries.map((entry) => entry.name);
+    } else {
+      const dirEntries = await window.educowork.fs.readDir(targetPath);
+      existingNames = dirEntries.map((entry) => entry.name);
+    }
+
+    const pasted = await pasteEntries(targetPath, existingNames);
     if (pasted) await refreshAll();
   };
 
@@ -216,6 +400,10 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
       onNavigate(entry.relativePath);
       return;
     }
+    if (isInTrashView || entry.relativePath.startsWith(`${TRASH_FOLDER}/`)) {
+      window.alert('휴지통에 있는 파일은 복원한 뒤 열어 주세요.');
+      return;
+    }
     onOpenFile(entry);
   };
 
@@ -225,6 +413,78 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
     const info = await stat(target.relativePath);
     setPropertiesEntry(target);
     setPropertiesStat(info);
+  };
+
+  const handlePropertiesPrivateChange = async (checked) => {
+    if (!propertiesEntry) return;
+    setPropertiesSaving(true);
+    try {
+      await setFileAccess(propertiesEntry.relativePath, {
+        visibility: checked ? 'private' : 'public',
+      });
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : '공개 설정 변경에 실패했습니다.');
+    } finally {
+      setPropertiesSaving(false);
+    }
+  };
+
+  const handlePropertiesViewRestrictedChange = async (checked) => {
+    if (!propertiesEntry) return;
+    setPropertiesSaving(true);
+    try {
+      await setFileAccess(propertiesEntry.relativePath, {
+        viewRestricted: checked,
+      });
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : '열람 제한 설정 변경에 실패했습니다.');
+    } finally {
+      setPropertiesSaving(false);
+    }
+  };
+
+  const handlePropertiesShareChange = async (checked) => {
+    if (!propertiesEntry) return;
+    setPropertiesSaving(true);
+    try {
+      if (checked) {
+        const result = await openShareLinkForEntry({
+          entry: propertiesEntry,
+          syncInfo,
+          shareMap,
+          refreshShareMap,
+        });
+        setShareLinkDialog(result);
+      } else {
+        await revokeShareLinkForEntry({ entry: propertiesEntry, refreshShareMap });
+      }
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : '공유 설정 변경에 실패했습니다.');
+    } finally {
+      setPropertiesSaving(false);
+    }
+  };
+
+  const handleToggleVisibility = async (entry) => {
+    const status = resolveFileEntryStatus(entry.relativePath, accessMap, shareMap);
+    try {
+      await setFileAccess(entry.relativePath, {
+        visibility: status.isPrivate ? 'public' : 'private',
+      });
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : '공개 설정 변경에 실패했습니다.');
+    }
+  };
+
+  const handleToggleViewRestriction = async (entry) => {
+    const status = resolveFileEntryStatus(entry.relativePath, accessMap, shareMap);
+    try {
+      await setFileAccess(entry.relativePath, {
+        viewRestricted: !status.isViewRestricted,
+      });
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : '열람 제한 설정 변경에 실패했습니다.');
+    }
   };
 
   const handleSelect = (entry, event) => {
@@ -238,8 +498,16 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
     setLastSelectedPath(entry.relativePath);
   };
 
+  const handleToggleCheckbox = (entry) => {
+    toggleSelection(entry.relativePath);
+    setLastSelectedPath(entry.relativePath);
+  };
+
   const openContextMenu = (event, entry) => {
     event.preventDefault();
+    if (entry) {
+      event.stopPropagation();
+    }
     if (entry && !selectedSet.has(entry.relativePath)) {
       selectOnly(entry.relativePath);
       setLastSelectedPath(entry.relativePath);
@@ -248,55 +516,54 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
     setContextMenu({
       x: event.clientX,
       y: event.clientY,
-      entry: entry ?? selectedEntries[0] ?? null,
+      entry: entry ?? null,
+      targetPath: currentPath,
     });
   };
 
-  const contextTarget = contextMenu?.entry ?? selectedEntries[0] ?? null;
-  const contextTargets = getTargetEntries(contextTarget);
+  const contextTarget = contextMenu?.entry ?? null;
+  const contextTargetPath = contextMenu?.targetPath ?? currentPath;
+  const contextTargets = contextTarget ? getTargetEntries(contextTarget) : [];
+  const contextTargetStatus = contextTarget
+    ? resolveFileEntryStatus(contextTarget.relativePath, accessMap, shareMap)
+    : null;
 
-  const contextItems = [
-    {
-      id: 'open',
-      label: contextTarget?.isDirectory ? '열기' : '편집 / 열기',
-      disabled: !contextTarget,
-      onClick: () => contextTarget && handleOpen(contextTarget),
-    },
-    {
-      id: 'open-system',
-      label: '시스템에서 열기',
-      disabled: !contextTarget || contextTarget.isDirectory,
-      onClick: () => contextTarget && openInSystem(contextTarget.relativePath),
-    },
-    { id: 'copy', label: '복사', disabled: !contextTargets.length, onClick: () => handleCopy(contextTarget) },
-    { id: 'cut', label: '잘라내기', disabled: !contextTargets.length, onClick: () => handleCut(contextTarget) },
-    { id: 'paste', label: '붙여넣기', disabled: !hasClipboard, onClick: handlePaste },
-    {
-      id: 'rename',
-      label: '이름 변경',
-      disabled: contextTargets.length !== 1,
-      onClick: () => handleRename(contextTarget),
-    },
-    {
-      id: 'duplicate',
-      label: '복제',
-      disabled: !contextTarget,
-      onClick: () => handleDuplicate(contextTarget),
-    },
-    {
-      id: 'delete',
-      label: '삭제',
-      danger: true,
-      disabled: !contextTargets.length,
-      onClick: () => handleDelete(contextTarget),
-    },
-    {
-      id: 'properties',
-      label: '속성',
-      disabled: !contextTarget,
-      onClick: () => handleShowProperties(contextTarget),
-    },
-  ];
+  const contextItems = contextTarget
+    ? buildEntryContextMenuItems({
+        entry: contextTarget,
+        targetCount: contextTargets.length,
+        isInTrashView,
+        hasClipboard,
+        onOpen: handleOpen,
+        onOpenSystem: (entry) => openInSystem(entry.relativePath),
+        onCopy: () => handleCopy(contextTarget),
+        onCut: () => handleCut(contextTarget),
+        onMove: () => handleMove(contextTarget),
+        onPaste: handlePaste,
+        onRename: () => handleRename(contextTarget),
+        onDuplicate: () => handleDuplicate(contextTarget),
+        onDelete: () => handleDelete(contextTarget),
+        onRestore: () => handleRestore(contextTarget),
+        onPermanentDelete: () => handleDelete(contextTarget),
+        onProperties: () => handleShowProperties(contextTarget),
+        onDownload: () => handleDownload(contextTarget),
+        canDownload: contextTargets.some((target) => !target.isDirectory),
+        isPrivate: contextTargetStatus?.isPrivate ?? false,
+        isViewRestricted: contextTargetStatus?.isViewRestricted ?? false,
+        onToggleVisibility: () => handleToggleVisibility(contextTarget),
+        onToggleViewRestriction: () => handleToggleViewRestriction(contextTarget),
+      })
+    : buildBackgroundContextMenuItems({
+        targetPath: contextTargetPath,
+        isInTrashView,
+        hasClipboard,
+        onCreateFolder: handleCreateFolder,
+        onCreateFile: handleCreateFile,
+        onUpload: handleUploadClick,
+        onPaste: handlePaste,
+        onRefresh: refreshAll,
+        onEmptyTrash: handleEmptyTrash,
+      });
 
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -329,7 +596,7 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
       }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v' && hasClipboard) {
         event.preventDefault();
-        handlePaste();
+        handlePaste(currentPath);
       }
     };
 
@@ -349,13 +616,20 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
       onDrop={handleDropUpload}
       onContextMenu={(event) => openContextMenu(event, null)}
     >
-      <div className="border-b border-nas-border px-4 py-3">
-        <Breadcrumb currentPath={currentPath} onNavigate={onNavigate} />
+      <div className="flex items-center gap-3 border-b border-nas-border px-4 py-3">
+        <div className="min-w-0 flex-1">
+          <Breadcrumb currentPath={currentPath} onNavigate={onNavigate} />
+        </div>
+        <input
+          type="search"
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder="현재 폴더 검색…"
+          className="h-8 w-full max-w-[220px] shrink-0 rounded-md border border-nas-border px-3 text-[10pt] outline-none focus:border-nas-accent focus:ring-1 focus:ring-nas-accent"
+        />
       </div>
 
       <FileExplorerToolbar
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
         sortField={sortField}
         sortDirection={sortDirection}
         onSortFieldChange={setSortField}
@@ -364,18 +638,33 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
         onViewModeChange={setViewMode}
         hasSelection={selectedEntries.length > 0}
         hasClipboard={hasClipboard}
+        isInTrashView={isInTrashView}
         onNavigateUp={handleNavigateUp}
         onRefresh={refreshAll}
         onCreateFolder={handleCreateFolder}
         onCreateFile={handleCreateFile}
         onUploadClick={handleUploadClick}
+        onDownloadClick={() => handleDownload()}
+        canDownload={downloadableEntries.length > 0}
         onCopy={() => handleCopy()}
         onCut={() => handleCut()}
-        onPaste={handlePaste}
+        onMove={() => handleMove()}
+        onPaste={() => handlePaste(currentPath)}
         onDelete={() => handleDelete()}
+        onRestore={() => handleRestore()}
+        onEmptyTrash={handleEmptyTrash}
         onRename={() => handleRename()}
         onSelectAll={selectAll}
+        onClearSelection={clearSelection}
+        onProperties={() => handleShowProperties()}
+        canShowProperties={selectedEntries.length === 1}
       />
+
+      {isInTrashView && (
+        <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
+          휴지통 · 항목을 복원하거나 영구 삭제할 수 있습니다. 파일은 복원 후 열어 주세요.
+        </div>
+      )}
 
       <input ref={uploadInputRef} type="file" multiple hidden onChange={handleUploadInput} />
 
@@ -396,10 +685,15 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
         loading={loading}
         viewMode={viewMode}
         selectedSet={selectedSet}
+        accessMap={accessMap}
+        shareMap={shareMap}
         onOpen={handleOpen}
         onSelect={handleSelect}
+        onToggleCheckbox={handleToggleCheckbox}
+        onToggleSelectAll={() => toggleSelectAllVisible(visibleEntries)}
         onContextMenu={openContextMenu}
         onBackgroundClick={clearSelection}
+        onShareLinkClick={handleShareLinkBadgeClick}
       />
 
       {contextMenu && (
@@ -415,6 +709,11 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
         <FilePropertiesDialog
           entry={propertiesEntry}
           statInfo={propertiesStat}
+          fileStatus={propertiesEntryStatus}
+          accessSaving={propertiesSaving}
+          onChangePrivate={handlePropertiesPrivateChange}
+          onChangeViewRestricted={handlePropertiesViewRestrictedChange}
+          onChangeShare={handlePropertiesShareChange}
           onClose={() => {
             setPropertiesEntry(null);
             setPropertiesStat(null);
@@ -433,6 +732,23 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
         onClose={() => setNewFolderDialogOpen(false)}
         onConfirm={handleCreateFolderConfirm}
       />
+
+      <ShareLinkModal
+        open={Boolean(shareLinkDialog)}
+        url={shareLinkDialog?.url ?? ''}
+        fileName={shareLinkDialog?.fileName}
+        onClose={() => setShareLinkDialog(null)}
+      />
+
+      <MoveItemsDialog
+        open={Boolean(moveDialogEntries?.length)}
+        entries={moveDialogEntries ?? []}
+        initialPath={currentPath}
+        onClose={() => setMoveDialogEntries(null)}
+        onConfirm={handleMoveConfirm}
+      />
+
+      {confirmDialog}
     </div>
   );
 }

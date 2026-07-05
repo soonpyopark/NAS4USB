@@ -1,11 +1,64 @@
 export const USER_PROFILE_PATH = '.educowork/profile.json';
+export const USER_DISPLAY_NAME_STORAGE_KEY = 'nas4usb.userDisplayName';
+
+export const USER_NAME_PREFIX = '사용자';
+const USER_NAME_PATTERN = /^사용자(\d{1,3})$/;
 
 /**
  * @returns {string}
  */
 export function createDefaultDisplayName() {
-  const suffix = Math.floor(Math.random() * 900) + 100;
-  return `사용자${suffix}`;
+  const num = Math.floor(Math.random() * 999) + 1;
+  return `${USER_NAME_PREFIX}${String(num).padStart(3, '0')}`;
+}
+
+/**
+ * @param {string} name
+ * @returns {string}
+ */
+export function normalizeDisplayName(name) {
+  const trimmed = name.trim();
+  const match = USER_NAME_PATTERN.exec(trimmed);
+  if (match) {
+    const num = Number.parseInt(match[1], 10);
+    if (num >= 1 && num <= 999) {
+      return `${USER_NAME_PREFIX}${String(num).padStart(3, '0')}`;
+    }
+  }
+
+  const digits = trimmed.replace(/\D/g, '').slice(0, 3);
+  if (digits) {
+    const num = Number.parseInt(digits, 10);
+    if (num >= 1 && num <= 999) {
+      return `${USER_NAME_PREFIX}${String(num).padStart(3, '0')}`;
+    }
+  }
+
+  if (trimmed.startsWith(USER_NAME_PREFIX)) {
+    return trimmed;
+  }
+
+  if (trimmed) return trimmed;
+  return createDefaultDisplayName();
+}
+
+/**
+ * @param {string} value
+ * @returns {string}
+ */
+export function formatUserDisplayNameInput(value) {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === USER_NAME_PREFIX) {
+    return USER_NAME_PREFIX;
+  }
+
+  if (!trimmed.startsWith(USER_NAME_PREFIX)) {
+    const digits = trimmed.replace(/\D/g, '').slice(0, 3);
+    return digits ? `${USER_NAME_PREFIX}${digits}` : USER_NAME_PREFIX;
+  }
+
+  const suffix = trimmed.slice(USER_NAME_PREFIX.length).replace(/\D/g, '').slice(0, 3);
+  return suffix ? `${USER_NAME_PREFIX}${suffix}` : USER_NAME_PREFIX;
 }
 
 /**
@@ -30,37 +83,46 @@ export function decodeBase64ToText(base64) {
 }
 
 /**
- * @returns {Promise<string>}
+ * @returns {string | null}
  */
-export async function loadUserDisplayName() {
-  if (!window.educowork?.fs?.readFile) {
-    return createDefaultDisplayName();
-  }
-
+function readStoredDisplayName() {
   try {
-    const exists = await window.educowork.fs.exists(USER_PROFILE_PATH);
-    if (exists) {
-      const base64 = await window.educowork.fs.readFile(USER_PROFILE_PATH);
-      const profile = JSON.parse(decodeBase64ToText(base64));
-      const savedName = typeof profile.displayName === 'string' ? profile.displayName.trim() : '';
-      if (savedName) return savedName;
-    }
-
-    const defaultName = createDefaultDisplayName();
-    await saveUserDisplayName(defaultName);
-    return defaultName;
+    const saved = localStorage.getItem(USER_DISPLAY_NAME_STORAGE_KEY);
+    return typeof saved === 'string' && saved.trim() ? saved.trim() : null;
   } catch {
-    return createDefaultDisplayName();
+    return null;
   }
 }
 
 /**
  * @param {string} displayName
  */
-export async function saveUserDisplayName(displayName) {
-  if (!window.educowork?.fs?.writeFile) return;
+function writeStoredDisplayName(displayName) {
+  try {
+    localStorage.setItem(USER_DISPLAY_NAME_STORAGE_KEY, displayName);
+  } catch {
+    // ignore quota / private mode
+  }
+}
 
-  const trimmed = displayName.trim();
-  const payload = JSON.stringify({ displayName: trimmed }, null, 2);
-  await window.educowork.fs.writeFile(USER_PROFILE_PATH, encodeTextToBase64(payload));
+/**
+ * @returns {Promise<string>}
+ */
+export async function loadUserDisplayName() {
+  const stored = readStoredDisplayName();
+  if (stored) {
+    return normalizeDisplayName(stored);
+  }
+
+  const defaultName = createDefaultDisplayName();
+  writeStoredDisplayName(defaultName);
+  return defaultName;
+}
+
+/**
+ * @param {string} displayName
+ */
+export async function saveUserDisplayName(displayName) {
+  const normalized = normalizeDisplayName(displayName);
+  writeStoredDisplayName(normalized);
 }

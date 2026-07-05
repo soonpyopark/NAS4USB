@@ -8,6 +8,7 @@ export default function DesktopShell({
   syncInfo,
   infoLoading,
   currentPath,
+  fsRevision = 0,
   onNavigate,
   onHome,
   onOpenFile,
@@ -20,12 +21,14 @@ export default function DesktopShell({
       <div className="flex min-h-0 flex-1">
         <Sidebar
           currentPath={currentPath}
+          fsRevision={fsRevision}
+          syncInfo={syncInfo}
           onNavigate={onNavigate}
           onOpenFile={onOpenFile}
           onFsChanged={onFsChanged}
         />
 
-        <main className="flex min-w-0 flex-1 flex-col p-4">
+        <main className="hidden min-w-0 flex-1 flex-col p-4 md:flex">
           <div className="nas-panel flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
         </main>
       </div>

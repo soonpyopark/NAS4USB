@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('educowork', {
   __source: 'electron',
   getPaths: () => ipcRenderer.invoke('app:getPaths'),
   getSyncInfo: () => ipcRenderer.invoke('sync:getInfo'),
+  openExternal: (url) => ipcRenderer.invoke('app:openExternal', url),
 
   fs: {
     readDir: (relativePath) => ipcRenderer.invoke('fs:readDir', relativePath),
@@ -32,5 +33,31 @@ contextBridge.exposeInMainWorld('educowork', {
   editors: {
     getStatus: () => ipcRenderer.invoke('editors:getStatus'),
     update: () => ipcRenderer.invoke('editors:update'),
+  },
+
+  auth: {
+    login: ({ id, password }) => ipcRenderer.invoke('auth:login', { id, password }),
+  },
+
+  share: {
+    getMap: () => ipcRenderer.invoke('share:getMap'),
+    create: ({ path }) => ipcRenderer.invoke('share:create', { path }),
+    revoke: ({ path }) => ipcRenderer.invoke('share:revoke', { path }),
+    resolve: ({ token }) => ipcRenderer.invoke('share:resolve', { token }),
+  },
+
+  fileAccess: {
+    getMap: () => ipcRenderer.invoke('fileAccess:getMap'),
+    set: ({ path, visibility, viewRestricted }) =>
+      ipcRenderer.invoke('fileAccess:set', { path, visibility, viewRestricted }),
+  },
+
+  trash: {
+    getMap: () => ipcRenderer.invoke('trash:getMap'),
+    move: (relativePath) => ipcRenderer.invoke('trash:move', { path: relativePath }),
+    restore: (relativePath) => ipcRenderer.invoke('trash:restore', { path: relativePath }),
+    empty: () => ipcRenderer.invoke('trash:empty'),
+    deletePermanent: (relativePath) =>
+      ipcRenderer.invoke('trash:deletePermanent', { path: relativePath }),
   },
 });

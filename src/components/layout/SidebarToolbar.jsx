@@ -16,6 +16,8 @@ export default function SidebarToolbar({
   onCreateFolder,
   onCreateFile,
   onUpload,
+  onDownload,
+  canDownload = false,
   onRefresh,
   onExpandAll,
   onCollapseAll,
@@ -42,6 +44,12 @@ export default function SidebarToolbar({
           <path d="M5 21h14" />
         </svg>
       </ToolbarButton>
+      <ToolbarButton title="다운로드" onClick={onDownload} disabled={!canDownload}>
+        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M12 21V9M7 14l5 5 5-5" />
+          <path d="M5 3h14" />
+        </svg>
+      </ToolbarButton>
       <ToolbarButton title="붙여넣기" onClick={onPaste} disabled={!canPaste}>
         <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2" />
@@ -57,12 +65,12 @@ export default function SidebarToolbar({
       </ToolbarButton>
       <ToolbarButton title="모두 펼치기" onClick={onExpandAll}>
         <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M8 9l4-4 4 4M8 15l4 4 4-4" />
+          <path d="M7 6l5 5 5-5M7 13l5 5 5-5" />
         </svg>
       </ToolbarButton>
       <ToolbarButton title="모두 접기" onClick={onCollapseAll}>
         <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M7 13l5 5 5-5M7 6l5 5 5-5" />
+          <path d="M7 11l5-5 5 5M7 18l5-5 5 5" />
         </svg>
       </ToolbarButton>
     </div>

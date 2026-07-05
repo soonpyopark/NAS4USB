@@ -1,4 +1,44 @@
+import { bindCollaborationPointers, trackLocalPointer } from '../collaborationPointers.js';
+
 const LOCAL_ORIGIN = Symbol('educowork-local-fortune-sheet');
+
+/**
+ * @param {import('y-websocket').WebsocketProvider} provider
+ * @param {() => HTMLElement | null | undefined} getMountElement
+ */
+function bindSpreadsheetPointers(provider, getMountElement) {
+  if (!provider?.awareness || typeof getMountElement !== 'function') {
+    return () => {};
+  }
+
+  let cleanup = () => {};
+  let cancelled = false;
+
+  const attach = () => {
+    if (cancelled) return;
+    const mountElement = getMountElement();
+    if (!mountElement) return;
+
+    cleanup = bindCollaborationPointers(provider, mountElement, {
+      subscribeLocal: (publish) => trackLocalPointer(mountElement, publish),
+    });
+  };
+
+  attach();
+  if (!getMountElement()) {
+    const raf = window.requestAnimationFrame(attach);
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(raf);
+      cleanup();
+    };
+  }
+
+  return () => {
+    cancelled = true;
+    cleanup();
+  };
+}
 
 /**
  * @param {import('yjs').Doc} ydoc
@@ -20,6 +60,7 @@ export function getOpsArray(ydoc) {
  *   updateSheets: (sheets: import('@fortune-sheet/core').Sheet[]) => void,
  *   applyOp: (ops: import('@fortune-sheet/core').Op[]) => void,
  *   onOp: (callback: (ops: import('@fortune-sheet/core').Op[]) => void) => () => void,
+ *   getMountElement?: () => HTMLElement | null,
  * }} editor
  * @param {import('yjs').Doc} ydoc
  * @param {{
@@ -108,11 +149,17 @@ export function bindFortuneSheetEditor(ydoc, editor, { initialSheets = [], provi
 
   yops.observe(observeOps);
 
+  const pointerCleanup =
+    provider && typeof editor.getMountElement === 'function'
+      ? bindSpreadsheetPointers(provider, editor.getMountElement)
+      : () => {};
+
   const binder = {
     resync() {
       bootstrapFromYjs();
     },
     destroy() {
+      pointerCleanup();
       unobserveEditor();
       yops.unobserve(observeOps);
     },

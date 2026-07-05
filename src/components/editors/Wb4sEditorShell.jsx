@@ -15,7 +15,7 @@ import { getParentPath, joinRelativePath, resolveUniqueName } from '../../lib/fs
 
 const Wb4sEditorView = lazy(() => import('../../wb4s/Wb4sEditorView.jsx'));
 
-export default function Wb4sEditorShell({ relativePath, fileName, syncInfo, onClose, onRenamed }) {
+export default function Wb4sEditorShell({ relativePath, fileName, syncInfo, onClose, onRenamed, allowClose = true }) {
   const workspace = useWorkspaceSession(relativePath);
   const collabPathRef = useRef(relativePath);
   const relativePathRef = useRef(relativePath);
@@ -103,18 +103,18 @@ export default function Wb4sEditorShell({ relativePath, fileName, syncInfo, onCl
   const handleRenameTitle = useCallback(async (nextTitle) => {
     try {
       const trimmedTitle = nextTitle.trim() || '제목 없음';
-      const currentStem = getWb4sFileStem(fileNameRef.current);
-      if (trimmedTitle === currentStem) {
-        await saveToHost(trimmedTitle);
-        return;
-      }
-
       const parent = getParentPath(relativePathRef.current);
       const dirEntries = await window.educowork.fs.readDir(parent === '.' ? '.' : parent);
       const existingNames = dirEntries
         .map((entry) => entry.name)
         .filter((name) => name !== fileNameRef.current);
       const nextFileName = resolveUniqueName(existingNames, titleToWb4sFileName(trimmedTitle));
+
+      if (nextFileName === fileNameRef.current) {
+        await saveToHost(trimmedTitle);
+        return;
+      }
+
       const nextRelativePath =
         parent === '.' ? nextFileName : joinRelativePath(parent, nextFileName);
 
@@ -123,6 +123,7 @@ export default function Wb4sEditorShell({ relativePath, fileName, syncInfo, onCl
 
       relativePathRef.current = result.relativePath;
       fileNameRef.current = result.fileName;
+      collabPathRef.current = result.relativePath;
       onRenamed?.({ relativePath: result.relativePath, name: result.fileName });
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Rename failed');
@@ -182,7 +183,7 @@ export default function Wb4sEditorShell({ relativePath, fileName, syncInfo, onCl
               onReady={handleEditorReady}
               onSaveToHost={handleSaveToHost}
               onRenameTitle={handleRenameTitle}
-              onClose={handleClose}
+              {...(allowClose ? { onClose: handleClose } : {})}
             />
           </Suspense>
         )}

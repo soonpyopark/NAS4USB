@@ -10,12 +10,35 @@ import * as fsService from './fsService.js';
 import {
   closeWorkspace,
   commitWorkspace,
+  getSession,
   renameWorkspace,
   openWorkspace,
   readWorkspaceFile,
   writeWorkspaceFile,
 } from './tempWorkspace.js';
 import { getEditorCoresStatus, updateEditorCores } from './editorUpdater.js';
+import { loginAdmin } from './authService.js';
+import {
+  createShareLink,
+  getShareMap,
+  resolveShareToken,
+  revokeShareLink,
+  syncSharePathDelete,
+  syncSharePathRename,
+} from './shareLinkService.js';
+import {
+  getFileAccessMap,
+  setFileAccess,
+  syncFileAccessDelete,
+  syncFileAccessRename,
+} from './fileAccessService.js';
+import {
+  deletePermanent,
+  emptyTrash,
+  getTrashMap,
+  restorePath,
+  trashPath,
+} from './trashService.js';
 
 /**
  * @param {import('node:http').ServerResponse} res
@@ -77,12 +100,16 @@ export async function handleHttpApiRequest(req, res) {
 
     if (method === 'POST' && url.pathname === '/api/fs/delete') {
       const body = await readJsonBody(req);
+      await syncSharePathDelete(body.path, getPortableRoot());
+      await syncFileAccessDelete(body.path, getPortableRoot());
       sendJson(res, 200, await fsService.deletePath(body.path));
       return true;
     }
 
     if (method === 'POST' && url.pathname === '/api/fs/rename') {
       const body = await readJsonBody(req);
+      await syncSharePathRename(body.from, body.to, getPortableRoot());
+      await syncFileAccessRename(body.from, body.to, getPortableRoot());
       sendJson(res, 200, await fsService.renamePath(body.from, body.to));
       return true;
     }
@@ -111,6 +138,8 @@ export async function handleHttpApiRequest(req, res) {
 
     if (method === 'POST' && url.pathname === '/api/fs/move') {
       const body = await readJsonBody(req);
+      await syncSharePathRename(body.from, body.to, getPortableRoot());
+      await syncFileAccessRename(body.from, body.to, getPortableRoot());
       sendJson(res, 200, await fsService.movePath(body.from, body.to));
       return true;
     }
@@ -161,11 +190,11 @@ export async function handleHttpApiRequest(req, res) {
 
     if (method === 'POST' && url.pathname === '/api/workspace/rename') {
       const body = await readJsonBody(req);
-      sendJson(
-        res,
-        200,
-        await renameWorkspace(body.sessionId, body.relativePath, getDataRoot()),
-      );
+      const fromPath = getSession(body.sessionId).relativePath;
+      const result = await renameWorkspace(body.sessionId, body.relativePath, getDataRoot());
+      await syncSharePathRename(fromPath, result.relativePath, getPortableRoot());
+      await syncFileAccessRename(fromPath, result.relativePath, getPortableRoot());
+      sendJson(res, 200, result);
       return true;
     }
 
@@ -182,6 +211,77 @@ export async function handleHttpApiRequest(req, res) {
 
     if (method === 'POST' && url.pathname === '/api/editors/update') {
       sendJson(res, 200, await updateEditorCores(getPortableRoot()));
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/auth/login') {
+      const body = await readJsonBody(req);
+      sendJson(res, 200, loginAdmin(body.id, body.password, getPortableRoot()));
+      return true;
+    }
+
+    if (method === 'GET' && url.pathname === '/api/share/map') {
+      sendJson(res, 200, await getShareMap(getPortableRoot()));
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/share/create') {
+      const body = await readJsonBody(req);
+      sendJson(res, 200, await createShareLink(body.path, getPortableRoot()));
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/share/revoke') {
+      const body = await readJsonBody(req);
+      sendJson(res, 200, await revokeShareLink(body.path, getPortableRoot()));
+      return true;
+    }
+
+    if (method === 'GET' && url.pathname === '/api/share/resolve') {
+      sendJson(res, 200, await resolveShareToken(url.searchParams.get('token') ?? '', getPortableRoot()));
+      return true;
+    }
+
+    if (method === 'GET' && url.pathname === '/api/file-access/map') {
+      sendJson(res, 200, await getFileAccessMap(getPortableRoot()));
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/file-access/set') {
+      const body = await readJsonBody(req);
+      sendJson(
+        res,
+        200,
+        await setFileAccess(body.path, { visibility: body.visibility, viewRestricted: body.viewRestricted }, getPortableRoot()),
+      );
+      return true;
+    }
+
+    if (method === 'GET' && url.pathname === '/api/trash/map') {
+      sendJson(res, 200, await getTrashMap(getPortableRoot()));
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/trash/move') {
+      const body = await readJsonBody(req);
+      sendJson(res, 200, await trashPath(body.path, getPortableRoot()));
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/trash/restore') {
+      const body = await readJsonBody(req);
+      sendJson(res, 200, await restorePath(body.path, getPortableRoot()));
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/trash/empty') {
+      sendJson(res, 200, await emptyTrash(getPortableRoot()));
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/trash/deletePermanent') {
+      const body = await readJsonBody(req);
+      sendJson(res, 200, await deletePermanent(body.path, getPortableRoot()));
       return true;
     }
 
