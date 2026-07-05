@@ -123,7 +123,10 @@ export default function DirectoryTree({
   onBackgroundContextMenu,
 }) {
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto px-1 py-2" onContextMenu={onBackgroundContextMenu}>
+    <div
+      className="min-h-0 flex-1 overflow-y-auto px-1 py-2"
+      onContextMenu={(event) => onBackgroundContextMenu(event)}
+    >
       <button
         type="button"
         className={`mb-1 flex w-full items-center gap-2 rounded-md px-3 py-2 text-[10pt] transition-colors ${
@@ -132,7 +135,10 @@ export default function DirectoryTree({
             : 'text-slate-300 hover:bg-nas-sidebarHover hover:text-white'
         }`}
         onClick={() => onNavigate('.')}
-        onContextMenu={onBackgroundContextMenu}
+        onContextMenu={(event) => {
+          event.stopPropagation();
+          onBackgroundContextMenu(event, '.');
+        }}
       >
         <FileIcon
           entry={{ isDirectory: true, name: 'data', extension: null }}

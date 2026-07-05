@@ -3,6 +3,7 @@ import ContextMenu from '../explorer/ContextMenu.jsx';
 import FilePropertiesDialog from '../explorer/FilePropertiesDialog.jsx';
 import NewFileDialog from '../explorer/NewFileDialog.jsx';
 import NewFolderDialog from '../explorer/NewFolderDialog.jsx';
+import RenameDialog from '../explorer/RenameDialog.jsx';
 import ShareLinkModal from '../common/ShareLinkModal.jsx';
 import MoveItemsDialog from '../explorer/MoveItemsDialog.jsx';
 import DirectoryTree from './DirectoryTree.jsx';
@@ -16,6 +17,8 @@ import { useAppConfirm } from '../../hooks/useAppConfirm.jsx';
 import { useShareLinks } from '../../hooks/useShareLinks.js';
 import { useFileAccess } from '../../hooks/useFileAccess.js';
 import { useTrash } from '../../hooks/useTrash.js';
+import { useFileDropZone } from '../../hooks/useFileDropZone.js';
+import FileDropOverlay from '../common/FileDropOverlay.jsx';
 import {
   openShareLinkForEntry,
   revokeShareLinkForEntry,
@@ -33,8 +36,11 @@ import { resolveFileEntryStatus } from '../../lib/fileEntryStatus.js';
 import { downloadFileEntries } from '../../lib/downloadEntries.js';
 import { moveEntries } from '../../lib/moveEntries.js';
 import { isTrashPath, TRASH_FOLDER } from '../../lib/trashPaths.js';
-import AppLogo from '../common/AppLogo.jsx';
-import { APP_NAME_LONG } from '../../../shared/constants.js';
+import {
+  createFolderAtPath,
+  createNewTypedFileAtPath,
+  uploadFilesAtPath,
+} from '../../lib/fsWriteActions.js';
 
 export default function Sidebar({
   currentPath,
@@ -66,11 +72,12 @@ export default function Sidebar({
   const [newFolderDialogOpen, setNewFolderDialogOpen] = useState(false);
   const [shareLinkDialog, setShareLinkDialog] = useState(null);
   const [moveDialogEntries, setMoveDialogEntries] = useState(null);
+  const [renameEntry, setRenameEntry] = useState(null);
   const [propertiesSaving, setPropertiesSaving] = useState(false);
   const [downloadTarget, setDownloadTarget] = useState(null);
-  const [isDragging, setIsDragging] = useState(false);
 
   const uploadInputRef = useRef(null);
+  const dialogTargetPathRef = useRef('.');
   const skipRevisionRefreshRef = useRef(false);
 
   const notifyChange = async () => {
@@ -96,40 +103,60 @@ export default function Sidebar({
     void refreshAccessMap();
   }, [fsRevision, tree.refreshTree, fs.refresh, refreshShareMap, refreshAccessMap]);
 
-  const handleCreateFolder = () => {
+  const openCreateFolderDialog = (targetPath = currentPath) => {
+    if (isTrashPath(targetPath)) return;
+    dialogTargetPathRef.current = targetPath;
     setNewFolderDialogOpen(true);
   };
 
   const handleCreateFolderConfirm = async (name) => {
-    await fs.createFolder(name);
-    await tree.expandPath(currentPath);
-    await notifyChange();
+    try {
+      const targetPath = dialogTargetPathRef.current;
+      await createFolderAtPath(targetPath, name);
+      await tree.expandPath(targetPath);
+      await notifyChange();
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : '폴더를 만들 수 없습니다.');
+    }
   };
 
-  const handleCreateFile = () => {
+  const openCreateFileDialog = (targetPath = currentPath) => {
+    if (isTrashPath(targetPath)) return;
+    dialogTargetPathRef.current = targetPath;
     setNewFileDialogOpen(true);
   };
 
   const handleCreateTypedFile = async (type) => {
     setNewFileDialogOpen(false);
     try {
-      await fs.createNewTypedFile(type);
-      await tree.expandPath(currentPath);
+      const targetPath = dialogTargetPathRef.current;
+      await createNewTypedFileAtPath(targetPath, type);
+      await tree.expandPath(targetPath);
       await notifyChange();
     } catch (err) {
       window.alert(err instanceof Error ? err.message : '새 파일을 만들 수 없습니다.');
     }
   };
 
-  const handleUploadFiles = async (files) => {
+  const triggerUpload = (targetPath = currentPath) => {
+    if (isTrashPath(targetPath)) return;
+    dialogTargetPathRef.current = targetPath;
+    uploadInputRef.current?.click();
+  };
+
+  const handleUploadFiles = async (files, targetPath = dialogTargetPathRef.current) => {
     try {
-      await fs.uploadFiles(files);
-      await tree.expandPath(currentPath);
+      await uploadFilesAtPath(targetPath, files);
+      await tree.expandPath(targetPath);
       await notifyChange();
     } catch (err) {
       window.alert(err instanceof Error ? err.message : '파일 업로드에 실패했습니다.');
     }
   };
+
+  const { isFileDragOver, dropZoneProps } = useFileDropZone(
+    isInTrashView ? async () => {} : (files) => handleUploadFiles(files, currentPath),
+  );
 
   const handleDownload = async (entry = downloadTarget) => {
     const target = entry && !entry.isDirectory ? entry : downloadTarget;
@@ -155,27 +182,46 @@ export default function Sidebar({
   };
 
   const handlePaste = async (targetPath = currentPath) => {
-    const existingNames = await getSiblingNames(targetPath);
-    const pasted = await pasteEntries(targetPath, existingNames);
-    if (pasted) {
-      if (targetPath !== '.') {
-        await tree.expandPath(getParentPath(targetPath));
+    try {
+      const existingNames = await getSiblingNames(targetPath);
+      const pasted = await pasteEntries(targetPath, existingNames);
+      if (pasted) {
+        if (targetPath !== '.') {
+          await tree.expandPath(getParentPath(targetPath));
+        }
+        await tree.expandPath(targetPath);
+        await notifyChange();
       }
-      await tree.expandPath(targetPath);
-      await notifyChange();
+    } catch (err) {
+      await appAlert({
+        title: '붙여넣기 실패',
+        body: err instanceof Error ? err.message : '붙여넣기에 실패했습니다.',
+      });
     }
   };
 
-  const handleRename = async (entry) => {
-    const nextName = window.prompt('새 이름', entry.name);
-    if (!nextName?.trim() || nextName.trim() === entry.name) return;
+  const handleRename = (entry) => {
+    if (!entry) return;
+    setRenameEntry(entry);
+  };
 
-    const parent = getParentPath(entry.relativePath);
-    const normalized = parent === '.' ? nextName.trim() : joinRelativePath(parent, nextName.trim());
+  const handleRenameConfirm = async (nextName) => {
+    if (!renameEntry) return;
 
-    await fs.rename(entry.relativePath, normalized);
+    const target = renameEntry;
+    const parent = getParentPath(target.relativePath);
+    const normalized = parent === '.' ? nextName : joinRelativePath(parent, nextName);
+
+    const siblingNames = (await getSiblingNames(parent)).filter((name) => name !== target.name);
+    if (siblingNames.includes(nextName)) {
+      throw new Error('같은 이름의 항목이 이미 있습니다.');
+    }
+
+    await fs.rename(target.relativePath, normalized);
+    setRenameEntry(null);
     await notifyChange();
-    if (currentPath === entry.relativePath || currentPath.startsWith(`${entry.relativePath}/`)) {
+
+    if (currentPath === target.relativePath || currentPath.startsWith(`${target.relativePath}/`)) {
       onNavigate(normalized);
     }
   };
@@ -369,7 +415,7 @@ export default function Sidebar({
         onCopy: () => copyEntries([contextTarget]),
         onCut: () => cutEntries([contextTarget]),
         onMove: () => handleMove(contextTarget),
-        onPaste: handlePaste,
+        onPaste: () => handlePaste(contextTargetPath),
         onRename: () => handleRename(contextTarget),
         onDuplicate: () => handleDuplicate(contextTarget),
         onDelete: () => handleDelete(contextTarget),
@@ -383,38 +429,28 @@ export default function Sidebar({
         targetPath: contextTargetPath,
         isInTrashView,
         hasClipboard,
-        onCreateFolder: handleCreateFolder,
-        onCreateFile: handleCreateFile,
-        onUpload: () => uploadInputRef.current?.click(),
-        onPaste: handlePaste,
+        onCreateFolder: () => openCreateFolderDialog(contextTargetPath),
+        onCreateFile: () => openCreateFileDialog(contextTargetPath),
+        onUpload: () => triggerUpload(contextTargetPath),
+        onPaste: () => handlePaste(contextTargetPath),
         onRefresh: notifyChange,
         onEmptyTrash: handleEmptyTrash,
       });
 
   return (
     <aside
-      className={`flex w-full min-w-0 flex-1 flex-col bg-nas-sidebar text-slate-200 md:w-72 md:flex-none md:shrink-0 ${isDragging ? 'ring-2 ring-inset ring-nas-accent' : ''}`}
-      onDragOver={(event) => {
-        event.preventDefault();
-        setIsDragging(true);
-      }}
-      onDragLeave={() => setIsDragging(false)}
-      onDrop={async (event) => {
-        event.preventDefault();
-        setIsDragging(false);
-        const files = Array.from(event.dataTransfer.files ?? []);
-        if (files.length) await handleUploadFiles(files);
-      }}
+      className="relative flex w-full min-w-0 flex-1 flex-col bg-nas-sidebar text-slate-200 md:w-72 md:flex-none md:shrink-0"
+      {...(isInTrashView ? {} : dropZoneProps)}
     >
-      <div className="flex items-center gap-2 border-b border-slate-700 px-3 py-3">
-        <AppLogo size={28} />
-        <span className="truncate text-sm font-semibold text-white">{APP_NAME_LONG}</span>
-      </div>
+      {!isInTrashView && isFileDragOver && (
+        <FileDropOverlay message="여기에 파일을 놓으면 업로드" variant="dark" />
+      )}
 
       <SidebarToolbar
-        onCreateFolder={handleCreateFolder}
-        onCreateFile={handleCreateFile}
-        onUpload={() => uploadInputRef.current?.click()}
+        isInTrashView={isInTrashView}
+        onCreateFolder={() => openCreateFolderDialog(currentPath)}
+        onCreateFile={() => openCreateFileDialog(currentPath)}
+        onUpload={() => triggerUpload(currentPath)}
         onDownload={() => handleDownload()}
         canDownload={Boolean(downloadTarget)}
         onRefresh={notifyChange}
@@ -456,14 +492,10 @@ export default function Sidebar({
             onNavigate={onNavigate}
             onOpenFile={onOpenFile}
             onContextMenu={openContextMenu}
-            onBackgroundContextMenu={(event) => openContextMenu(event, null, currentPath)}
+            onBackgroundContextMenu={(event, targetPath = currentPath) =>
+              openContextMenu(event, null, targetPath)
+            }
           />
-        </div>
-      )}
-
-      {isDragging && (
-        <div className="border-t border-nas-accent bg-slate-800 px-3 py-2 text-center text-xs text-sky-300">
-          여기에 파일을 놓으면 업로드
         </div>
       )}
 
@@ -538,6 +570,13 @@ export default function Sidebar({
         open={newFolderDialogOpen}
         onClose={() => setNewFolderDialogOpen(false)}
         onConfirm={handleCreateFolderConfirm}
+      />
+
+      <RenameDialog
+        open={Boolean(renameEntry)}
+        entry={renameEntry}
+        onClose={() => setRenameEntry(null)}
+        onConfirm={handleRenameConfirm}
       />
 
       <ShareLinkModal

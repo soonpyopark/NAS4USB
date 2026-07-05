@@ -6,6 +6,7 @@ import FileList from './FileList.jsx';
 import FilePropertiesDialog from './FilePropertiesDialog.jsx';
 import NewFileDialog from './NewFileDialog.jsx';
 import NewFolderDialog from './NewFolderDialog.jsx';
+import RenameDialog from './RenameDialog.jsx';
 import MoveItemsDialog from './MoveItemsDialog.jsx';
 import ShareLinkModal from '../common/ShareLinkModal.jsx';
 import { useFileClipboard } from '../../hooks/useFileClipboard.js';
@@ -34,6 +35,8 @@ import { moveEntries } from '../../lib/moveEntries.js';
 import { isTrashPath, TRASH_FOLDER } from '../../lib/trashPaths.js';
 import { useTrash } from '../../hooks/useTrash.js';
 import { useAppConfirm } from '../../hooks/useAppConfirm.jsx';
+import { useFileDropZone } from '../../hooks/useFileDropZone.js';
+import FileDropOverlay from '../common/FileDropOverlay.jsx';
 
 export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFsChanged, fsRevision = 0, syncInfo }) {
   const {
@@ -85,13 +88,14 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
   const [newFolderDialogOpen, setNewFolderDialogOpen] = useState(false);
   const [shareLinkDialog, setShareLinkDialog] = useState(null);
   const [moveDialogEntries, setMoveDialogEntries] = useState(null);
+  const [renameEntry, setRenameEntry] = useState(null);
   const [propertiesSaving, setPropertiesSaving] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
   const [lastSelectedPath, setLastSelectedPath] = useState(null);
 
   const uploadInputRef = useRef(null);
   const containerRef = useRef(null);
   const skipRevisionRefreshRef = useRef(false);
+  const keyHandlersRef = useRef({});
 
   const visibleEntries = useMemo(() => {
     const filtered = filterEntries(entries, searchQuery);
@@ -116,6 +120,17 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
     skipRevisionRefreshRef.current = true;
     onFsChanged?.();
   };
+
+  const handleFileDrop = async (files) => {
+    try {
+      await uploadFiles(files);
+      await refreshAll();
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : '파일 업로드에 실패했습니다.');
+    }
+  };
+
+  const { isFileDragOver, dropZoneProps } = useFileDropZone(handleFileDrop);
 
   useEffect(() => {
     clearSelection();
@@ -208,35 +223,38 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
     }
   };
 
-  const handleDropUpload = async (event) => {
-    event.preventDefault();
-    setIsDragging(false);
-    const files = Array.from(event.dataTransfer.files ?? []);
-    if (!files.length) return;
-    try {
-      await uploadFiles(files);
-      await refreshAll();
-    } catch (err) {
-      window.alert(err instanceof Error ? err.message : '파일 업로드에 실패했습니다.');
-    }
-  };
-
-  const handleRename = async (entry) => {
+  const handleRename = (entry) => {
     const targets = entry ? getTargetEntries(entry) : selectedEntries;
     if (targets.length !== 1) {
-      window.alert('이름을 변경할 항목 하나를 선택해 주세요.');
+      void appAlert({
+        title: '이름 변경',
+        body: '이름을 변경할 항목 하나를 선택해 주세요.',
+      });
       return;
     }
+    setRenameEntry(targets[0]);
+  };
 
-    const target = targets[0];
-    const nextName = window.prompt('새 이름', target.name);
-    if (!nextName?.trim() || nextName.trim() === target.name) return;
+  const handleRenameConfirm = async (nextName) => {
+    if (!renameEntry) return;
 
-    const parent = getParentPath(target.relativePath);
-    const normalized =
-      parent === '.' ? nextName.trim() : joinRelativePath(parent, nextName.trim());
+    const parent = getParentPath(renameEntry.relativePath);
+    const normalized = parent === '.' ? nextName : joinRelativePath(parent, nextName);
 
-    await rename(target.relativePath, normalized);
+    const siblingNames = entries
+      .filter((item) => item.relativePath !== renameEntry.relativePath)
+      .map((item) => item.name);
+    if (siblingNames.includes(nextName)) {
+      throw new Error('같은 이름의 항목이 이미 있습니다.');
+    }
+
+    await rename(renameEntry.relativePath, normalized);
+
+    if (currentPath === renameEntry.relativePath || currentPath.startsWith(`${renameEntry.relativePath}/`)) {
+      onNavigate(normalized);
+    }
+
+    setRenameEntry(null);
     clearSelection();
     await refreshAll();
   };
@@ -465,28 +483,6 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
     }
   };
 
-  const handleToggleVisibility = async (entry) => {
-    const status = resolveFileEntryStatus(entry.relativePath, accessMap, shareMap);
-    try {
-      await setFileAccess(entry.relativePath, {
-        visibility: status.isPrivate ? 'public' : 'private',
-      });
-    } catch (err) {
-      window.alert(err instanceof Error ? err.message : '공개 설정 변경에 실패했습니다.');
-    }
-  };
-
-  const handleToggleViewRestriction = async (entry) => {
-    const status = resolveFileEntryStatus(entry.relativePath, accessMap, shareMap);
-    try {
-      await setFileAccess(entry.relativePath, {
-        viewRestricted: !status.isViewRestricted,
-      });
-    } catch (err) {
-      window.alert(err instanceof Error ? err.message : '열람 제한 설정 변경에 실패했습니다.');
-    }
-  };
-
   const handleSelect = (entry, event) => {
     if (event.shiftKey && lastSelectedPath) {
       selectRange(lastSelectedPath, entry.relativePath);
@@ -524,9 +520,6 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
   const contextTarget = contextMenu?.entry ?? null;
   const contextTargetPath = contextMenu?.targetPath ?? currentPath;
   const contextTargets = contextTarget ? getTargetEntries(contextTarget) : [];
-  const contextTargetStatus = contextTarget
-    ? resolveFileEntryStatus(contextTarget.relativePath, accessMap, shareMap)
-    : null;
 
   const contextItems = contextTarget
     ? buildEntryContextMenuItems({
@@ -548,10 +541,6 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
         onProperties: () => handleShowProperties(contextTarget),
         onDownload: () => handleDownload(contextTarget),
         canDownload: contextTargets.some((target) => !target.isDirectory),
-        isPrivate: contextTargetStatus?.isPrivate ?? false,
-        isViewRestricted: contextTargetStatus?.isViewRestricted ?? false,
-        onToggleVisibility: () => handleToggleVisibility(contextTarget),
-        onToggleViewRestriction: () => handleToggleViewRestriction(contextTarget),
       })
     : buildBackgroundContextMenuItems({
         targetPath: contextTargetPath,
@@ -565,57 +554,68 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
         onEmptyTrash: handleEmptyTrash,
       });
 
+  keyHandlersRef.current = {
+    refreshAll,
+    handleDelete,
+    handleRename,
+    selectAll,
+    handleCopy,
+    handleCut,
+    handlePaste,
+    currentPath,
+    selectedEntries,
+    hasClipboard,
+  };
+
   useEffect(() => {
     const onKeyDown = (event) => {
       const target = event.target;
       if (target instanceof HTMLElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
 
+      const h = keyHandlersRef.current;
+
       if (event.key === 'F5') {
         event.preventDefault();
-        refreshAll();
+        h.refreshAll();
       }
-      if (event.key === 'Delete' && selectedEntries.length) {
+      if (event.key === 'Delete' && h.selectedEntries.length) {
         event.preventDefault();
-        handleDelete();
+        h.handleDelete();
       }
-      if (event.key === 'F2' && selectedEntries.length === 1) {
+      if (event.key === 'F2' && h.selectedEntries.length === 1) {
         event.preventDefault();
-        handleRename(selectedEntries[0]);
+        h.handleRename(h.selectedEntries[0]);
       }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
         event.preventDefault();
-        selectAll();
+        h.selectAll();
       }
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c' && selectedEntries.length) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c' && h.selectedEntries.length) {
         event.preventDefault();
-        handleCopy();
+        h.handleCopy();
       }
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'x' && selectedEntries.length) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'x' && h.selectedEntries.length) {
         event.preventDefault();
-        handleCut();
+        h.handleCut();
       }
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v' && hasClipboard) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v' && h.hasClipboard) {
         event.preventDefault();
-        handlePaste(currentPath);
+        h.handlePaste(h.currentPath);
       }
     };
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  });
+  }, []);
 
   return (
     <div
       ref={containerRef}
-      className={`flex min-h-0 flex-1 flex-col ${isDragging ? 'bg-blue-50/60' : ''}`}
-      onDragOver={(event) => {
-        event.preventDefault();
-        setIsDragging(true);
-      }}
-      onDragLeave={() => setIsDragging(false)}
-      onDrop={handleDropUpload}
+      className="relative flex min-h-0 flex-1 flex-col"
+      {...dropZoneProps}
       onContextMenu={(event) => openContextMenu(event, null)}
     >
+      {isFileDragOver && <FileDropOverlay />}
       <div className="flex items-center gap-3 border-b border-nas-border px-4 py-3">
         <div className="min-w-0 flex-1">
           <Breadcrumb currentPath={currentPath} onNavigate={onNavigate} />
@@ -637,6 +637,7 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
         viewMode={viewMode}
         onViewModeChange={setViewMode}
         hasSelection={selectedEntries.length > 0}
+        canRename={selectedEntries.length === 1}
         hasClipboard={hasClipboard}
         isInTrashView={isInTrashView}
         onNavigateUp={handleNavigateUp}
@@ -667,12 +668,6 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
       )}
 
       <input ref={uploadInputRef} type="file" multiple hidden onChange={handleUploadInput} />
-
-      {isDragging && (
-        <div className="border-b border-blue-200 bg-blue-50 px-4 py-2 text-center text-xs text-blue-700">
-          파일을 여기에 놓으면 업로드됩니다
-        </div>
-      )}
 
       {error && (
         <div className="mx-4 mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -731,6 +726,13 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
         open={newFolderDialogOpen}
         onClose={() => setNewFolderDialogOpen(false)}
         onConfirm={handleCreateFolderConfirm}
+      />
+
+      <RenameDialog
+        open={Boolean(renameEntry)}
+        entry={renameEntry}
+        onClose={() => setRenameEntry(null)}
+        onConfirm={handleRenameConfirm}
       />
 
       <ShareLinkModal

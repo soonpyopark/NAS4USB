@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { joinRelativePath, resolveUniqueName } from '../lib/fsPaths.js';
+import { isTrashPath } from '../lib/trashPaths.js';
 
 /** @typedef {{ mode: 'copy'|'cut', entries: import('../types/educowork.d.ts').FsEntry[] }} FileClipboard */
 
@@ -21,14 +22,18 @@ export function useFileClipboard() {
   }, []);
 
   const pasteEntries = useCallback(
-    async (currentPath, existingNames) => {
+    async (destinationPath, existingNames) => {
       if (!clipboard?.entries.length) return false;
+
+      if (isTrashPath(destinationPath)) {
+        throw new Error('휴지통에는 붙여넣기할 수 없습니다. 삭제 메뉴를 사용해 주세요.');
+      }
 
       const names = new Set(existingNames);
 
       for (const entry of clipboard.entries) {
         const uniqueName = resolveUniqueName(names, entry.name);
-        const destination = joinRelativePath(currentPath, uniqueName);
+        const destination = joinRelativePath(destinationPath, uniqueName);
         names.add(uniqueName);
 
         if (clipboard.mode === 'copy') {

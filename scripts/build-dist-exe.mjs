@@ -69,6 +69,8 @@ async function finalizePortableFolder() {
     path.join(portableDir, 'allow-firewall-inbound.bat'),
   );
 
+  await applyPortableExeIcon(portableDir);
+
   const readme = `EduCowork USB Portable
 ======================
 
@@ -86,6 +88,28 @@ exe 와 같은 폴더를 유지해 주세요.
   await fs.writeFile(path.join(portableDir, 'README-USB.txt'), readme, 'utf8');
 
   console.log(`\n[build:dist:exe] USB portable folder ready → ${portableDir}`);
+}
+
+async function applyPortableExeIcon(portableDir) {
+  const icoPath = path.join(projectRoot, 'build', 'icon.ico');
+  if (!(await pathExists(icoPath))) {
+    console.warn('[build:dist:exe] build/icon.ico not found — skipping exe icon');
+    return;
+  }
+
+  const entries = await fs.readdir(portableDir);
+  const exeName = entries.find(
+    (name) => name.toLowerCase().endsWith('.exe') && !name.toLowerCase().includes('uninstall'),
+  );
+  if (!exeName) {
+    console.warn('[build:dist:exe] main exe not found — skipping exe icon');
+    return;
+  }
+
+  const { rcedit } = await import('rcedit');
+  const exePath = path.join(portableDir, exeName);
+  await rcedit(exePath, { icon: icoPath });
+  console.log(`[build:dist:exe] Applied NAS4USB icon → ${exeName}`);
 }
 
 console.log('[build:dist:exe] Building renderer…');

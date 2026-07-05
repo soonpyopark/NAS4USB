@@ -6,6 +6,7 @@ export default function FileExplorerToolbar({
   viewMode,
   onViewModeChange,
   hasSelection,
+  canRename = false,
   hasClipboard,
   onNavigateUp,
   onRefresh,
@@ -65,7 +66,7 @@ export default function FileExplorerToolbar({
             <button type="button" className="nas-btn-ghost" disabled={!hasClipboard} onClick={onPaste}>
               붙여넣기
             </button>
-            <button type="button" className="nas-btn-ghost" disabled={!hasSelection} onClick={onRename}>
+            <button type="button" className="nas-btn-ghost" disabled={!canRename} onClick={onRename}>
               이름 변경
             </button>
           </>

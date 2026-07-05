@@ -7,7 +7,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '..');
 const buildDir = path.join(projectRoot, 'build');
 const publicDir = path.join(projectRoot, 'public');
-const source = path.join(buildDir, 'icon-source.jpg');
+const sourceCandidates = [
+  path.join(buildDir, 'icon-source.png'),
+  path.join(buildDir, 'icon-source.jpg'),
+  path.join(buildDir, 'icon-source.jpeg'),
+];
 
 function run(command, args) {
   const result = spawnSync(command, args, { stdio: 'inherit', shell: process.platform === 'win32' });
@@ -16,14 +20,18 @@ function run(command, args) {
   }
 }
 
-if (!fs.existsSync(source)) {
-  console.warn('[icons] build/icon-source.jpg not found — skipping icon generation.');
+const source = sourceCandidates.find((candidate) => fs.existsSync(candidate));
+if (!source) {
+  console.warn('[icons] build/icon-source.(png|jpg|jpeg) not found — skipping icon generation.');
   process.exit(0);
 }
 
 const sizes = [
   { size: 16, out: 'icon-16.png' },
   { size: 32, out: 'icon-32.png' },
+  { size: 48, out: 'icon-48.png' },
+  { size: 64, out: 'icon-64.png' },
+  { size: 128, out: 'icon-128.png' },
   { size: 256, out: 'icon-256.png' },
   { size: 512, out: 'icon-512.png' },
 ];
@@ -39,7 +47,11 @@ fs.copyFileSync(path.join(buildDir, 'icon-256.png'), path.join(publicDir, 'apple
 fs.copyFileSync(path.join(buildDir, 'icon-32.png'), path.join(publicDir, 'favicon-32.png'));
 fs.copyFileSync(path.join(buildDir, 'icon-16.png'), path.join(publicDir, 'favicon-16.png'));
 
-const icoBuffer = execSync(`npx --yes png-to-ico "${path.join(buildDir, 'icon-256.png')}"`, {
+const icoInputs = ['icon-16.png', 'icon-32.png', 'icon-48.png', 'icon-64.png', 'icon-128.png', 'icon-256.png']
+  .map((fileName) => `"${path.join(buildDir, fileName)}"`)
+  .join(' ');
+
+const icoBuffer = execSync(`npx --yes png-to-ico ${icoInputs}`, {
   encoding: 'buffer',
   shell: true,
 });

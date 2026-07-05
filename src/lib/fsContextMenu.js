@@ -20,10 +20,6 @@ import { isTrashPath } from './trashPaths.js';
  *   onProperties: () => void,
  *   onDownload?: () => void,
  *   canDownload?: boolean,
- *   isPrivate?: boolean,
- *   isViewRestricted?: boolean,
- *   onToggleVisibility?: () => void,
- *   onToggleViewRestriction?: () => void,
  * }} options
  */
 export function buildEntryContextMenuItems({
@@ -45,10 +41,6 @@ export function buildEntryContextMenuItems({
   onProperties,
   onDownload,
   canDownload = false,
-  isPrivate = false,
-  isViewRestricted = false,
-  onToggleVisibility,
-  onToggleViewRestriction,
 }) {
   const showTrashMenu = Boolean(entry && isTrashPath(entry.relativePath));
 
@@ -77,7 +69,6 @@ export function buildEntryContextMenuItems({
   }
 
   const pasteTarget = entry?.isDirectory ? entry.relativePath : null;
-  const isFileEntry = Boolean(entry && !entry.isDirectory);
 
   const items = [
     {
@@ -135,21 +126,6 @@ export function buildEntryContextMenuItems({
       disabled: !canDownload,
       onClick: onDownload,
     });
-  }
-
-  if (isFileEntry && onToggleVisibility && onToggleViewRestriction) {
-    items.push(
-      {
-        id: 'toggle-visibility',
-        label: isPrivate ? '공개로 설정' : '비공개로 설정',
-        onClick: onToggleVisibility,
-      },
-      {
-        id: 'toggle-view-restriction',
-        label: isViewRestricted ? '열람 제한 해제' : '열람 제한 설정',
-        onClick: onToggleViewRestriction,
-      },
-    );
   }
 
   return items;
