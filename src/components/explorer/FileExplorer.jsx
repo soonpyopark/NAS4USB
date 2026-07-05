@@ -34,14 +34,23 @@ import { downloadFileEntries } from '../../lib/downloadEntries.js';
 import { moveEntries } from '../../lib/moveEntries.js';
 import { uploadFilesAtPath } from '../../lib/fsWriteActions.js';
 import { isTrashPath, isTrashSubfolder, TRASH_FOLDER } from '../../lib/trashPaths.js';
+import { guardOpenFileEntry } from '../../lib/openFileGuard.js';
 import { useTrash } from '../../hooks/useTrash.js';
 import { useAppConfirm } from '../../hooks/useAppConfirm.jsx';
 import { useFileDropZone } from '../../hooks/useFileDropZone.js';
 import { useAdminAuthContext } from '../../context/AdminAuthContext.jsx';
+import { useFsSync } from '../../context/FsSyncContext.jsx';
+import { useFsRemoteRefresh } from '../../hooks/useFsRemoteRefresh.js';
 import FileDropOverlay from '../common/FileDropOverlay.jsx';
 import { canOpenFileForEdit, VIEW_OPEN_DENIED_MESSAGE } from '../../lib/fileEditAccess.js';
 
-export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFsChanged, fsRevision = 0, syncInfo }) {
+export default function FileExplorer({
+  currentPath,
+  onNavigate,
+  onOpenFile,
+  syncInfo,
+  isEditorOpen = false,
+}) {
   const {
     entries,
     loading,
@@ -76,7 +85,8 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
   const { shareMap, refreshShareMap } = useShareLinks();
   const { accessMap, refreshAccessMap, setFileAccess } = useFileAccess();
   const { isAdminLoggedIn } = useAdminAuthContext();
-  const { refresh: refreshTrash } = useTrash(fsRevision);
+  const { notifyLocalChange } = useFsSync();
+  const { refresh: refreshTrash } = useTrash();
   const { confirm: appConfirm, alert: appAlert, dialog: confirmDialog } = useAppConfirm();
 
   const isInTrashView = isTrashPath(currentPath);
@@ -99,7 +109,6 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
   const uploadInputRef = useRef(null);
   const uploadTargetPathRef = useRef('.');
   const containerRef = useRef(null);
-  const skipRevisionRefreshRef = useRef(false);
   const keyHandlersRef = useRef({});
 
   const visibleEntries = useMemo(() => {
@@ -117,14 +126,26 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
     [selectedEntries],
   );
 
-  const refreshAll = async () => {
-    await refresh();
+  const refreshMaps = async () => {
     await refreshShareMap();
     await refreshAccessMap();
     await refreshTrash();
-    skipRevisionRefreshRef.current = true;
-    onFsChanged?.();
   };
+
+  const refreshAll = async (paths) => {
+    await refresh();
+    await refreshMaps();
+    notifyLocalChange('explorer', paths?.length ? { paths } : {});
+  };
+
+  useFsRemoteRefresh('explorer', {
+    currentPath,
+    onRefresh: async () => {
+      await refresh();
+      await refreshMaps();
+    },
+    onRefreshMeta: refreshMaps,
+  });
 
   const handleFileDrop = async (files) => {
     if (isInTrashView) return;
@@ -146,18 +167,6 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
     setSearchQuery('');
     setContextMenu(null);
   }, [currentPath, clearSelection]);
-
-  useEffect(() => {
-    if (fsRevision === 0) return;
-    if (skipRevisionRefreshRef.current) {
-      skipRevisionRefreshRef.current = false;
-      return;
-    }
-
-    refresh();
-    void refreshShareMap();
-    void refreshAccessMap();
-  }, [fsRevision, refresh, refreshShareMap, refreshAccessMap]);
 
   const getTargetEntries = (entry) => {
     if (entry && selectedSet.has(entry.relativePath) && selectedEntries.length > 1) {
@@ -365,21 +374,17 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
     });
     if (!confirmed) return;
 
+    const wasInTrashView = isInTrashView;
     const wasInTrashSubfolder = isTrashSubfolder(currentPath);
     if (wasInTrashSubfolder) {
-      skipRevisionRefreshRef.current = true;
       onNavigate(TRASH_FOLDER);
     }
 
     await emptyTrash();
     clearSelection();
 
-    if (wasInTrashSubfolder) {
-      await refreshShareMap();
-      await refreshAccessMap();
-      await refreshTrash();
-      onFsChanged?.();
-      return;
+    if (wasInTrashView) {
+      onNavigate('.');
     }
 
     await refreshAll();
@@ -449,15 +454,13 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
     await refreshAll();
   };
 
-  const handleOpen = (entry) => {
+  const handleOpen = async (entry) => {
     if (entry.isDirectory) {
       onNavigate(entry.relativePath);
       return;
     }
-    if (isInTrashView || entry.relativePath.startsWith(`${TRASH_FOLDER}/`)) {
-      window.alert('휴지통에 있는 파일은 복원한 뒤 열어 주세요.');
-      return;
-    }
+    const canOpen = await guardOpenFileEntry(entry, { onMissing: () => void refreshAll() });
+    if (!canOpen) return;
     if (!canOpenFileForEdit(entry.relativePath, accessMap, isAdminLoggedIn)) {
       window.alert(VIEW_OPEN_DENIED_MESSAGE);
       return;
@@ -617,6 +620,13 @@ export default function FileExplorer({ currentPath, onNavigate, onOpenFile, onFs
     const onKeyDown = (event) => {
       const target = event.target;
       if (target instanceof HTMLElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
+      if (
+        isEditorOpen ||
+        document.documentElement.classList.contains('wb4s-embed-mode') ||
+        document.querySelector('.modal-dialog--editor')
+      ) {
+        return;
+      }
 
       const h = keyHandlersRef.current;
 

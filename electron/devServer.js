@@ -91,12 +91,20 @@ export async function startDevServer() {
       middlewareMode: { server },
       hmr: {
         port: syncPort + 21670,
+        clientPort: syncPort + 21670,
       },
     },
     appType: 'spa',
   });
 
   server.on('request', async (req, res) => {
+    req.setTimeout(180000, () => {
+      if (!res.headersSent) {
+        res.writeHead(408, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: 'Request timeout' }));
+      }
+    });
+
     if (await handleHttpApiRequest(req, res)) return;
     vite.middlewares(req, res);
   });

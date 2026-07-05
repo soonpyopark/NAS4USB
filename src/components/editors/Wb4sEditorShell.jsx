@@ -1,7 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { useWorkspaceSession } from '../../hooks/useWorkspaceSession.js';
 import { getSyncServerUrl } from '../../sync/buildWsUrl.js';
-import { toRoomId } from '../../sync/roomId.js';
 import {
   base64ToUtf8,
   getWb4sFileStem,
@@ -11,6 +10,8 @@ import {
   wb4sDocumentWithTitle,
 } from '../../wb4s/document.js';
 import { loadUserDisplayName } from '../../lib/userProfile.js';
+import { formatNetworkError, retryAsync } from '../../lib/retryAsync.js';
+import { isBrowserClient } from '../../lib/runtime.js';
 import { getParentPath, joinRelativePath, resolveUniqueName } from '../../lib/fsPaths.js';
 
 const Wb4sEditorView = lazy(() => import('../../wb4s/Wb4sEditorView.jsx'));
@@ -19,13 +20,13 @@ export default function Wb4sEditorShell({ relativePath, fileName, syncInfo, onCl
   const workspace = useWorkspaceSession(relativePath);
   const relativePathRef = useRef(relativePath);
   const fileNameRef = useRef(fileName);
-  const roomId = toRoomId(relativePath);
   const [loadError, setLoadError] = useState(null);
   const [contentReady, setContentReady] = useState(false);
   const [editorReady, setEditorReady] = useState(false);
   const [userName, setUserName] = useState('사용자');
   const exportApiRef = useRef(null);
   const documentJsonRef = useRef('');
+  const lastCommittedJsonRef = useRef('');
   const closingRef = useRef(false);
 
   relativePathRef.current = relativePath;
@@ -56,6 +57,7 @@ export default function Wb4sEditorShell({ relativePath, fileName, syncInfo, onCl
         if (cancelled) return;
         const text = base64 ? base64ToUtf8(base64) : createEmptyFallback(fileNameRef.current);
         documentJsonRef.current = normalizeWb4sDocument(text);
+        lastCommittedJsonRef.current = documentJsonRef.current;
         setContentReady(true);
       } catch (err) {
         if (!cancelled) {
@@ -76,26 +78,24 @@ export default function Wb4sEditorShell({ relativePath, fileName, syncInfo, onCl
     setEditorReady(true);
   }, []);
 
-  const saveToHost = useCallback(async (titleOverride) => {
-    if (!workspace.ready || !exportApiRef.current) return;
-    const json = exportApiRef.current.exportDocument();
+  const saveToHost = useCallback(async (titleOverride, { includeThumbnail = false } = {}) => {
+    if (!workspace.ready || !exportApiRef.current) return false;
+
+    const json = exportApiRef.current.exportDocument({ includeThumbnail });
     const normalized = titleOverride
       ? wb4sDocumentWithTitle(json, titleOverride)
       : normalizeWb4sDocument(json);
-    const base64 = utf8ToBase64(normalized);
-    await workspace.writeBinary(base64);
-    await workspace.commit();
-    documentJsonRef.current = normalized;
-  }, [workspace]);
 
-  const handleSaveToHost = useCallback(async () => {
-    try {
-      await saveToHost();
-    } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Save failed');
-      throw err;
+    if (!titleOverride && normalized === lastCommittedJsonRef.current) {
+      return false;
     }
-  }, [saveToHost]);
+
+    const base64 = utf8ToBase64(normalized);
+    await workspace.saveBinary(base64);
+    documentJsonRef.current = normalized;
+    lastCommittedJsonRef.current = normalized;
+    return true;
+  }, [workspace]);
 
   const handleRenameTitle = useCallback(async (nextTitle) => {
     try {
@@ -131,19 +131,21 @@ export default function Wb4sEditorShell({ relativePath, fileName, syncInfo, onCl
     if (closingRef.current) return;
     closingRef.current = true;
 
+    const retryOptions = isBrowserClient()
+      ? { retries: 1, delayMs: 300 }
+      : { retries: 0, delayMs: 0 };
+
     try {
-      if (workspace.ready && exportApiRef.current) {
-        await saveToHost();
-      }
+      await retryAsync(() => saveToHost(undefined, { includeThumbnail: false }), retryOptions);
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Save failed');
       closingRef.current = false;
-      return;
+      setLoadError(formatNetworkError(err));
+      throw err;
     }
 
     exportApiRef.current = null;
-    await workspace.close();
     onClose();
+    void workspace.close();
   }, [onClose, saveToHost, workspace]);
 
   const isLoading = !loadError && (workspace.loading || !contentReady || !editorReady);
@@ -172,12 +174,11 @@ export default function Wb4sEditorShell({ relativePath, fileName, syncInfo, onCl
             }
           >
             <Wb4sEditorView
+              relativePath={relativePath}
               documentJson={documentJsonRef.current}
-              roomId={roomId}
               syncServerUrl={getSyncServerUrl(syncInfo)}
               userName={userName}
               onReady={handleEditorReady}
-              onSaveToHost={handleSaveToHost}
               onRenameTitle={handleRenameTitle}
               {...(allowClose ? { onClose: handleClose } : {})}
             />

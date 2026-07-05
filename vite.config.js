@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { parseAllowedHosts } from './shared/viteHosts.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const wb4sEngineRoot = path.resolve(__dirname, '.cache/wb4s-src/src');
+const wb4sEngineRoot = path.resolve(__dirname, 'vendor/whiteboard4share/src');
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, __dirname, '');

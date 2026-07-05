@@ -13,11 +13,9 @@ export default function DesktopShell({
   syncInfo,
   infoLoading,
   currentPath,
-  fsRevision = 0,
   onNavigate,
   onHome,
   onOpenFile,
-  onFsChanged,
 }) {
   const layoutRef = useRef(null);
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
@@ -85,11 +83,9 @@ export default function DesktopShell({
         >
           <Sidebar
             currentPath={currentPath}
-            fsRevision={fsRevision}
             syncInfo={syncInfo}
             onNavigate={onNavigate}
             onOpenFile={onOpenFile}
-            onFsChanged={onFsChanged}
           />
         </div>
 

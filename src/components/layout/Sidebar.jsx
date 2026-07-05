@@ -19,6 +19,8 @@ import { useFileAccess } from '../../hooks/useFileAccess.js';
 import { useTrash } from '../../hooks/useTrash.js';
 import { useFileDropZone } from '../../hooks/useFileDropZone.js';
 import { useAdminAuthContext } from '../../context/AdminAuthContext.jsx';
+import { useFsSync } from '../../context/FsSyncContext.jsx';
+import { useFsRemoteRefresh } from '../../hooks/useFsRemoteRefresh.js';
 import FileDropOverlay from '../common/FileDropOverlay.jsx';
 import EditorUpdateButton from './EditorUpdateButton.jsx';
 import {
@@ -39,6 +41,7 @@ import { canOpenFileForEdit, VIEW_OPEN_DENIED_MESSAGE } from '../../lib/fileEdit
 import { downloadFileEntries } from '../../lib/downloadEntries.js';
 import { moveEntries } from '../../lib/moveEntries.js';
 import { isTrashPath, isTrashSubfolder, TRASH_FOLDER } from '../../lib/trashPaths.js';
+import { guardOpenFileEntry } from '../../lib/openFileGuard.js';
 import {
   createFolderAtPath,
   createNewTypedFileAtPath,
@@ -47,25 +50,23 @@ import {
 
 export default function Sidebar({
   currentPath,
-  fsRevision = 0,
   onNavigate,
   onOpenFile,
-  onFsChanged,
   syncInfo,
 }) {
   const [searchQuery, setSearchQuery] = useState('');
-  const tree = useDirectoryTree(currentPath, fsRevision);
+  const tree = useDirectoryTree(currentPath);
   const fs = useFileSystem(currentPath);
   const { confirm: appConfirm, alert: appAlert, dialog: confirmDialog } = useAppConfirm();
   const { results: searchResults, searching, truncated, isActive: isSearchActive } = useFileSearch(
     searchQuery,
-    fsRevision,
   );
   const { hasClipboard, copyEntries, cutEntries, pasteEntries } = useFileClipboard();
   const { shareMap, refreshShareMap } = useShareLinks();
   const { accessMap, refreshAccessMap, setFileAccess } = useFileAccess();
   const { isAdminLoggedIn } = useAdminAuthContext();
-  const { count: trashCount, refresh: refreshTrash } = useTrash(fsRevision);
+  const { notifyLocalChange } = useFsSync();
+  const { count: trashCount, refresh: refreshTrash } = useTrash();
 
   const isInTrashView = isTrashPath(currentPath);
 
@@ -82,31 +83,38 @@ export default function Sidebar({
 
   const uploadInputRef = useRef(null);
   const dialogTargetPathRef = useRef('.');
-  const skipRevisionRefreshRef = useRef(false);
 
-  const notifyChange = async () => {
-    await tree.refreshTree();
-    await fs.refresh();
+  const refreshMaps = async () => {
     await refreshShareMap();
     await refreshAccessMap();
     await refreshTrash();
-    skipRevisionRefreshRef.current = true;
-    onFsChanged?.();
   };
 
-  useEffect(() => {
-    if (fsRevision === 0) return;
-    if (skipRevisionRefreshRef.current) {
-      skipRevisionRefreshRef.current = false;
-      return;
+  const notifyChange = async (paths) => {
+    if (paths?.length) {
+      await tree.refreshTree({ paths });
+    } else {
+      await tree.refreshTree();
     }
+    await fs.refresh();
+    await refreshMaps();
+    notifyLocalChange('sidebar', paths?.length ? { paths } : {});
+  };
 
-    void tree.refreshTree();
-    void fs.refresh();
-    void refreshShareMap();
-    void refreshAccessMap();
-    void refreshTrash();
-  }, [fsRevision, tree.refreshTree, fs.refresh, refreshShareMap, refreshAccessMap, refreshTrash]);
+  useFsRemoteRefresh('sidebar', {
+    currentPath,
+    getExpandedPaths: () => tree.expandedPaths,
+    onRefresh: async (event) => {
+      if (event.paths?.length) {
+        await tree.refreshTree({ paths: event.paths });
+      } else {
+        await tree.refreshTree();
+      }
+      await fs.refresh();
+      await refreshMaps();
+    },
+    onRefreshMeta: refreshMaps,
+  });
 
   const openCreateFolderDialog = (targetPath = currentPath) => {
     if (isTrashPath(targetPath)) return;
@@ -289,9 +297,9 @@ export default function Sidebar({
     });
     if (!confirmed) return;
 
+    const wasInTrashView = isInTrashView;
     const wasInTrashSubfolder = isTrashSubfolder(currentPath);
     if (wasInTrashSubfolder) {
-      skipRevisionRefreshRef.current = true;
       onNavigate(TRASH_FOLDER);
     }
 
@@ -300,11 +308,12 @@ export default function Sidebar({
     await refreshShareMap();
     await refreshAccessMap();
     await refreshTrash();
-    onFsChanged?.();
 
-    if (!wasInTrashSubfolder) {
-      await fs.refresh();
+    if (wasInTrashView) {
+      onNavigate('.');
     }
+
+    await fs.refresh();
   };
 
   const handleDuplicate = async (entry) => {
@@ -402,15 +411,13 @@ export default function Sidebar({
     await revokeShareLinkForEntry({ entry: shareLinkDialog.entry, refreshShareMap });
   };
 
-  const handleOpen = (entry) => {
+  const handleOpen = async (entry) => {
     if (entry.isDirectory) {
       onNavigate(entry.relativePath);
       return;
     }
-    if (isInTrashView || entry.relativePath.startsWith(`${TRASH_FOLDER}/`)) {
-      window.alert('휴지통에 있는 파일은 복원한 뒤 열어 주세요.');
-      return;
-    }
+    const canOpen = await guardOpenFileEntry(entry, { onMissing: notifyChange });
+    if (!canOpen) return;
     if (!canOpenFileForEdit(entry.relativePath, accessMap, isAdminLoggedIn)) {
       window.alert(VIEW_OPEN_DENIED_MESSAGE);
       return;

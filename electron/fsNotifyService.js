@@ -3,21 +3,77 @@ import { BrowserWindow } from 'electron';
 /** @type {number} */
 let revision = 0;
 
+/** @type {string[]} */
+let lastChangedPaths = [];
+
 /** @type {import('node:http').ServerResponse[]} */
 const sseClients = [];
+
+/** @type {ReturnType<typeof setInterval> | null} */
+let heartbeatTimer = null;
+
+const SSE_HEARTBEAT_MS = 25_000;
+
+function startHeartbeat() {
+  if (heartbeatTimer) return;
+  heartbeatTimer = setInterval(() => {
+    for (let index = sseClients.length - 1; index >= 0; index -= 1) {
+      const client = sseClients[index];
+      try {
+        client.write(': keepalive\n\n');
+      } catch {
+        sseClients.splice(index, 1);
+      }
+    }
+    if (sseClients.length === 0 && heartbeatTimer) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+    }
+  }, SSE_HEARTBEAT_MS);
+}
+
+function writeSseData(res, payload) {
+  res.write(`data: ${JSON.stringify(payload)}\n\n`);
+}
+
+/**
+ * @param {string | string[] | { paths?: string | string[] } | undefined} changed
+ * @returns {string[]}
+ */
+function normalizeChangedPaths(changed) {
+  if (!changed) return [];
+  if (typeof changed === 'string') return changed ? [changed] : [];
+  if (Array.isArray(changed)) return changed.filter((value) => typeof value === 'string' && value.trim());
+  if (Array.isArray(changed.paths)) {
+    return changed.paths.filter((value) => typeof value === 'string' && value.trim());
+  }
+  if (typeof changed.paths === 'string' && changed.paths.trim()) {
+    return [changed.paths.trim()];
+  }
+  return [];
+}
 
 export function getFsRevision() {
   return revision;
 }
 
-export function notifyFsChanged() {
+export function getFsRevisionPayload() {
+  return { revision, paths: lastChangedPaths };
+}
+
+/**
+ * @param {string | string[] | { paths?: string | string[] } | undefined} [changed]
+ */
+export function notifyFsChanged(changed) {
+  const paths = normalizeChangedPaths(changed);
+  lastChangedPaths = paths;
   revision += 1;
-  const payload = JSON.stringify({ revision, at: Date.now() });
+  const payload = { revision, at: Date.now(), paths };
 
   for (let index = sseClients.length - 1; index >= 0; index -= 1) {
     const client = sseClients[index];
     try {
-      client.write(`data: ${payload}\n\n`);
+      writeSseData(client, payload);
     } catch {
       sseClients.splice(index, 1);
     }
@@ -25,7 +81,7 @@ export function notifyFsChanged() {
 
   for (const window of BrowserWindow.getAllWindows()) {
     if (window.isDestroyed()) continue;
-    window.webContents.send('fs:changed', revision);
+    window.webContents.send('fs:changed', payload);
   }
 }
 
@@ -46,8 +102,9 @@ export function handleFsEventsRequest(req, res) {
     'X-Accel-Buffering': 'no',
   });
 
-  res.write(`data: ${JSON.stringify({ revision, at: Date.now() })}\n\n`);
+  writeSseData(res, getFsRevisionPayload());
   sseClients.push(res);
+  startHeartbeat();
 
   req.on('close', () => {
     const index = sseClients.indexOf(res);
@@ -59,5 +116,10 @@ export function handleFsEventsRequest(req, res) {
 
 export function resetFsNotifyState() {
   revision = 0;
+  lastChangedPaths = [];
   sseClients.length = 0;
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+  }
 }

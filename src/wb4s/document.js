@@ -1,5 +1,33 @@
+import { toRoomId } from '../sync/roomId.js';
+
 export const WHITEBOARD_FILE_FORMAT = 'whiteboard4share';
 export const WHITEBOARD_FILE_VERSION = 1;
+
+/**
+ * @param {string} relativePath
+ */
+export function getWb4sByDept(relativePath) {
+  const parts = String(relativePath ?? '').replace(/\\/g, '/').split('/');
+  const first = parts[0];
+  return first && first !== '.' ? first : '0000001';
+}
+
+/**
+ * WhiteBoard4Share collab room id: wb-{byDept}-{whiteboardId}
+ * @param {string} relativePath
+ */
+export function getWb4sCollabRoomId(relativePath) {
+  const byDept = getWb4sByDept(relativePath);
+  const whiteboardId = toRoomId(relativePath);
+  return `wb-${byDept.trim()}-${whiteboardId.trim()}`;
+}
+
+/**
+ * @param {string} relativePath
+ */
+export function getWb4sWhiteboardId(relativePath) {
+  return toRoomId(relativePath);
+}
 
 /**
  * @param {string} [title]

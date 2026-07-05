@@ -22,10 +22,9 @@ export async function openWorkspace(relativePath, dataRoot, tempRoot) {
     await fs.copyFile(sourcePath, workingPath);
   } catch (error) {
     if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
-      await fs.writeFile(workingPath, '');
-    } else {
-      throw error;
+      throw new Error(`파일을 찾을 수 없습니다: ${relativePath}`);
     }
+    throw error;
   }
 
   await fs.writeFile(
@@ -66,6 +65,11 @@ export async function commitWorkspace(sessionId, dataRoot) {
   await fs.copyFile(session.workingPath, destination);
   session.dirty = false;
   return { relativePath: session.relativePath };
+}
+
+export async function saveWorkspace(sessionId, base64, dataRoot) {
+  await writeWorkspaceFile(sessionId, base64);
+  return commitWorkspace(sessionId, dataRoot);
 }
 
 export async function renameWorkspace(sessionId, newRelativePath, dataRoot) {

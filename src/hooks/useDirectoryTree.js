@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
+import { resolveTreeReloadPaths } from '../lib/fsInvalidatePaths.js';
 import { sortEntries } from '../lib/fsPaths.js';
+import { readDirWithRetry } from '../lib/readDirWithRetry.js';
 import { filterTrashFromEntries, isFsNotFoundError } from '../lib/trashPaths.js';
 
 /**
  * @param {string} currentPath
- * @param {number} [fsRevision]
  */
-export function useDirectoryTree(currentPath, fsRevision = 0) {
+export function useDirectoryTree(currentPath) {
   const [expandedPaths, setExpandedPaths] = useState(() => new Set(['.']));
   const [childrenMap, setChildrenMap] = useState({});
   const [loadingPaths, setLoadingPaths] = useState(() => new Set());
@@ -15,7 +16,7 @@ export function useDirectoryTree(currentPath, fsRevision = 0) {
   const loadChildren = useCallback(async (relativePath) => {
     setLoadingPaths((prev) => new Set(prev).add(relativePath));
     try {
-      const entries = await window.educowork.fs.readDir(relativePath);
+      const entries = await readDirWithRetry(relativePath);
       const sorted = filterTrashFromEntries(sortEntries(entries, 'name', 'asc'), relativePath);
       setChildrenMap((prev) => ({ ...prev, [relativePath]: sorted }));
       return sorted;
@@ -33,7 +34,8 @@ export function useDirectoryTree(currentPath, fsRevision = 0) {
         });
         return [];
       }
-      throw err;
+      // 네트워크 실패 — 기존 트리 노드 유지
+      return null;
     } finally {
       setLoadingPaths((prev) => {
         const next = new Set(prev);
@@ -70,18 +72,20 @@ export function useDirectoryTree(currentPath, fsRevision = 0) {
     [collapsePath, expandPath, expandedPaths],
   );
 
-  const refreshTree = useCallback(async () => {
-    const pathsToReload = ['.', currentPath, ...Array.from(expandedPaths)];
+  const refreshTree = useCallback(async (options) => {
+    const pathsToReload = options?.paths?.length
+      ? resolveTreeReloadPaths(options.paths, currentPath, expandedPaths)
+      : ['.', currentPath, ...Array.from(expandedPaths)];
     const uniquePaths = [...new Set(pathsToReload.filter(Boolean))];
 
     const nextEntries = await Promise.all(
       uniquePaths.map(async (path) => {
         try {
-          const entries = await window.educowork.fs.readDir(path);
+          const entries = await readDirWithRetry(path);
           return [path, filterTrashFromEntries(sortEntries(entries, 'name', 'asc'), path)];
         } catch (err) {
           if (isFsNotFoundError(err)) return [path, null];
-          throw err;
+          return [path, undefined];
         }
       }),
     );
@@ -91,7 +95,7 @@ export function useDirectoryTree(currentPath, fsRevision = 0) {
       for (const [path, entries] of nextEntries) {
         if (entries === null) {
           delete next[path];
-        } else {
+        } else if (entries !== undefined) {
           next[path] = entries;
         }
       }
@@ -107,17 +111,13 @@ export function useDirectoryTree(currentPath, fsRevision = 0) {
     setTreeVersion((value) => value + 1);
   }, [currentPath, expandedPaths]);
 
-  useEffect(() => {
-    if (fsRevision === 0) return;
-    void refreshTree();
-  }, [fsRevision, refreshTree]);
-
   const collapseAll = useCallback(() => {
     setExpandedPaths(new Set(['.']));
   }, []);
 
   const expandAllLoaded = useCallback(async () => {
-    const rootEntries = childrenMap['.'] ?? (await loadChildren('.'));
+    const loadedRoot = await loadChildren('.');
+    const rootEntries = childrenMap['.'] ?? loadedRoot ?? [];
     const folderPaths = rootEntries.filter((entry) => entry.isDirectory).map((entry) => entry.relativePath);
 
     await Promise.all(folderPaths.map((folderPath) => loadChildren(folderPath)));

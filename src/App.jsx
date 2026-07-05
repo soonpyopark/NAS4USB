@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import DesktopShell from './components/layout/DesktopShell.jsx';
 import BrowserOnlyNotice from './components/layout/BrowserOnlyNotice.jsx';
 import FileExplorer from './components/explorer/FileExplorer.jsx';
@@ -10,9 +10,11 @@ import AudioPlayerShell from './components/editors/AudioPlayerShell.jsx';
 import VideoPlayerShell from './components/editors/VideoPlayerShell.jsx';
 import { ShareLinkError, ShareLinkLoading } from './components/share/ShareLinkScreen.jsx';
 import { AdminAuthProvider } from './context/AdminAuthContext.jsx';
+import { FsSyncProvider, useFsSync } from './context/FsSyncContext.jsx';
 import { useAppInfo } from './hooks/useAppInfo.js';
 import { useFsChangeSync } from './hooks/useFsChangeSync.js';
 import { hasEducoworkApi } from './lib/runtime.js';
+import { guardOpenFileEntry } from './lib/openFileGuard.js';
 import { getShareTokenFromUrl } from './lib/shareAccess.js';
 import { AUDIO_EXTENSIONS, VIDEO_EXTENSIONS } from './lib/media/mediaTypes.js';
 
@@ -122,18 +124,39 @@ function OpenEditorLayer({ openEditor, syncInfo, allowClose, fullscreen = false,
   return null;
 }
 
-function EduCoworkApp() {
+function EduCoworkAppMain() {
   const shareToken = useMemo(() => getShareTokenFromUrl() || null, []);
   const isShareMode = Boolean(shareToken);
 
   const { paths, syncInfo, loading: infoLoading } = useAppInfo();
+  const { notifyRemoteChange } = useFsSync();
   const [currentPath, setCurrentPath] = useState('.');
   const [openEditor, setOpenEditor] = useState(null);
-  const [fsRevision, setFsRevision] = useState(0);
   const [shareStatus, setShareStatus] = useState(isShareMode ? 'loading' : 'idle');
   const [shareError, setShareError] = useState('');
+  const openEditorRef = useRef(null);
+
+  openEditorRef.current = openEditor;
+
+  const handleRemoteFsChange = useCallback(
+    (event) => {
+      notifyRemoteChange(event);
+    },
+    [notifyRemoteChange],
+  );
+
+  useFsChangeSync(handleRemoteFsChange, { isEditorOpen: Boolean(openEditor) });
 
   const handleOpenFile = useCallback(async (entry) => {
+    if (entry.isDirectory) {
+      return false;
+    }
+
+    const canOpen = await guardOpenFileEntry(entry, {
+      onMissing: () => notifyRemoteChange({ paths: [entry.relativePath] }),
+    });
+    if (!canOpen) return false;
+
     const viewerType = OPENABLE_EXTENSIONS[entry.extension];
     if (viewerType) {
       setOpenEditor({
@@ -156,7 +179,7 @@ function EduCoworkApp() {
     }
 
     return false;
-  }, []);
+  }, [isShareMode, notifyRemoteChange]);
 
   const handleCloseEditor = useCallback(() => {
     if (isShareMode) return;
@@ -166,12 +189,6 @@ function EduCoworkApp() {
   const handleHome = useCallback(() => {
     setCurrentPath('.');
   }, []);
-
-  const handleFsChanged = useCallback(() => {
-    setFsRevision((value) => value + 1);
-  }, []);
-
-  useFsChangeSync(handleFsChanged);
 
   const handleEditorRenamed = useCallback((entry) => {
     if (entry?.relativePath && entry?.name) {
@@ -188,8 +205,10 @@ function EduCoworkApp() {
         };
       });
     }
-    handleFsChanged();
-  }, [handleFsChanged]);
+    notifyRemoteChange(
+      entry?.relativePath ? { paths: [entry.relativePath] } : {},
+    );
+  }, [notifyRemoteChange]);
 
   useEffect(() => {
     if (!shareToken || !window.educowork?.auth?.bindShareToken) return undefined;
@@ -270,25 +289,22 @@ function EduCoworkApp() {
   }
 
   return (
-    <AdminAuthProvider onAuthChange={handleFsChanged}>
+    <AdminAuthProvider onAuthChange={() => notifyRemoteChange({})}>
       <DesktopShell
         paths={paths}
         syncInfo={syncInfo}
         infoLoading={infoLoading}
         currentPath={currentPath}
-        fsRevision={fsRevision}
         onNavigate={setCurrentPath}
         onHome={handleHome}
         onOpenFile={handleOpenFile}
-        onFsChanged={handleFsChanged}
       >
         <FileExplorer
           currentPath={currentPath}
           onNavigate={setCurrentPath}
           onOpenFile={handleOpenFile}
-          onFsChanged={handleFsChanged}
-          fsRevision={fsRevision}
           syncInfo={syncInfo}
+          isEditorOpen={Boolean(openEditor)}
         />
       </DesktopShell>
 
@@ -300,6 +316,14 @@ function EduCoworkApp() {
         onRenamed={handleEditorRenamed}
       />
     </AdminAuthProvider>
+  );
+}
+
+function EduCoworkApp() {
+  return (
+    <FsSyncProvider>
+      <EduCoworkAppMain />
+    </FsSyncProvider>
   );
 }
 

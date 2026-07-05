@@ -10,6 +10,10 @@ export function useWorkspaceSession(relativePath) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const sessionRef = useRef(null);
+  const closingRef = useRef(false);
+  const openPathRef = useRef(relativePath);
+
+  openPathRef.current = relativePath;
 
   useEffect(() => {
     let cancelled = false;
@@ -20,9 +24,9 @@ export function useWorkspaceSession(relativePath) {
 
       try {
         const shareToken = getShareTokenFromUrl() || undefined;
-        const session = await window.educowork.workspace.open(relativePath, shareToken);
+        const session = await window.educowork.workspace.open(openPathRef.current, shareToken);
         if (cancelled) {
-          await window.educowork.workspace.close(session.sessionId);
+          await window.educowork.workspace.close(session.sessionId).catch(() => {});
           return;
         }
         sessionRef.current = session.sessionId;
@@ -36,16 +40,19 @@ export function useWorkspaceSession(relativePath) {
       }
     }
 
-    open();
+    void open();
 
     return () => {
       cancelled = true;
-      if (sessionRef.current) {
-        window.educowork.workspace.close(sessionRef.current);
-        sessionRef.current = null;
-      }
+      if (closingRef.current) return;
+
+      const id = sessionRef.current;
+      if (!id) return;
+
+      sessionRef.current = null;
+      void window.educowork.workspace.close(id).catch(() => {});
     };
-  }, [relativePath]);
+  }, []);
 
   const readBinary = useCallback(async () => {
     const id = sessionRef.current;
@@ -65,6 +72,13 @@ export function useWorkspaceSession(relativePath) {
     return window.educowork.workspace.commit(id);
   }, []);
 
+  const saveBinary = useCallback(async (base64) => {
+    const id = sessionRef.current;
+    if (!id) throw new Error('Workspace session is not ready.');
+    await window.educowork.workspace.write(id, base64);
+    return window.educowork.workspace.commit(id);
+  }, []);
+
   const rename = useCallback(async (newRelativePath) => {
     const id = sessionRef.current;
     if (!id) throw new Error('Workspace session is not ready.');
@@ -74,9 +88,18 @@ export function useWorkspaceSession(relativePath) {
   const close = useCallback(async () => {
     const id = sessionRef.current;
     if (!id) return;
-    await window.educowork.workspace.close(id);
+
+    closingRef.current = true;
     sessionRef.current = null;
     setSessionId(null);
+
+    try {
+      await window.educowork.workspace.close(id);
+    } catch {
+      // Non-fatal after commit; server session may linger until restart.
+    } finally {
+      closingRef.current = false;
+    }
   }, []);
 
   return {
@@ -86,6 +109,7 @@ export function useWorkspaceSession(relativePath) {
     readBinary,
     writeBinary,
     commit,
+    saveBinary,
     rename,
     close,
     ready: Boolean(sessionId) && !loading,

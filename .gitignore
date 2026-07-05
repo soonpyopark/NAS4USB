@@ -2,6 +2,8 @@ node_modules/
 dist/
 .cache/
 .dist-build/
+vendor/whiteboard4share/node_modules/
+vendor/whiteboard4share/dist/
 exe/
 exe_new/
 mac/

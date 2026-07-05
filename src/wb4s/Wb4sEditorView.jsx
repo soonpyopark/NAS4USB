@@ -4,14 +4,18 @@ import { EmbedDeptSessionProvider } from '@wb4s-engine/context/DeptSessionContex
 import { parseWhiteboardFileText } from '@wb4s-engine/lib/whiteboard/whiteboardFile.ts';
 import '@wb4s-engine/index.css';
 import '@wb4s-engine/App.css';
-import '@wb4s-engine/embed-tools-mobile.css';
+import {
+  getWb4sByDept,
+  getWb4sCollabRoomId,
+  getWb4sWhiteboardId,
+} from './document.js';
 
 /**
- * EduCowork native WhiteBoard4Share editor (no iframe mount).
+ * EduCowork native WhiteBoard4Share editor (upstream v1.0.3 collab).
  *
  * @param {{
+ *   relativePath: string,
  *   documentJson: string,
- *   roomId: string,
  *   syncServerUrl: string,
  *   userName: string,
  *   onReady?: (api: { exportDocument: () => string }) => void,
@@ -21,30 +25,26 @@ import '@wb4s-engine/embed-tools-mobile.css';
  *     isSynced: boolean,
  *     isReady: boolean,
  *   }) => void,
- *   onSaveToHost?: () => void | Promise<void>,
  *   onRenameTitle?: (title: string) => void | Promise<void>,
  *   onClose?: () => void | Promise<void>,
  * }} props
  */
 export default function Wb4sEditorView({
+  relativePath,
   documentJson,
-  roomId,
   syncServerUrl,
   userName,
   onReady,
   onCollabStatus,
-  onSaveToHost,
   onRenameTitle,
   onClose,
 }) {
   const onReadyRef = useRef(onReady);
   const onCollabStatusRef = useRef(onCollabStatus);
-  const onSaveToHostRef = useRef(onSaveToHost);
   const onRenameTitleRef = useRef(onRenameTitle);
   const onCloseRef = useRef(onClose);
   onReadyRef.current = onReady;
   onCollabStatusRef.current = onCollabStatus;
-  onSaveToHostRef.current = onSaveToHost;
   onRenameTitleRef.current = onRenameTitle;
   onCloseRef.current = onClose;
 
@@ -55,6 +55,10 @@ export default function Wb4sEditorView({
     };
   }, []);
 
+  const whiteboardId = useMemo(() => getWb4sWhiteboardId(relativePath), [relativePath]);
+  const byDept = useMemo(() => getWb4sByDept(relativePath), [relativePath]);
+  const roomId = useMemo(() => getWb4sCollabRoomId(relativePath), [relativePath]);
+
   const embedMode = useMemo(
     () => ({
       initialPayload: parseWhiteboardFileText(documentJson),
@@ -63,9 +67,8 @@ export default function Wb4sEditorView({
       userName,
       onReady: (api) => onReadyRef.current?.(api),
       onCollabStatus: (status) => onCollabStatusRef.current?.(status),
-      onSaveToHost: () => onSaveToHostRef.current?.(),
-      onRenameTitle: (title) => onRenameTitleRef.current?.(title),
-      onClose: () => onCloseRef.current?.(),
+      onRenameTitle: (title) => Promise.resolve(onRenameTitleRef.current?.(title)),
+      onClose: () => Promise.resolve(onCloseRef.current?.()),
     }),
     [documentJson, roomId, syncServerUrl, userName],
   );
@@ -74,8 +77,8 @@ export default function Wb4sEditorView({
     <EmbedDeptSessionProvider userName={userName}>
       <div className="app editor min-h-0 flex-1 overflow-hidden">
         <EditorView
-          whiteboardId="embed"
-          byDept="embed"
+          whiteboardId={whiteboardId}
+          byDept={byDept}
           embedMode={embedMode}
           onBack={() => {}}
         />

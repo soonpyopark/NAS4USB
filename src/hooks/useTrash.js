@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
-/**
- * @param {number} [fsRevision]
- */
-export function useTrash(fsRevision = 0) {
+export function useTrash() {
   /** @type {[Record<string, { originalPath: string, deletedAt: string, isDirectory: boolean }>, Function]} */
   const [trashMap, setTrashMap] = useState({});
 
@@ -18,7 +15,7 @@ export function useTrash(fsRevision = 0) {
 
   useEffect(() => {
     refresh();
-  }, [refresh, fsRevision]);
+  }, [refresh]);
 
   return {
     trashMap,

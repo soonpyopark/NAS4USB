@@ -22,18 +22,47 @@ function withShareAccessQuery(route) {
 
 /**
  * @param {string} route
- * @param {RequestInit} [init]
  */
-async function apiFetch(route, init) {
+function buildApiUrl(route) {
+  const path = withShareAccessQuery(route);
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return `${window.location.origin}${path}`;
+  }
+  return path;
+}
+
+/**
+ * @param {string} route
+ * @param {RequestInit} [init]
+ * @param {number} [timeoutMs]
+ */
+async function apiFetch(route, init, timeoutMs = 60000) {
   const adminToken = readAdminToken();
-  const response = await fetch(withShareAccessQuery(route), {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(adminToken ? { 'X-Admin-Token': adminToken } : {}),
-      ...(init?.headers ?? {}),
-    },
-    ...init,
-  });
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+
+  let response;
+  try {
+    response = await fetch(buildApiUrl(route), {
+      ...init,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(adminToken ? { 'X-Admin-Token': adminToken } : {}),
+        ...(init?.headers ?? {}),
+      },
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('서버 응답 시간이 초과되었습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요.');
+    }
+    if (error instanceof TypeError && error.message === 'Failed to fetch') {
+      throw new Error('서버에 연결할 수 없습니다. 네트워크 연결을 확인한 뒤 다시 시도해 주세요.');
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timer);
+  }
 
   if (!response.ok) {
     let message = response.statusText;
@@ -122,10 +151,14 @@ export function createHttpEducoworkClient() {
       read: (sessionId) =>
         apiFetch(`/workspace/read?sessionId=${encodeURIComponent(sessionId)}`),
       write: (sessionId, base64) =>
-        apiFetch('/workspace/write', {
-          method: 'POST',
-          body: JSON.stringify({ sessionId, base64 }),
-        }),
+        apiFetch(
+          '/workspace/write',
+          {
+            method: 'POST',
+            body: JSON.stringify({ sessionId, base64 }),
+          },
+          180000,
+        ),
       commit: (sessionId) =>
         apiFetch('/workspace/commit', {
           method: 'POST',
@@ -140,6 +173,7 @@ export function createHttpEducoworkClient() {
         apiFetch('/workspace/close', {
           method: 'POST',
           body: JSON.stringify({ sessionId }),
+          keepalive: true,
         }),
     },
 

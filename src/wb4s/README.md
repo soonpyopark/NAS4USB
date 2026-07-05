@@ -1,18 +1,11 @@
-# EduCowork overlay for WhiteBoard4Share
+# EduCowork host layer for WhiteBoard4Share
 
-Upstream source lives in `.cache/wb4s-src` (synced from sibling `WhiteBoard4Share v1.0.3` or cloned from GitHub on first build).
+| Layer | Path |
+|-------|------|
+| **Vendored editor (fixed copy)** | `vendor/whiteboard4share/` |
+| **NAS host (open/save `.wb4s`)** | `Wb4sEditorShell.jsx`, `Wb4sEditorView.jsx` |
+| **EduCowork patches** | `vendor/wb4s-educowork-overlay/` |
 
-This folder contains EduCowork-specific changes applied on top before `npm run build:wb4s-editor`:
+Vite alias `@wb4s-engine` → `vendor/whiteboard4share/src`.
 
-- `embed.html`, `src/embed/*` — iframe embed entry for EduCowork
-- `src/hooks/useYjsWhiteboardEmbed.ts` — Y.js via EduCowork sync server (`http://host:3008`)
-- `src/components/EditorView.tsx`, `Toolbar.tsx` — embed mode (no gallery/API save)
-- `src/context/DeptSessionContext.tsx` — `EmbedDeptSessionProvider`
-- `vite.config.ts` — relative `base`, multi-page (`embed.html`)
-- `src/index.css` — full-height embed layout
-
-Edit files here, then run:
-
-```bash
-npm run build:wb4s-editor
-```
+Upstream updates: see `vendor/whiteboard4share/UPSTREAM.md` and `npm run sync:wb4s-upstream`.

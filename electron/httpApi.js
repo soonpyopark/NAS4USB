@@ -14,6 +14,7 @@ import {
   renameWorkspace,
   openWorkspace,
   readWorkspaceFile,
+  saveWorkspace,
   writeWorkspaceFile,
 } from './tempWorkspace.js';
 import { getEditorCoresStatus, updateEditorCores } from './editorUpdater.js';
@@ -51,7 +52,7 @@ import {
 } from './trashService.js';
 import { streamFile } from './mediaStream.js';
 import { getAudioMimeType, getVideoMimeType, isAudioExtension, isVideoExtension } from '../src/lib/media/mediaTypes.js';
-import { handleFsEventsRequest, notifyFsChanged, getFsRevision } from './fsNotifyService.js';
+import { handleFsEventsRequest, notifyFsChanged, getFsRevisionPayload } from './fsNotifyService.js';
 
 /**
  * @param {import('node:http').ServerResponse} res
@@ -128,7 +129,7 @@ export async function handleHttpApiRequest(req, res) {
     }
 
     if (method === 'GET' && url.pathname === '/api/fs/revision') {
-      sendJson(res, 200, { revision: getFsRevision() });
+      sendJson(res, 200, getFsRevisionPayload());
       return true;
     }
 
@@ -148,7 +149,7 @@ export async function handleHttpApiRequest(req, res) {
     if (method === 'POST' && url.pathname === '/api/fs/mkdir') {
       const body = await readJsonBody(req);
       const result = await fsService.mkdir(body.path);
-      notifyFsChanged();
+      notifyFsChanged(body.path);
       sendJson(res, 200, result);
       return true;
     }
@@ -158,7 +159,7 @@ export async function handleHttpApiRequest(req, res) {
       await syncSharePathDelete(body.path, getPortableRoot());
       await syncFileAccessDelete(body.path, getPortableRoot());
       const result = await fsService.deletePath(body.path);
-      notifyFsChanged();
+      notifyFsChanged(body.path);
       sendJson(res, 200, result);
       return true;
     }
@@ -168,7 +169,7 @@ export async function handleHttpApiRequest(req, res) {
       await syncSharePathRename(body.from, body.to, getPortableRoot());
       await syncFileAccessRename(body.from, body.to, getPortableRoot());
       const result = await fsService.renamePath(body.from, body.to);
-      notifyFsChanged();
+      notifyFsChanged([body.from, body.to]);
       sendJson(res, 200, result);
       return true;
     }
@@ -202,7 +203,7 @@ export async function handleHttpApiRequest(req, res) {
     if (method === 'POST' && url.pathname === '/api/fs/writeFile') {
       const body = await readJsonBody(req);
       const result = await fsService.writeFileBase64(body.path, body.base64 ?? '');
-      notifyFsChanged();
+      notifyFsChanged(body.path);
       sendJson(res, 200, result);
       return true;
     }
@@ -210,7 +211,7 @@ export async function handleHttpApiRequest(req, res) {
     if (method === 'POST' && url.pathname === '/api/fs/copy') {
       const body = await readJsonBody(req);
       const result = await fsService.copyPath(body.from, body.to);
-      notifyFsChanged();
+      notifyFsChanged([body.from, body.to]);
       sendJson(res, 200, result);
       return true;
     }
@@ -220,7 +221,7 @@ export async function handleHttpApiRequest(req, res) {
       await syncSharePathRename(body.from, body.to, getPortableRoot());
       await syncFileAccessRename(body.from, body.to, getPortableRoot());
       const result = await fsService.movePath(body.from, body.to);
-      notifyFsChanged();
+      notifyFsChanged([body.from, body.to]);
       sendJson(res, 200, result);
       return true;
     }
@@ -302,7 +303,21 @@ export async function handleHttpApiRequest(req, res) {
         getShareTokenFromQuery(url),
       );
       const result = await commitWorkspace(body.sessionId, getDataRoot());
-      notifyFsChanged();
+      notifyFsChanged(session.relativePath);
+      sendJson(res, 200, result);
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/workspace/save') {
+      const body = await readJsonBody(req);
+      const session = getSession(body.sessionId ?? '');
+      await assertCanEditFile(
+        session.relativePath,
+        isAdminAuthenticated(req),
+        getShareTokenFromQuery(url),
+      );
+      const result = await saveWorkspace(body.sessionId, body.base64 ?? '', getDataRoot());
+      notifyFsChanged(session.relativePath);
       sendJson(res, 200, result);
       return true;
     }
@@ -319,7 +334,7 @@ export async function handleHttpApiRequest(req, res) {
       const result = await renameWorkspace(body.sessionId, body.relativePath, getDataRoot());
       await syncSharePathRename(fromPath, result.relativePath, getPortableRoot());
       await syncFileAccessRename(fromPath, result.relativePath, getPortableRoot());
-      notifyFsChanged();
+      notifyFsChanged([fromPath, result.relativePath]);
       sendJson(res, 200, result);
       return true;
     }
@@ -362,7 +377,7 @@ export async function handleHttpApiRequest(req, res) {
       assertAdminAuthenticated(isAdminAuthenticated(req));
       const body = await readJsonBody(req);
       const result = await createShareLink(body.path, getPortableRoot());
-      notifyFsChanged();
+      notifyFsChanged(body.path);
       sendJson(res, 200, result);
       return true;
     }
@@ -371,7 +386,7 @@ export async function handleHttpApiRequest(req, res) {
       assertAdminAuthenticated(isAdminAuthenticated(req));
       const body = await readJsonBody(req);
       const result = await revokeShareLink(body.path, getPortableRoot());
-      notifyFsChanged();
+      notifyFsChanged(body.path);
       sendJson(res, 200, result);
       return true;
     }
@@ -409,7 +424,7 @@ export async function handleHttpApiRequest(req, res) {
         { visibility: body.visibility, viewRestricted: body.viewRestricted },
         getPortableRoot(),
       );
-      notifyFsChanged();
+      notifyFsChanged(body.path);
       sendJson(res, 200, result);
       return true;
     }
@@ -422,7 +437,7 @@ export async function handleHttpApiRequest(req, res) {
     if (method === 'POST' && url.pathname === '/api/trash/move') {
       const body = await readJsonBody(req);
       const result = await trashPath(body.path, getPortableRoot());
-      notifyFsChanged();
+      notifyFsChanged(body.path);
       sendJson(res, 200, result);
       return true;
     }
@@ -430,7 +445,7 @@ export async function handleHttpApiRequest(req, res) {
     if (method === 'POST' && url.pathname === '/api/trash/restore') {
       const body = await readJsonBody(req);
       const result = await restorePath(body.path, getPortableRoot());
-      notifyFsChanged();
+      notifyFsChanged(body.path);
       sendJson(res, 200, result);
       return true;
     }
@@ -445,7 +460,7 @@ export async function handleHttpApiRequest(req, res) {
     if (method === 'POST' && url.pathname === '/api/trash/deletePermanent') {
       const body = await readJsonBody(req);
       const result = await deletePermanent(body.path, getPortableRoot());
-      notifyFsChanged();
+      notifyFsChanged(body.path);
       sendJson(res, 200, result);
       return true;
     }

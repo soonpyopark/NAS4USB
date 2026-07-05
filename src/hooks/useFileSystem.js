@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { joinRelativePath, readFileAsBase64, resolveUniqueName, validateFolderName } from '../lib/fsPaths.js';
+import { readDirWithRetry } from '../lib/readDirWithRetry.js';
 import { filterTrashFromEntries, isFsNotFoundError, isTrashPath } from '../lib/trashPaths.js';
 import { buildNewFileContent, resolveNewFileName } from '../lib/files/newFileFactory.js';
 import { convertHwpBase64ToHwpx, isHwpFileName, toHwpxFileName } from '@educowork/rhwp/hwpConvert.js';
@@ -14,15 +15,15 @@ export function useFileSystem(currentPath) {
     setError(null);
 
     try {
-      const result = await window.educowork.fs.readDir(currentPath);
+      const result = await readDirWithRetry(currentPath);
       setEntries(filterTrashFromEntries(result, currentPath));
     } catch (err) {
       if (isFsNotFoundError(err)) {
         setEntries([]);
         setError(null);
       } else {
-        setError(err instanceof Error ? err.message : 'Failed to read directory');
-        setEntries([]);
+        // 재시도 후에도 실패 — 목록은 유지하고 배너는 띄우지 않음
+        setError(null);
       }
     } finally {
       setLoading(false);

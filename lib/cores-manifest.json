@@ -7,9 +7,9 @@
       "method": "npm"
     },
     "wb4s": {
-      "version": "not-installed",
+      "version": "1.0.3",
       "updatedAt": "2026-07-05T03:27:40.647Z",
-      "method": "local-package"
+      "method": "vendor-copy"
     },
     "fortune-sheet": {
       "version": "@fortune-sheet/react@1.0.4",

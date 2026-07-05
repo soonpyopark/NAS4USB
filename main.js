@@ -33,6 +33,7 @@ import {
   renameWorkspace,
   openWorkspace,
   readWorkspaceFile,
+  saveWorkspace,
   writeWorkspaceFile,
 } from './electron/tempWorkspace.js';
 import { getEditorCoresStatus, updateEditorCores } from './electron/editorUpdater.js';
@@ -411,7 +412,7 @@ ipcMain.handle('fs:readDir', async (event, relativePath = '.') =>
 
 ipcMain.handle('fs:mkdir', async (_event, relativePath) => {
   const result = await fsService.mkdir(relativePath);
-  notifyFsChanged();
+  notifyFsChanged(relativePath);
   return result;
 });
 
@@ -419,7 +420,7 @@ ipcMain.handle('fs:rename', async (_event, fromRelative, toRelative) => {
   await syncSharePathRename(fromRelative, toRelative, getPortableRoot());
   await syncFileAccessRename(fromRelative, toRelative, getPortableRoot());
   const result = await fsService.renamePath(fromRelative, toRelative);
-  notifyFsChanged();
+  notifyFsChanged([fromRelative, toRelative]);
   return result;
 });
 
@@ -427,7 +428,7 @@ ipcMain.handle('fs:delete', async (_event, relativePath) => {
   await syncSharePathDelete(relativePath, getPortableRoot());
   await syncFileAccessDelete(relativePath, getPortableRoot());
   const result = await fsService.deletePath(relativePath);
-  notifyFsChanged();
+  notifyFsChanged(relativePath);
   return result;
 });
 
@@ -448,13 +449,13 @@ ipcMain.handle('fs:readFile', async (event, relativePath) =>
 
 ipcMain.handle('fs:writeFile', async (_event, relativePath, base64 = '') => {
   const result = await fsService.writeFileBase64(relativePath, base64);
-  notifyFsChanged();
+  notifyFsChanged(relativePath);
   return result;
 });
 
 ipcMain.handle('fs:copy', async (_event, fromRelative, toRelative) => {
   const result = await fsService.copyPath(fromRelative, toRelative);
-  notifyFsChanged();
+  notifyFsChanged([fromRelative, toRelative]);
   return result;
 });
 
@@ -462,7 +463,7 @@ ipcMain.handle('fs:move', async (_event, fromRelative, toRelative) => {
   await syncSharePathRename(fromRelative, toRelative, getPortableRoot());
   await syncFileAccessRename(fromRelative, toRelative, getPortableRoot());
   const result = await fsService.movePath(fromRelative, toRelative);
-  notifyFsChanged();
+  notifyFsChanged([fromRelative, toRelative]);
   return result;
 });
 
@@ -488,7 +489,15 @@ ipcMain.handle('workspace:commit', async (event, sessionId) => {
   const session = getSession(sessionId);
   await assertCanEditFile(session.relativePath, isAdminFromEvent(event), getShareTokenFromEvent(event));
   const result = await commitWorkspace(sessionId, getDataRoot());
-  notifyFsChanged();
+  notifyFsChanged(session.relativePath);
+  return result;
+});
+
+ipcMain.handle('workspace:save', async (event, sessionId, base64) => {
+  const session = getSession(sessionId);
+  await assertCanEditFile(session.relativePath, isAdminFromEvent(event), getShareTokenFromEvent(event));
+  const result = await saveWorkspace(sessionId, base64, getDataRoot());
+  notifyFsChanged(session.relativePath);
   return result;
 });
 
@@ -499,7 +508,7 @@ ipcMain.handle('workspace:rename', async (event, sessionId, newRelativePath) => 
   const result = await renameWorkspace(sessionId, newRelativePath, getDataRoot());
   await syncSharePathRename(fromPath, result.relativePath, getPortableRoot());
   await syncFileAccessRename(fromPath, result.relativePath, getPortableRoot());
-  notifyFsChanged();
+  notifyFsChanged([fromPath, result.relativePath]);
   return result;
 });
 
@@ -521,14 +530,14 @@ ipcMain.handle('share:getMap', async (event) => {
 ipcMain.handle('share:create', async (event, { path: relativePath } = {}) => {
   assertAdminAuthenticated(isAdminFromEvent(event));
   const result = await createShareLink(relativePath, getPortableRoot());
-  notifyFsChanged();
+  notifyFsChanged(relativePath);
   return result;
 });
 
 ipcMain.handle('share:revoke', async (event, { path: relativePath } = {}) => {
   assertAdminAuthenticated(isAdminFromEvent(event));
   const result = await revokeShareLink(relativePath, getPortableRoot());
-  notifyFsChanged();
+  notifyFsChanged(relativePath);
   return result;
 });
 
@@ -544,7 +553,7 @@ ipcMain.handle('fileAccess:getMap', async (event) => {
 ipcMain.handle('fileAccess:set', async (event, { path: relativePath, visibility, viewRestricted } = {}) => {
   assertAdminAuthenticated(isAdminFromEvent(event));
   const result = await setFileAccess(relativePath, { visibility, viewRestricted }, getPortableRoot());
-  notifyFsChanged();
+  notifyFsChanged(relativePath);
   return result;
 });
 
@@ -564,13 +573,13 @@ ipcMain.handle('trash:getMap', async () => getTrashMap(getPortableRoot()));
 
 ipcMain.handle('trash:move', async (_event, { path: relativePath } = {}) => {
   const result = await trashPath(relativePath, getPortableRoot());
-  notifyFsChanged();
+  notifyFsChanged(relativePath);
   return result;
 });
 
 ipcMain.handle('trash:restore', async (_event, { path: relativePath } = {}) => {
   const result = await restorePath(relativePath, getPortableRoot());
-  notifyFsChanged();
+  notifyFsChanged(relativePath);
   return result;
 });
 
@@ -582,7 +591,7 @@ ipcMain.handle('trash:empty', async () => {
 
 ipcMain.handle('trash:deletePermanent', async (_event, { path: relativePath } = {}) => {
   const result = await deletePermanent(relativePath, getPortableRoot());
-  notifyFsChanged();
+  notifyFsChanged(relativePath);
   return result;
 });
 

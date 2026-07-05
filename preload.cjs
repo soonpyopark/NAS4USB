@@ -6,8 +6,12 @@ contextBridge.exposeInMainWorld('educowork', {
   getSyncInfo: () => ipcRenderer.invoke('sync:getInfo'),
   openExternal: (url) => ipcRenderer.invoke('app:openExternal', url),
   subscribeFsChanged: (callback) => {
-    const handler = (_event, revision) => {
-      callback(revision);
+    const handler = (_event, payload) => {
+      if (typeof payload === 'number') {
+        callback({ revision: payload });
+        return;
+      }
+      callback(payload && typeof payload === 'object' ? payload : {});
     };
     ipcRenderer.on('fs:changed', handler);
     return () => {
@@ -34,6 +38,7 @@ contextBridge.exposeInMainWorld('educowork', {
     read: (sessionId) => ipcRenderer.invoke('workspace:read', sessionId),
     write: (sessionId, base64) => ipcRenderer.invoke('workspace:write', sessionId, base64),
     commit: (sessionId) => ipcRenderer.invoke('workspace:commit', sessionId),
+    save: (sessionId, base64) => ipcRenderer.invoke('workspace:save', sessionId, base64),
     rename: (sessionId, relativePath) =>
       ipcRenderer.invoke('workspace:rename', sessionId, relativePath),
     close: (sessionId) => ipcRenderer.invoke('workspace:close', sessionId),

@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
+import { useFsSync } from '../context/FsSyncContext.jsx';
 import { searchFileEntries } from '../lib/fsSearch.js';
 
 /**
  * @param {string} query
- * @param {number} [fsRevision]
  */
-export function useFileSearch(query, fsRevision = 0) {
+export function useFileSearch(query) {
+  const { generation } = useFsSync();
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [truncated, setTruncated] = useState(false);
@@ -48,7 +49,7 @@ export function useFileSearch(query, fsRevision = 0) {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [query, fsRevision]);
+  }, [query, generation]);
 
   return { results, searching, truncated, isActive };
 }

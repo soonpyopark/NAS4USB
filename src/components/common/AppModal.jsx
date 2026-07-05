@@ -1,6 +1,6 @@
 /**
  * WhiteBoard4Share DeleteConfirmDialog 과 동일한 모달 스타일.
- * @see .cache/wb4s-src/src/index.css
+ * @see vendor/whiteboard4share/src/index.css
  */
 
 /**

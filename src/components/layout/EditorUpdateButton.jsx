@@ -56,7 +56,7 @@ export default function EditorUpdateButton() {
         body={
           '에디터 코어를 USB에 업데이트할까요?\n\n' +
           '- HWPX (rhwp): npm @rhwp/core, @rhwp/editor\n' +
-          '- 화이트보드 (wb4s): Git submodule / vendor\n' +
+          '- 화이트보드 (wb4s): vendor/whiteboard4share (see UPSTREAM.md)\n' +
           '- 엑셀 (FortuneSheet): npm @fortune-sheet/react\n\n' +
           'Git submodule 또는 lib/updates/ 패키지를 사용하는 코어는 해당 방식으로 반영됩니다.'
         }

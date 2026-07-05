@@ -27,7 +27,7 @@ export const EDITOR_CORES = [
     id: 'wb4s',
     label: 'Whiteboard (.wb4s)',
     libDir: 'src/wb4s',
-    submodulePath: '.cache/wb4s-src',
+    submodulePath: 'vendor/whiteboard4share',
     updatePackageDir: 'vendor/wb4s-educowork-overlay',
     repositoryUrl: 'https://github.com/soonpyopark/WhiteBoard4Share',
     npmPackage: null,

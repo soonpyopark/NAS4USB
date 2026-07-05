@@ -2,12 +2,18 @@ import { DEFAULT_SYNC_PORT } from '../../shared/constants.js';
 import { loadSyncHost } from '../lib/syncHost.js';
 
 function resolveSyncHost(syncInfo) {
+  const pageHost =
+    typeof window !== 'undefined' ? window.location?.hostname?.trim() : '';
+
+  // LAN 브라우저: 주소창의 IP/호스트를 Y.js 서버로 사용 (localStorage 127.0.0.1 무시)
+  if (pageHost && pageHost !== '127.0.0.1' && pageHost !== 'localhost') {
+    return pageHost;
+  }
+
   const configured = loadSyncHost();
   if (configured) return configured;
 
-  if (typeof window !== 'undefined' && window.location?.hostname) {
-    return window.location.hostname;
-  }
+  if (pageHost) return pageHost;
 
   // file:// Electron 등 — LAN IP로는 Windows에서 로컬 WS 접속이 실패할 수 있음
   return '127.0.0.1';
