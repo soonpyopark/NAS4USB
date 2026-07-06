@@ -75,6 +75,50 @@ export async function seedPortableData(portableDir) {
   await copyFileIfMissing(path.join(projectRoot, '.env.example'), path.join(portableDir, '.env.example'));
 }
 
+/**
+ * @param {Date} [date]
+ */
+export function formatBuildTimestamp(date = new Date()) {
+  const pad = (value) => String(value).padStart(2, '0');
+  const yy = String(date.getFullYear()).slice(-2);
+  const mm = pad(date.getMonth() + 1);
+  const dd = pad(date.getDate());
+  const hh = pad(date.getHours());
+  const min = pad(date.getMinutes());
+  const ss = pad(date.getSeconds());
+  return `${yy}${mm}${dd}_${hh}${min}${ss}`;
+}
+
+export async function readPackageMeta() {
+  const raw = await fs.readFile(path.join(projectRoot, 'package.json'), 'utf8');
+  const pkg = JSON.parse(raw);
+  return {
+    productName: pkg.build?.productName ?? pkg.name ?? 'app',
+    version: pkg.version ?? '0.0.0',
+  };
+}
+
+/**
+ * @param {string} name
+ */
+export function sanitizeDirName(name) {
+  const sanitized = String(name).replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').trim();
+  return sanitized || 'app';
+}
+
+/**
+ * @param {string} [baseDirName]
+ */
+export async function createVersionedPortableDir(baseDirName = 'exe') {
+  const { productName, version } = await readPackageMeta();
+  const folderName = `${sanitizeDirName(productName)}_${version}_${formatBuildTimestamp()}`;
+  const baseDir = path.join(projectRoot, baseDirName);
+  const portableDir = path.join(baseDir, folderName);
+  await fs.mkdir(baseDir, { recursive: true });
+  console.log(`[build:dist] Output folder: ${baseDirName}/${folderName}`);
+  return portableDir;
+}
+
 export function buildRenderer() {
   console.log('[build:dist] Building renderer…');
   run('npm', ['run', 'build']);

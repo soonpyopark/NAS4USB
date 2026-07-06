@@ -51,7 +51,7 @@ import {
   trashPath,
 } from './trashService.js';
 import { streamFile } from './mediaStream.js';
-import { getAudioMimeType, getVideoMimeType, isAudioExtension, isVideoExtension } from '../src/lib/media/mediaTypes.js';
+import { getAudioMimeType, getVideoMimeType, isAudioExtension, isVideoExtension } from '../shared/mediaTypes.js';
 import { handleFsEventsRequest, notifyFsChanged, getFsRevisionPayload } from './fsNotifyService.js';
 
 /**

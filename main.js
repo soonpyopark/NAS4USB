@@ -15,7 +15,6 @@ import {
   resolvePortablePath,
 } from './electron/appContext.js';
 import * as fsService from './electron/fsService.js';
-import { startDevServer, stopDevServer } from './electron/devServer.js';
 import {
   configureSyncServer,
   startSyncServer,
@@ -221,6 +220,7 @@ async function ensureServer() {
   if (activeServerInfo) return activeServerInfo;
 
   if (isDev) {
+    const { startDevServer } = await import('./electron/devServer.js');
     activeServerInfo = await startDevServer();
   } else {
     activeServerInfo = startSyncServer(path.join(__dirname, 'dist'));
@@ -231,6 +231,7 @@ async function ensureServer() {
 
 async function shutdownServer() {
   if (isDev) {
+    const { stopDevServer } = await import('./electron/devServer.js');
     await stopDevServer();
   } else {
     stopSyncServer();

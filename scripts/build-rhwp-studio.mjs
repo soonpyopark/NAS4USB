@@ -85,6 +85,46 @@ function commandExists(command) {
   });
 }
 
+async function wasmArtifactsReady() {
+  const required = ['rhwp.js', 'rhwp_bg.wasm'];
+  for (const base of [rhwpPkg, rhwpCore]) {
+    try {
+      for (const name of required) {
+        await fs.access(path.join(base, name));
+      }
+      return true;
+    } catch {
+      // try next location
+    }
+  }
+  return false;
+}
+
+async function copyWasmToStudioPublic() {
+  for (const name of ['rhwp.js', 'rhwp_bg.wasm', 'rhwp.d.ts', 'rhwp_bg.wasm.d.ts']) {
+    const fromPkg = path.join(rhwpPkg, name);
+    const fromCore = path.join(rhwpCore, name);
+    const source = await fs.access(fromPkg).then(() => fromPkg).catch(() => fromCore);
+    await fs.mkdir(path.join(rhwpStudio, 'public'), { recursive: true });
+    await fs.copyFile(source, path.join(rhwpStudio, 'public', name));
+  }
+}
+
+async function ensureWasmPkg() {
+  if (await wasmArtifactsReady()) {
+    console.log('[rhwp-studio] WASM pkg already present — skipping rebuild');
+    try {
+      await syncWasmPkg();
+    } catch {
+      // pkg may already be complete when core is absent
+    }
+    await copyWasmToStudioPublic();
+    return;
+  }
+
+  await buildWasmFromSource();
+}
+
 async function buildStudio() {
   console.log('[rhwp-studio] npm install …');
   await run(rhwpStudio, 'npm', ['install'], { shell: process.platform === 'win32' });
@@ -118,6 +158,6 @@ async function publishDist() {
 }
 
 await ensureRhwpSource();
-await buildWasmFromSource();
+await ensureWasmPkg();
 await buildStudio();
 await publishDist();
