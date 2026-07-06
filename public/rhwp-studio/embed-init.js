@@ -212,54 +212,9 @@
     observer.observe(statusEl, { childList: true, characterData: true, subtree: true });
   }
 
-  function bindPointerBroadcast() {
-    if (window.parent === window) return;
-
-    const target = document.documentElement;
-    let lastSent = 0;
-
-    const publish = (visible, clientX, clientY) => {
-      const rect = target.getBoundingClientRect();
-      const width = rect.width || 1;
-      const height = rect.height || 1;
-      const inside =
-        visible &&
-        clientX >= rect.left &&
-        clientX <= rect.right &&
-        clientY >= rect.top &&
-        clientY <= rect.bottom;
-
-      window.parent.postMessage(
-        {
-          type: 'rhwp-pointer',
-          visible: inside,
-          px: inside ? ((clientX - rect.left) / width) * 100 : 0,
-          py: inside ? ((clientY - rect.top) / height) * 100 : 0,
-        },
-        '*',
-      );
-    };
-
-    document.addEventListener(
-      'mousemove',
-      (event) => {
-        const now = Date.now();
-        if (now - lastSent < 50) return;
-        lastSent = now;
-        publish(true, event.clientX, event.clientY);
-      },
-      { passive: true },
-    );
-
-    document.addEventListener('mouseleave', () => {
-      window.parent.postMessage({ type: 'rhwp-pointer', visible: false, px: 0, py: 0 }, '*');
-    });
-  }
-
   function bootEmbed() {
     hideChrome();
     autoDismissEmbedUi();
-    bindPointerBroadcast();
     publishInitStatus();
   }
 

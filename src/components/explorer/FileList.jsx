@@ -8,21 +8,6 @@ function formatSize(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function formatModifiedDateParts(iso) {
-  const date = new Date(iso);
-  return {
-    datePart: date.toLocaleDateString('ko-KR', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }),
-    timePart: date.toLocaleTimeString('ko-KR', {
-      hour: '2-digit',
-      minute: '2-digit',
-    }),
-  };
-}
-
 function formatModifiedDateLine(iso) {
   return new Date(iso).toLocaleString('ko-KR', {
     year: 'numeric',
@@ -33,7 +18,7 @@ function formatModifiedDateLine(iso) {
   });
 }
 
-const MODIFIED_DATE_COLUMN_CLASS = 'hidden w-28 px-2 py-2 md:table-cell xl:w-48';
+const MODIFIED_DATE_COLUMN_CLASS = 'hidden w-44 min-w-[9.5rem] whitespace-nowrap px-2 py-2 md:table-cell';
 
 export default function FileList({
   entries,
@@ -178,7 +163,7 @@ export default function FileList({
         <tbody>
           {entries.map((entry) => {
             const selected = selectedSet.has(entry.relativePath);
-            const { datePart, timePart } = formatModifiedDateParts(entry.modifiedAt);
+            const modifiedLabel = formatModifiedDateLine(entry.modifiedAt);
 
             return (
               <tr
@@ -223,14 +208,8 @@ export default function FileList({
                     </span>
                   </div>
                 </td>
-                <td className={`text-nas-muted ${MODIFIED_DATE_COLUMN_CLASS}`}>
-                  <span className="hidden whitespace-nowrap xl:inline">
-                    {formatModifiedDateLine(entry.modifiedAt)}
-                  </span>
-                  <span className="block leading-snug xl:hidden">
-                    <span className="block whitespace-nowrap">{datePart}</span>
-                    <span className="block whitespace-nowrap">{timePart}</span>
-                  </span>
+                <td className={`text-nas-muted ${MODIFIED_DATE_COLUMN_CLASS}`} title={modifiedLabel}>
+                  {modifiedLabel}
                 </td>
                 <td className="hidden px-4 py-2 text-nas-muted sm:table-cell">
                   {entry.isDirectory ? '—' : formatSize(entry.size)}

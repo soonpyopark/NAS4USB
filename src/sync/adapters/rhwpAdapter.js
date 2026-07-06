@@ -1,5 +1,4 @@
 import { bindTextEditor } from './textEditorAdapter.js';
-import { bindCollaborationPointers, trackLocalPointer } from '../collaborationPointers.js';
 
 /**
  * @param {HTMLElement} root
@@ -53,33 +52,6 @@ function setCaretOffset(root, offset) {
 }
 
 /**
- * @param {import('y-websocket').WebsocketProvider} provider
- * @param {import('../../lib/rhwp/types.js').RhwpEditorHandle} editor
- */
-function bindRhwpAwareness(provider, editor) {
-  const surface = editor.getEditableElement?.();
-  if (!surface || !provider?.awareness) {
-    return () => {};
-  }
-
-  const mountElement =
-    surface instanceof HTMLIFrameElement
-      ? surface
-      : surface.closest('.relative') ?? surface.parentElement ?? surface;
-
-  return bindCollaborationPointers(provider, mountElement, {
-    subscribeLocal: (publish) => {
-      if (typeof editor.onPointerMove === 'function') {
-        return editor.onPointerMove((pointer) => publish(pointer));
-      }
-
-      const trackTarget = mountElement instanceof HTMLElement ? mountElement : surface;
-      return trackLocalPointer(trackTarget, publish);
-    },
-  });
-}
-
-/**
  * rhwp 에디터를 Y.Text 및 awareness에 바인딩합니다.
  * getHwpxBase64/setHwpxBase64 → HWPX 바이너리(documentBase64)
  * getHtml/setHtml → HTML(documentHtml)
@@ -89,7 +61,7 @@ export function bindRhwpEditor(ydoc, editor, options = {}) {
     typeof editor.getHwpxBase64 === 'function' && typeof editor.setHwpxBase64 === 'function';
   const usesHtml = typeof editor.getHtml === 'function' && typeof editor.setHtml === 'function';
 
-  /** @type {{ getText: () => string, setText: (value: string, origin?: string) => void | Promise<void>, onChange: (cb: (value: string, origin?: string) => void) => () => void, getEditableElement?: () => HTMLElement | null, setEditable?: (enabled: boolean) => void, onPointerMove?: (cb: (pointer: { px: number, py: number, visible: boolean }) => void) => () => void }} */
+  /** @type {{ getText: () => string, setText: (value: string, origin?: string) => void | Promise<void>, onChange: (cb: (value: string, origin?: string) => void) => () => void, getEditableElement?: () => HTMLElement | null, setEditable?: (enabled: boolean) => void }} */
   let contentEditor;
 
   if (usesBinary) {
@@ -102,7 +74,6 @@ export function bindRhwpEditor(ydoc, editor, options = {}) {
         }),
       getEditableElement: () => editor.getEditableElement?.() ?? null,
       setEditable: (enabled) => editor.setEditable?.(enabled),
-      onPointerMove: (callback) => editor.onPointerMove?.(callback) ?? (() => {}),
     };
   } else if (usesHtml) {
     contentEditor = {
@@ -114,7 +85,6 @@ export function bindRhwpEditor(ydoc, editor, options = {}) {
         }),
       getEditableElement: () => editor.getEditableElement?.() ?? null,
       setEditable: (enabled) => editor.setEditable?.(enabled),
-      onPointerMove: (callback) => editor.onPointerMove?.(callback) ?? (() => {}),
     };
   } else {
     contentEditor = editor;
@@ -138,13 +108,10 @@ export function bindRhwpEditor(ydoc, editor, options = {}) {
     initialText: initialContent,
     deferSeedUntilSync: Boolean(options.provider),
   });
-  const awarenessCleanup = options.provider ? bindRhwpAwareness(options.provider, editor) : null;
-
   editor.setEditable?.(true);
 
   const cleanup = () => {
     editor.setEditable?.(false);
-    awarenessCleanup?.();
     binder.destroy();
   };
 

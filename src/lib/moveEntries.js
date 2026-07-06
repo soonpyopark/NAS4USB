@@ -22,6 +22,20 @@ export function isPathInsideOrEqual(ancestorPath, candidatePath) {
  * @param {import('../types/educowork.d.ts').FsEntry[]} entries
  * @param {string} destinationPath
  */
+export function validateExportDestination(entries, destinationPath) {
+  if (!entries.length) {
+    return { ok: false, error: '내보낼 항목을 선택해 주세요.' };
+  }
+  if (isTrashPath(destinationPath)) {
+    return { ok: false, error: '휴지통에는 저장할 수 없습니다.' };
+  }
+  return { ok: true };
+}
+
+/**
+ * @param {import('../types/educowork.d.ts').FsEntry[]} entries
+ * @param {string} destinationPath
+ */
 export function validateMoveDestination(entries, destinationPath) {
   if (!entries.length) {
     return { ok: false, error: '이동할 항목을 선택해 주세요.' };

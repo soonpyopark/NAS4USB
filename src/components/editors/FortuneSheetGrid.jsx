@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Workbook } from '@fortune-sheet/react';
 import '@fortune-sheet/react/dist/index.css';
 import '../../styles/fortune-sheet.css';
@@ -12,6 +12,8 @@ import { cloneFortuneSheets } from '../../lib/xlsx/cloneFortuneSheets.js';
  *     updateSheets: (sheets: import('@fortune-sheet/core').Sheet[]) => void,
  *     applyOp: (ops: import('@fortune-sheet/core').Op[]) => void,
  *     onOp: (callback: (ops: import('@fortune-sheet/core').Op[]) => void) => () => void,
+ *     onSelectionChange: (callback: (payload: { sheetId: string, selection: { r: number, c: number } }) => void) => () => void,
+ *     getWorkbook: () => { addPresence?: Function, addPresences?: Function, removePresence?: Function, removePresences?: Function } | null,
  *     getMountElement: () => HTMLElement | null,
  *     destroy: () => void,
  *   }) => void,
@@ -22,6 +24,7 @@ export default function FortuneSheetGrid({ initialSheets, onReady }) {
   const sheetsRef = useRef(initialSheets);
   const applyingRemoteRef = useRef(false);
   const listenersRef = useRef(new Set());
+  const selectionListenersRef = useRef(new Set());
   const onReadyRef = useRef(onReady);
   const workbookRef = useRef(null);
   const hostRef = useRef(null);
@@ -67,9 +70,15 @@ export default function FortuneSheetGrid({ initialSheets, onReady }) {
         listenersRef.current.add(callback);
         return () => listenersRef.current.delete(callback);
       },
+      onSelectionChange(callback) {
+        selectionListenersRef.current.add(callback);
+        return () => selectionListenersRef.current.delete(callback);
+      },
+      getWorkbook: () => workbookRef.current,
       getMountElement: () => hostRef.current,
       destroy() {
         listenersRef.current.clear();
+        selectionListenersRef.current.clear();
         readyRef.current = false;
       },
     };
@@ -87,6 +96,7 @@ export default function FortuneSheetGrid({ initialSheets, onReady }) {
   useEffect(() => {
     return () => {
       listenersRef.current.clear();
+      selectionListenersRef.current.clear();
       readyRef.current = false;
     };
   }, []);
@@ -107,6 +117,20 @@ export default function FortuneSheetGrid({ initialSheets, onReady }) {
     setSheets(mutableSheets);
   }, []);
 
+  const hooks = useMemo(
+    () => ({
+      afterSelectionChange(sheetId, selection) {
+        if (!selection?.row?.length || !selection?.column?.length) return;
+        const payload = {
+          sheetId: String(sheetId),
+          selection: { r: selection.row[0], c: selection.column[0] },
+        };
+        selectionListenersRef.current.forEach((listener) => listener(payload));
+      },
+    }),
+    [],
+  );
+
   return (
     <div ref={hostRef} className="fortune-sheet-host relative min-h-0 flex-1">
       <Workbook
@@ -114,6 +138,7 @@ export default function FortuneSheetGrid({ initialSheets, onReady }) {
         data={sheets}
         onChange={handleChange}
         onOp={handleOp}
+        hooks={hooks}
       />
     </div>
   );

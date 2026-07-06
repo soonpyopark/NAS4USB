@@ -125,6 +125,59 @@ async function readCoreVersion(appPath, core) {
 }
 
 /**
+ * @param {string} packageName
+ */
+async function fetchNpmLatestVersion(packageName) {
+  try {
+    const response = await fetch(`https://registry.npmjs.org/${encodeURIComponent(packageName)}/latest`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    return typeof data.version === 'string' ? data.version : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * @param {import('../shared/editorCores.js').EditorCoreDefinition} core
+ */
+async function readAvailableCoreVersion(core) {
+  const npmPackages = getNpmPackages(core);
+  if (npmPackages.length > 0) {
+    const versions = [];
+    for (const packageName of npmPackages) {
+      const latest = await fetchNpmLatestVersion(packageName);
+      if (latest) {
+        versions.push(`${packageName}@${latest}`);
+      }
+    }
+    if (versions.length > 0) {
+      return versions.join(', ');
+    }
+  }
+
+  if (core.id === 'wb4s') {
+    try {
+      const response = await fetch(
+        'https://api.github.com/repos/soonpyopark/WhiteBoard4Share/releases/latest',
+        { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'NAS4USB' } },
+      );
+      if (response.ok) {
+        const data = await response.json();
+        const tag = typeof data.tag_name === 'string' ? data.tag_name.replace(/^v/, '') : null;
+        if (tag) return tag;
+      }
+    } catch {
+      // offline — available unknown
+    }
+  }
+
+  return null;
+}
+
+/**
  * @param {string} appPath
  */
 export async function getEditorCoresStatus(appPath) {
@@ -133,6 +186,7 @@ export async function getEditorCoresStatus(appPath) {
 
   for (const core of EDITOR_CORES) {
     const version = await readCoreVersion(appPath, core);
+    const availableVersion = await readAvailableCoreVersion(core);
     const hasGit = (await isGitRepository(appPath)) && (await hasSubmoduleCheckout(appPath, core.submodulePath));
     const hasLocalPackage = await pathExists(appPath, core.updatePackageDir);
 
@@ -140,6 +194,11 @@ export async function getEditorCoresStatus(appPath) {
       id: core.id,
       label: core.label,
       version,
+      availableVersion: availableVersion ?? '확인 불가',
+      updateAvailable:
+        availableVersion != null &&
+        availableVersion !== '확인 불가' &&
+        availableVersion !== version,
       libDir: core.libDir,
       hasGitSource: hasGit,
       hasLocalUpdatePackage: hasLocalPackage,
@@ -262,8 +321,15 @@ async function updateWb4sCore(appPath, core) {
  * @param {import('../shared/editorCores.js').EditorCoreDefinition} core
  */
 async function updateSingleCore(appPath, core) {
+  const previousVersion = await readCoreVersion(appPath, core);
+
   if (core.id === 'wb4s') {
-    return updateWb4sCore(appPath, core);
+    const result = await updateWb4sCore(appPath, core);
+    return {
+      ...result,
+      previousVersion,
+      message: `${core.label} ${previousVersion} → ${result.version}`,
+    };
   }
 
   /** @type {string|null} */
@@ -281,15 +347,16 @@ async function updateSingleCore(appPath, core) {
         label: core.label,
         success: true,
         method,
+        previousVersion,
         version,
-        message: `${core.label} ${version} 반영 완료`,
+        message: `${core.label} ${previousVersion} → ${version}`,
       };
     } catch (error) {
       if (error instanceof Error) {
         npmErrors.push(error);
       }
-      if (core.id === 'fortune-sheet') {
-        throw npmErrors[0] ?? new Error('Fortune Sheet npm 업데이트 실패');
+      if (core.id === 'fortune-sheet' || core.id === 'tiptap') {
+        throw npmErrors[0] ?? new Error(`${core.label} npm 업데이트 실패`);
       }
     }
   }
@@ -320,8 +387,9 @@ async function updateSingleCore(appPath, core) {
     label: core.label,
     success: true,
     method,
+    previousVersion,
     version,
-    message: `${core.label} ${version} 반영 완료`,
+    message: `${core.label} ${previousVersion} → ${version}`,
   };
 }
 
@@ -350,6 +418,7 @@ export async function updateEditorCores(appPath) {
         label: core.label,
         success: false,
         method: null,
+        previousVersion: await readCoreVersion(appPath, core),
         version: await readCoreVersion(appPath, core),
         message: error instanceof Error ? error.message : '업데이트 실패',
       });

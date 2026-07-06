@@ -159,7 +159,7 @@ export default function FileExplorer({
   };
 
   const { isFileDragOver, dropZoneProps } = useFileDropZone(handleFileDrop, {
-    enabled: !isInTrashView,
+    enabled: !isInTrashView && isAdminLoggedIn,
   });
 
   useEffect(() => {

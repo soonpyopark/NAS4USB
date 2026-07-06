@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, nativeImage, shell, Tray } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell, Tray } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -39,6 +39,7 @@ import { getEditorCoresStatus, updateEditorCores } from './electron/editorUpdate
 import { loginAdmin, isValidAdminSession, revokeAdminSession } from './electron/authService.js';
 import {
   assertAdminAuthenticated,
+  assertCanAccessTrash,
   assertCanAccessFile,
   assertCanEditFile,
   pathExistsWithAccessFilter,
@@ -356,6 +357,53 @@ ipcMain.handle('app:openExternal', async (_event, url) => {
   return true;
 });
 
+/**
+ * @param {string[]} existingNames
+ * @param {string} desiredName
+ */
+function resolveUniqueFileName(existingNames, desiredName) {
+  const names = new Set(existingNames);
+  if (!names.has(desiredName)) return desiredName;
+
+  const extIndex = desiredName.lastIndexOf('.');
+  const hasExt = extIndex > 0;
+  const stem = hasExt ? desiredName.slice(0, extIndex) : desiredName;
+  const ext = hasExt ? desiredName.slice(extIndex) : '';
+
+  let counter = 1;
+  while (names.has(`${stem} (${counter})${ext}`)) counter += 1;
+  return `${stem} (${counter})${ext}`;
+}
+
+ipcMain.handle('dialog:pickDirectory', async (event, options = {}) => {
+  const parentWindow = BrowserWindow.fromWebContents(event.sender);
+  const result = await dialog.showOpenDialog(parentWindow ?? undefined, {
+    title: typeof options?.title === 'string' ? options.title : '폴더 선택',
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  if (result.canceled || !result.filePaths[0]) return null;
+  return result.filePaths[0];
+});
+
+ipcMain.handle('fs:writeFileAbsolute', async (_event, params = {}) => {
+  const { directory, fileName, base64, unique = true } = params;
+  if (typeof directory !== 'string' || typeof fileName !== 'string') {
+    throw new Error('저장 경로가 올바르지 않습니다.');
+  }
+
+  const dir = path.resolve(directory);
+  let targetName = fileName;
+  if (unique) {
+    const existing = await fs.readdir(dir).catch(() => []);
+    targetName = resolveUniqueFileName(existing, fileName);
+  }
+
+  const absolutePath = path.join(dir, targetName);
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(absolutePath, Buffer.from(base64 ?? '', 'base64'));
+  return { fileName: targetName, absolutePath };
+});
+
 ipcMain.handle('sync:getInfo', async () => {
   await ensureServer();
   return getSyncInfo();
@@ -570,7 +618,10 @@ ipcMain.handle('fileAccess:canEdit', async (event, relativePath) => {
   }
 });
 
-ipcMain.handle('trash:getMap', async () => getTrashMap(getPortableRoot()));
+ipcMain.handle('trash:getMap', async (event) => {
+  assertCanAccessTrash(isAdminFromEvent(event));
+  return getTrashMap(getPortableRoot());
+});
 
 ipcMain.handle('trash:move', async (_event, { path: relativePath } = {}) => {
   const result = await trashPath(relativePath, getPortableRoot());
@@ -578,19 +629,22 @@ ipcMain.handle('trash:move', async (_event, { path: relativePath } = {}) => {
   return result;
 });
 
-ipcMain.handle('trash:restore', async (_event, { path: relativePath } = {}) => {
+ipcMain.handle('trash:restore', async (event, { path: relativePath } = {}) => {
+  assertCanAccessTrash(isAdminFromEvent(event));
   const result = await restorePath(relativePath, getPortableRoot());
   notifyFsChanged(relativePath);
   return result;
 });
 
-ipcMain.handle('trash:empty', async () => {
+ipcMain.handle('trash:empty', async (event) => {
+  assertCanAccessTrash(isAdminFromEvent(event));
   const result = await emptyTrash(getPortableRoot());
   notifyFsChanged();
   return result;
 });
 
-ipcMain.handle('trash:deletePermanent', async (_event, { path: relativePath } = {}) => {
+ipcMain.handle('trash:deletePermanent', async (event, { path: relativePath } = {}) => {
+  assertCanAccessTrash(isAdminFromEvent(event));
   const result = await deletePermanent(relativePath, getPortableRoot());
   notifyFsChanged(relativePath);
   return result;

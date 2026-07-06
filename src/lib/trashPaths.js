@@ -1,4 +1,4 @@
-import { TRASH_FOLDER } from '../../shared/constants.js';
+import { TRASH_FOLDER, isTrashRelativePath } from '../../shared/constants.js';
 
 export { TRASH_FOLDER };
 
@@ -13,8 +13,7 @@ export function normalizeTrashPath(relativePath) {
  * @param {string} relativePath
  */
 export function isTrashPath(relativePath) {
-  const normalized = normalizeTrashPath(relativePath);
-  return normalized === TRASH_FOLDER || normalized.startsWith(`${TRASH_FOLDER}/`);
+  return isTrashRelativePath(relativePath);
 }
 
 /**

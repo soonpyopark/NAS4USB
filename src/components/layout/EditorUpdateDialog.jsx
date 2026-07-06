@@ -17,7 +17,14 @@ function EditorUpdateDialog({ result, onClose }) {
               >
                 <p className="font-medium">{item.label}</p>
                 <p className="text-xs opacity-90">{item.message}</p>
-                {item.version && <p className="mt-1 text-xs opacity-75">버전: {item.version}</p>}
+                {item.previousVersion && item.version && item.previousVersion !== item.version && (
+                  <p className="mt-1 text-xs opacity-75">
+                    {item.previousVersion} → {item.version}
+                  </p>
+                )}
+                {item.version && !item.previousVersion && (
+                  <p className="mt-1 text-xs opacity-75">버전: {item.version}</p>
+                )}
               </li>
             ))}
           </ul>

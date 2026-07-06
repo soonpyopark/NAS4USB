@@ -52,14 +52,7 @@ export function buildEntryContextMenuItems({
 
   if (showTrashMenu) {
     if (!isAdminLoggedIn) {
-      return [
-        {
-          id: 'properties',
-          label: '속성',
-          disabled: targetCount !== 1,
-          onClick: onProperties,
-        },
-      ];
+      return [];
     }
 
     return [

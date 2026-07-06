@@ -6,6 +6,7 @@ import HwpxEditorShell from './components/editors/HwpxEditorShell.jsx';
 import Wb4sEditorShell from './components/editors/Wb4sEditorShell.jsx';
 import XlsxEditorShell from './components/editors/XlsxEditorShell.jsx';
 import TextEditorShell from './components/editors/TextEditorShell.jsx';
+import HtmlEditorShell from './components/editors/HtmlEditorShell.jsx';
 import AudioPlayerShell from './components/editors/AudioPlayerShell.jsx';
 import VideoPlayerShell from './components/editors/VideoPlayerShell.jsx';
 import { ShareLinkError, ShareLinkLoading } from './components/share/ShareLinkScreen.jsx';
@@ -15,6 +16,7 @@ import { useAppInfo } from './hooks/useAppInfo.js';
 import { useFsChangeSync } from './hooks/useFsChangeSync.js';
 import { hasEducoworkApi } from './lib/runtime.js';
 import { guardOpenFileEntry } from './lib/openFileGuard.js';
+import { useTrashGuardedNavigate } from './hooks/useTrashGuardedNavigate.js';
 import { getShareTokenFromUrl } from './lib/shareAccess.js';
 import { AUDIO_EXTENSIONS, VIDEO_EXTENSIONS } from './lib/media/mediaTypes.js';
 
@@ -25,6 +27,8 @@ const OPENABLE_EXTENSIONS = {
   xls: 'xlsx',
   txt: 'text',
   md: 'text',
+  html: 'html',
+  htm: 'html',
   ...Object.fromEntries(AUDIO_EXTENSIONS.map((ext) => [ext, 'audio'])),
   ...Object.fromEntries(VIDEO_EXTENSIONS.map((ext) => [ext, 'video'])),
 };
@@ -95,6 +99,19 @@ function OpenEditorLayer({ openEditor, syncInfo, allowClose, fullscreen = false,
     );
   }
 
+  if (openEditor.type === 'html') {
+    return (
+      <HtmlEditorShell
+        relativePath={openEditor.relativePath}
+        fileName={openEditor.name}
+        syncInfo={syncInfo}
+        onClose={onClose}
+        allowClose={allowClose}
+        fullscreen={fullscreen}
+      />
+    );
+  }
+
   if (openEditor.type === 'audio') {
     return (
       <AudioPlayerShell
@@ -124,13 +141,54 @@ function OpenEditorLayer({ openEditor, syncInfo, allowClose, fullscreen = false,
   return null;
 }
 
+function EduCoworkDesktop({
+  paths,
+  syncInfo,
+  infoLoading,
+  openEditor,
+  onOpenFile,
+  onCloseEditor,
+  onEditorRenamed,
+}) {
+  const { currentPath, navigate } = useTrashGuardedNavigate('.');
+
+  return (
+    <>
+      <DesktopShell
+        paths={paths}
+        syncInfo={syncInfo}
+        infoLoading={infoLoading}
+        currentPath={currentPath}
+        onNavigate={navigate}
+        onHome={() => navigate('.')}
+        onOpenFile={onOpenFile}
+      >
+        <FileExplorer
+          currentPath={currentPath}
+          onNavigate={navigate}
+          onOpenFile={onOpenFile}
+          syncInfo={syncInfo}
+          isEditorOpen={Boolean(openEditor)}
+        />
+      </DesktopShell>
+
+      <OpenEditorLayer
+        openEditor={openEditor}
+        syncInfo={syncInfo}
+        allowClose
+        onClose={onCloseEditor}
+        onRenamed={onEditorRenamed}
+      />
+    </>
+  );
+}
+
 function EduCoworkAppMain() {
   const shareToken = useMemo(() => getShareTokenFromUrl() || null, []);
   const isShareMode = Boolean(shareToken);
 
   const { paths, syncInfo, loading: infoLoading } = useAppInfo();
   const { notifyRemoteChange } = useFsSync();
-  const [currentPath, setCurrentPath] = useState('.');
   const [openEditor, setOpenEditor] = useState(null);
   const [shareStatus, setShareStatus] = useState(isShareMode ? 'loading' : 'idle');
   const [shareError, setShareError] = useState('');
@@ -185,10 +243,6 @@ function EduCoworkAppMain() {
     if (isShareMode) return;
     setOpenEditor(null);
   }, [isShareMode]);
-
-  const handleHome = useCallback(() => {
-    setCurrentPath('.');
-  }, []);
 
   const handleEditorRenamed = useCallback((entry) => {
     if (entry?.relativePath && entry?.name) {
@@ -290,30 +344,14 @@ function EduCoworkAppMain() {
 
   return (
     <AdminAuthProvider onAuthChange={() => notifyRemoteChange({})}>
-      <DesktopShell
+      <EduCoworkDesktop
         paths={paths}
         syncInfo={syncInfo}
         infoLoading={infoLoading}
-        currentPath={currentPath}
-        onNavigate={setCurrentPath}
-        onHome={handleHome}
-        onOpenFile={handleOpenFile}
-      >
-        <FileExplorer
-          currentPath={currentPath}
-          onNavigate={setCurrentPath}
-          onOpenFile={handleOpenFile}
-          syncInfo={syncInfo}
-          isEditorOpen={Boolean(openEditor)}
-        />
-      </DesktopShell>
-
-      <OpenEditorLayer
         openEditor={openEditor}
-        syncInfo={syncInfo}
-        allowClose
-        onClose={handleCloseEditor}
-        onRenamed={handleEditorRenamed}
+        onOpenFile={handleOpenFile}
+        onCloseEditor={handleCloseEditor}
+        onEditorRenamed={handleEditorRenamed}
       />
     </AdminAuthProvider>
   );

@@ -5,6 +5,7 @@ import { useYjsSession } from '../../hooks/useYjsSession.js';
 import { useAwarenessPeerCount } from '../../hooks/useAwarenessPeerCount.js';
 import { useWorkspaceSession } from '../../hooks/useWorkspaceSession.js';
 import { bindFortuneSheetEditor, setWorkbookSnapshot } from '../../sync/adapters/xlsxAdapter.js';
+import { bindFortuneSheetPresence } from '../../sync/adapters/xlsxPresenceAdapter.js';
 import { getLanWsEndpoints } from '../../sync/buildWsUrl.js';
 import { parseSpreadsheetBase64, buildSpreadsheetBase64 } from '../../lib/xlsx/xlsxIO.js';
 
@@ -23,6 +24,7 @@ export default function XlsxEditorShell({ relativePath, fileName, syncInfo, onCl
   const [editorHandle, setEditorHandle] = useState(null);
   const [bound, setBound] = useState(false);
   const unbindRef = useRef(null);
+  const unbindPresenceRef = useRef(null);
   const diskRevisionRef = useRef('');
   diskRevisionRef.current = diskRevision;
 
@@ -80,7 +82,9 @@ export default function XlsxEditorShell({ relativePath, fileName, syncInfo, onCl
     if (!editorHandle || !doc || initialSheets == null) return undefined;
 
     unbindRef.current?.();
+    unbindPresenceRef.current?.();
     unbindRef.current = null;
+    unbindPresenceRef.current = null;
     setBound(false);
 
     try {
@@ -89,6 +93,7 @@ export default function XlsxEditorShell({ relativePath, fileName, syncInfo, onCl
         provider,
         diskRevision: diskRevisionRef.current,
       });
+      unbindPresenceRef.current = bindFortuneSheetPresence(provider, editorHandle);
       setBound(true);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Failed to bind spreadsheet editor');
@@ -96,7 +101,9 @@ export default function XlsxEditorShell({ relativePath, fileName, syncInfo, onCl
 
     return () => {
       unbindRef.current?.();
+      unbindPresenceRef.current?.();
       unbindRef.current = null;
+      unbindPresenceRef.current = null;
       setBound(false);
     };
   }, [editorHandle, doc, initialSheets, provider]);
@@ -125,6 +132,7 @@ export default function XlsxEditorShell({ relativePath, fileName, syncInfo, onCl
 
   const handleClose = async () => {
     unbindRef.current?.();
+    unbindPresenceRef.current?.();
     editorHandle?.destroy?.();
     await workspace.close();
     onClose();

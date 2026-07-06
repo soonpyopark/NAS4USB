@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-07-05T03:27:40.647Z",
+  "updatedAt": "2026-07-06T12:12:00.000Z",
   "cores": {
     "rhwp": {
       "version": "@rhwp/core@0.7.17, @rhwp/editor@0.7.17",
@@ -14,6 +14,11 @@
     "fortune-sheet": {
       "version": "@fortune-sheet/react@1.0.4",
       "updatedAt": "2026-07-05T03:27:40.647Z",
+      "method": "npm"
+    },
+    "tiptap": {
+      "version": "@tiptap/react@3.27.2, @tiptap/starter-kit@3.27.2, @tiptap/extension-table@3.27.2, @tiptap/extension-placeholder@3.27.2",
+      "updatedAt": "2026-07-06T12:12:00.000Z",
       "method": "npm"
     }
   }

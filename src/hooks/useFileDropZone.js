@@ -21,7 +21,8 @@ export function useFileDropZone(onDrop, { enabled = true } = {}) {
 
   const handleDragEnter = useCallback(
     (event) => {
-      if (!enabled || !isExternalFileDrag(event)) return;
+      if (!isExternalFileDrag(event)) return;
+      if (!enabled) return;
       event.preventDefault();
       depthRef.current += 1;
       if (depthRef.current === 1) {
@@ -33,7 +34,8 @@ export function useFileDropZone(onDrop, { enabled = true } = {}) {
 
   const handleDragLeave = useCallback(
     (event) => {
-      if (!enabled || !isExternalFileDrag(event)) return;
+      if (!isExternalFileDrag(event)) return;
+      if (!enabled) return;
       depthRef.current = Math.max(0, depthRef.current - 1);
       if (depthRef.current === 0) {
         setIsFileDragOver(false);
@@ -44,18 +46,21 @@ export function useFileDropZone(onDrop, { enabled = true } = {}) {
 
   const handleDragOver = useCallback(
     (event) => {
-      if (!enabled || !isExternalFileDrag(event)) return;
+      if (!isExternalFileDrag(event)) return;
       event.preventDefault();
-      event.dataTransfer.dropEffect = 'copy';
+      if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = enabled ? 'copy' : 'none';
+      }
     },
     [enabled],
   );
 
   const handleDrop = useCallback(
     async (event) => {
-      if (!enabled || !isExternalFileDrag(event)) return;
+      if (!isExternalFileDrag(event)) return;
       event.preventDefault();
       reset();
+      if (!enabled) return;
       const files = Array.from(event.dataTransfer.files ?? []);
       if (files.length) {
         await onDrop(files);

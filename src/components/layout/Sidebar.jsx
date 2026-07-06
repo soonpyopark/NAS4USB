@@ -40,6 +40,7 @@ import { resolveFileEntryStatus } from '../../lib/fileEntryStatus.js';
 import { canOpenFileForEdit, VIEW_OPEN_DENIED_MESSAGE } from '../../lib/fileEditAccess.js';
 import { downloadFileEntries } from '../../lib/downloadEntries.js';
 import { moveEntries } from '../../lib/moveEntries.js';
+import { TRASH_ACCESS_DENIED_MESSAGE } from '../../../shared/constants.js';
 import { isTrashPath, isTrashSubfolder, TRASH_FOLDER } from '../../lib/trashPaths.js';
 import { guardOpenFileEntry } from '../../lib/openFileGuard.js';
 import {
@@ -66,7 +67,7 @@ export default function Sidebar({
   const { accessMap, refreshAccessMap, setFileAccess } = useFileAccess();
   const { isAdminLoggedIn } = useAdminAuthContext();
   const { notifyLocalChange } = useFsSync();
-  const { count: trashCount, refresh: refreshTrash } = useTrash();
+  const { count: trashCount, refresh: refreshTrash } = useTrash({ enabled: isAdminLoggedIn });
 
   const isInTrashView = isTrashPath(currentPath);
 
@@ -169,7 +170,7 @@ export default function Sidebar({
 
   const { isFileDragOver, dropZoneProps } = useFileDropZone(
     (files) => handleUploadFiles(files, currentPath),
-    { enabled: !isInTrashView },
+    { enabled: !isInTrashView && isAdminLoggedIn },
   );
 
   const handleDownload = async (entry = downloadTarget) => {
@@ -549,7 +550,16 @@ export default function Sidebar({
       <div className="mt-auto border-t border-slate-700 px-2 py-2">
         <button
           type="button"
-          onClick={() => onNavigate(TRASH_FOLDER)}
+          onClick={() => {
+            if (isAdminLoggedIn) {
+              onNavigate(TRASH_FOLDER);
+              return;
+            }
+            void appAlert({
+              title: '휴지통',
+              body: TRASH_ACCESS_DENIED_MESSAGE,
+            });
+          }}
           onDragEnter={(event) => {
             event.preventDefault();
             event.stopPropagation();
@@ -566,7 +576,8 @@ export default function Sidebar({
             event.stopPropagation();
           }}
           className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-[10pt] transition-colors ${
-            currentPath === TRASH_FOLDER || currentPath.startsWith(`${TRASH_FOLDER}/`)
+            isAdminLoggedIn &&
+            (currentPath === TRASH_FOLDER || currentPath.startsWith(`${TRASH_FOLDER}/`))
               ? 'bg-nas-accent text-white'
               : 'text-slate-300 hover:bg-nas-sidebarHover hover:text-white'
           }`}
@@ -575,7 +586,7 @@ export default function Sidebar({
             <path d="M9 3h6l1 2h4v2H4V5h4l1-2zm1 6h2v9h-2V9zm3 0h2v9h-2V9zM6 9h2v9H6V9z" />
           </svg>
           <span className="truncate">휴지통</span>
-          {trashCount > 0 && (
+          {isAdminLoggedIn && trashCount > 0 && (
             <span className="ml-auto rounded-full bg-slate-600 px-1.5 py-0.5 text-[10px] text-slate-100">
               {trashCount}
             </span>

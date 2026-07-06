@@ -5,6 +5,10 @@ contextBridge.exposeInMainWorld('educowork', {
   getPaths: () => ipcRenderer.invoke('app:getPaths'),
   getSyncInfo: () => ipcRenderer.invoke('sync:getInfo'),
   openExternal: (url) => ipcRenderer.invoke('app:openExternal', url),
+
+  dialog: {
+    pickDirectory: (options) => ipcRenderer.invoke('dialog:pickDirectory', options),
+  },
   subscribeFsChanged: (callback) => {
     const handler = (_event, payload) => {
       if (typeof payload === 'number') {
@@ -31,6 +35,7 @@ contextBridge.exposeInMainWorld('educowork', {
     copy: (fromRelative, toRelative) => ipcRenderer.invoke('fs:copy', fromRelative, toRelative),
     move: (fromRelative, toRelative) => ipcRenderer.invoke('fs:move', fromRelative, toRelative),
     stat: (relativePath) => ipcRenderer.invoke('fs:stat', relativePath),
+    writeFileAbsolute: (params) => ipcRenderer.invoke('fs:writeFileAbsolute', params),
   },
 
   workspace: {

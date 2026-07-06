@@ -44,6 +44,11 @@ window.educowork = {
   __source: 'electron',
   getPaths: () => {},
   getSyncInfo: () => {},
+  openExternal: (url) => {},
+  dialog: {
+    pickDirectory: (options) => {},
+  },
+  subscribeFsChanged: (callback) => {},
   fs: {
     readDir: (relativePath) => {},
     mkdir: (relativePath) => {},
@@ -56,6 +61,7 @@ window.educowork = {
     copy: (fromRelative, toRelative) => {},
     move: (fromRelative, toRelative) => {},
     stat: (relativePath) => {},
+    writeFileAbsolute: (params) => {},
   },
   workspace: {
     open: (relativePath) => {},

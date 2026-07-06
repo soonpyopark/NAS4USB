@@ -97,6 +97,15 @@ export function createHttpEducoworkClient() {
       return Promise.resolve(true);
     },
 
+    dialog: {
+      pickDirectory: async () => {
+        if (typeof window.showDirectoryPicker !== 'function') {
+          throw new Error('브라우저에서 시스템 폴더 선택을 지원하지 않습니다. Electron 앱을 사용해 주세요.');
+        }
+        return window.showDirectoryPicker({ mode: 'readwrite' });
+      },
+    },
+
     subscribeFsChanged: (callback) => createFsChangeSubscription(callback),
 
     fs: {

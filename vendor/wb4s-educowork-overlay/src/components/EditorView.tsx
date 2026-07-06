@@ -854,7 +854,6 @@ export function EditorView({
       <main className="workspace">
         <div className="workspace-canvas-area">
           <DrawingToolsBar
-            key={whiteboardId}
             tool={tool}
             drawSettings={drawSettings}
             eraserSettings={eraserSettings}

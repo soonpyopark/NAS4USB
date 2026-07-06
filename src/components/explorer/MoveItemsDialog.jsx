@@ -14,6 +14,14 @@ import { AppModal, AppModalActions, AppModalBody, AppModalButton } from '../comm
  *   open: boolean,
  *   entries: import('../../types/educowork.d.ts').FsEntry[],
  *   initialPath?: string,
+ *   title?: string,
+ *   confirmLabel?: string,
+ *   submittingLabel?: string,
+ *   summary?: string,
+ *   validateDestination?: (
+ *     entries: import('../../types/educowork.d.ts').FsEntry[],
+ *     destinationPath: string,
+ *   ) => { ok: boolean, error?: string },
  *   onClose: () => void,
  *   onConfirm: (destinationPath: string) => void | Promise<void>,
  * }} props
@@ -22,6 +30,11 @@ export default function MoveItemsDialog({
   open,
   entries,
   initialPath = '.',
+  title = '이동',
+  confirmLabel = '여기로 이동',
+  submittingLabel = '이동 중…',
+  summary: summaryOverride,
+  validateDestination = validateMoveDestination,
   onClose,
   onConfirm,
 }) {
@@ -69,7 +82,7 @@ export default function MoveItemsDialog({
     };
   }, [open, browsePath]);
 
-  const destinationValidation = validateMoveDestination(entries, browsePath);
+  const destinationValidation = validateDestination(entries, browsePath);
   const canMove = destinationValidation.ok && !submitting;
 
   const handleSubmit = async () => {
@@ -89,12 +102,11 @@ export default function MoveItemsDialog({
   };
 
   const summary =
-    entries.length === 1
-      ? `"${entries[0].name}" 이동`
-      : `${entries.length}개 항목 이동`;
+    summaryOverride ??
+    (entries.length === 1 ? `"${entries[0].name}" 이동` : `${entries.length}개 항목 이동`);
 
   return (
-    <AppModal open={open} onClose={onClose} title="이동" wide>
+    <AppModal open={open} onClose={onClose} title={title} wide>
       <AppModalBody className="!mb-3">{summary}</AppModalBody>
 
       <div className="mb-3 rounded border border-[#e1dfdd] bg-[#faf9f8] px-3 py-2">
@@ -156,7 +168,7 @@ export default function MoveItemsDialog({
 
       <AppModalActions>
         <AppModalButton variant="primary" disabled={!canMove} onClick={handleSubmit}>
-          {submitting ? '이동 중…' : '여기로 이동'}
+          {submitting ? submittingLabel : confirmLabel}
         </AppModalButton>
         <AppModalButton onClick={onClose} disabled={submitting}>
           취소

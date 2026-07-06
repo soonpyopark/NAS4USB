@@ -1,5 +1,3 @@
-import { bindCollaborationPointers, trackLocalPointer } from '../collaborationPointers.js';
-
 const LOCAL_ORIGIN = Symbol('educowork-local-fortune-sheet');
 const DISK_SNAPSHOT_ORIGIN = Symbol('educowork-disk-snapshot');
 
@@ -77,44 +75,6 @@ export function setWorkbookSnapshot(ydoc, sheets, { diskRevision } = {}) {
   } catch {
     // Ignore snapshots that cannot be serialized.
   }
-}
-
-/**
- * @param {import('y-websocket').WebsocketProvider} provider
- * @param {() => HTMLElement | null | undefined} getMountElement
- */
-function bindSpreadsheetPointers(provider, getMountElement) {
-  if (!provider?.awareness || typeof getMountElement !== 'function') {
-    return () => {};
-  }
-
-  let cleanup = () => {};
-  let cancelled = false;
-
-  const attach = () => {
-    if (cancelled) return;
-    const mountElement = getMountElement();
-    if (!mountElement) return;
-
-    cleanup = bindCollaborationPointers(provider, mountElement, {
-      subscribeLocal: (publish) => trackLocalPointer(mountElement, publish),
-    });
-  };
-
-  attach();
-  if (!getMountElement()) {
-    const raf = window.requestAnimationFrame(attach);
-    return () => {
-      cancelled = true;
-      window.cancelAnimationFrame(raf);
-      cleanup();
-    };
-  }
-
-  return () => {
-    cancelled = true;
-    cleanup();
-  };
 }
 
 /**
@@ -270,18 +230,12 @@ export function bindFortuneSheetEditor(
 
   yops.observe(observeOps);
 
-  const pointerCleanup =
-    provider && typeof editor.getMountElement === 'function'
-      ? bindSpreadsheetPointers(provider, editor.getMountElement)
-      : () => {};
-
   const binder = {
     resync() {
       resyncFromYjs();
     },
     destroy() {
       cancelBootstrap?.();
-      pointerCleanup();
       unobserveEditor();
       yops.unobserve(observeOps);
     },

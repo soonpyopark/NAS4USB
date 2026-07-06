@@ -22,6 +22,7 @@ import { loginAdmin, isValidAdminSession, revokeAdminSession } from './authServi
 import {
   assertAdminAuthenticated,
   assertCanAccessFile,
+  assertCanAccessTrash,
   assertCanEditFile,
   pathExistsWithAccessFilter,
   readDirWithAccessFilter,
@@ -430,6 +431,7 @@ export async function handleHttpApiRequest(req, res) {
     }
 
     if (method === 'GET' && url.pathname === '/api/trash/map') {
+      assertCanAccessTrash(isAdminAuthenticated(req));
       sendJson(res, 200, await getTrashMap(getPortableRoot()));
       return true;
     }
@@ -443,6 +445,7 @@ export async function handleHttpApiRequest(req, res) {
     }
 
     if (method === 'POST' && url.pathname === '/api/trash/restore') {
+      assertCanAccessTrash(isAdminAuthenticated(req));
       const body = await readJsonBody(req);
       const result = await restorePath(body.path, getPortableRoot());
       notifyFsChanged(body.path);
@@ -451,6 +454,7 @@ export async function handleHttpApiRequest(req, res) {
     }
 
     if (method === 'POST' && url.pathname === '/api/trash/empty') {
+      assertCanAccessTrash(isAdminAuthenticated(req));
       const result = await emptyTrash(getPortableRoot());
       notifyFsChanged();
       sendJson(res, 200, result);
@@ -458,6 +462,7 @@ export async function handleHttpApiRequest(req, res) {
     }
 
     if (method === 'POST' && url.pathname === '/api/trash/deletePermanent') {
+      assertCanAccessTrash(isAdminAuthenticated(req));
       const body = await readJsonBody(req);
       const result = await deletePermanent(body.path, getPortableRoot());
       notifyFsChanged(body.path);

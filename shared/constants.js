@@ -2,7 +2,7 @@
 export const DEFAULT_SYNC_PORT = 3008;
 
 /** Application display version. */
-export const APP_VERSION = '1.0.1';
+export const APP_VERSION = '1.0.2';
 
 /** Application display name. */
 export const APP_NAME = 'NAS4USB';
@@ -34,3 +34,11 @@ export const DEPARTMENT_CODE_PATTERN = /^\d{7}$/;
 
 /** Trash folder name under data root (visible in readDir). */
 export const TRASH_FOLDER = '__trash';
+
+/** @param {string} relativePath */
+export function isTrashRelativePath(relativePath) {
+  const normalized = String(relativePath ?? '').replace(/\\/g, '/');
+  return normalized === TRASH_FOLDER || normalized.startsWith(`${TRASH_FOLDER}/`);
+}
+
+export const TRASH_ACCESS_DENIED_MESSAGE = '휴지통은 총괄관리자만 접근할 수 있습니다.';

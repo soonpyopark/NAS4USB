@@ -3,6 +3,7 @@ import {
   canViewFileEntry,
   filterEntriesByFileAccess,
 } from '../shared/fileAccessVisibility.js';
+import { isTrashRelativePath, TRASH_ACCESS_DENIED_MESSAGE } from '../shared/constants.js';
 import { getPortableRoot } from './appContext.js';
 import * as fsService from './fsService.js';
 import { getFileAccessMap } from './fileAccessService.js';
@@ -37,6 +38,10 @@ export async function assertCanAccessFile(
 ) {
   const normalizedPath = String(relativePath ?? '').replace(/\\/g, '/');
   if (!normalizedPath || normalizedPath === '.') return;
+
+  if (isTrashRelativePath(normalizedPath) && !isAdminAuthenticated) {
+    throw new Error(TRASH_ACCESS_DENIED_MESSAGE);
+  }
 
   if (await canAccessViaShareToken(normalizedPath, shareToken, portableRoot)) {
     return;
@@ -81,6 +86,11 @@ export async function readDirWithAccessFilter(
   isAdminAuthenticated,
   portableRoot = getPortableRoot(),
 ) {
+  const normalizedPath = String(relativePath ?? '.').replace(/\\/g, '/');
+  if (isTrashRelativePath(normalizedPath) && !isAdminAuthenticated) {
+    throw new Error(TRASH_ACCESS_DENIED_MESSAGE);
+  }
+
   const entries = await fsService.readDir(relativePath);
   if (isAdminAuthenticated) return entries;
 
@@ -143,5 +153,14 @@ export async function readFileBufferWithAccessFilter(
 export function assertAdminAuthenticated(isAdminAuthenticated) {
   if (!isAdminAuthenticated) {
     throw new Error('총괄관리자 권한이 필요합니다.');
+  }
+}
+
+/**
+ * @param {boolean} isAdminAuthenticated
+ */
+export function assertCanAccessTrash(isAdminAuthenticated) {
+  if (!isAdminAuthenticated) {
+    throw new Error(TRASH_ACCESS_DENIED_MESSAGE);
   }
 }

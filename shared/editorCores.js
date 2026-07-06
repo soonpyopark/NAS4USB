@@ -1,4 +1,4 @@
-/** @typedef {'rhwp' | 'wb4s' | 'fortune-sheet'} EditorCoreId */
+/** @typedef {'rhwp' | 'wb4s' | 'fortune-sheet' | 'tiptap'} EditorCoreId */
 
 /** @typedef {Object} EditorCoreDefinition
  * @property {EditorCoreId} id
@@ -43,6 +43,21 @@ export const EDITOR_CORES = [
     repositoryUrl: 'https://github.com/ruilisi/fortune-sheet',
     npmPackage: '@fortune-sheet/react',
     npmPackages: ['@fortune-sheet/react'],
+  },
+  {
+    id: 'tiptap',
+    label: 'HTML Editor (TipTap)',
+    libDir: 'src/lib/tiptap',
+    submodulePath: 'src/lib/tiptap',
+    updatePackageDir: 'lib/updates/tiptap',
+    repositoryUrl: 'https://github.com/ueberdosis/tiptap',
+    npmPackage: '@tiptap/react',
+    npmPackages: [
+      '@tiptap/react',
+      '@tiptap/starter-kit',
+      '@tiptap/extension-table',
+      '@tiptap/extension-placeholder',
+    ],
   },
 ];
 
