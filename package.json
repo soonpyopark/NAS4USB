@@ -5,7 +5,7 @@
   "main": "main.js",
   "type": "module",
   "scripts": {
-    "dev": "npm run prepare:wb4s-src && electron .",
+    "dev": "npm run prepare:icons && npm run prepare:wb4s-src && electron .",
     "dev:stop": "node scripts/dev-process.mjs stop",
     "dev:restart": "node scripts/dev-process.mjs restart",
     "prepare:icons": "node scripts/prepare-app-icon.mjs",
@@ -18,6 +18,8 @@
     "build": "npm run prepare:icons && npm run build:rhwp-studio && npm run build:wb4s-editor && npm run prepare:wb4s-src && vite build",
     "build:dist:exe": "npm run prepare:icons && node scripts/build-dist-exe.mjs",
     "build:dist:mac": "npm run prepare:icons && node scripts/build-dist-mac.mjs",
+    "update:all": "node scripts/update-all.mjs",
+    "build:update_all": "update_all.bat _inner build",
     "start": "npm run build && electron .",
     "preview": "vite preview --port 3008 --strictPort"
   },
@@ -47,10 +49,10 @@
     "@fortune-sheet/react": "^1.0.4",
     "@rhwp/core": "^0.7.17",
     "@rhwp/editor": "^0.7.17",
-    "@tiptap/extension-placeholder": "^3.27.2",
-    "@tiptap/extension-table": "^3.27.2",
-    "@tiptap/react": "^3.27.2",
-    "@tiptap/starter-kit": "^3.27.2",
+    "@tiptap/extension-placeholder": "^3.27.3",
+    "@tiptap/extension-table": "^3.27.3",
+    "@tiptap/react": "^3.27.3",
+    "@tiptap/starter-kit": "^3.27.3",
     "highlight.js": "^11.11.1",
     "jszip": "^3.10.1",
     "react": "^18.3.1",
@@ -106,6 +108,10 @@
       {
         "from": "build/icon.png",
         "to": "app-icon.png"
+      },
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
       }
     ],
     "win": {
@@ -120,7 +126,7 @@
       ]
     },
     "mac": {
-      "icon": "build/icon.png",
+      "icon": "build/icon.icns",
       "category": "public.app-category.productivity",
       "target": [
         {

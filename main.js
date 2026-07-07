@@ -242,16 +242,12 @@ async function shutdownServer() {
 }
 
 function resolveTrayIcon() {
-  const candidates = [
-    resolveAppIconPath(),
-    path.join(resolveElectronDir(), 'splash-icon.png'),
-  ].filter(Boolean);
-
-  for (const iconPath of candidates) {
-    if (!fs.existsSync(iconPath)) continue;
+  const iconPath = resolveAppIconPath();
+  if (iconPath && fs.existsSync(iconPath)) {
     const image = nativeImage.createFromPath(iconPath);
-    if (image.isEmpty()) continue;
-    return image.resize({ width: 16, height: 16 });
+    if (!image.isEmpty()) {
+      return image.resize({ width: 16, height: 16 });
+    }
   }
 
   return nativeImage.createEmpty();

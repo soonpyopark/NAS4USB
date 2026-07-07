@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
-import { nestedTableExtensions, StyledParagraph } from '../../lib/tiptap/styledBlockExtensions.js';
+import { insertFullWidthTable, nestedTableExtensions, StyledParagraph } from '../../lib/tiptap/styledBlockExtensions.js';
 import { formatHtmlFragment } from '../../lib/tiptap/formatHtmlFragment.js';
 import HtmlSourceEditor from './HtmlSourceEditor.jsx';
 
@@ -149,7 +149,7 @@ export default function TipTapEditor({ initialHtml, onReady }) {
           type="button"
           className="tiptap-toolbar-btn"
           disabled={toolbarDisabled}
-          onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}
+          onClick={() => insertFullWidthTable(editor, { rows: 3, cols: 3, withHeaderRow: true })}
           title="표 삽입 (셀 안에서 실행 시 중첩 표)"
         >
           표

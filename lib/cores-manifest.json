@@ -1,24 +1,24 @@
 {
-  "updatedAt": "2026-07-06T12:12:00.000Z",
+  "updatedAt": "2026-07-07T08:50:43.680Z",
   "cores": {
     "rhwp": {
       "version": "@rhwp/core@0.7.17, @rhwp/editor@0.7.17",
-      "updatedAt": "2026-07-05T03:27:40.647Z",
+      "updatedAt": "2026-07-07T08:50:43.680Z",
       "method": "npm"
     },
     "wb4s": {
       "version": "1.0.3",
-      "updatedAt": "2026-07-05T03:27:40.647Z",
-      "method": "vendor-copy"
+      "updatedAt": "2026-07-07T08:50:43.680Z",
+      "method": "git-clone+build"
     },
     "fortune-sheet": {
       "version": "@fortune-sheet/react@1.0.4",
-      "updatedAt": "2026-07-05T03:27:40.647Z",
+      "updatedAt": "2026-07-07T08:50:43.680Z",
       "method": "npm"
     },
     "tiptap": {
-      "version": "@tiptap/react@3.27.2, @tiptap/starter-kit@3.27.2, @tiptap/extension-table@3.27.2, @tiptap/extension-placeholder@3.27.2",
-      "updatedAt": "2026-07-06T12:12:00.000Z",
+      "version": "@tiptap/react@3.27.3, @tiptap/starter-kit@3.27.3, @tiptap/extension-table@3.27.3, @tiptap/extension-placeholder@3.27.3",
+      "updatedAt": "2026-07-07T08:50:43.680Z",
       "method": "npm"
     }
   }

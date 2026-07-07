@@ -6,6 +6,8 @@ import {
 } from '../../../shared/constants.js';
 import { openExternalUrl } from '../../lib/openExternal.js';
 
+const iconSrc = `${import.meta.env.BASE_URL}${APP_ICON_URL.replace(/^\//, '')}`;
+
 export default function SplashOverlay({ open, onClose }) {
   if (!open) return null;
 
@@ -18,7 +20,7 @@ export default function SplashOverlay({ open, onClose }) {
       onClick={onClose}
     >
       <div className="splash-overlay__panel" onClick={onClose}>
-        <img className="splash-overlay__logo" src={APP_ICON_URL} alt="" />
+        <img className="splash-overlay__logo" src={iconSrc} alt="" />
         <div className="splash-overlay__content">
           <h2 className="splash-overlay__title">
             {APP_NAME}{' '}

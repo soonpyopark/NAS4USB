@@ -1,5 +1,7 @@
 import { APP_ICON_URL, APP_NAME } from '../../../shared/constants.js';
 
+const iconSrc = `${import.meta.env.BASE_URL}${APP_ICON_URL.replace(/^\//, '')}`;
+
 /**
  * @param {{
  *   size?: number,
@@ -10,7 +12,7 @@ import { APP_ICON_URL, APP_NAME } from '../../../shared/constants.js';
 export default function AppLogo({ size = 32, className = '', title = APP_NAME }) {
   return (
     <img
-      src={APP_ICON_URL}
+      src={iconSrc}
       alt={title}
       width={size}
       height={size}

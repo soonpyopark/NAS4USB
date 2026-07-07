@@ -5,6 +5,7 @@ import { initEducowork } from './lib/initEducowork.js';
 import { APP_ICON_URL, APP_NAME } from '../shared/constants.js';
 import './styles/index.css';
 
+const iconSrc = `${import.meta.env.BASE_URL}${APP_ICON_URL.replace(/^\//, '')}`;
 const root = ReactDOM.createRoot(document.getElementById('root'));
 
 root.render(
@@ -12,7 +13,7 @@ root.render(
     <div className="flex items-center gap-[18px]">
       <img
         className="h-[68px] w-[68px] shrink-0 rounded-[14px] bg-white object-contain"
-        src={APP_ICON_URL}
+        src={iconSrc}
         alt=""
       />
       <div className="flex flex-col gap-1">

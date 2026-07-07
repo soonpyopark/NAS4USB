@@ -54,6 +54,14 @@ export function enrichTablesWithInlineStyles(html) {
     table.style.borderCollapse = 'collapse';
     table.style.width = '100%';
     table.style.margin = '12px 0';
+    table.style.minWidth = '';
+  });
+
+  root.querySelectorAll('colgroup col').forEach((col) => {
+    col.style.removeProperty('min-width');
+    if (!col.style.cssText && !col.hasAttribute('width')) {
+      col.removeAttribute('style');
+    }
   });
 
   root.querySelectorAll('th').forEach((cell) => {
