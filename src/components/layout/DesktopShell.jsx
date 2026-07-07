@@ -78,7 +78,7 @@ export default function DesktopShell({
 
       <div ref={layoutRef} className="flex min-h-0 flex-1">
         <div
-          className="sidebar-panel relative flex min-h-0 min-w-0 flex-1 flex-col md:flex-none md:shrink-0"
+          className="sidebar-panel relative flex min-h-0 min-w-0 shrink-0 flex-col"
           style={{ ['--sidebar-width']: `${sidebarWidth}px` }}
         >
           <Sidebar
@@ -96,11 +96,11 @@ export default function DesktopShell({
           aria-valuemin={SIDEBAR_MIN_WIDTH}
           aria-valuemax={Math.max(SIDEBAR_MIN_WIDTH, Math.round(layoutWidth * SIDEBAR_MAX_RATIO))}
           aria-valuenow={sidebarWidth}
-          className={`sidebar-resize-handle hidden shrink-0 md:block ${isResizing ? 'sidebar-resize-handle--active' : ''}`}
+          className={`sidebar-resize-handle shrink-0 ${isResizing ? 'sidebar-resize-handle--active' : ''}`}
           onMouseDown={handleResizeStart}
         />
 
-        <main className="hidden min-w-0 flex-1 flex-col p-4 md:flex">
+        <main className="nas-desktop-main flex min-w-0 flex-1 flex-col p-4">
           <div className="nas-panel flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>
         </main>
       </div>

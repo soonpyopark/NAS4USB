@@ -7,8 +7,8 @@
 USB(또는 단일 폴더)만으로 **오프라인 LAN NAS**와 **실시간 공동 편집**을 제공하는 Windows/macOS Electron 앱입니다.
 
 - **Electron + Vite + React** — 로컬 파일 탐색기 UI
-- **Y.js** — HWPX·HTML·XLSX·화이트보드 실시간 동기화 (기본 포트 `3008`)
-- **에디터 코어** — rhwp(HWPX), TipTap(HTML), FortuneSheet(XLSX), WhiteBoard4Share(.wb4s)
+- **Y.js** — HWPX·XLSX·화이트보드 실시간 동기화 (기본 포트 `3008`)
+- **에디터 코어** — rhwp(HWPX), FortuneSheet(XLSX), WhiteBoard4Share(.wb4s), BlockNote(.block)
 
 > **용도:** USB 이동·교실/회의실 LAN 협업. 인터넷 없이 동작하도록 설계되었습니다.
 
@@ -21,7 +21,8 @@ USB(또는 단일 폴더)만으로 **오프라인 LAN NAS**와 **실시간 공�
 | USB 포터블 | `NAS4USB.exe` + `data/` 폴더를 USB에 복사해 실행 |
 | LAN 동기화 | Y.js WebSocket — 같은 방(room)에 접속한 클라이언트 간 CRDT 동기화 |
 | HWPX 편집 | rhwp-studio 기반 `.hwpx` 브라우저 에디터 |
-| HTML 편집 | TipTap — `.html` 표·중첩 표·HTML 소스 보기 |
+| Markdown / TXT | textarea 편집 · MD 미리보기 |
+| BlockNote 문서 | `.block` — 블록 기반 리치 텍스트 (슬래시 메뉴, 실시간 협업) |
 | 스프레드시트 | FortuneSheet — `.xlsx` / `.xls` |
 | 화이트보드 | `.wb4s` — WhiteBoard4Share 엔진 |
 | 파일 접근 제어 | 비공개·열람제한·공유 링크 (총괄관리자) |
@@ -157,9 +158,9 @@ NAS4USB/
 | 코어 | 패키지 / 경로 |
 |------|----------------|
 | HWPX (rhwp) | `@rhwp/core`, `@rhwp/editor` |
-| HTML (TipTap) | `@tiptap/react` 등 |
 | Spreadsheet | `@fortune-sheet/react` |
 | Whiteboard | `lib/updates/wb4s` / upstream WhiteBoard4Share |
+| BlockNote | `@blocknote/core`, `@blocknote/react` |
 
 버전 기록: `lib/cores-manifest.json`
 

@@ -273,7 +273,7 @@ export default function TextEditor({ initialText, isMarkdown = false, onReady, o
             </div>
             <textarea
               ref={textareaRef}
-              defaultValue={initialText}
+              value={text}
               spellCheck
               readOnly={!isEditable}
               className={`min-h-0 flex-1 resize-none border-0 bg-white py-3 pl-3 pr-4 font-mono text-sm leading-6 text-slate-800 outline-none ${

@@ -7,9 +7,9 @@
 | HWPX (rhwp) | https://github.com/edwardkim/rhwp | `@rhwp/core`, `@rhwp/editor` |
 | Spreadsheet (FortuneSheet) | https://github.com/ruilisi/fortune-sheet | `@fortune-sheet/react` |
 | Whiteboard (wb4s) | https://github.com/soonpyopark/WhiteBoard4Share | (git / `lib/updates/wb4s`) |
-| HTML (TipTap) | https://github.com/ueberdosis/tiptap | `@tiptap/react` 등 |
+| BlockNote | https://github.com/TypeCellOS/BlockNote | `@blocknote/core`, `@blocknote/react` |
 
-어댑터 코드: `lib/rhwp/`, `src/lib/xlsx/`, `src/lib/tiptap/`
+어댑터 코드: `lib/rhwp/`, `src/lib/xlsx/`, `src/lib/blocknote/`
 
 ## 일괄 업데이트
 

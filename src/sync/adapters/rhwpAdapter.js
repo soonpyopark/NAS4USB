@@ -107,24 +107,48 @@ export function bindRhwpEditor(ydoc, editor, options = {}) {
     fieldName,
     initialText: initialContent,
     deferSeedUntilSync: Boolean(options.provider),
+    diskRevision: options.diskRevision ?? '',
+    canonicalText: options.canonicalText,
   });
-  editor.setEditable?.(true);
+
+  let disposed = false;
+  let hasInitialSynced = false;
 
   const cleanup = () => {
+    disposed = true;
     editor.setEditable?.(false);
     binder.destroy();
   };
 
-  if (options.provider) {
-    let syncedOnce = false;
-    const onSync = (isSynced) => {
-      if (!isSynced || syncedOnce) return;
-      syncedOnce = true;
+  const finishSync = async ({ reconnect = false } = {}) => {
+    if (reconnect) {
       binder.resync();
+      await binder.flushRemoteApply();
+      return;
+    }
+
+    if (hasInitialSynced) return;
+    hasInitialSynced = true;
+
+    await binder.flushRemoteApply();
+    if (disposed) return;
+    editor.setEditable?.(true);
+    options.onSynced?.();
+  };
+
+  if (options.provider) {
+    const onSync = (isSynced) => {
+      if (!isSynced) {
+        editor.setEditable?.(false);
+        return;
+      }
+      void finishSync({ reconnect: hasInitialSynced });
     };
     options.provider.on('sync', onSync);
     if (options.provider.synced) {
-      onSync(true);
+      void finishSync();
+    } else {
+      editor.setEditable?.(false);
     }
     return () => {
       options.provider.off('sync', onSync);
@@ -132,6 +156,7 @@ export function bindRhwpEditor(ydoc, editor, options = {}) {
     };
   }
 
+  void finishSync();
   return cleanup;
 }
 

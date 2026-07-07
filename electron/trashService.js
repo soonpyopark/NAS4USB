@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { TRASH_FOLDER } from '../shared/constants.js';
+import { purgeYjsRoomsForPathTree } from './yjsRoomTree.js';
 import { getPortableRoot } from './appContext.js';
 import * as fsService from './fsService.js';
 import { syncSharePathDelete, syncSharePathMoveTree } from './shareLinkService.js';
@@ -172,6 +173,7 @@ export async function trashPath(relativePath, portableRoot = getPortableRoot()) 
   const uniqueName = resolveUniqueName(trashNames, getBaseName(normalized));
   const trashDest = `${TRASH_FOLDER}/${uniqueName}`;
 
+  await purgeYjsRoomsForPathTree(normalized);
   await syncMetadataMoveTree(normalized, trashDest, portableRoot);
   await fsService.movePath(normalized, trashDest);
 
@@ -228,6 +230,7 @@ export async function deletePermanent(trashRelativePath, portableRoot = getPorta
     throw new Error('영구 삭제할 수 없는 항목입니다.');
   }
 
+  await purgeYjsRoomsForPathTree(normalized);
   await syncSharePathDelete(normalized, portableRoot);
   await syncFileAccessDelete(normalized, portableRoot);
   await fsService.deletePath(normalized);

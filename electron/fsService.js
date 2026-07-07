@@ -152,6 +152,9 @@ export async function mkdir(relativePath) {
 }
 
 export async function deletePath(relativePath) {
+  const { purgeYjsRoomsForPathTree } = await import('./yjsRoomTree.js');
+  await purgeYjsRoomsForPathTree(relativePath);
+
   const absolute = await resolveExistingAbsolutePathWithFallback(relativePath);
   let stat;
   try {
@@ -196,7 +199,12 @@ export async function writeFileBase64(relativePath, base64 = '') {
   assertNotTrashTarget(relativePath);
   const absolute = resolvePortablePath(relativePath);
   await fs.mkdir(path.dirname(absolute), { recursive: true });
+  const existed = await pathExists(relativePath);
   await fs.writeFile(absolute, Buffer.from(base64, 'base64'));
+  if (!existed) {
+    const { purgeYjsRoomForPath } = await import('./yjsRoom.js');
+    purgeYjsRoomForPath(relativePath);
+  }
   return true;
 }
 

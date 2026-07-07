@@ -4,6 +4,7 @@ import { useYjsSession } from '../../hooks/useYjsSession.js';
 import { useAwarenessPeerCount } from '../../hooks/useAwarenessPeerCount.js';
 import { useWorkspaceSession } from '../../hooks/useWorkspaceSession.js';
 import { bindRhwpEditor } from '../../sync/adapters/rhwpAdapter.js';
+import { setTextDiskRevision } from '../../sync/adapters/textEditorAdapter.js';
 import { getLanWsEndpoints } from '../../sync/buildWsUrl.js';
 import { loadRhwpModule } from '../../lib/rhwp/loadRhwp.js';
 
@@ -25,6 +26,7 @@ export default function HwpxEditorShell({ relativePath, fileName, syncInfo, onCl
   const mountRef = useRef(null);
   const unbindRef = useRef(null);
   const hwpxBase64Ref = useRef('');
+  const diskRevisionRef = useRef('');
 
   useEffect(() => {
     if (!workspace.ready) return undefined;
@@ -39,8 +41,17 @@ export default function HwpxEditorShell({ relativePath, fileName, syncInfo, onCl
     async function loadContent() {
       try {
         const base64 = await workspace.readBinary();
+        let nextDiskRevision = '';
+        try {
+          const statInfo = await window.educowork.fs.stat(relativePath);
+          nextDiskRevision = statInfo?.modifiedAt ?? '';
+        } catch {
+          // diskRevision is optional; load should still succeed.
+        }
+
         if (cancelled) return;
         hwpxBase64Ref.current = base64;
+        diskRevisionRef.current = nextDiskRevision;
         setContentReady(true);
       } catch (err) {
         if (!cancelled) {
@@ -54,7 +65,7 @@ export default function HwpxEditorShell({ relativePath, fileName, syncInfo, onCl
     return () => {
       cancelled = true;
     };
-  }, [workspace.ready, workspace.sessionId, workspace.readBinary]);
+  }, [workspace.ready, workspace.sessionId, workspace.readBinary, relativePath]);
 
   useEffect(() => {
     if (!contentReady) return undefined;
@@ -156,6 +167,7 @@ export default function HwpxEditorShell({ relativePath, fileName, syncInfo, onCl
       initialBase64: hwpxBase64Ref.current,
       synced: true,
       provider,
+      diskRevision: diskRevisionRef.current,
     });
     setBound(true);
 
@@ -177,6 +189,12 @@ export default function HwpxEditorShell({ relativePath, fileName, syncInfo, onCl
       await workspace.writeBinary(base64);
       await workspace.commit();
       hwpxBase64Ref.current = base64;
+      try {
+        const statInfo = await window.educowork.fs.stat(relativePath);
+        setTextDiskRevision(doc, 'documentBase64', statInfo?.modifiedAt ?? '');
+      } catch {
+        // ignore optional revision update
+      }
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Save failed');
     } finally {

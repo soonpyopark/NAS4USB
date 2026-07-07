@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-07-07T08:50:43.680Z",
+  "updatedAt": "2026-07-07T16:40:00.000Z",
   "cores": {
     "rhwp": {
       "version": "@rhwp/core@0.7.17, @rhwp/editor@0.7.17",
@@ -16,9 +16,9 @@
       "updatedAt": "2026-07-07T08:50:43.680Z",
       "method": "npm"
     },
-    "tiptap": {
-      "version": "@tiptap/react@3.27.3, @tiptap/starter-kit@3.27.3, @tiptap/extension-table@3.27.3, @tiptap/extension-placeholder@3.27.3",
-      "updatedAt": "2026-07-07T08:50:43.680Z",
+    "blocknote": {
+      "version": "@blocknote/core@0.51.4, @blocknote/react@0.51.4",
+      "updatedAt": "2026-07-07T16:40:00.000Z",
       "method": "npm"
     }
   }

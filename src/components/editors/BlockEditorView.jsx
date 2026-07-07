@@ -1,0 +1,88 @@
+import { useEffect } from 'react';
+import { BlockNoteView } from '@blocknote/mantine';
+import { useCreateBlockNote } from '@blocknote/react';
+import '@blocknote/core/fonts/inter.css';
+import '@blocknote/react/style.css';
+import '@blocknote/mantine/style.css';
+import '../../styles/block-editor.css';
+import { BLOCKNOTE_FRAGMENT } from '../../lib/blocknote/seedRoom.js';
+
+/**
+ * @param {{
+ *   initialBlocks: import('@blocknote/core').PartialBlock[],
+ *   collaboration: {
+ *     doc: import('yjs').Doc,
+ *     provider: import('y-websocket').WebsocketProvider,
+ *     user: { name: string, color: string },
+ *   } | null,
+ *   readOnly?: boolean,
+ *   onReady?: (editor: import('@blocknote/core').BlockNoteEditor) => void,
+ *   onSave?: () => void,
+ * }} props
+ */
+export default function BlockEditorView({
+  initialBlocks,
+  collaboration,
+  readOnly = false,
+  onReady,
+  onSave,
+}) {
+  useEffect(() => {
+    document.documentElement.classList.add('block-embed-mode');
+    return () => document.documentElement.classList.remove('block-embed-mode');
+  }, []);
+
+  const editor = useCreateBlockNote(
+    collaboration
+      ? {
+          collaboration: {
+            fragment: collaboration.doc.getXmlFragment(BLOCKNOTE_FRAGMENT),
+            user: collaboration.user,
+            provider: collaboration.provider,
+            showCursorLabels: 'activity',
+          },
+        }
+      : {
+          initialContent: initialBlocks,
+        },
+    [
+      collaboration?.doc,
+      collaboration?.provider,
+      collaboration?.user.name,
+      collaboration?.user.color,
+      initialBlocks,
+    ],
+  );
+
+  useEffect(() => {
+    if (editor) onReady?.(editor);
+  }, [editor, onReady]);
+
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        onSave?.();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onSave]);
+
+  return (
+    <div className="block-editor-shell">
+      <BlockNoteView
+        editor={editor}
+        editable={!readOnly}
+        theme="light"
+        slashMenu
+        sideMenu
+        formattingToolbar
+        linkToolbar
+        emojiPicker
+        tableHandles
+      />
+    </div>
+  );
+}

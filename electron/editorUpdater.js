@@ -355,7 +355,7 @@ async function updateSingleCore(appPath, core) {
       if (error instanceof Error) {
         npmErrors.push(error);
       }
-      if (core.id === 'fortune-sheet' || core.id === 'tiptap') {
+      if (core.id === 'fortune-sheet') {
         throw npmErrors[0] ?? new Error(`${core.label} npm 업데이트 실패`);
       }
     }

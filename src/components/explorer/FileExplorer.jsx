@@ -623,6 +623,7 @@ export default function FileExplorer({
       if (
         isEditorOpen ||
         document.documentElement.classList.contains('wb4s-embed-mode') ||
+        document.documentElement.classList.contains('block-embed-mode') ||
         document.querySelector('.modal-dialog--editor')
       ) {
         return;

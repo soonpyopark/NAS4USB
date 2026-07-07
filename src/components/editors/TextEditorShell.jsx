@@ -5,6 +5,7 @@ import { useYjsSession } from '../../hooks/useYjsSession.js';
 import { useAwarenessPeerCount } from '../../hooks/useAwarenessPeerCount.js';
 import { useWorkspaceSession } from '../../hooks/useWorkspaceSession.js';
 import { bindRhwpEditor } from '../../sync/adapters/rhwpAdapter.js';
+import { setTextDiskRevision } from '../../sync/adapters/textEditorAdapter.js';
 import { getLanWsEndpoints } from '../../sync/buildWsUrl.js';
 import { decodeTextBase64, encodeTextBase64 } from '../../lib/text/textIO.js';
 
@@ -25,6 +26,7 @@ export default function TextEditorShell({ relativePath, fileName, extension, syn
   const [bound, setBound] = useState(false);
   const unbindRef = useRef(null);
   const initialTextRef = useRef('');
+  const diskRevisionRef = useRef('');
   const editorHandleRef = useRef(null);
 
   useEffect(() => {
@@ -39,10 +41,19 @@ export default function TextEditorShell({ relativePath, fileName, extension, syn
     async function bootstrap() {
       try {
         const base64 = await workspace.readBinary();
+        let nextDiskRevision = '';
+        try {
+          const statInfo = await window.educowork.fs.stat(relativePath);
+          nextDiskRevision = statInfo?.modifiedAt ?? '';
+        } catch {
+          // diskRevision is optional; load should still succeed.
+        }
+
         const text = decodeTextBase64(base64);
         if (cancelled) return;
 
         initialTextRef.current = text;
+        diskRevisionRef.current = nextDiskRevision;
         setInitialText(text);
         setReady(true);
       } catch (err) {
@@ -59,19 +70,21 @@ export default function TextEditorShell({ relativePath, fileName, extension, syn
       unbindRef.current?.();
       unbindRef.current = null;
     };
-  }, [workspace.ready, workspace.sessionId, doc]);
+  }, [workspace.ready, workspace.sessionId, doc, relativePath]);
 
   useEffect(() => {
     if (!ready || !doc || !editorHandle || !synced) return undefined;
 
+    setBound(false);
     unbindRef.current?.();
     unbindRef.current = bindRhwpEditor(doc, editorHandle, {
       fieldName: 'document',
       initialText: initialTextRef.current,
       synced: true,
       provider,
+      diskRevision: diskRevisionRef.current,
+      onSynced: () => setBound(true),
     });
-    setBound(true);
 
     return () => {
       unbindRef.current?.();
@@ -92,12 +105,18 @@ export default function TextEditorShell({ relativePath, fileName, extension, syn
       const base64 = encodeTextBase64(editorHandleRef.current.getText());
       await workspace.writeBinary(base64);
       await workspace.commit();
+      try {
+        const statInfo = await window.educowork.fs.stat(relativePath);
+        setTextDiskRevision(doc, 'document', statInfo?.modifiedAt ?? '');
+      } catch {
+        // ignore optional revision update
+      }
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Save failed');
     } finally {
       setSaving(false);
     }
-  }, [workspace]);
+  }, [doc, relativePath, workspace]);
 
   const handleClose = async () => {
     unbindRef.current?.();

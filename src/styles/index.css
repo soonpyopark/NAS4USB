@@ -35,6 +35,11 @@
     @apply nas-btn text-slate-600 hover:bg-slate-100;
   }
 
+  .nas-topbar {
+    display: flex;
+    align-items: center;
+  }
+
   .sidebar-panel {
     @apply w-full;
   }
@@ -123,99 +128,6 @@
 
   .markdown-preview hr {
     @apply my-6 border-slate-200;
-  }
-
-  .tiptap-toolbar-btn {
-    @apply rounded border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40;
-  }
-
-  .tiptap-toolbar-btn-active {
-    @apply border-nas-accent bg-blue-50 text-nas-accent;
-  }
-
-  .tiptap-source-panel {
-    @apply flex h-full min-h-0 flex-1 overflow-hidden rounded-md border border-slate-700/80 bg-[#0f172a];
-  }
-
-  .tiptap-source-gutter {
-    @apply shrink-0 overflow-hidden border-r border-slate-700/80 bg-[#0b1220] py-3 pr-2 text-right font-mono text-[11px] leading-6 text-slate-500 select-none;
-    width: 3rem;
-  }
-
-  .tiptap-source-gutter-line {
-    @apply px-2;
-  }
-
-  .tiptap-source-code {
-    @apply relative min-h-0 min-w-0 flex-1 overflow-hidden;
-  }
-
-  .tiptap-source-highlight,
-  .tiptap-source-editor {
-    @apply m-0 box-border w-full py-3 pl-3 pr-4 font-mono text-[13px] leading-6 whitespace-pre;
-    tab-size: 2;
-  }
-
-  .tiptap-source-highlight {
-    @apply pointer-events-none absolute inset-0 overflow-hidden text-slate-100;
-  }
-
-  .tiptap-source-highlight code {
-    @apply block min-h-full bg-transparent font-mono text-[13px] leading-6;
-  }
-
-  .tiptap-source-editor {
-    @apply absolute inset-0 z-10 h-full resize-none overflow-auto border-0 bg-transparent text-transparent caret-sky-300 outline-none;
-    -webkit-text-fill-color: transparent;
-  }
-
-  .tiptap-source-highlight .hljs-meta,
-  .tiptap-source-highlight .hljs-comment {
-    color: #64748b;
-  }
-
-  .tiptap-source-highlight .hljs-name,
-  .tiptap-source-highlight .hljs-tag {
-    color: #7dd3fc;
-  }
-
-  .tiptap-source-highlight .hljs-attr {
-    color: #c4b5fd;
-  }
-
-  .tiptap-source-highlight .hljs-string {
-    color: #86efac;
-  }
-
-  .tiptap-source-highlight .hljs-punctuation {
-    color: #94a3b8;
-  }
-
-  .tiptap-editor-content .ProseMirror {
-    @apply min-h-[320px] outline-none;
-  }
-
-  .tiptap-editor-content .ProseMirror p.is-editor-empty:first-child::before {
-    @apply pointer-events-none float-left h-0 text-slate-400;
-    content: attr(data-placeholder);
-  }
-
-  .tiptap-editor-content table {
-    @apply my-3 w-full border-collapse;
-  }
-
-  .tiptap-editor-content td,
-  .tiptap-editor-content th {
-    @apply min-w-[48px] border border-slate-300 px-2 py-1 align-top;
-  }
-
-  .tiptap-editor-content th {
-    @apply bg-slate-50 font-semibold;
-  }
-
-  .tiptap-editor-content td table,
-  .tiptap-editor-content th table {
-    @apply my-1 w-full;
   }
 }
 
@@ -541,4 +453,31 @@
 .splash-overlay__url:hover {
   color: #d4deea;
   text-decoration: underline;
+}
+
+/* Some editor themes inject global `.hidden { display: none }` without responsive overrides. */
+@media (min-width: 768px) {
+  .hidden.md\:flex {
+    display: flex !important;
+  }
+
+  .hidden.md\:block {
+    display: block !important;
+  }
+
+  .hidden.md\:inline-flex {
+    display: inline-flex !important;
+  }
+
+  .hidden.md\:table-cell {
+    display: table-cell !important;
+  }
+
+  .hidden.lg\:flex {
+    display: flex !important;
+  }
+
+  .lg\:hidden {
+    display: none !important;
+  }
 }

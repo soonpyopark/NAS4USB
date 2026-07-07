@@ -6,7 +6,7 @@ import HwpxEditorShell from './components/editors/HwpxEditorShell.jsx';
 import Wb4sEditorShell from './components/editors/Wb4sEditorShell.jsx';
 import XlsxEditorShell from './components/editors/XlsxEditorShell.jsx';
 import TextEditorShell from './components/editors/TextEditorShell.jsx';
-import HtmlEditorShell from './components/editors/HtmlEditorShell.jsx';
+import BlockEditorShell from './components/editors/BlockEditorShell.jsx';
 import AudioPlayerShell from './components/editors/AudioPlayerShell.jsx';
 import VideoPlayerShell from './components/editors/VideoPlayerShell.jsx';
 import { ShareLinkError, ShareLinkLoading } from './components/share/ShareLinkScreen.jsx';
@@ -27,8 +27,7 @@ const OPENABLE_EXTENSIONS = {
   xls: 'xlsx',
   txt: 'text',
   md: 'text',
-  html: 'html',
-  htm: 'html',
+  block: 'block',
   ...Object.fromEntries(AUDIO_EXTENSIONS.map((ext) => [ext, 'audio'])),
   ...Object.fromEntries(VIDEO_EXTENSIONS.map((ext) => [ext, 'video'])),
 };
@@ -99,9 +98,9 @@ function OpenEditorLayer({ openEditor, syncInfo, allowClose, fullscreen = false,
     );
   }
 
-  if (openEditor.type === 'html') {
+  if (openEditor.type === 'block') {
     return (
-      <HtmlEditorShell
+      <BlockEditorShell
         relativePath={openEditor.relativePath}
         fileName={openEditor.name}
         syncInfo={syncInfo}
@@ -312,7 +311,11 @@ function EduCoworkAppMain() {
     if (isShareMode) return undefined;
 
     const onKeyDown = (event) => {
-      if (event.key === 'Escape' && openEditor && openEditor.type !== 'wb4s') {
+      if (
+        event.key === 'Escape' &&
+        openEditor &&
+        openEditor.type !== 'wb4s'
+      ) {
         setOpenEditor(null);
       }
     };

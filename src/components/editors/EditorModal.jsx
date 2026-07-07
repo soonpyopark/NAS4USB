@@ -35,6 +35,7 @@ export default function EditorModal({
   synced,
   peerCount,
   saving,
+  saveDisabled = false,
   onSave,
   onClose,
   allowClose = true,
@@ -57,7 +58,7 @@ export default function EditorModal({
         />
 
         <AppModalActions className="modal-editor-header__actions !mb-0 shrink-0">
-          <AppModalButton variant="primary" onClick={onSave} disabled={saving}>
+          <AppModalButton variant="primary" onClick={onSave} disabled={saving || saveDisabled}>
             {saving ? '저장 중…' : '작성 내용 저장'}
           </AppModalButton>
           {allowClose && <AppModalButton onClick={onClose}>닫기</AppModalButton>}
