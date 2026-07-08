@@ -477,13 +477,6 @@ ipcMain.handle('fs:delete', async (_event, relativePath) => {
   return result;
 });
 
-ipcMain.handle('fs:openPath', async (event, relativePath) => {
-  await assertCanAccessFile(relativePath, isAdminFromEvent(event), getShareTokenFromEvent(event));
-  const error = await shell.openPath(resolvePortablePath(relativePath));
-  if (error) throw new Error(error);
-  return true;
-});
-
 ipcMain.handle('fs:exists', async (event, relativePath) =>
   pathExistsWithAccessFilter(relativePath, isAdminFromEvent(event), getShareTokenFromEvent(event)),
 );

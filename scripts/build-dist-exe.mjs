@@ -66,7 +66,7 @@ async function finalizePortableFolder() {
 5. 서버 중지: stop_server.bat (개발/백그라운드 서버가 남았을 때)
 
 data/ 폴더에 문서가 저장됩니다 (기본값). 다른 경로를 쓰려면 .env 에 DATA_ROOT 를 지정하세요.
-예) DATA_ROOT=data  또는  DATA_ROOT=D:/USB/educowork-data
+예) DATA_ROOT=data  또는  DATA_ROOT=D:/USB/nas4usb-data
 
 exe 와 같은 폴더를 유지해 주세요.
 `;

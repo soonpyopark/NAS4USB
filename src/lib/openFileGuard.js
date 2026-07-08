@@ -17,7 +17,7 @@ export async function guardOpenFileEntry(entry, { onMissing } = {}) {
   }
 
   try {
-    await window.educowork.fs.stat(entry.relativePath);
+    await window.nas4usb.fs.stat(entry.relativePath);
     return true;
   } catch {
     window.alert(MISSING_OPEN_MESSAGE);

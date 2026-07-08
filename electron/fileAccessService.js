@@ -1,8 +1,9 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { getPortableRoot } from './appContext.js';
+import { LEGACY_FILE_ACCESS_FILE } from '../shared/legacyConfig.js';
 
-const ACCESS_FILE = '.educowork-file-access.json';
+const ACCESS_FILE = '.nas4usb-file-access.json';
 
 /**
  * @typedef {{ visibility?: 'public' | 'private', viewRestricted?: boolean }} FileAccessRecord
@@ -14,15 +15,17 @@ const ACCESS_FILE = '.educowork-file-access.json';
  * @returns {Promise<FileAccessStore>}
  */
 async function loadStore(portableRoot) {
-  const filePath = path.join(portableRoot, ACCESS_FILE);
-  try {
-    const raw = await fs.readFile(filePath, 'utf8');
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed.files === 'object') {
-      return { files: parsed.files };
+  for (const fileName of [ACCESS_FILE, LEGACY_FILE_ACCESS_FILE]) {
+    const filePath = path.join(portableRoot, fileName);
+    try {
+      const raw = await fs.readFile(filePath, 'utf8');
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.files === 'object') {
+        return { files: parsed.files };
+      }
+    } catch {
+      // try next
     }
-  } catch {
-    // fall through
   }
   return { files: {} };
 }
@@ -34,6 +37,7 @@ async function loadStore(portableRoot) {
 async function saveStore(portableRoot, store) {
   const filePath = path.join(portableRoot, ACCESS_FILE);
   await fs.writeFile(filePath, JSON.stringify(store, null, 2), 'utf8');
+  await fs.rm(path.join(portableRoot, LEGACY_FILE_ACCESS_FILE), { force: true }).catch(() => {});
 }
 
 /**

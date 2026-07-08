@@ -11,6 +11,6 @@ USB 오프라인 환경에서 GitHub clone이 불가할 때, 이 폴더에 White
 ## 반영 위치
 
 - 엔진 소스: `.cache/wb4s-src/` (gitignored, 런타임/빌드용)
-- EduCowork 패치: `vendor/wb4s-educowork-overlay/` (저장소에 포함)
+- NAS4USB 패치: `vendor/wb4s-nas4usb-overlay/` (저장소에 포함)
 
 에디터 업데이트 후 `public/wb4s-editor/` embed 번들도 함께 갱신됩니다.

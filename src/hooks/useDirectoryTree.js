@@ -3,6 +3,7 @@ import { resolveTreeReloadPaths } from '../lib/fsInvalidatePaths.js';
 import { sortEntries } from '../lib/fsPaths.js';
 import { readDirWithRetry } from '../lib/readDirWithRetry.js';
 import { filterTrashFromEntries, isFsNotFoundError } from '../lib/trashPaths.js';
+import { filterBlockAssetSidecarFromEntries } from '../../shared/blockAssetPaths.js';
 
 /**
  * @param {string} currentPath
@@ -17,7 +18,9 @@ export function useDirectoryTree(currentPath) {
     setLoadingPaths((prev) => new Set(prev).add(relativePath));
     try {
       const entries = await readDirWithRetry(relativePath);
-      const sorted = filterTrashFromEntries(sortEntries(entries, 'name', 'asc'), relativePath);
+      const sorted = filterBlockAssetSidecarFromEntries(
+        filterTrashFromEntries(sortEntries(entries, 'name', 'asc'), relativePath),
+      );
       setChildrenMap((prev) => ({ ...prev, [relativePath]: sorted }));
       return sorted;
     } catch (err) {
@@ -82,7 +85,12 @@ export function useDirectoryTree(currentPath) {
       uniquePaths.map(async (path) => {
         try {
           const entries = await readDirWithRetry(path);
-          return [path, filterTrashFromEntries(sortEntries(entries, 'name', 'asc'), path)];
+          return [
+            path,
+            filterBlockAssetSidecarFromEntries(
+              filterTrashFromEntries(sortEntries(entries, 'name', 'asc'), path),
+            ),
+          ];
         } catch (err) {
           if (isFsNotFoundError(err)) return [path, null];
           return [path, undefined];

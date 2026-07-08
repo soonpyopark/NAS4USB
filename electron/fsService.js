@@ -214,9 +214,21 @@ export async function copyPath(fromRelative, toRelative) {
 }
 
 export async function movePath(fromRelative, toRelative) {
+  const from = resolvePortablePath(fromRelative);
   const destination = resolvePortablePath(toRelative);
   await fs.mkdir(path.dirname(destination), { recursive: true });
-  await fs.rename(resolvePortablePath(fromRelative), destination);
+
+  try {
+    await fs.rename(from, destination);
+  } catch (error) {
+    const code = error && typeof error === 'object' && 'code' in error ? error.code : null;
+    if (code === 'EPERM' || code === 'EACCES' || code === 'EXDEV') {
+      await fs.cp(from, destination, { recursive: true, force: true });
+      await fs.rm(from, { recursive: true, force: true });
+    } else {
+      throw toUserFsError(error);
+    }
+  }
   return true;
 }
 

@@ -35,8 +35,8 @@ export function useFsChangeSync(onRemoteChange, { debounceMs = 800, isEditorOpen
     };
 
     const unsubscribe =
-      typeof window.educowork?.subscribeFsChanged === 'function'
-        ? window.educowork.subscribeFsChanged(notify)
+      typeof window.nas4usb?.subscribeFsChanged === 'function'
+        ? window.nas4usb.subscribeFsChanged(notify)
         : createFsChangeSubscription(notify);
 
     return () => {

@@ -65,9 +65,9 @@ export interface EditorEmbedMode {
     isSynced: boolean;
     isReady: boolean;
   }) => void;
-  /** EduCowork host: close editor (file save handled by host) */
+  /** NAS4USB host: close editor (file save handled by host) */
   onClose?: () => void | Promise<void>;
-  /** EduCowork host: rename NAS file to match document title */
+  /** NAS4USB host: rename NAS file to match document title */
   onRenameTitle?: (title: string) => void | Promise<void>;
 }
 

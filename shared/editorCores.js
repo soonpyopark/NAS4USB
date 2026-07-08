@@ -30,7 +30,7 @@ export const EDITOR_CORES = [
     libDir: '.cache/wb4s-src',
     submodulePath: '.cache/wb4s-src',
     updatePackageDir: 'lib/updates/wb4s',
-    overlayDir: 'vendor/wb4s-educowork-overlay',
+    overlayDir: 'vendor/wb4s-nas4usb-overlay',
     repositoryUrl: 'https://github.com/soonpyopark/WhiteBoard4Share',
     npmPackage: null,
   },

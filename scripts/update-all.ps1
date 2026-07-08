@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  NAS4USB / EduCowork - update editor cores, npm deps, and optionally rebuild portable exe.
+  NAS4USB / NAS4USB - update editor cores, npm deps, and optionally rebuild portable exe.
 
 .PARAMETER SkipGit
   Skip git pull.

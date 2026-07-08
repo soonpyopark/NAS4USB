@@ -192,7 +192,7 @@ export default function Sidebar({
       return (tree.childrenMap[targetPath] ?? tree.rootEntries).map((entry) => entry.name);
     }
 
-    const dirEntries = await window.educowork.fs.readDir(targetPath);
+    const dirEntries = await window.nas4usb.fs.readDir(targetPath);
     return dirEntries.map((entry) => entry.name);
   };
 
@@ -453,7 +453,6 @@ export default function Sidebar({
         isInTrashView,
         hasClipboard,
         onOpen: handleOpen,
-        onOpenSystem: (entry) => fs.openInSystem(entry.relativePath),
         onUpload: contextTarget?.isDirectory ? triggerUpload : undefined,
         onCopy: () => copyEntries([contextTarget]),
         onCut: () => cutEntries([contextTarget]),

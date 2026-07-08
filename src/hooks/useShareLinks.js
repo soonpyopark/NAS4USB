@@ -5,14 +5,14 @@ export function useShareLinks() {
   const [loading, setLoading] = useState(true);
 
   const refreshShareMap = useCallback(async () => {
-    if (!window.educowork?.share?.getMap) {
+    if (!window.nas4usb?.share?.getMap) {
       setShareMap({});
       setLoading(false);
       return;
     }
 
     try {
-      const map = await window.educowork.share.getMap();
+      const map = await window.nas4usb.share.getMap();
       setShareMap(map ?? {});
     } catch {
       setShareMap({});

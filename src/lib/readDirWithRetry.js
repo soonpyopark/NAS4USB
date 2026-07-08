@@ -8,7 +8,7 @@ const FS_READ_DIR_RETRY = { retries: 4, delayMs: 600 };
  */
 export function readDirWithRetry(relativePath) {
   return retryAsync(
-    () => window.educowork.fs.readDir(relativePath ?? '.'),
+    () => window.nas4usb.fs.readDir(relativePath ?? '.'),
     FS_READ_DIR_RETRY,
   );
 }

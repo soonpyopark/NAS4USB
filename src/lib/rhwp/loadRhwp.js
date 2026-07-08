@@ -20,7 +20,7 @@
  */
 export async function loadRhwpModule() {
   try {
-    const mod = await import('@educowork/rhwp');
+    const mod = await import('@nas4usb/rhwp');
     const mount = mod.mountRhwp ?? mod.default?.mount ?? mod.default ?? null;
     if (typeof mount === 'function') {
       return { mount };

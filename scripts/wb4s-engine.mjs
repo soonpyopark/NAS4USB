@@ -165,7 +165,7 @@ export async function applyEducoworkOverlay(root) {
     return;
   }
 
-  console.log('[wb4s-engine] applying EduCowork overlay …');
+  console.log('[wb4s-engine] applying NAS4USB overlay …');
   await copyDir(overlayDir, engineRoot);
 }
 

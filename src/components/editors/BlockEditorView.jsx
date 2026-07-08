@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { BlockNoteView } from '@blocknote/mantine';
 import { useCreateBlockNote } from '@blocknote/react';
 import '@blocknote/core/fonts/inter.css';
@@ -6,9 +6,14 @@ import '@blocknote/react/style.css';
 import '@blocknote/mantine/style.css';
 import '../../styles/block-editor.css';
 import { BLOCKNOTE_FRAGMENT } from '../../lib/blocknote/seedRoom.js';
+import {
+  createBlocknoteResolveFileUrl,
+  createBlocknoteUploadFile,
+} from '../../lib/blocknote/uploadFile.js';
 
 /**
  * @param {{
+ *   relativePath: string,
  *   initialBlocks: import('@blocknote/core').PartialBlock[],
  *   collaboration: {
  *     doc: import('yjs').Doc,
@@ -21,6 +26,7 @@ import { BLOCKNOTE_FRAGMENT } from '../../lib/blocknote/seedRoom.js';
  * }} props
  */
 export default function BlockEditorView({
+  relativePath,
   initialBlocks,
   collaboration,
   readOnly = false,
@@ -32,25 +38,41 @@ export default function BlockEditorView({
     return () => document.documentElement.classList.remove('block-embed-mode');
   }, []);
 
+  const uploadFile = useMemo(
+    () => createBlocknoteUploadFile(relativePath),
+    [relativePath],
+  );
+  const resolveFileUrl = useMemo(
+    () => createBlocknoteResolveFileUrl(relativePath),
+    [relativePath],
+  );
+
   const editor = useCreateBlockNote(
-    collaboration
-      ? {
-          collaboration: {
-            fragment: collaboration.doc.getXmlFragment(BLOCKNOTE_FRAGMENT),
-            user: collaboration.user,
-            provider: collaboration.provider,
-            showCursorLabels: 'activity',
-          },
-        }
-      : {
-          initialContent: initialBlocks,
-        },
+    {
+      uploadFile,
+      resolveFileUrl,
+      ...(collaboration
+        ? {
+            collaboration: {
+              fragment: collaboration.doc.getXmlFragment(BLOCKNOTE_FRAGMENT),
+              user: collaboration.user,
+              provider: collaboration.provider,
+              showCursorLabels: 'activity',
+            },
+          }
+        : {
+            initialContent: initialBlocks,
+          }),
+    },
     [
       collaboration?.doc,
       collaboration?.provider,
       collaboration?.user.name,
       collaboration?.user.color,
       initialBlocks,
+      relativePath,
+      uploadFile,
+      resolveFileUrl,
     ],
   );
 
@@ -78,6 +100,7 @@ export default function BlockEditorView({
         theme="light"
         slashMenu
         sideMenu
+        filePanel
         formattingToolbar
         linkToolbar
         emojiPicker

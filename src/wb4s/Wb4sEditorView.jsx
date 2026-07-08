@@ -11,7 +11,7 @@ import {
 } from './document.js';
 
 /**
- * EduCowork native WhiteBoard4Share editor (upstream v1.0.3 collab).
+ * NAS4USB native WhiteBoard4Share editor (upstream v1.0.3 collab).
  *
  * @param {{
  *   relativePath: string,

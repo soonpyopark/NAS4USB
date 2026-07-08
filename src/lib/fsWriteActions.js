@@ -1,7 +1,7 @@
 import { joinRelativePath, readFileAsBase64, resolveUniqueName, validateFolderName } from './fsPaths.js';
 import { isTrashPath } from './trashPaths.js';
 import { buildNewFileContent, resolveNewFileName } from './files/newFileFactory.js';
-import { convertHwpBase64ToHwpx, isHwpFileName, toHwpxFileName } from '@educowork/rhwp/hwpConvert.js';
+import { convertHwpBase64ToHwpx, isHwpFileName, toHwpxFileName } from '@nas4usb/rhwp/hwpConvert.js';
 
 /**
  * @param {string} targetPath
@@ -16,7 +16,7 @@ function assertWritablePath(targetPath) {
  * @param {string} targetPath
  */
 async function readSiblingNames(targetPath) {
-  const entries = await window.educowork.fs.readDir(targetPath);
+  const entries = await window.nas4usb.fs.readDir(targetPath);
   return entries.map((entry) => entry.name);
 }
 
@@ -31,10 +31,10 @@ export async function createFolderAtPath(targetPath, name) {
     throw new Error(validation.error);
   }
 
-  const entries = await window.educowork.fs.readDir(targetPath);
+  const entries = await window.nas4usb.fs.readDir(targetPath);
   const existingNames = entries.filter((entry) => entry.isDirectory).map((entry) => entry.name);
   const folderName = resolveUniqueName(existingNames, validation.name);
-  await window.educowork.fs.mkdir(joinRelativePath(targetPath, folderName));
+  await window.nas4usb.fs.mkdir(joinRelativePath(targetPath, folderName));
   return folderName;
 }
 
@@ -47,7 +47,7 @@ export async function createNewTypedFileAtPath(targetPath, type) {
   const existingNames = await readSiblingNames(targetPath);
   const fileName = resolveNewFileName(existingNames, type);
   const base64 = await buildNewFileContent(type);
-  await window.educowork.fs.writeFile(joinRelativePath(targetPath, fileName), base64);
+  await window.nas4usb.fs.writeFile(joinRelativePath(targetPath, fileName), base64);
   return fileName;
 }
 
@@ -67,6 +67,6 @@ export async function uploadFilesAtPath(targetPath, files) {
       targetName = toHwpxFileName(file.name);
     }
 
-    await window.educowork.fs.writeFile(joinRelativePath(targetPath, targetName), base64);
+    await window.nas4usb.fs.writeFile(joinRelativePath(targetPath, targetName), base64);
   }
 }

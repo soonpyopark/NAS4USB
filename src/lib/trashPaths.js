@@ -36,7 +36,7 @@ export function isFsNotFoundError(error) {
 }
 
 /**
- * @param {import('../types/educowork.d.ts').FsEntry[]} entries
+ * @param {import('../types/nas4usb.d.ts').FsEntry[]} entries
  * @param {string} currentPath
  */
 export function filterTrashFromEntries(entries, currentPath) {

@@ -20,7 +20,7 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, 'src'),
-        '@educowork/rhwp': path.resolve(__dirname, 'lib/rhwp'),
+        '@nas4usb/rhwp': path.resolve(__dirname, 'lib/rhwp'),
         '@wb4s-engine': wb4sEngineRoot,
         stream: path.resolve(__dirname, 'src/lib/shims/stream.js'),
         fs: path.resolve(__dirname, 'src/lib/shims/fs.js'),

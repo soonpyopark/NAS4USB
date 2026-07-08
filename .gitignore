@@ -13,7 +13,10 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+.nas4usb-shares.json
+.nas4usb-file-access.json
 .educowork-shares.json
 .educowork-file-access.json
+.educowork-trash.json
 data/
 

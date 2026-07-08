@@ -4,16 +4,18 @@ import { useAwarenessPeerCount } from '../../hooks/useAwarenessPeerCount.js';
 import { useWorkspaceSession } from '../../hooks/useWorkspaceSession.js';
 import { useYjsSession } from '../../hooks/useYjsSession.js';
 import { getLanWsEndpoints } from '../../sync/buildWsUrl.js';
-import { decodeTextBase64, encodeTextBase64 } from '../../lib/text/textIO.js';
 import { loadUserDisplayName } from '../../lib/userProfile.js';
 import { pickUserColor } from '../../lib/userColors.js';
-import {
-  getBlockFileStem,
-  normalizeBlockDocument,
-  parseBlockDocument,
-  serializeBlockDocument,
-} from '../../lib/blocknote/document.js';
+import { getBlockFileStem } from '../../lib/blocknote/document.js';
+import { normalizeBlockAssetUrls } from '../../lib/blocknote/assetUrls.js';
 import { seedBlocknoteRoomFromDisk, setBlocknoteDiskRevision } from '../../lib/blocknote/seedRoom.js';
+import { cleanupUnreferencedBlockAssets } from '../../lib/blocknote/assetCleanup.js';
+import {
+  packBlockFileFromSidecar,
+  parseBlockFileBase64,
+  removeBlockAssetsSidecar,
+  syncEmbeddedAssetsToSidecar,
+} from '../../lib/blocknote/package.js';
 
 const BlockEditorView = lazy(() => import('./BlockEditorView.jsx'));
 
@@ -65,7 +67,7 @@ export default function BlockEditorShell({
         const base64 = await workspace.readBinary();
         let nextDiskRevision = '';
         try {
-          const statInfo = await window.educowork.fs.stat(relativePath);
+          const statInfo = await window.nas4usb.fs.stat(relativePath);
           nextDiskRevision = statInfo?.modifiedAt ?? '';
         } catch {
           // optional
@@ -73,10 +75,14 @@ export default function BlockEditorShell({
 
         if (cancelled) return;
 
-        const text = normalizeBlockDocument(decodeTextBase64(base64));
-        const parsed = parseBlockDocument(text);
+        const parsed = await parseBlockFileBase64(base64);
+        if (parsed.embeddedAssets.length > 0) {
+          await removeBlockAssetsSidecar(relativePath);
+          await syncEmbeddedAssetsToSidecar(relativePath, parsed.embeddedAssets);
+        }
+
         diskRevisionRef.current = nextDiskRevision;
-        setInitialBlocks(parsed.content);
+        setInitialBlocks(normalizeBlockAssetUrls(parsed.content, relativePath));
         setContentReady(true);
       } catch (err) {
         if (!cancelled) {
@@ -132,16 +138,19 @@ export default function BlockEditorShell({
     setSaving(true);
     try {
       const title = getBlockFileStem(fileName);
-      const json = serializeBlockDocument(
-        editorRef.current.document,
+      const documentBlocks = editorRef.current.document;
+      await cleanupUnreferencedBlockAssets(relativePath, documentBlocks);
+      const base64 = await packBlockFileFromSidecar({
         title,
-        new Date().toISOString(),
-      );
-      const base64 = encodeTextBase64(json);
+        exportedAt: new Date().toISOString(),
+        content: documentBlocks,
+        blockRelativePath: relativePath,
+      });
       await workspace.writeBinary(base64);
       await workspace.commit();
+      await removeBlockAssetsSidecar(relativePath);
       try {
-        const statInfo = await window.educowork.fs.stat(relativePath);
+        const statInfo = await window.nas4usb.fs.stat(relativePath);
         if (doc) {
           setBlocknoteDiskRevision(doc, statInfo?.modifiedAt ?? '');
         }
@@ -202,8 +211,8 @@ export default function BlockEditorShell({
             ? 'BlockNote · 재연결 중… Y.js 동기화 후 편집 가능'
             : 'BlockNote · Y.js 동기화 후 편집 가능 · LAN 실시간 협업'
           : collaborationEnabled
-            ? 'BlockNote · 블록 편집 · 원격 커서 · Ctrl+S 저장'
-            : 'BlockNote · 오프라인 편집 · Ctrl+S 저장'}
+            ? 'BlockNote · 블록 편집 · 미디어·첨부 업로드 · 원격 커서 · Ctrl+S 저장'
+            : 'BlockNote · 오프라인 편집 · 미디어·첨부 업로드 · Ctrl+S 저장'}
       </div>
 
       <div className="relative flex min-h-0 flex-1 flex-col">
@@ -222,6 +231,7 @@ export default function BlockEditorShell({
             }
           >
             <BlockEditorView
+              relativePath={relativePath}
               initialBlocks={initialBlocks}
               collaboration={
                 collaborationEnabled && doc && provider

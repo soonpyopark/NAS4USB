@@ -12,14 +12,14 @@ import { AppModal, AppModalActions, AppModalBody, AppModalButton } from '../comm
 /**
  * @param {{
  *   open: boolean,
- *   entries: import('../../types/educowork.d.ts').FsEntry[],
+ *   entries: import('../../types/nas4usb.d.ts').FsEntry[],
  *   initialPath?: string,
  *   title?: string,
  *   confirmLabel?: string,
  *   submittingLabel?: string,
  *   summary?: string,
  *   validateDestination?: (
- *     entries: import('../../types/educowork.d.ts').FsEntry[],
+ *     entries: import('../../types/nas4usb.d.ts').FsEntry[],
  *     destinationPath: string,
  *   ) => { ok: boolean, error?: string },
  *   onClose: () => void,

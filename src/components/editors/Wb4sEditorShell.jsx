@@ -101,7 +101,7 @@ export default function Wb4sEditorShell({ relativePath, fileName, syncInfo, onCl
     try {
       const trimmedTitle = nextTitle.trim() || '제목 없음';
       const parent = getParentPath(relativePathRef.current);
-      const dirEntries = await window.educowork.fs.readDir(parent === '.' ? '.' : parent);
+      const dirEntries = await window.nas4usb.fs.readDir(parent === '.' ? '.' : parent);
       const existingNames = dirEntries
         .map((entry) => entry.name)
         .filter((name) => name !== fileNameRef.current);

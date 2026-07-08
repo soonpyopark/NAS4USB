@@ -1,9 +1,9 @@
 {
-  "name": "@educowork/xlsx",
+  "name": "@nas4usb/xlsx",
   "version": "1.0.4",
   "private": true,
   "type": "module",
-  "description": "Fortune Sheet adapter for EduCowork xlsx/xls editing",
+  "description": "Fortune Sheet adapter for NAS4USB xlsx/xls editing",
   "repository": {
     "type": "git",
     "url": "https://github.com/ruilisi/fortune-sheet.git"

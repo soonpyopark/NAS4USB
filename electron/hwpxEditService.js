@@ -2,9 +2,10 @@ import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { getDataRoot, getPortableRoot, getTempPath } from './appContext.js';
+import { LEGACY_HISTORY_ROOT, LEGACY_LOCKS_FILE } from '../shared/legacyConfig.js';
 
-const LOCKS_FILE = '.educowork/hwpx-locks.json';
-const HISTORY_ROOT = '.educowork/hwpx-history';
+const LOCKS_FILE = '.nas4usb/hwpx-locks.json';
+const HISTORY_ROOT = '.nas4usb/hwpx-history';
 const MAX_HISTORY = 10;
 
 /** @type {Map<string, { relativePath: string, workingPath: string, sessionDir: string, holderId: string, userName: string }>} */
@@ -33,6 +34,13 @@ function locksFilePath(portableRoot) {
 
 /**
  * @param {string} portableRoot
+ */
+function legacyLocksFilePath(portableRoot) {
+  return path.join(portableRoot, LEGACY_LOCKS_FILE);
+}
+
+/**
+ * @param {string} portableRoot
  * @param {string} relativePath
  */
 function historyDir(portableRoot, relativePath) {
@@ -41,16 +49,26 @@ function historyDir(portableRoot, relativePath) {
 
 /**
  * @param {string} portableRoot
+ * @param {string} relativePath
+ */
+function legacyHistoryDir(portableRoot, relativePath) {
+  return path.join(portableRoot, LEGACY_HISTORY_ROOT, encodeHistoryKey(relativePath));
+}
+
+/**
+ * @param {string} portableRoot
  */
 async function loadLockStore(portableRoot) {
-  try {
-    const raw = await fs.readFile(locksFilePath(portableRoot), 'utf8');
-    const parsed = JSON.parse(raw);
-    if (parsed?.locks && typeof parsed.locks === 'object') {
-      return { locks: parsed.locks };
+  for (const filePath of [locksFilePath(portableRoot), legacyLocksFilePath(portableRoot)]) {
+    try {
+      const raw = await fs.readFile(filePath, 'utf8');
+      const parsed = JSON.parse(raw);
+      if (parsed?.locks && typeof parsed.locks === 'object') {
+        return { locks: parsed.locks };
+      }
+    } catch {
+      // try next
     }
-  } catch {
-    // ignore
   }
   return { locks: {} };
 }
@@ -63,6 +81,7 @@ async function saveLockStore(portableRoot, store) {
   const filePath = locksFilePath(portableRoot);
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(filePath, JSON.stringify(store, null, 2), 'utf8');
+  await fs.rm(legacyLocksFilePath(portableRoot), { force: true }).catch(() => {});
 }
 
 /**
@@ -146,12 +165,28 @@ async function appendHistorySnapshot(sourcePath, dir, meta) {
   return entry;
 }
 
+async function resolveHistoryDir(portableRoot, relativePath) {
+  const primary = historyDir(portableRoot, relativePath);
+  try {
+    await fs.access(path.join(primary, 'manifest.json'));
+    return primary;
+  } catch {
+    const legacy = legacyHistoryDir(portableRoot, relativePath);
+    try {
+      await fs.access(path.join(legacy, 'manifest.json'));
+      return legacy;
+    } catch {
+      return primary;
+    }
+  }
+}
+
 /**
  * @param {string} relativePath
  * @param {string} [portableRoot]
  */
 export async function listHwpxHistory(relativePath, portableRoot = getPortableRoot()) {
-  const dir = historyDir(portableRoot, relativePath);
+  const dir = await resolveHistoryDir(portableRoot, relativePath);
   const manifest = await loadHistoryManifest(dir);
   return manifest.entries;
 }
@@ -162,7 +197,7 @@ export async function listHwpxHistory(relativePath, portableRoot = getPortableRo
  * @param {string} [portableRoot]
  */
 export async function readHwpxHistoryBase64(relativePath, entryId, portableRoot = getPortableRoot()) {
-  const dir = historyDir(portableRoot, relativePath);
+  const dir = await resolveHistoryDir(portableRoot, relativePath);
   const filePath = path.join(dir, `${entryId}.hwpx`);
   const buffer = await fs.readFile(filePath);
   return buffer.toString('base64');
@@ -178,7 +213,7 @@ export async function deleteHwpxHistoryEntry(relativePath, entryId, actor, porta
   const normalized = normalizePath(relativePath);
   await assertHwpxNotLockedByOther(normalized, actor.holderId, portableRoot);
 
-  const dir = historyDir(portableRoot, normalized);
+  const dir = await resolveHistoryDir(portableRoot, normalized);
   const manifest = await loadHistoryManifest(dir);
   const nextEntries = manifest.entries.filter((entry) => entry.id !== entryId);
   if (nextEntries.length === manifest.entries.length) {
@@ -208,7 +243,7 @@ export async function restoreHwpxHistoryEntry(
   await assertHwpxNotLockedByOther(normalized, actor.holderId, portableRoot);
 
   const destination = path.join(dataRoot, normalized);
-  const dir = historyDir(portableRoot, normalized);
+  const dir = await resolveHistoryDir(portableRoot, normalized);
   const snapshotPath = path.join(dir, `${entryId}.hwpx`);
 
   try {
@@ -293,7 +328,7 @@ export async function startHwpxSystemEdit(
   });
 
   const editSessionId = crypto.randomUUID();
-  const sessionDir = path.join(tempRoot, 'educowork', 'hwpx-edits', editSessionId);
+  const sessionDir = path.join(tempRoot, 'nas4usb', 'hwpx-edits', editSessionId);
   await fs.mkdir(sessionDir, { recursive: true });
 
   const fileName = path.basename(normalized);

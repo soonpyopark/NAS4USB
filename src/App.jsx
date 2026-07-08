@@ -14,7 +14,7 @@ import { AdminAuthProvider } from './context/AdminAuthContext.jsx';
 import { FsSyncProvider, useFsSync } from './context/FsSyncContext.jsx';
 import { useAppInfo } from './hooks/useAppInfo.js';
 import { useFsChangeSync } from './hooks/useFsChangeSync.js';
-import { hasEducoworkApi } from './lib/runtime.js';
+import { hasNas4usbApi } from './lib/runtime.js';
 import { guardOpenFileEntry } from './lib/openFileGuard.js';
 import { useTrashGuardedNavigate } from './hooks/useTrashGuardedNavigate.js';
 import { getShareTokenFromUrl } from './lib/shareAccess.js';
@@ -140,7 +140,7 @@ function OpenEditorLayer({ openEditor, syncInfo, allowClose, fullscreen = false,
   return null;
 }
 
-function EduCoworkDesktop({
+function Nas4usbDesktop({
   paths,
   syncInfo,
   infoLoading,
@@ -182,7 +182,7 @@ function EduCoworkDesktop({
   );
 }
 
-function EduCoworkAppMain() {
+function Nas4usbAppMain() {
   const shareToken = useMemo(() => getShareTokenFromUrl() || null, []);
   const isShareMode = Boolean(shareToken);
 
@@ -229,12 +229,7 @@ function EduCoworkAppMain() {
       throw new Error('이 파일 형식은 공유 링크로 미리볼 수 없습니다.');
     }
 
-    try {
-      await window.educowork.fs.openPath(entry.relativePath);
-    } catch (err) {
-      window.alert(err instanceof Error ? err.message : '파일을 열 수 없습니다.');
-    }
-
+    window.alert('이 파일 형식은 앱에서 편집할 수 없습니다.');
     return false;
   }, [isShareMode, notifyRemoteChange]);
 
@@ -264,16 +259,16 @@ function EduCoworkAppMain() {
   }, [notifyRemoteChange]);
 
   useEffect(() => {
-    if (!shareToken || !window.educowork?.auth?.bindShareToken) return undefined;
+    if (!shareToken || !window.nas4usb?.auth?.bindShareToken) return undefined;
 
-    void window.educowork.auth.bindShareToken(shareToken);
+    void window.nas4usb.auth.bindShareToken(shareToken);
     return () => {
-      void window.educowork.auth.bindShareToken('');
+      void window.nas4usb.auth.bindShareToken('');
     };
   }, [shareToken]);
 
   useEffect(() => {
-    if (!shareToken || !window.educowork?.share?.resolve) return undefined;
+    if (!shareToken || !window.nas4usb?.share?.resolve) return undefined;
 
     let cancelled = false;
 
@@ -282,7 +277,7 @@ function EduCoworkAppMain() {
       setShareError('');
 
       try {
-        const entry = await window.educowork.share.resolve({ token: shareToken });
+        const entry = await window.nas4usb.share.resolve({ token: shareToken });
         if (cancelled) return;
 
         if (!entry?.relativePath) {
@@ -347,7 +342,7 @@ function EduCoworkAppMain() {
 
   return (
     <AdminAuthProvider onAuthChange={() => notifyRemoteChange({})}>
-      <EduCoworkDesktop
+      <Nas4usbDesktop
         paths={paths}
         syncInfo={syncInfo}
         infoLoading={infoLoading}
@@ -360,18 +355,18 @@ function EduCoworkAppMain() {
   );
 }
 
-function EduCoworkApp() {
+function Nas4usbApp() {
   return (
     <FsSyncProvider>
-      <EduCoworkAppMain />
+      <Nas4usbAppMain />
     </FsSyncProvider>
   );
 }
 
 export default function App({ connectionError = null }) {
-  if (!hasEducoworkApi()) {
+  if (!hasNas4usbApi()) {
     return <BrowserOnlyNotice error={connectionError} />;
   }
 
-  return <EduCoworkApp />;
+  return <Nas4usbApp />;
 }

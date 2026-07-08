@@ -1,6 +1,6 @@
 import JSZip from 'jszip';
 import { createEmptyWb4sDocument, utf8ToBase64 } from '../../wb4s/document.js';
-import { createEmptyBlockDocument } from '../blocknote/document.js';
+import { createEmptyBlockPackageBase64 } from '../blocknote/package.js';
 import { bytesToBase64 } from '../bytes.js';
 import { resolveUniqueName } from '../fsPaths.js';
 
@@ -121,7 +121,7 @@ export async function buildNewFileContent(type) {
     case 'wb4s':
       return utf8ToBase64(createEmptyWb4sDocument(DEFAULT_STEM));
     case 'block':
-      return utf8ToBase64(createEmptyBlockDocument(DEFAULT_STEM));
+      return createEmptyBlockPackageBase64(DEFAULT_STEM);
     default:
       throw new Error(`지원하지 않는 파일 형식입니다: ${type}`);
   }

@@ -11,7 +11,7 @@ export function useDepartments() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const entries = await window.educowork.fs.readDir('.');
+      const entries = await window.nas4usb.fs.readDir('.');
       const codes = entries
         .filter((entry) => entry.isDirectory && isDepartmentCode(entry.name))
         .map((entry) => entry.name)

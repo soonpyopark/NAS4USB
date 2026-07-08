@@ -1,10 +1,10 @@
-# EduCowork host layer for WhiteBoard4Share
+# NAS4USB host layer for WhiteBoard4Share
 
 | Layer | Path |
 |-------|------|
 | **Engine (synced, not in git)** | `.cache/wb4s-src/` |
 | **NAS host (open/save `.wb4s`)** | `Wb4sEditorShell.jsx`, `Wb4sEditorView.jsx` |
-| **EduCowork patches** | `vendor/wb4s-educowork-overlay/` |
+| **NAS4USB patches** | `vendor/wb4s-nas4usb-overlay/` |
 | **Offline update package** | `lib/updates/wb4s/` |
 
 Vite alias `@wb4s-engine` → `.cache/wb4s-src/src`.

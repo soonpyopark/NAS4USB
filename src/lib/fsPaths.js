@@ -111,7 +111,7 @@ export function readFileAsBase64(file) {
 /** @typedef {'asc'|'desc'} SortDirection */
 
 /**
- * @param {import('../types/educowork.d.ts').FsEntry[]} entries
+ * @param {import('../types/nas4usb.d.ts').FsEntry[]} entries
  * @param {SortField} sortField
  * @param {SortDirection} sortDirection
  */
@@ -136,7 +136,7 @@ export function sortEntries(entries, sortField, sortDirection) {
 }
 
 /**
- * @param {import('../types/educowork.d.ts').FsEntry[]} entries
+ * @param {import('../types/nas4usb.d.ts').FsEntry[]} entries
  * @param {string} query
  */
 export function filterEntries(entries, query) {

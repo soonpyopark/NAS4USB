@@ -1,6 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-contextBridge.exposeInMainWorld('educowork', {
+contextBridge.exposeInMainWorld('nas4usb', {
   __source: 'electron',
   getPaths: () => ipcRenderer.invoke('app:getPaths'),
   getSyncInfo: () => ipcRenderer.invoke('sync:getInfo'),
@@ -28,7 +28,6 @@ contextBridge.exposeInMainWorld('educowork', {
     mkdir: (relativePath) => ipcRenderer.invoke('fs:mkdir', relativePath),
     delete: (relativePath) => ipcRenderer.invoke('fs:delete', relativePath),
     rename: (fromRelative, toRelative) => ipcRenderer.invoke('fs:rename', fromRelative, toRelative),
-    openPath: (relativePath) => ipcRenderer.invoke('fs:openPath', relativePath),
     exists: (relativePath) => ipcRenderer.invoke('fs:exists', relativePath),
     readFile: (relativePath) => ipcRenderer.invoke('fs:readFile', relativePath),
     writeFile: (relativePath, base64) => ipcRenderer.invoke('fs:writeFile', relativePath, base64),

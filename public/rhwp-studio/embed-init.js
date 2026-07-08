@@ -1,5 +1,5 @@
 /**
- * EduCowork iframe embed — CDN/SW 없이 WASM만 빠르게 초기화.
+ * NAS4USB iframe embed — CDN/SW 없이 WASM만 빠르게 초기화.
  * ?embed=1 쿼리가 있을 때만 동작한다.
  */
 (function initRhwpEmbed() {

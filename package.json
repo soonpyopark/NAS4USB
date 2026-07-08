@@ -1,5 +1,5 @@
 {
-  "name": "educowork",
+  "name": "nas4usb",
   "version": "1.0.2",
   "description": "Offline LAN NAS & real-time collaborative HWPX editor",
   "main": "main.js",
@@ -67,7 +67,7 @@
     "electron@33.4.11": true
   },
   "build": {
-    "appId": "com.educowork.app",
+    "appId": "com.nas4usb.app",
     "productName": "NAS4USB",
     "icon": "build/icon.png",
     "directories": {

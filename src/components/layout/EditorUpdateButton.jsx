@@ -16,13 +16,13 @@ export default function EditorUpdateButton() {
     setCoreStatus(null);
 
     try {
-      if (!window.educowork?.editors?.getStatus) {
+      if (!window.nas4usb?.editors?.getStatus) {
         throw new Error(
           '에디터 API가 연결되지 않았습니다. preload 변경 반영을 위해 npm run dev를 다시 실행해 주세요.',
         );
       }
 
-      const status = await window.educowork.editors.getStatus();
+      const status = await window.nas4usb.editors.getStatus();
       setCoreStatus(status?.cores ?? {});
       setConfirmOpen(true);
     } catch (error) {
@@ -48,13 +48,13 @@ export default function EditorUpdateButton() {
     setUpdateResult(null);
 
     try {
-      if (!window.educowork?.editors?.update) {
+      if (!window.nas4usb?.editors?.update) {
         throw new Error(
           '에디터 API가 연결되지 않았습니다. preload 변경 반영을 위해 npm run dev를 다시 실행해 주세요.',
         );
       }
 
-      const result = await window.educowork.editors.update();
+      const result = await window.nas4usb.editors.update();
       setUpdateResult(result);
     } catch (error) {
       setUpdateResult({

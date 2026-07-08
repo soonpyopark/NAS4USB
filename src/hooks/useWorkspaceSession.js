@@ -24,9 +24,9 @@ export function useWorkspaceSession(relativePath) {
 
       try {
         const shareToken = getShareTokenFromUrl() || undefined;
-        const session = await window.educowork.workspace.open(openPathRef.current, shareToken);
+        const session = await window.nas4usb.workspace.open(openPathRef.current, shareToken);
         if (cancelled) {
-          await window.educowork.workspace.close(session.sessionId).catch(() => {});
+          await window.nas4usb.workspace.close(session.sessionId).catch(() => {});
           return;
         }
         sessionRef.current = session.sessionId;
@@ -50,39 +50,39 @@ export function useWorkspaceSession(relativePath) {
       if (!id) return;
 
       sessionRef.current = null;
-      void window.educowork.workspace.close(id).catch(() => {});
+      void window.nas4usb.workspace.close(id).catch(() => {});
     };
   }, []);
 
   const readBinary = useCallback(async () => {
     const id = sessionRef.current;
     if (!id) throw new Error('Workspace session is not ready.');
-    return window.educowork.workspace.read(id);
+    return window.nas4usb.workspace.read(id);
   }, []);
 
   const writeBinary = useCallback(async (base64) => {
     const id = sessionRef.current;
     if (!id) throw new Error('Workspace session is not ready.');
-    return window.educowork.workspace.write(id, base64);
+    return window.nas4usb.workspace.write(id, base64);
   }, []);
 
   const commit = useCallback(async () => {
     const id = sessionRef.current;
     if (!id) throw new Error('Workspace session is not ready.');
-    return window.educowork.workspace.commit(id);
+    return window.nas4usb.workspace.commit(id);
   }, []);
 
   const saveBinary = useCallback(async (base64) => {
     const id = sessionRef.current;
     if (!id) throw new Error('Workspace session is not ready.');
-    await window.educowork.workspace.write(id, base64);
-    return window.educowork.workspace.commit(id);
+    await window.nas4usb.workspace.write(id, base64);
+    return window.nas4usb.workspace.commit(id);
   }, []);
 
   const rename = useCallback(async (newRelativePath) => {
     const id = sessionRef.current;
     if (!id) throw new Error('Workspace session is not ready.');
-    return window.educowork.workspace.rename(id, newRelativePath);
+    return window.nas4usb.workspace.rename(id, newRelativePath);
   }, []);
 
   const close = useCallback(async () => {
@@ -94,7 +94,7 @@ export function useWorkspaceSession(relativePath) {
     setSessionId(null);
 
     try {
-      await window.educowork.workspace.close(id);
+      await window.nas4usb.workspace.close(id);
     } catch {
       // Non-fatal after commit; server session may linger until restart.
     } finally {

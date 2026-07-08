@@ -2,17 +2,17 @@ import { useCallback, useState } from 'react';
 import { joinRelativePath, resolveUniqueName } from '../lib/fsPaths.js';
 import { isTrashPath } from '../lib/trashPaths.js';
 
-/** @typedef {{ mode: 'copy'|'cut', entries: import('../types/educowork.d.ts').FsEntry[] }} FileClipboard */
+/** @typedef {{ mode: 'copy'|'cut', entries: import('../types/nas4usb.d.ts').FsEntry[] }} FileClipboard */
 
 export function useFileClipboard() {
   const [clipboard, setClipboard] = useState(null);
 
-  const copyEntries = useCallback((/** @type {import('../types/educowork.d.ts').FsEntry[]} */ entries) => {
+  const copyEntries = useCallback((/** @type {import('../types/nas4usb.d.ts').FsEntry[]} */ entries) => {
     if (!entries.length) return;
     setClipboard({ mode: 'copy', entries });
   }, []);
 
-  const cutEntries = useCallback((/** @type {import('../types/educowork.d.ts').FsEntry[]} */ entries) => {
+  const cutEntries = useCallback((/** @type {import('../types/nas4usb.d.ts').FsEntry[]} */ entries) => {
     if (!entries.length) return;
     setClipboard({ mode: 'cut', entries });
   }, []);
@@ -37,9 +37,9 @@ export function useFileClipboard() {
         names.add(uniqueName);
 
         if (clipboard.mode === 'copy') {
-          await window.educowork.fs.copy(entry.relativePath, destination);
+          await window.nas4usb.fs.copy(entry.relativePath, destination);
         } else {
-          await window.educowork.fs.move(entry.relativePath, destination);
+          await window.nas4usb.fs.move(entry.relativePath, destination);
         }
       }
 

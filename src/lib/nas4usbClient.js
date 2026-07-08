@@ -1,16 +1,16 @@
 import { appendShareTokenToUrl } from './shareAccess.js';
 import { createFsChangeSubscription } from './fsChangeSubscription.js';
+import {
+  LEGACY_ADMIN_TOKEN_STORAGE_KEY,
+  readStorageWithLegacy,
+} from '../../shared/legacyConfig.js';
 
 const API_PREFIX = '/api';
 
-const ADMIN_TOKEN_STORAGE_KEY = 'educowork.adminToken';
+const ADMIN_TOKEN_STORAGE_KEY = 'nas4usb.adminToken';
 
 function readAdminToken() {
-  try {
-    return sessionStorage.getItem(ADMIN_TOKEN_STORAGE_KEY) ?? '';
-  } catch {
-    return '';
-  }
+  return readStorageWithLegacy(sessionStorage, ADMIN_TOKEN_STORAGE_KEY, LEGACY_ADMIN_TOKEN_STORAGE_KEY);
 }
 
 /**
@@ -86,7 +86,7 @@ async function apiFetch(route, init, timeoutMs = 60000) {
 /**
  * Electron preload와 동일한 API를 HTTP로 제공합니다.
  */
-export function createHttpEducoworkClient() {
+export function createHttpNas4usbClient() {
   return {
     __source: 'http',
 
@@ -120,14 +120,6 @@ export function createHttpEducoworkClient() {
           method: 'POST',
           body: JSON.stringify({ from: fromRelative, to: toRelative }),
         }),
-      openPath: (relativePath) => {
-        window.open(
-          `${API_PREFIX}/fs/download?path=${encodeURIComponent(relativePath)}`,
-          '_blank',
-          'noopener,noreferrer',
-        );
-        return Promise.resolve(true);
-      },
       exists: (relativePath) =>
         apiFetch(`/fs/exists?path=${encodeURIComponent(relativePath)}`),
       readFile: (relativePath) =>

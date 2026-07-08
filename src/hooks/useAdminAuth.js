@@ -1,37 +1,34 @@
 import { useCallback, useEffect, useState } from 'react';
+import {
+  LEGACY_ADMIN_ID_STORAGE_KEY,
+  LEGACY_ADMIN_TOKEN_STORAGE_KEY,
+  readStorageWithLegacy,
+} from '../../shared/legacyConfig.js';
 
-const ADMIN_ID_STORAGE_KEY = 'educowork.adminSession';
-const ADMIN_TOKEN_STORAGE_KEY = 'educowork.adminToken';
+const ADMIN_ID_STORAGE_KEY = 'nas4usb.adminSession';
+const ADMIN_TOKEN_STORAGE_KEY = 'nas4usb.adminToken';
 
 function readStoredAdminId() {
-  try {
-    return sessionStorage.getItem(ADMIN_ID_STORAGE_KEY) ?? '';
-  } catch {
-    return '';
-  }
+  return readStorageWithLegacy(sessionStorage, ADMIN_ID_STORAGE_KEY, LEGACY_ADMIN_ID_STORAGE_KEY);
 }
 
 function readStoredAdminToken() {
-  try {
-    return sessionStorage.getItem(ADMIN_TOKEN_STORAGE_KEY) ?? '';
-  } catch {
-    return '';
-  }
+  return readStorageWithLegacy(sessionStorage, ADMIN_TOKEN_STORAGE_KEY, LEGACY_ADMIN_TOKEN_STORAGE_KEY);
 }
 
 async function bindAdminToken(token) {
-  if (window.educowork?.auth?.bindToken) {
-    await window.educowork.auth.bindToken(token);
+  if (window.nas4usb?.auth?.bindToken) {
+    await window.nas4usb.auth.bindToken(token);
   }
 }
 
 async function logoutAdminSession(token) {
-  if (window.educowork?.auth?.logout) {
-    await window.educowork.auth.logout();
+  if (window.nas4usb?.auth?.logout) {
+    await window.nas4usb.auth.logout();
     return;
   }
 
-  if (token && window.educowork?.__source === 'http') {
+  if (token && window.nas4usb?.__source === 'http') {
     await fetch('/api/auth/logout', {
       method: 'POST',
       headers: {
@@ -62,11 +59,11 @@ export function useAdminAuth({ onAuthChange } = {}) {
       setError('');
 
       try {
-        if (!window.educowork?.auth?.login) {
+        if (!window.nas4usb?.auth?.login) {
           throw new Error('로그인 API를 사용할 수 없습니다. 앱을 다시 실행해 주세요.');
         }
 
-        const result = await window.educowork.auth.login({ id, password });
+        const result = await window.nas4usb.auth.login({ id, password });
         if (!result?.success) {
           setError('아이디 또는 비밀번호가 올바르지 않습니다.');
           return false;

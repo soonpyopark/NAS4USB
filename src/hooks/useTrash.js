@@ -11,7 +11,7 @@ export function useTrash({ enabled = true } = {}) {
     }
 
     try {
-      const map = await window.educowork.trash.getMap();
+      const map = await window.nas4usb.trash.getMap();
       setTrashMap(map && typeof map === 'object' ? map : {});
     } catch {
       setTrashMap({});

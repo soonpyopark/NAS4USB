@@ -1,6 +1,6 @@
 import { applyDeltaToString, computeTextDiff } from '../textDiff.js';
 
-const LOCAL_ORIGIN = Symbol('educowork-local-editor');
+const LOCAL_ORIGIN = Symbol('nas4usb-local-editor');
 const SEED_ORIGIN = 'seed';
 
 /**

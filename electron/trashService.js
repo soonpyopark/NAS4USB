@@ -1,13 +1,19 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { TRASH_FOLDER } from '../shared/constants.js';
+import {
+  getBlockAssetSidecarPath,
+  isBlockAssetSidecarRelativePath,
+  isBlockDocumentRelativePath,
+} from '../shared/blockAssetPaths.js';
+import { LEGACY_TRASH_INDEX_FILE } from '../shared/legacyConfig.js';
 import { purgeYjsRoomsForPathTree } from './yjsRoomTree.js';
 import { getPortableRoot } from './appContext.js';
 import * as fsService from './fsService.js';
 import { syncSharePathDelete, syncSharePathMoveTree } from './shareLinkService.js';
 import { syncFileAccessDelete, syncFileAccessMoveTree } from './fileAccessService.js';
 
-const TRASH_INDEX_FILE = '.educowork-trash.json';
+const TRASH_INDEX_FILE = '.nas4usb-trash.json';
 
 /**
  * @typedef {{ originalPath: string, deletedAt: string, isDirectory: boolean }} TrashItemRecord
@@ -70,15 +76,17 @@ function getBaseName(relativePath) {
  * @returns {Promise<TrashStore>}
  */
 async function loadIndex(portableRoot) {
-  const filePath = path.join(portableRoot, TRASH_INDEX_FILE);
-  try {
-    const raw = await fs.readFile(filePath, 'utf8');
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed.items === 'object') {
-      return { items: parsed.items };
+  for (const fileName of [TRASH_INDEX_FILE, LEGACY_TRASH_INDEX_FILE]) {
+    const filePath = path.join(portableRoot, fileName);
+    try {
+      const raw = await fs.readFile(filePath, 'utf8');
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.items === 'object') {
+        return { items: parsed.items };
+      }
+    } catch {
+      // try next
     }
-  } catch {
-    // fall through
   }
   return { items: {} };
 }
@@ -90,6 +98,7 @@ async function loadIndex(portableRoot) {
 async function saveIndex(portableRoot, store) {
   const filePath = path.join(portableRoot, TRASH_INDEX_FILE);
   await fs.writeFile(filePath, JSON.stringify(store, null, 2), 'utf8');
+  await fs.rm(path.join(portableRoot, LEGACY_TRASH_INDEX_FILE), { force: true }).catch(() => {});
 }
 
 async function ensureTrashFolder() {
@@ -164,6 +173,25 @@ export async function trashPath(relativePath, portableRoot = getPortableRoot()) 
   const normalized = normalizePath(relativePath);
   if (!normalized || normalized === '.' || isTrashPath(normalized)) {
     throw new Error('휴지통으로 이동할 수 없는 항목입니다.');
+  }
+
+  if (isBlockAssetSidecarRelativePath(normalized)) {
+    throw new Error(
+      'BlockNote 편집용 임시 폴더입니다. 연결된 .block 파일을 삭제해 주세요.',
+    );
+  }
+
+  if (isBlockDocumentRelativePath(normalized)) {
+    const sidecar = getBlockAssetSidecarPath(normalized);
+    if (await fsService.pathExists(sidecar)) {
+      try {
+        await fsService.deletePath(sidecar);
+      } catch {
+        throw new Error(
+          'BlockNote 편집 중이거나 미디어 파일이 사용 중입니다. .block 편집 창을 닫은 뒤 다시 시도해 주세요.',
+        );
+      }
+    }
   }
 
   await ensureTrashFolder();

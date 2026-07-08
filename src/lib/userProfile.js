@@ -1,4 +1,4 @@
-export const USER_PROFILE_PATH = '.educowork/profile.json';
+export const USER_PROFILE_PATH = '.nas4usb/profile.json';
 export const USER_DISPLAY_NAME_STORAGE_KEY = 'nas4usb.userDisplayName';
 
 export const USER_NAME_PREFIX = '사용자';

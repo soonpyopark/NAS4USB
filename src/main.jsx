@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
-import { initEducowork } from './lib/initEducowork.js';
+import { initNas4usb } from './lib/initNas4usb.js';
 import { APP_ICON_URL, APP_NAME } from '../shared/constants.js';
 import './styles/index.css';
 
@@ -24,7 +24,7 @@ root.render(
   </div>,
 );
 
-initEducowork()
+initNas4usb()
   .then(() => {
     root.render(
       <React.StrictMode>

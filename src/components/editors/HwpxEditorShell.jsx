@@ -43,7 +43,7 @@ export default function HwpxEditorShell({ relativePath, fileName, syncInfo, onCl
         const base64 = await workspace.readBinary();
         let nextDiskRevision = '';
         try {
-          const statInfo = await window.educowork.fs.stat(relativePath);
+          const statInfo = await window.nas4usb.fs.stat(relativePath);
           nextDiskRevision = statInfo?.modifiedAt ?? '';
         } catch {
           // diskRevision is optional; load should still succeed.
@@ -190,7 +190,7 @@ export default function HwpxEditorShell({ relativePath, fileName, syncInfo, onCl
       await workspace.commit();
       hwpxBase64Ref.current = base64;
       try {
-        const statInfo = await window.educowork.fs.stat(relativePath);
+        const statInfo = await window.nas4usb.fs.stat(relativePath);
         setTextDiskRevision(doc, 'documentBase64', statInfo?.modifiedAt ?? '');
       } catch {
         // ignore optional revision update

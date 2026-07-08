@@ -6,7 +6,7 @@ import path from 'node:path';
 const sessions = new Map();
 
 function getSessionsRoot(tempRoot) {
-  return path.join(tempRoot, 'educowork', 'sessions');
+  return path.join(tempRoot, 'nas4usb', 'sessions');
 }
 
 export async function openWorkspace(relativePath, dataRoot, tempRoot) {

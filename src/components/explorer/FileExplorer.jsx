@@ -66,7 +66,6 @@ export default function FileExplorer({
     copyTo,
     uploadFiles,
     stat,
-    openInSystem,
   } = useFileSystem(currentPath);
 
   const {
@@ -431,7 +430,7 @@ export default function FileExplorer({
     if (targetPath === currentPath) {
       existingNames = entries.map((entry) => entry.name);
     } else {
-      const dirEntries = await window.educowork.fs.readDir(targetPath);
+      const dirEntries = await window.nas4usb.fs.readDir(targetPath);
       existingNames = dirEntries.map((entry) => entry.name);
     }
 
@@ -571,7 +570,6 @@ export default function FileExplorer({
         isInTrashView,
         hasClipboard,
         onOpen: handleOpen,
-        onOpenSystem: (entry) => openInSystem(entry.relativePath),
         onUpload: contextTarget?.isDirectory ? triggerUpload : undefined,
         onCopy: () => handleCopy(contextTarget),
         onCut: () => handleCut(contextTarget),

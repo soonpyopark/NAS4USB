@@ -41,7 +41,7 @@ Current engine cache   : ${engineRoot}
 Upstream scratch       : ${scratch}
 Offline update package : ${localUpdateDir}
 Bundled version        : v${WB4S_UPSTREAM_VERSION}
-EduCowork patches      : ${overlayDir}
+NAS4USB patches      : ${overlayDir}
 
 Steps:
   1. Compare upstream scratch with current engine cache

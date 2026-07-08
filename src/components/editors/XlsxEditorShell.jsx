@@ -49,7 +49,7 @@ export default function XlsxEditorShell({ relativePath, fileName, syncInfo, onCl
 
         let nextDiskRevision = '';
         try {
-          const statInfo = await window.educowork.fs.stat(relativePath);
+          const statInfo = await window.nas4usb.fs.stat(relativePath);
           nextDiskRevision = statInfo?.modifiedAt ?? '';
         } catch {
           // diskRevision is optional; load should still succeed.
@@ -117,7 +117,7 @@ export default function XlsxEditorShell({ relativePath, fileName, syncInfo, onCl
       const base64 = buildSpreadsheetBase64(sheets, { bookType });
       await workspace.writeBinary(base64);
       await workspace.commit();
-      const statInfo = await window.educowork.fs.stat(relativePath);
+      const statInfo = await window.nas4usb.fs.stat(relativePath);
       const nextDiskRevision = statInfo?.modifiedAt ?? '';
       setDiskRevision(nextDiskRevision);
       if (doc) {

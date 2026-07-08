@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { joinRelativePath, readFileAsBase64, resolveUniqueName, validateFolderName } from '../lib/fsPaths.js';
 import { readDirWithRetry } from '../lib/readDirWithRetry.js';
 import { filterTrashFromEntries, isFsNotFoundError, isTrashPath } from '../lib/trashPaths.js';
+import { filterBlockAssetSidecarFromEntries } from '../../shared/blockAssetPaths.js';
 import { buildNewFileContent, resolveNewFileName } from '../lib/files/newFileFactory.js';
-import { convertHwpBase64ToHwpx, isHwpFileName, toHwpxFileName } from '@educowork/rhwp/hwpConvert.js';
+import { convertHwpBase64ToHwpx, isHwpFileName, toHwpxFileName } from '@nas4usb/rhwp/hwpConvert.js';
 
 export function useFileSystem(currentPath) {
   const [entries, setEntries] = useState([]);
@@ -16,7 +17,7 @@ export function useFileSystem(currentPath) {
 
     try {
       const result = await readDirWithRetry(currentPath);
-      setEntries(filterTrashFromEntries(result, currentPath));
+      setEntries(filterBlockAssetSidecarFromEntries(filterTrashFromEntries(result, currentPath)));
     } catch (err) {
       if (isFsNotFoundError(err)) {
         setEntries([]);
@@ -36,7 +37,7 @@ export function useFileSystem(currentPath) {
 
   const mkdir = useCallback(
     async (name) => {
-      await window.educowork.fs.mkdir(joinRelativePath(currentPath, name));
+      await window.nas4usb.fs.mkdir(joinRelativePath(currentPath, name));
     },
     [currentPath],
   );
@@ -50,7 +51,7 @@ export function useFileSystem(currentPath) {
 
       const existingNames = entries.filter((entry) => entry.isDirectory).map((entry) => entry.name);
       const folderName = resolveUniqueName(existingNames, validation.name);
-      await window.educowork.fs.mkdir(joinRelativePath(currentPath, folderName));
+      await window.nas4usb.fs.mkdir(joinRelativePath(currentPath, folderName));
       return folderName;
     },
     [currentPath, entries],
@@ -58,7 +59,7 @@ export function useFileSystem(currentPath) {
 
   const createFile = useCallback(
     async (name, base64 = '') => {
-      await window.educowork.fs.writeFile(joinRelativePath(currentPath, name), base64);
+      await window.nas4usb.fs.writeFile(joinRelativePath(currentPath, name), base64);
     },
     [currentPath],
   );
@@ -75,35 +76,35 @@ export function useFileSystem(currentPath) {
   );
 
   const remove = useCallback(async (relativePath) => {
-    await window.educowork.fs.delete(relativePath);
+    await window.nas4usb.fs.delete(relativePath);
   }, []);
 
   const moveToTrash = useCallback(async (relativePath) => {
-    await window.educowork.trash.move(relativePath);
+    await window.nas4usb.trash.move(relativePath);
   }, []);
 
   const restoreFromTrash = useCallback(async (relativePath) => {
-    return window.educowork.trash.restore(relativePath);
+    return window.nas4usb.trash.restore(relativePath);
   }, []);
 
   const emptyTrash = useCallback(async () => {
-    await window.educowork.trash.empty();
+    await window.nas4usb.trash.empty();
   }, []);
 
   const deletePermanent = useCallback(async (relativePath) => {
-    await window.educowork.trash.deletePermanent(relativePath);
+    await window.nas4usb.trash.deletePermanent(relativePath);
   }, []);
 
   const rename = useCallback(async (fromRelative, toRelative) => {
-    await window.educowork.fs.rename(fromRelative, toRelative);
+    await window.nas4usb.fs.rename(fromRelative, toRelative);
   }, []);
 
   const copyTo = useCallback(async (fromRelative, toRelative) => {
-    await window.educowork.fs.copy(fromRelative, toRelative);
+    await window.nas4usb.fs.copy(fromRelative, toRelative);
   }, []);
 
   const moveTo = useCallback(async (fromRelative, toRelative) => {
-    await window.educowork.fs.move(fromRelative, toRelative);
+    await window.nas4usb.fs.move(fromRelative, toRelative);
   }, []);
 
   const uploadFiles = useCallback(
@@ -121,17 +122,13 @@ export function useFileSystem(currentPath) {
           targetName = toHwpxFileName(file.name);
         }
 
-        await window.educowork.fs.writeFile(joinRelativePath(currentPath, targetName), base64);
+        await window.nas4usb.fs.writeFile(joinRelativePath(currentPath, targetName), base64);
       }
     },
     [currentPath],
   );
 
-  const stat = useCallback(async (relativePath) => window.educowork.fs.stat(relativePath), []);
-
-  const openInSystem = useCallback(async (relativePath) => {
-    await window.educowork.fs.openPath(relativePath);
-  }, []);
+  const stat = useCallback(async (relativePath) => window.nas4usb.fs.stat(relativePath), []);
 
   return {
     entries,
@@ -152,6 +149,5 @@ export function useFileSystem(currentPath) {
     moveTo,
     uploadFiles,
     stat,
-    openInSystem,
   };
 }

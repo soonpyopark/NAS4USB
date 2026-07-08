@@ -1,9 +1,16 @@
-const STORAGE_KEY = 'educowork.syncHost';
+import {
+  LEGACY_ADMIN_ID_STORAGE_KEY,
+  LEGACY_ADMIN_TOKEN_STORAGE_KEY,
+  LEGACY_SYNC_HOST_STORAGE_KEY,
+  readStorageWithLegacy,
+} from '../../shared/legacyConfig.js';
+
+const STORAGE_KEY = 'nas4usb.syncHost';
 
 /** @returns {string} */
 export function loadSyncHost() {
   if (typeof window === 'undefined') return '';
-  return window.localStorage.getItem(STORAGE_KEY)?.trim() ?? '';
+  return readStorageWithLegacy(window.localStorage, STORAGE_KEY, LEGACY_SYNC_HOST_STORAGE_KEY).trim();
 }
 
 /**
@@ -21,6 +28,7 @@ export function sanitizeSyncHostForBrowser() {
 
   if (!isLocalPage && isLocalConfig) {
     window.localStorage.removeItem(STORAGE_KEY);
+    window.localStorage.removeItem(LEGACY_SYNC_HOST_STORAGE_KEY);
   }
 }
 
@@ -30,6 +38,7 @@ export function saveSyncHost(host) {
   const trimmed = host.trim();
   if (!trimmed) {
     window.localStorage.removeItem(STORAGE_KEY);
+    window.localStorage.removeItem(LEGACY_SYNC_HOST_STORAGE_KEY);
     return;
   }
   window.localStorage.setItem(STORAGE_KEY, trimmed);

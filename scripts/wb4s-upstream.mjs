@@ -1,6 +1,6 @@
 import path from 'node:path';
 
-/** WhiteBoard4Share version bundled into EduCowork. */
+/** WhiteBoard4Share version bundled into NAS4USB. */
 export const WB4S_UPSTREAM_VERSION = '1.0.3';
 
 export const WB4S_REPO = 'https://github.com/soonpyopark/WhiteBoard4Share.git';
@@ -34,7 +34,7 @@ export function getWb4sEngineSrc(root) {
 }
 
 export function getWb4sOverlayDir(root) {
-  return path.join(root, 'vendor', 'wb4s-educowork-overlay');
+  return path.join(root, 'vendor', 'wb4s-nas4usb-overlay');
 }
 
 export function getWb4sLocalUpdatePackage(root) {

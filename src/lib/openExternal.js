@@ -2,8 +2,8 @@
  * @param {string} url
  */
 export async function openExternalUrl(url) {
-  if (window.educowork?.openExternal) {
-    await window.educowork.openExternal(url);
+  if (window.nas4usb?.openExternal) {
+    await window.nas4usb.openExternal(url);
     return;
   }
 

@@ -7,7 +7,6 @@ import { isTrashPath } from './trashPaths.js';
  *   hasClipboard: boolean,
  *   isInTrashView?: boolean,
  *   onOpen: (entry: { relativePath: string, isDirectory: boolean }) => void,
- *   onOpenSystem: (entry: { relativePath: string, isDirectory: boolean }) => void,
  *   onUpload?: (targetPath: string) => void,
  *   onCopy: () => void,
  *   onCut: () => void,
@@ -31,7 +30,6 @@ export function buildEntryContextMenuItems({
   hasClipboard,
   isInTrashView = false,
   onOpen,
-  onOpenSystem,
   onUpload,
   onCopy,
   onCut,
@@ -88,12 +86,6 @@ export function buildEntryContextMenuItems({
           onClick: () => entry && onOpen(entry),
         },
         {
-          id: 'open-system',
-          label: '시스템에서 열기',
-          disabled: !entry,
-          onClick: () => entry && onOpenSystem(entry),
-        },
-        {
           id: 'properties',
           label: '속성',
           disabled: targetCount !== 1,
@@ -108,12 +100,6 @@ export function buildEntryContextMenuItems({
         label: '편집 열기',
         disabled: !entry || !canEditOpen,
         onClick: () => entry && onOpen(entry),
-      },
-      {
-        id: 'open-system',
-        label: '시스템에서 열기',
-        disabled: !entry || entry.isDirectory,
-        onClick: () => entry && onOpenSystem(entry),
       },
       {
         id: 'download',
@@ -177,12 +163,6 @@ export function buildEntryContextMenuItems({
         onClick: () => entry && onOpen(entry),
       },
       {
-        id: 'open-system',
-        label: '시스템에서 열기',
-        disabled: !entry,
-        onClick: () => entry && onOpenSystem(entry),
-      },
-      {
         id: 'upload',
         label: '업로드',
         disabled: !entry || !onUpload,
@@ -204,12 +184,6 @@ export function buildEntryContextMenuItems({
       label: '편집 열기',
       disabled: !entry || !canEditOpen,
       onClick: () => entry && onOpen(entry),
-    },
-    {
-      id: 'open-system',
-      label: '시스템에서 열기',
-      disabled: !entry || entry.isDirectory,
-      onClick: () => entry && onOpenSystem(entry),
     },
     {
       id: 'download',

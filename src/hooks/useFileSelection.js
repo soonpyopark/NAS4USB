@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 
 /**
- * @param {import('../types/educowork.d.ts').FsEntry[]} entries
+ * @param {import('../types/nas4usb.d.ts').FsEntry[]} entries
  */
 export function useFileSelection(entries) {
   const [selectedPaths, setSelectedPaths] = useState([]);

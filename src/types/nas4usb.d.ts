@@ -1,5 +1,5 @@
 /**
- * @typedef {Object} EducoworkPaths
+ * @typedef {Object} Nas4usbPaths
  * @property {string} appPath
  * @property {string} dataRoot
  * @property {string} tempPath
@@ -7,7 +7,7 @@
  */
 
 /**
- * @typedef {Object} EducoworkSyncInfo
+ * @typedef {Object} Nas4usbSyncInfo
  * @property {number} port
  * @property {string[]} addresses
  */
@@ -40,7 +40,7 @@
  */
 
 /** @global */
-window.educowork = {
+window.nas4usb = {
   __source: 'electron',
   getPaths: () => {},
   getSyncInfo: () => {},
@@ -54,7 +54,6 @@ window.educowork = {
     mkdir: (relativePath) => {},
     delete: (relativePath) => {},
     rename: (fromRelative, toRelative) => {},
-    openPath: (relativePath) => {},
     exists: (relativePath) => {},
     readFile: (relativePath) => {},
     writeFile: (relativePath, base64) => {},

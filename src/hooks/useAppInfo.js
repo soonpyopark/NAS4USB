@@ -12,8 +12,8 @@ export function useAppInfo() {
     async function load() {
       try {
         const [pathInfo, sync] = await Promise.all([
-          window.educowork.getPaths(),
-          window.educowork.getSyncInfo(),
+          window.nas4usb.getPaths(),
+          window.nas4usb.getSyncInfo(),
         ]);
 
         if (!cancelled) {

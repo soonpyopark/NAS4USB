@@ -5,14 +5,14 @@ export function useFileAccess() {
   const [loading, setLoading] = useState(true);
 
   const refreshAccessMap = useCallback(async () => {
-    if (!window.educowork?.fileAccess?.getMap) {
+    if (!window.nas4usb?.fileAccess?.getMap) {
       setAccessMap({});
       setLoading(false);
       return;
     }
 
     try {
-      const map = await window.educowork.fileAccess.getMap();
+      const map = await window.nas4usb.fileAccess.getMap();
       setAccessMap(map ?? {});
     } catch {
       setAccessMap({});
@@ -27,11 +27,11 @@ export function useFileAccess() {
 
   const setFileAccess = useCallback(
     async (relativePath, patch) => {
-      if (!window.educowork?.fileAccess?.set) {
+      if (!window.nas4usb?.fileAccess?.set) {
         throw new Error('파일 접근 설정 API를 사용할 수 없습니다.');
       }
 
-      await window.educowork.fileAccess.set({ path: relativePath, ...patch });
+      await window.nas4usb.fileAccess.set({ path: relativePath, ...patch });
       await refreshAccessMap();
     },
     [refreshAccessMap],

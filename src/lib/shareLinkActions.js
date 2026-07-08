@@ -10,13 +10,13 @@ import { buildShareLinkUrl } from './shareLink.js';
  * @returns {Promise<{ url: string, fileName?: string, entry: { relativePath: string, name?: string } }>}
  */
 export async function openShareLinkForEntry({ entry, syncInfo, shareMap, refreshShareMap }) {
-  if (!window.educowork?.share?.create) {
+  if (!window.nas4usb?.share?.create) {
     throw new Error('공유링크 API를 사용할 수 없습니다.');
   }
 
   let token = shareMap[entry.relativePath]?.token;
   if (!token) {
-    const result = await window.educowork.share.create({ path: entry.relativePath });
+    const result = await window.nas4usb.share.create({ path: entry.relativePath });
     token = result.token;
     await refreshShareMap();
   }
@@ -35,11 +35,11 @@ export async function openShareLinkForEntry({ entry, syncInfo, shareMap, refresh
  * }} options
  */
 export async function revokeShareLinkForEntry({ entry, refreshShareMap }) {
-  if (!window.educowork?.share?.revoke) {
+  if (!window.nas4usb?.share?.revoke) {
     throw new Error('공유링크 API를 사용할 수 없습니다.');
   }
 
-  const result = await window.educowork.share.revoke({ path: entry.relativePath });
+  const result = await window.nas4usb.share.revoke({ path: entry.relativePath });
   await refreshShareMap();
 
   if (!result?.revoked) {

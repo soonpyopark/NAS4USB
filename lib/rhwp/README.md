@@ -4,7 +4,7 @@
 
 ```bash
 npm run build:rhwp-studio   # rhwp-studio 오프라인 번들 생성
-npm run build               # rhwp-studio + EduCowork UI
+npm run build               # rhwp-studio + NAS4USB UI
 ```
 
 `lib/rhwp/mountRhwp.js`는 `./rhwp-studio/` iframe만 사용합니다 (외부 CDN 없음).

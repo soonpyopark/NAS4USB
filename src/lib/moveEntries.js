@@ -19,7 +19,7 @@ export function isPathInsideOrEqual(ancestorPath, candidatePath) {
 }
 
 /**
- * @param {import('../types/educowork.d.ts').FsEntry[]} entries
+ * @param {import('../types/nas4usb.d.ts').FsEntry[]} entries
  * @param {string} destinationPath
  */
 export function validateExportDestination(entries, destinationPath) {
@@ -33,7 +33,7 @@ export function validateExportDestination(entries, destinationPath) {
 }
 
 /**
- * @param {import('../types/educowork.d.ts').FsEntry[]} entries
+ * @param {import('../types/nas4usb.d.ts').FsEntry[]} entries
  * @param {string} destinationPath
  */
 export function validateMoveDestination(entries, destinationPath) {
@@ -64,7 +64,7 @@ export function validateMoveDestination(entries, destinationPath) {
 
 /**
  * @param {string} folderPath
- * @param {import('../types/educowork.d.ts').FsEntry[]} entries
+ * @param {import('../types/nas4usb.d.ts').FsEntry[]} entries
  */
 export function isBlockedMoveFolder(folderPath, entries) {
   return entries.some(
@@ -73,9 +73,9 @@ export function isBlockedMoveFolder(folderPath, entries) {
 }
 
 /**
- * @param {import('../types/educowork.d.ts').FsEntry[]} entries
+ * @param {import('../types/nas4usb.d.ts').FsEntry[]} entries
  * @param {string} destinationPath
- * @returns {Promise<Array<{ from: string, to: string, entry: import('../types/educowork.d.ts').FsEntry }>>}
+ * @returns {Promise<Array<{ from: string, to: string, entry: import('../types/nas4usb.d.ts').FsEntry }>>}
  */
 export async function moveEntries(entries, destinationPath) {
   const validation = validateMoveDestination(entries, destinationPath);
@@ -83,9 +83,9 @@ export async function moveEntries(entries, destinationPath) {
     throw new Error(validation.error);
   }
 
-  const dirEntries = await window.educowork.fs.readDir(destinationPath);
+  const dirEntries = await window.nas4usb.fs.readDir(destinationPath);
   const names = new Set(dirEntries.map((entry) => entry.name));
-  /** @type {Array<{ from: string, to: string, entry: import('../types/educowork.d.ts').FsEntry }>} */
+  /** @type {Array<{ from: string, to: string, entry: import('../types/nas4usb.d.ts').FsEntry }>} */
   const results = [];
 
   for (const entry of entries) {
@@ -98,7 +98,7 @@ export async function moveEntries(entries, destinationPath) {
     }
 
     names.add(uniqueName);
-    await window.educowork.fs.move(entry.relativePath, destination);
+    await window.nas4usb.fs.move(entry.relativePath, destination);
     results.push({ from: entry.relativePath, to: destination, entry });
   }
 
@@ -109,7 +109,7 @@ export async function moveEntries(entries, destinationPath) {
  * @param {string} relativePath
  */
 export async function listMoveDestinationFolders(relativePath) {
-  const entries = await window.educowork.fs.readDir(relativePath);
+  const entries = await window.nas4usb.fs.readDir(relativePath);
   return sortEntries(
     entries.filter((entry) => entry.isDirectory && entry.relativePath !== TRASH_FOLDER),
     'name',

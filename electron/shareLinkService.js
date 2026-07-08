@@ -2,8 +2,9 @@ import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { getPortableRoot, resolvePortablePath } from './appContext.js';
+import { LEGACY_SHARE_FILE } from '../shared/legacyConfig.js';
 
-const SHARE_FILE = '.educowork-shares.json';
+const SHARE_FILE = '.nas4usb-shares.json';
 
 /**
  * @typedef {{ token: string, createdAt: string }} ShareLinkRecord
@@ -15,15 +16,17 @@ const SHARE_FILE = '.educowork-shares.json';
  * @returns {Promise<ShareLinkStore>}
  */
 async function loadStore(portableRoot) {
-  const filePath = path.join(portableRoot, SHARE_FILE);
-  try {
-    const raw = await fs.readFile(filePath, 'utf8');
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed.links === 'object') {
-      return { links: parsed.links };
+  for (const fileName of [SHARE_FILE, LEGACY_SHARE_FILE]) {
+    const filePath = path.join(portableRoot, fileName);
+    try {
+      const raw = await fs.readFile(filePath, 'utf8');
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.links === 'object') {
+        return { links: parsed.links };
+      }
+    } catch {
+      // try next
     }
-  } catch {
-    // fall through
   }
   return { links: {} };
 }
@@ -35,6 +38,7 @@ async function loadStore(portableRoot) {
 async function saveStore(portableRoot, store) {
   const filePath = path.join(portableRoot, SHARE_FILE);
   await fs.writeFile(filePath, JSON.stringify(store, null, 2), 'utf8');
+  await fs.rm(path.join(portableRoot, LEGACY_SHARE_FILE), { force: true }).catch(() => {});
 }
 
 /**

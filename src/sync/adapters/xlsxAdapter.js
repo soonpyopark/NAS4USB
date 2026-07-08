@@ -1,5 +1,5 @@
-const LOCAL_ORIGIN = Symbol('educowork-local-fortune-sheet');
-const DISK_SNAPSHOT_ORIGIN = Symbol('educowork-disk-snapshot');
+const LOCAL_ORIGIN = Symbol('nas4usb-local-fortune-sheet');
+const DISK_SNAPSHOT_ORIGIN = Symbol('nas4usb-disk-snapshot');
 
 /**
  * @param {import('yjs').Map<string, unknown>} meta

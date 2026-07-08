@@ -2,7 +2,7 @@
 chcp 949 >nul 2>&1
 
 REM ============================================================================
-REM  NAS4USB / EduCowork - Update all components to latest
+REM  NAS4USB / NAS4USB - Update all components to latest
 REM  Editor cores (rhwp, wb4s, fortune-sheet, tiptap) + npm + optional exe build
 REM ============================================================================
 
