@@ -36,6 +36,7 @@ export default function EditorModal({
   peerCount,
   saving,
   saveDisabled = false,
+  hideSave = false,
   onSave,
   onClose,
   allowClose = true,
@@ -58,9 +59,11 @@ export default function EditorModal({
         />
 
         <AppModalActions className="modal-editor-header__actions !mb-0 shrink-0">
-          <AppModalButton variant="primary" onClick={onSave} disabled={saving || saveDisabled}>
-            {saving ? '저장 중…' : '작성 내용 저장'}
-          </AppModalButton>
+          {!hideSave && (
+            <AppModalButton variant="primary" onClick={onSave} disabled={saving || saveDisabled}>
+              {saving ? '저장 중…' : '작성 내용 저장'}
+            </AppModalButton>
+          )}
           {allowClose && <AppModalButton onClick={onClose}>닫기</AppModalButton>}
         </AppModalActions>
       </header>

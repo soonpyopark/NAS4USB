@@ -1,12 +1,31 @@
 import { resolveFileEntryStatus } from '../../lib/fileEntryStatus.js';
 
-/** [비] + [열쇠] + [링크] 3칸 (18px × 3 + gap 0.5 × 2) */
-export const FILE_STATUS_SLOT_WIDTH = 58;
+/** [별] + [비] + [열쇠] + [링크] 4칸 (18px × 4 + gap 0.5 × 3) */
+export const FILE_STATUS_SLOT_WIDTH = 76;
 
 const ICON_BADGE_CLASS =
   'inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-sm text-[10pt] font-semibold leading-none';
 
 const STATUS_SLOT_CLASS = `inline-flex h-[18px] shrink-0 items-center gap-0.5`;
+
+function ShareLinkIcon() {
+  return (
+    <svg
+      className="h-3 w-3"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      aria-hidden="true"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"
+      />
+    </svg>
+  );
+}
 
 function VisibilityBadge({ onClick }) {
   return (
@@ -44,7 +63,7 @@ function ViewRestrictionBadge({ onClick }) {
   );
 }
 
-function ShareLinkBadge({ onClick }) {
+function ShareViewOnlyBadge({ onClick }) {
   return (
     <button
       type="button"
@@ -52,23 +71,46 @@ function ShareLinkBadge({ onClick }) {
         event.stopPropagation();
         onClick?.();
       }}
-      className={`${ICON_BADGE_CLASS} cursor-pointer bg-sky-50 text-sky-700 transition-colors hover:bg-sky-100`}
-      title="공유 링크 복사"
-      aria-label="공유 링크 복사"
+      className={`${ICON_BADGE_CLASS} cursor-pointer bg-red-50 text-red-700 transition-colors hover:bg-red-100`}
+      title="공유(보기 전용) · 링크 복사"
+      aria-label="공유(보기 전용) · 링크 복사"
     >
-      <svg
-        className="h-3 w-3"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        aria-hidden="true"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"
-        />
+      <ShareLinkIcon />
+    </button>
+  );
+}
+
+function ShareEditableBadge({ onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick?.();
+      }}
+      className={`${ICON_BADGE_CLASS} cursor-pointer bg-green-50 text-green-700 transition-colors hover:bg-green-100`}
+      title="공유(편집 가능) · 링크 복사"
+      aria-label="공유(편집 가능) · 링크 복사"
+    >
+      <ShareLinkIcon />
+    </button>
+  );
+}
+
+function FavoriteBadge({ onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick?.();
+      }}
+      className={`${ICON_BADGE_CLASS} cursor-pointer bg-amber-50 text-amber-600 transition-colors hover:bg-amber-100`}
+      title="즐겨찾기 · 속성"
+      aria-label="즐겨찾기 · 속성"
+    >
+      <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M12 2.25l2.52 5.11 5.64.82-4.08 3.98.96 5.62L12 15.9l-5.04 2.88.96-5.62-4.08-3.98 5.64-.82L12 2.25z" />
       </svg>
     </button>
   );
@@ -78,12 +120,13 @@ export default function FileEntryStatusBadges({
   entry,
   accessMap,
   shareMap,
+  favoritesMap = {},
   onShareLinkClick,
   onPropertiesClick,
 }) {
   const status = entry.isDirectory
     ? null
-    : resolveFileEntryStatus(entry.relativePath, accessMap, shareMap);
+    : resolveFileEntryStatus(entry.relativePath, accessMap, shareMap, favoritesMap);
 
   const openProperties = () => onPropertiesClick?.(entry);
 
@@ -95,10 +138,14 @@ export default function FileEntryStatusBadges({
       onClick={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}
     >
+      {status?.isFavorite && <FavoriteBadge onClick={openProperties} />}
       {status?.isPrivate && <VisibilityBadge onClick={openProperties} />}
       {status?.isViewRestricted && <ViewRestrictionBadge onClick={openProperties} />}
-      {status?.isSharing && (
-        <ShareLinkBadge onClick={() => onShareLinkClick?.(entry)} />
+      {status?.isShareViewOnly && (
+        <ShareViewOnlyBadge onClick={() => onShareLinkClick?.(entry)} />
+      )}
+      {status?.isShareEditable && (
+        <ShareEditableBadge onClick={() => onShareLinkClick?.(entry)} />
       )}
     </span>
   );

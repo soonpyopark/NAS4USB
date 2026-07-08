@@ -71,16 +71,21 @@ window.nas4usb = {
   },
   editors: {
     getStatus: () => {},
-    update: () => {},
   },
   auth: {
     login: ({ id, password }) => {},
   },
   share: {
     getMap: () => {},
-    create: ({ path }) => {},
+    create: ({ path, mode }) => {},
+    setMode: ({ path, mode }) => {},
     revoke: ({ path }) => {},
     resolve: ({ token }) => {},
+  },
+  favorites: {
+    getMap: () => {},
+    listEntries: () => {},
+    set: ({ path, favorited }) => {},
   },
 };
 

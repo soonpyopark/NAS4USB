@@ -1,7 +1,8 @@
-import { spawnSync, execSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import pngToIco from 'png-to-ico';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '..');
@@ -46,7 +47,7 @@ function syncIconPngToTargets(iconPngPath) {
     fs.copyFileSync(iconPngPath, target);
   }
 
-  console.log('[icons] icon.png → build/, public/, electron/, wb4s-editor/, src/wb4s/');
+  console.log('[icons] icon.png (512px) → build/, public/, electron/, wb4s-editor/, src/wb4s/');
 }
 
 /**
@@ -58,7 +59,7 @@ function syncDerivedPublicAssets(icon256Path, icon512Path, icon32Path, icon16Pat
   fs.copyFileSync(icon32Path, path.join(publicDir, 'favicon-32.png'));
   fs.copyFileSync(icon16Path, path.join(publicDir, 'favicon-16.png'));
 
-  for (const size of [16, 32, 48, 64, 128, 256]) {
+  for (const size of [16, 32, 48, 64, 128, 256, 512, 1024]) {
     const from = path.join(buildDir, `icon-${size}.png`);
     if (fs.existsSync(from)) {
       fs.copyFileSync(from, path.join(publicDir, `icon-${size}.png`));
@@ -69,18 +70,24 @@ function syncDerivedPublicAssets(icon256Path, icon512Path, icon32Path, icon16Pat
 /**
  * @param {string} icon512Path
  */
-function generatePlatformIcons(icon512Path) {
-  const icoInputs = ['icon-16.png', 'icon-32.png', 'icon-48.png', 'icon-64.png', 'icon-128.png', 'icon-256.png']
-    .map((fileName) => `"${path.join(buildDir, fileName)}"`)
-    .join(' ');
+async function generatePlatformIcons(icon512Path) {
+  const icoFiles = [
+    'icon-16.png',
+    'icon-32.png',
+    'icon-48.png',
+    'icon-64.png',
+    'icon-128.png',
+    'icon-256.png',
+    'icon-512.png',
+    'icon-1024.png',
+  ].filter((fileName) => fs.existsSync(path.join(buildDir, fileName)));
 
-  const icoBuffer = execSync(`npx --yes png-to-ico ${icoInputs}`, {
-    encoding: 'buffer',
-    shell: true,
-  });
-  fs.writeFileSync(path.join(buildDir, 'icon.ico'), icoBuffer);
-  fs.copyFileSync(path.join(buildDir, 'icon.ico'), path.join(publicDir, 'favicon.ico'));
-  console.log('[icons] icon.ico → build/ + public/favicon.ico');
+  const icoBuffer = await pngToIco(icoFiles.map((fileName) => path.join(buildDir, fileName)));
+  const icoPath = path.join(buildDir, 'icon.ico');
+  fs.writeFileSync(icoPath, icoBuffer);
+  fs.copyFileSync(icoPath, path.join(publicDir, 'favicon.ico'));
+  fs.copyFileSync(icoPath, path.join(electronDir, 'icon.ico'));
+  console.log(`[icons] icon.ico (${icoFiles.length} sizes, up to 1024px) → build/, public/favicon.ico, electron/`);
 
   const icnsBase = path.join(buildDir, 'icon');
   const icnsOk = tryRun('npx', [
@@ -120,19 +127,19 @@ const sizes = [
   { size: 128, out: 'icon-128.png' },
   { size: 256, out: 'icon-256.png' },
   { size: 512, out: 'icon-512.png' },
+  { size: 1024, out: 'icon-1024.png' },
 ];
 
 for (const { size, out } of sizes) {
   run('npx', ['--yes', 'sharp-cli', '-i', source, '-o', path.join(buildDir, out), 'resize', String(size), String(size)]);
 }
 
-const icon256Path = path.join(buildDir, 'icon-256.png');
 const icon512Path = path.join(buildDir, 'icon-512.png');
 const icon32Path = path.join(buildDir, 'icon-32.png');
 const icon16Path = path.join(buildDir, 'icon-16.png');
 
-syncIconPngToTargets(icon256Path);
-syncDerivedPublicAssets(icon256Path, icon512Path, icon32Path, icon16Path);
-generatePlatformIcons(icon512Path);
+syncIconPngToTargets(icon512Path);
+syncDerivedPublicAssets(icon512Path, icon512Path, icon32Path, icon16Path);
+await generatePlatformIcons(icon512Path);
 
 console.log('[icons] NAS4USB icons ready');

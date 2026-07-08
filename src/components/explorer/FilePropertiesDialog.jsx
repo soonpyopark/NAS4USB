@@ -21,12 +21,20 @@ function formatDate(iso) {
  * @param {{
  *   entry: { name?: string, relativePath: string, isDirectory?: boolean, extension?: string, size?: number, modifiedAt?: string } | null,
  *   statInfo?: { name?: string, size?: number, createdAt?: string, modifiedAt?: string } | null,
- *   fileStatus?: { isPrivate: boolean, isViewRestricted: boolean, isSharing: boolean } | null,
+ *   fileStatus?: {
+ *     isPrivate: boolean,
+ *     isViewRestricted: boolean,
+ *     isShareViewOnly?: boolean,
+ *     isShareEditable?: boolean,
+ *     isFavorite?: boolean,
+ *   } | null,
  *   isAdminLoggedIn?: boolean,
  *   accessSaving?: boolean,
  *   onChangePrivate?: (checked: boolean) => void,
  *   onChangeViewRestricted?: (checked: boolean) => void,
- *   onChangeShare?: (checked: boolean) => void,
+ *   onChangeShareView?: (checked: boolean) => void,
+ *   onChangeShareEdit?: (checked: boolean) => void,
+ *   onChangeFavorite?: (checked: boolean) => void,
  *   onClose: () => void,
  * }} props
  */
@@ -38,14 +46,22 @@ export default function FilePropertiesDialog({
   accessSaving = false,
   onChangePrivate,
   onChangeViewRestricted,
-  onChangeShare,
+  onChangeShareView,
+  onChangeShareEdit,
+  onChangeFavorite,
   onClose,
 }) {
   const canEditAccessOptions = isAdminLoggedIn;
   const resolvedFileStatus =
     fileStatus ??
     (entry && !entry.isDirectory
-      ? { isPrivate: false, isViewRestricted: false, isSharing: false }
+      ? {
+          isPrivate: false,
+          isViewRestricted: false,
+          isShareViewOnly: false,
+          isShareEditable: false,
+          isFavorite: false,
+        }
       : null);
   const showAccessOptions = Boolean(entry && !entry.isDirectory);
 
@@ -103,11 +119,29 @@ export default function FilePropertiesDialog({
               <label className={`modal-access-option${canEditAccessOptions ? '' : ' modal-access-option--readonly'}`}>
                 <input
                   type="checkbox"
-                  checked={resolvedFileStatus.isSharing}
+                  checked={Boolean(resolvedFileStatus.isShareViewOnly)}
                   disabled={accessSaving || !canEditAccessOptions}
-                  onChange={(event) => onChangeShare?.(event.target.checked)}
+                  onChange={(event) => onChangeShareView?.(event.target.checked)}
                 />
-                <span>공유</span>
+                <span>공유(보기 전용)</span>
+              </label>
+              <label className={`modal-access-option${canEditAccessOptions ? '' : ' modal-access-option--readonly'}`}>
+                <input
+                  type="checkbox"
+                  checked={Boolean(resolvedFileStatus.isShareEditable)}
+                  disabled={accessSaving || !canEditAccessOptions}
+                  onChange={(event) => onChangeShareEdit?.(event.target.checked)}
+                />
+                <span>공유(편집 가능)</span>
+              </label>
+              <label className={`modal-access-option${canEditAccessOptions ? '' : ' modal-access-option--readonly'}`}>
+                <input
+                  type="checkbox"
+                  checked={Boolean(resolvedFileStatus.isFavorite)}
+                  disabled={accessSaving || !canEditAccessOptions}
+                  onChange={(event) => onChangeFavorite?.(event.target.checked)}
+                />
+                <span>즐겨찾기</span>
               </label>
               {!canEditAccessOptions && (
                 <p className="modal-access-hint">총괄관리자 로그인 시 변경할 수 있습니다.</p>

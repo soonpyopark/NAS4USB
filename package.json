@@ -39,6 +39,7 @@
     "concurrently": "^9.1.2",
     "electron": "^33.2.1",
     "electron-builder": "^25.1.8",
+    "png-to-ico": "^3.0.2",
     "postcss": "^8.4.49",
     "rcedit": "^5.0.2",
     "tailwindcss": "^3.4.17",
@@ -69,7 +70,7 @@
   "build": {
     "appId": "com.nas4usb.app",
     "productName": "NAS4USB",
-    "icon": "build/icon.png",
+    "icon": "build/icon-512.png",
     "directories": {
       "output": ".dist-build"
     },
@@ -106,8 +107,12 @@
     ],
     "extraResources": [
       {
-        "from": "build/icon.png",
+        "from": "build/icon-512.png",
         "to": "app-icon.png"
+      },
+      {
+        "from": "build/icon.ico",
+        "to": "app-icon.ico"
       },
       {
         "from": "build/icon.png",

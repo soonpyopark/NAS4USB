@@ -8,27 +8,64 @@ const electronDir = __dirname;
 const projectRoot = path.resolve(__dirname, '..');
 
 /**
- * Electron 창·트레이·스플래시용 icon.png 경로 (존재하는 첫 후보).
+ * @param {string[]} candidates
+ * @returns {string | undefined}
+ */
+function firstExistingPath(candidates) {
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * 창·작업 표시줄용 아이콘. Windows는 다중 해상도 .ico 우선.
  * @returns {string | undefined}
  */
 export function resolveAppIconPath() {
+  const isWin = process.platform === 'win32';
   const candidates = app.isPackaged
     ? [
+        ...(isWin ? [path.join(process.resourcesPath, 'app-icon.ico')] : []),
         path.join(process.resourcesPath, 'app-icon.png'),
         path.join(process.resourcesPath, 'icon.png'),
       ]
     : [
+        ...(isWin
+          ? [
+              path.join(projectRoot, 'build/icon.ico'),
+              path.join(electronDir, 'icon.ico'),
+            ]
+          : []),
+        path.join(projectRoot, 'build/icon-512.png'),
         path.join(electronDir, 'icon.png'),
         path.join(projectRoot, 'build/icon.png'),
         path.join(projectRoot, 'public/icon.png'),
         path.join(projectRoot, 'dist/icon.png'),
       ];
 
-  for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) {
-      return candidate;
-    }
-  }
+  return firstExistingPath(candidates);
+}
 
-  return undefined;
+/**
+ * 트레이 등 작은 아이콘 리사이즈용 고해상도 PNG.
+ * @returns {string | undefined}
+ */
+export function resolveAppIconImagePath() {
+  const candidates = app.isPackaged
+    ? [
+        path.join(process.resourcesPath, 'app-icon.png'),
+        path.join(process.resourcesPath, 'icon.png'),
+      ]
+    : [
+        path.join(projectRoot, 'build/icon-512.png'),
+        path.join(electronDir, 'icon.png'),
+        path.join(projectRoot, 'build/icon.png'),
+        path.join(projectRoot, 'public/icon.png'),
+        path.join(projectRoot, 'dist/icon.png'),
+      ];
+
+  return firstExistingPath(candidates);
 }

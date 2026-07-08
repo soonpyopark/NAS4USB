@@ -17,7 +17,7 @@ import {
   saveWorkspace,
   writeWorkspaceFile,
 } from './tempWorkspace.js';
-import { getEditorCoresStatus, updateEditorCores } from './editorUpdater.js';
+import { getEditorCoresStatus } from './editorUpdater.js';
 import { loginAdmin, isValidAdminSession, revokeAdminSession } from './authService.js';
 import {
   assertAdminAuthenticated,
@@ -29,12 +29,13 @@ import {
   readFileBase64WithAccessFilter,
   statPathWithAccessFilter,
 } from './fileAccessGuard.js';
-import { filterFileAccessMap } from '../shared/fileAccessVisibility.js';
+import { filterFileAccessMap, canViewFileEntry } from '../shared/fileAccessVisibility.js';
 import {
   createShareLink,
   getShareMap,
   resolveShareToken,
   revokeShareLink,
+  setShareLink,
   syncSharePathDelete,
   syncSharePathRename,
 } from './shareLinkService.js';
@@ -45,12 +46,25 @@ import {
   syncFileAccessRename,
 } from './fileAccessService.js';
 import {
+  getFavoritesMap,
+  listFavoriteEntries,
+  setFavorite,
+  syncFavoritesDelete,
+  syncFavoritesRename,
+} from './favoritesService.js';
+import {
   deletePermanent,
   emptyTrash,
   getTrashMap,
   restorePath,
   trashPath,
 } from './trashService.js';
+import {
+  syncFortuneSidecarCopy,
+  syncFortuneSidecarDelete,
+  syncFortuneSidecarRename,
+  isFortuneSidecarRelativePath,
+} from './fortuneSidecarService.js';
 import { streamFile } from './mediaStream.js';
 import { getAudioMimeType, getVideoMimeType, isAudioExtension, isVideoExtension } from '../shared/mediaTypes.js';
 import { handleFsEventsRequest, notifyFsChanged, getFsRevisionPayload } from './fsNotifyService.js';
@@ -157,8 +171,14 @@ export async function handleHttpApiRequest(req, res) {
 
     if (method === 'POST' && url.pathname === '/api/fs/delete') {
       const body = await readJsonBody(req);
+      if (isFortuneSidecarRelativePath(body.path)) {
+        sendJson(res, 400, { error: 'FortuneSheet 편집용 보조 파일입니다. 연결된 스프레드시트를 삭제해 주세요.' });
+        return true;
+      }
       await syncSharePathDelete(body.path, getPortableRoot());
       await syncFileAccessDelete(body.path, getPortableRoot());
+      await syncFavoritesDelete(body.path, getPortableRoot());
+      await syncFortuneSidecarDelete(body.path);
       const result = await fsService.deletePath(body.path);
       notifyFsChanged(body.path);
       sendJson(res, 200, result);
@@ -169,6 +189,8 @@ export async function handleHttpApiRequest(req, res) {
       const body = await readJsonBody(req);
       await syncSharePathRename(body.from, body.to, getPortableRoot());
       await syncFileAccessRename(body.from, body.to, getPortableRoot());
+      await syncFavoritesRename(body.from, body.to, getPortableRoot());
+      await syncFortuneSidecarRename(body.from, body.to);
       const result = await fsService.renamePath(body.from, body.to);
       notifyFsChanged([body.from, body.to]);
       sendJson(res, 200, result);
@@ -212,6 +234,7 @@ export async function handleHttpApiRequest(req, res) {
     if (method === 'POST' && url.pathname === '/api/fs/copy') {
       const body = await readJsonBody(req);
       const result = await fsService.copyPath(body.from, body.to);
+      await syncFortuneSidecarCopy(body.from, body.to);
       notifyFsChanged([body.from, body.to]);
       sendJson(res, 200, result);
       return true;
@@ -221,6 +244,8 @@ export async function handleHttpApiRequest(req, res) {
       const body = await readJsonBody(req);
       await syncSharePathRename(body.from, body.to, getPortableRoot());
       await syncFileAccessRename(body.from, body.to, getPortableRoot());
+      await syncFavoritesRename(body.from, body.to, getPortableRoot());
+      await syncFortuneSidecarRename(body.from, body.to);
       const result = await fsService.movePath(body.from, body.to);
       notifyFsChanged([body.from, body.to]);
       sendJson(res, 200, result);
@@ -273,7 +298,7 @@ export async function handleHttpApiRequest(req, res) {
       sendJson(
         res,
         200,
-        await openWorkspace(body.relativePath, getDataRoot(), getTempPath()),
+        await openWorkspace(body.relativePath, getDataRoot(), getTempPath(), { shareToken }),
       );
       return true;
     }
@@ -289,7 +314,7 @@ export async function handleHttpApiRequest(req, res) {
       await assertCanEditFile(
         session.relativePath,
         isAdminAuthenticated(req),
-        getShareTokenFromQuery(url),
+        session.shareToken || getShareTokenFromQuery(url),
       );
       sendJson(res, 200, await writeWorkspaceFile(body.sessionId, body.base64 ?? ''));
       return true;
@@ -301,7 +326,7 @@ export async function handleHttpApiRequest(req, res) {
       await assertCanEditFile(
         session.relativePath,
         isAdminAuthenticated(req),
-        getShareTokenFromQuery(url),
+        session.shareToken || getShareTokenFromQuery(url),
       );
       const result = await commitWorkspace(body.sessionId, getDataRoot());
       notifyFsChanged(session.relativePath);
@@ -315,7 +340,7 @@ export async function handleHttpApiRequest(req, res) {
       await assertCanEditFile(
         session.relativePath,
         isAdminAuthenticated(req),
-        getShareTokenFromQuery(url),
+        session.shareToken || getShareTokenFromQuery(url),
       );
       const result = await saveWorkspace(body.sessionId, body.base64 ?? '', getDataRoot());
       notifyFsChanged(session.relativePath);
@@ -329,12 +354,14 @@ export async function handleHttpApiRequest(req, res) {
       await assertCanEditFile(
         session.relativePath,
         isAdminAuthenticated(req),
-        getShareTokenFromQuery(url),
+        session.shareToken || getShareTokenFromQuery(url),
       );
       const fromPath = session.relativePath;
       const result = await renameWorkspace(body.sessionId, body.relativePath, getDataRoot());
       await syncSharePathRename(fromPath, result.relativePath, getPortableRoot());
       await syncFileAccessRename(fromPath, result.relativePath, getPortableRoot());
+      await syncFavoritesRename(fromPath, result.relativePath, getPortableRoot());
+      await syncFortuneSidecarRename(fromPath, result.relativePath);
       notifyFsChanged([fromPath, result.relativePath]);
       sendJson(res, 200, result);
       return true;
@@ -351,8 +378,46 @@ export async function handleHttpApiRequest(req, res) {
       return true;
     }
 
-    if (method === 'POST' && url.pathname === '/api/editors/update') {
-      sendJson(res, 200, await updateEditorCores(getPortableRoot()));
+    if (method === 'GET' && url.pathname === '/api/favorites/map') {
+      const map = await getFavoritesMap(getPortableRoot());
+      const isAdmin = isAdminAuthenticated(req);
+      if (isAdmin) {
+        sendJson(res, 200, map);
+        return true;
+      }
+      const accessMap = await getFileAccessMap(getPortableRoot());
+      sendJson(
+        res,
+        200,
+        Object.fromEntries(
+          Object.entries(map).filter(([path]) => canViewFileEntry(path, accessMap, isAdmin)),
+        ),
+      );
+      return true;
+    }
+
+    if (method === 'GET' && url.pathname === '/api/favorites/listEntries') {
+      const entries = await listFavoriteEntries(getPortableRoot());
+      const isAdmin = isAdminAuthenticated(req);
+      if (isAdmin) {
+        sendJson(res, 200, entries);
+        return true;
+      }
+      const accessMap = await getFileAccessMap(getPortableRoot());
+      sendJson(
+        res,
+        200,
+        entries.filter((entry) => canViewFileEntry(entry.relativePath, accessMap, isAdmin)),
+      );
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/favorites/set') {
+      assertAdminAuthenticated(isAdminAuthenticated(req));
+      const body = await readJsonBody(req);
+      const result = await setFavorite(body.path, Boolean(body.favorited), getPortableRoot());
+      notifyFsChanged(body.path);
+      sendJson(res, 200, result);
       return true;
     }
 
@@ -377,7 +442,16 @@ export async function handleHttpApiRequest(req, res) {
     if (method === 'POST' && url.pathname === '/api/share/create') {
       assertAdminAuthenticated(isAdminAuthenticated(req));
       const body = await readJsonBody(req);
-      const result = await createShareLink(body.path, getPortableRoot());
+      const result = await createShareLink(body.path, body.mode, getPortableRoot());
+      notifyFsChanged(body.path);
+      sendJson(res, 200, result);
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/share/set-mode') {
+      assertAdminAuthenticated(isAdminAuthenticated(req));
+      const body = await readJsonBody(req);
+      const result = await setShareLink(body.path, body.mode ?? null, getPortableRoot());
       notifyFsChanged(body.path);
       sendJson(res, 200, result);
       return true;

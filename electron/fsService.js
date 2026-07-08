@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { TRASH_FOLDER } from '../shared/constants.js';
+import { assertRenamePreservesExtension } from '../shared/entryNames.js';
 import { resolvePortablePath } from './appContext.js';
 
 /**
@@ -176,6 +177,10 @@ export async function deletePath(relativePath) {
 }
 
 export async function renamePath(fromRelative, toRelative) {
+  const fromName = path.basename(normalizeRelativePath(fromRelative));
+  const toName = path.basename(normalizeRelativePath(toRelative));
+  const stat = await statPath(fromRelative);
+  assertRenamePreservesExtension(fromName, toName, stat.isDirectory);
   await fs.rename(resolvePortablePath(fromRelative), resolvePortablePath(toRelative));
   return true;
 }

@@ -15,6 +15,7 @@ Thumbs.db
 !.env.example
 .nas4usb-shares.json
 .nas4usb-file-access.json
+.nas4usb-favorites.json
 .educowork-shares.json
 .educowork-file-access.json
 .educowork-trash.json

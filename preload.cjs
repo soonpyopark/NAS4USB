@@ -50,7 +50,6 @@ contextBridge.exposeInMainWorld('nas4usb', {
 
   editors: {
     getStatus: () => ipcRenderer.invoke('editors:getStatus'),
-    update: () => ipcRenderer.invoke('editors:update'),
   },
 
   auth: {
@@ -62,7 +61,8 @@ contextBridge.exposeInMainWorld('nas4usb', {
 
   share: {
     getMap: () => ipcRenderer.invoke('share:getMap'),
-    create: ({ path }) => ipcRenderer.invoke('share:create', { path }),
+    create: ({ path, mode }) => ipcRenderer.invoke('share:create', { path, mode }),
+    setMode: ({ path, mode }) => ipcRenderer.invoke('share:setMode', { path, mode }),
     revoke: ({ path }) => ipcRenderer.invoke('share:revoke', { path }),
     resolve: ({ token }) => ipcRenderer.invoke('share:resolve', { token }),
   },
@@ -72,6 +72,12 @@ contextBridge.exposeInMainWorld('nas4usb', {
     canEdit: (relativePath) => ipcRenderer.invoke('fileAccess:canEdit', relativePath),
     set: ({ path, visibility, viewRestricted }) =>
       ipcRenderer.invoke('fileAccess:set', { path, visibility, viewRestricted }),
+  },
+
+  favorites: {
+    getMap: () => ipcRenderer.invoke('favorites:getMap'),
+    listEntries: () => ipcRenderer.invoke('favorites:listEntries'),
+    set: ({ path, favorited }) => ipcRenderer.invoke('favorites:set', { path, favorited }),
   },
 
   trash: {

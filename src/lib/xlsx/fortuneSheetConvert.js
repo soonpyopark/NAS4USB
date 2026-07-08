@@ -323,6 +323,261 @@ function xlsxCellToFortuneCell(cell, resolvedStyle) {
 
 /**
  * @param {import('xlsx-js-style').WorkSheet} sheet
+ * @returns {import('@fortune-sheet/core').SheetConfig | undefined}
+ */
+function extractSheetConfigFromXlsx(sheet, workbook, styleIndexMap) {
+  /** @type {import('@fortune-sheet/core').SheetConfig} */
+  const config = {};
+
+  const cols = sheet['!cols'];
+  if (Array.isArray(cols)) {
+    /** @type {Record<string, number>} */
+    const columnlen = {};
+    cols.forEach((col, index) => {
+      if (!col) return;
+      const width =
+        col.wpx ??
+        (col.wch != null ? Math.round(Number(col.wch) * 7) : null) ??
+        (col.width != null ? Math.round(Number(col.width) * 7) : null);
+      if (width != null && width > 0) columnlen[String(index)] = Math.round(width);
+    });
+    if (Object.keys(columnlen).length > 0) config.columnlen = columnlen;
+  }
+
+  const rows = sheet['!rows'];
+  if (Array.isArray(rows)) {
+    /** @type {Record<string, number>} */
+    const rowlen = {};
+    rows.forEach((row, index) => {
+      if (!row) return;
+      const height =
+        row.hpx ??
+        (row.hpt != null ? Math.round(Number(row.hpt) * 4 / 3) : null);
+      if (height != null && height > 0) rowlen[String(index)] = Math.round(height);
+    });
+    if (Object.keys(rowlen).length > 0) config.rowlen = rowlen;
+  }
+
+  const merges = sheet['!merges'];
+  if (Array.isArray(merges)) {
+    /** @type {NonNullable<import('@fortune-sheet/core').SheetConfig['merge']>} */
+    const merge = {};
+    for (const range of merges) {
+      if (!range?.s || !range?.e) continue;
+      const key = `${range.s.r}_${range.s.c}`;
+      merge[key] = {
+        r: range.s.r,
+        c: range.s.c,
+        rs: range.e.r - range.s.r + 1,
+        cs: range.e.c - range.s.c + 1,
+      };
+    }
+    if (Object.keys(merge).length > 0) config.merge = merge;
+  }
+
+  const borderInfo = extractBorderInfoFromXlsxSheet(sheet, workbook, styleIndexMap);
+  if (borderInfo?.length) config.borderInfo = borderInfo;
+
+  return Object.keys(config).length > 0 ? config : undefined;
+}
+
+/**
+ * @param {string | undefined} style
+ */
+function mapXlsxBorderStyleToFortune(style) {
+  const normalized = String(style ?? 'thin').toLowerCase();
+  if (normalized === 'hair') return 2;
+  if (normalized === 'dotted') return 3;
+  if (normalized === 'dashdot') return 5;
+  if (normalized === 'dashed') return 4;
+  if (normalized === 'medium') return 8;
+  if (normalized === 'double') return 7;
+  if (normalized === 'thick') return 13;
+  return 1;
+}
+
+/**
+ * @param {number} style
+ */
+function mapFortuneBorderStyleToXlsx(style) {
+  switch (Number(style)) {
+    case 2:
+      return 'hair';
+    case 3:
+      return 'dotted';
+    case 4:
+      return 'dashed';
+    case 5:
+      return 'dashDot';
+    case 7:
+      return 'double';
+    case 8:
+      return 'medium';
+    case 13:
+      return 'thick';
+    default:
+      return 'thin';
+  }
+}
+
+/**
+ * @param {{ style?: number | string, color?: string } | undefined} side
+ */
+function fortuneBorderSideToXlsx(side) {
+  if (!side) return undefined;
+  const rgb = fortuneColorToXlsxRgb(side.color?.replace(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/i, (_, r, g, b) => {
+    return `#${Number(r).toString(16).padStart(2, '0')}${Number(g).toString(16).padStart(2, '0')}${Number(b).toString(16).padStart(2, '0')}`;
+  }));
+  if (!rgb) return undefined;
+  return {
+    style: mapFortuneBorderStyleToXlsx(side.style ?? 1),
+    color: { rgb },
+  };
+}
+
+/**
+ * @param {import('xlsx-js-style').BorderSide | undefined} side
+ */
+function xlsxBorderSideToFortune(side) {
+  if (!side?.style) return undefined;
+  const color = xlsxRgbToFortuneColor(side.color?.rgb) ?? '#000000';
+  return {
+    style: mapXlsxBorderStyleToFortune(side.style),
+    color,
+  };
+}
+
+/**
+ * @param {import('xlsx-js-style').WorkSheet} sheet
+ * @param {import('xlsx-js-style').WorkBook} workbook
+ * @param {Map<string, number>} styleIndexMap
+ */
+function extractBorderInfoFromXlsxSheet(sheet, workbook, styleIndexMap) {
+  /** @type {import('@fortune-sheet/core').SheetConfig['borderInfo']} */
+  const borderInfo = [];
+
+  for (const [address, cell] of Object.entries(sheet)) {
+    if (address.startsWith('!')) continue;
+    const decoded = XLSX.utils.decode_cell(address);
+    const resolvedStyle = resolveXlsxCellStyle(workbook, cell, address, styleIndexMap);
+    const border = resolvedStyle?.border;
+    if (!border) continue;
+
+    /** @type {Record<string, { style: number, color: string }>} */
+    const value = {
+      row_index: decoded.r,
+      col_index: decoded.c,
+    };
+    let hasBorder = false;
+
+    const top = xlsxBorderSideToFortune(border.top);
+    const bottom = xlsxBorderSideToFortune(border.bottom);
+    const left = xlsxBorderSideToFortune(border.left);
+    const right = xlsxBorderSideToFortune(border.right);
+
+    if (top) {
+      value.t = top;
+      hasBorder = true;
+    }
+    if (bottom) {
+      value.b = bottom;
+      hasBorder = true;
+    }
+    if (left) {
+      value.l = left;
+      hasBorder = true;
+    }
+    if (right) {
+      value.r = right;
+      hasBorder = true;
+    }
+
+    if (hasBorder) {
+      borderInfo.push({ rangeType: 'cell', value });
+    }
+  }
+
+  return borderInfo;
+}
+
+/**
+ * @param {import('xlsx-js-style').WorkSheet} worksheet
+ * @param {import('@fortune-sheet/core').SheetConfig['borderInfo']} borderInfo
+ */
+function applyBorderInfoToWorksheet(worksheet, borderInfo) {
+  for (const item of borderInfo ?? []) {
+    if (item?.rangeType !== 'cell' || !item.value) continue;
+
+    const { row_index, col_index, l, r, t, b } = item.value;
+    if (row_index == null || col_index == null) continue;
+
+    const address = XLSX.utils.encode_cell({ r: row_index, c: col_index });
+    if (!worksheet[address]) {
+      worksheet[address] = { v: '', t: 's' };
+    }
+
+    /** @type {import('xlsx-js-style').CellObject} */
+    const cell = worksheet[address];
+    cell.s = cell.s && typeof cell.s === 'object' ? { ...cell.s } : {};
+    /** @type {import('xlsx-js-style').CellStyle['border']} */
+    const border = { ...(cell.s.border ?? {}) };
+
+    const top = fortuneBorderSideToXlsx(t);
+    const bottom = fortuneBorderSideToXlsx(b);
+    const left = fortuneBorderSideToXlsx(l);
+    const right = fortuneBorderSideToXlsx(r);
+    if (top) border.top = top;
+    if (bottom) border.bottom = bottom;
+    if (left) border.left = left;
+    if (right) border.right = right;
+
+    if (Object.keys(border).length > 0) {
+      cell.s.border = border;
+    }
+  }
+}
+
+/**
+ * @param {import('xlsx-js-style').WorkSheet} worksheet
+ * @param {import('@fortune-sheet/core').SheetConfig | undefined} config
+ */
+function applySheetLayoutToWorksheet(worksheet, config) {
+  if (!config) return;
+
+  if (config.columnlen && Object.keys(config.columnlen).length > 0) {
+    const maxCol = Math.max(...Object.keys(config.columnlen).map(Number));
+    /** @type {import('xlsx-js-style').ColInfo[]} */
+    const cols = [];
+    for (let c = 0; c <= maxCol; c += 1) {
+      const width = config.columnlen[String(c)];
+      cols[c] = width != null ? { wpx: width } : {};
+    }
+    worksheet['!cols'] = cols;
+  }
+
+  if (config.rowlen && Object.keys(config.rowlen).length > 0) {
+    const maxRow = Math.max(...Object.keys(config.rowlen).map(Number));
+    /** @type {import('xlsx-js-style').RowInfo[]} */
+    const rows = [];
+    for (let r = 0; r <= maxRow; r += 1) {
+      const height = config.rowlen[String(r)];
+      rows[r] = height != null ? { hpx: height } : {};
+    }
+    worksheet['!rows'] = rows;
+  }
+
+  if (config.merge) {
+    worksheet['!merges'] = Object.values(config.merge).map((entry) => ({
+      s: { r: entry.r, c: entry.c },
+      e: { r: entry.r + entry.rs - 1, c: entry.c + entry.cs - 1 },
+    }));
+  }
+
+  applyBorderInfoToWorksheet(worksheet, config.borderInfo);
+}
+
+/**
+ * @param {import('xlsx-js-style').WorkSheet} sheet
  */
 function getSheetBounds(sheet) {
   if (sheet['!ref']) {
@@ -376,6 +631,7 @@ function xlsxSheetToFortuneSheet(sheet, name, id, order, isActive, workbook, sty
     row: bounds.rows,
     column: bounds.cols,
     celldata,
+    config: extractSheetConfigFromXlsx(sheet, workbook, styleIndexMap),
   };
 }
 
@@ -529,6 +785,8 @@ function fortuneSheetToXlsxWorksheet(sheet) {
       e: { r: maxRow, c: maxCol },
     });
   }
+
+  applySheetLayoutToWorksheet(worksheet, sheet.config);
 
   return worksheet;
 }

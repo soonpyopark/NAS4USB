@@ -14,10 +14,16 @@ import { useFileSelection } from '../../hooks/useFileSelection.js';
 import { useFileSystem } from '../../hooks/useFileSystem.js';
 import { useShareLinks } from '../../hooks/useShareLinks.js';
 import { useFileAccess } from '../../hooks/useFileAccess.js';
+import { useFavorites } from '../../hooks/useFavorites.js';
 import {
   openShareLinkForEntry,
   revokeShareLinkForEntry,
 } from '../../lib/shareLinkActions.js';
+import {
+  handleShareModeToggle,
+  SHARE_LINK_MODE_EDIT,
+  SHARE_LINK_MODE_VIEW,
+} from '../../lib/shareProperties.js';
 import {
   buildBackgroundContextMenuItems,
   buildEntryContextMenuItems,
@@ -34,6 +40,7 @@ import { downloadFileEntries } from '../../lib/downloadEntries.js';
 import { moveEntries } from '../../lib/moveEntries.js';
 import { uploadFilesAtPath } from '../../lib/fsWriteActions.js';
 import { isTrashPath, isTrashSubfolder, TRASH_FOLDER } from '../../lib/trashPaths.js';
+import { FAVORITES_FOLDER, isFavoritesPath } from '../../lib/favoritesPaths.js';
 import { guardOpenFileEntry } from '../../lib/openFileGuard.js';
 import { useTrash } from '../../hooks/useTrash.js';
 import { useAppConfirm } from '../../hooks/useAppConfirm.jsx';
@@ -83,12 +90,14 @@ export default function FileExplorer({
   const { hasClipboard, copyEntries, cutEntries, pasteEntries } = useFileClipboard();
   const { shareMap, refreshShareMap } = useShareLinks();
   const { accessMap, refreshAccessMap, setFileAccess } = useFileAccess();
+  const { favoritesMap, refreshFavoritesMap, setFavorite } = useFavorites();
   const { isAdminLoggedIn } = useAdminAuthContext();
   const { notifyLocalChange } = useFsSync();
   const { refresh: refreshTrash } = useTrash();
   const { confirm: appConfirm, alert: appAlert, dialog: confirmDialog } = useAppConfirm();
 
   const isInTrashView = isTrashPath(currentPath);
+  const isInFavoritesView = isFavoritesPath(currentPath);
 
   const [viewMode, setViewMode] = useState('list');
   const [searchQuery, setSearchQuery] = useState('');
@@ -117,8 +126,8 @@ export default function FileExplorer({
 
   const propertiesEntryStatus = useMemo(() => {
     if (!propertiesEntry || propertiesEntry.isDirectory) return null;
-    return resolveFileEntryStatus(propertiesEntry.relativePath, accessMap, shareMap);
-  }, [propertiesEntry, accessMap, shareMap]);
+    return resolveFileEntryStatus(propertiesEntry.relativePath, accessMap, shareMap, favoritesMap);
+  }, [propertiesEntry, accessMap, shareMap, favoritesMap]);
 
   const downloadableEntries = useMemo(
     () => selectedEntries.filter((entry) => !entry.isDirectory),
@@ -128,6 +137,7 @@ export default function FileExplorer({
   const refreshMaps = async () => {
     await refreshShareMap();
     await refreshAccessMap();
+    await refreshFavoritesMap();
     await refreshTrash();
   };
 
@@ -147,7 +157,7 @@ export default function FileExplorer({
   });
 
   const handleFileDrop = async (files) => {
-    if (isInTrashView) return;
+    if (isInTrashView || isInFavoritesView) return;
 
     try {
       await uploadFiles(files);
@@ -158,7 +168,7 @@ export default function FileExplorer({
   };
 
   const { isFileDragOver, dropZoneProps } = useFileDropZone(handleFileDrop, {
-    enabled: !isInTrashView && isAdminLoggedIn,
+    enabled: !isInTrashView && !isInFavoritesView && isAdminLoggedIn,
   });
 
   useEffect(() => {
@@ -202,7 +212,7 @@ export default function FileExplorer({
   };
 
   const triggerUpload = (targetPath = currentPath) => {
-    if (isTrashPath(targetPath)) return;
+    if (isTrashPath(targetPath) || isFavoritesPath(targetPath)) return;
     uploadTargetPathRef.current = targetPath;
     uploadInputRef.current?.click();
   };
@@ -503,23 +513,58 @@ export default function FileExplorer({
     }
   };
 
-  const handlePropertiesShareChange = async (checked) => {
+  const handlePropertiesShareViewChange = async (checked) => {
+    if (!propertiesEntry) return;
+    if (!checked && !propertiesEntryStatus?.isShareViewOnly) return;
+
+    setPropertiesSaving(true);
+    try {
+      const result = await handleShareModeToggle({
+        entry: propertiesEntry,
+        checked,
+        mode: SHARE_LINK_MODE_VIEW,
+        syncInfo,
+        shareMap,
+        refreshShareMap,
+      });
+      if (result) setShareLinkDialog(result);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : '공유 설정 변경에 실패했습니다.');
+    } finally {
+      setPropertiesSaving(false);
+    }
+  };
+
+  const handlePropertiesShareEditChange = async (checked) => {
+    if (!propertiesEntry) return;
+    if (!checked && !propertiesEntryStatus?.isShareEditable) return;
+
+    setPropertiesSaving(true);
+    try {
+      const result = await handleShareModeToggle({
+        entry: propertiesEntry,
+        checked,
+        mode: SHARE_LINK_MODE_EDIT,
+        syncInfo,
+        shareMap,
+        refreshShareMap,
+      });
+      if (result) setShareLinkDialog(result);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : '공유 설정 변경에 실패했습니다.');
+    } finally {
+      setPropertiesSaving(false);
+    }
+  };
+
+  const handlePropertiesFavoriteChange = async (checked) => {
     if (!propertiesEntry) return;
     setPropertiesSaving(true);
     try {
-      if (checked) {
-        const result = await openShareLinkForEntry({
-          entry: propertiesEntry,
-          syncInfo,
-          shareMap,
-          refreshShareMap,
-        });
-        setShareLinkDialog(result);
-      } else {
-        await revokeShareLinkForEntry({ entry: propertiesEntry, refreshShareMap });
-      }
+      await setFavorite(propertiesEntry.relativePath, checked);
+      await refreshAll();
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : '공유 설정 변경에 실패했습니다.');
+      window.alert(err instanceof Error ? err.message : '즐겨찾기 설정 변경에 실패했습니다.');
     } finally {
       setPropertiesSaving(false);
     }
@@ -568,6 +613,7 @@ export default function FileExplorer({
         entry: contextTarget,
         targetCount: contextTargets.length,
         isInTrashView,
+        isInFavoritesView,
         hasClipboard,
         onOpen: handleOpen,
         onUpload: contextTarget?.isDirectory ? triggerUpload : undefined,
@@ -591,6 +637,7 @@ export default function FileExplorer({
     : buildBackgroundContextMenuItems({
         targetPath: contextTargetPath,
         isInTrashView,
+        isInFavoritesView,
         hasClipboard,
         onCreateFolder: handleCreateFolder,
         onCreateFile: handleCreateFile,
@@ -670,7 +717,7 @@ export default function FileExplorer({
       {...dropZoneProps}
       onContextMenu={(event) => openContextMenu(event, null)}
     >
-      {!isInTrashView && isFileDragOver && <FileDropOverlay />}
+      {!isInTrashView && !isInFavoritesView && isFileDragOver && <FileDropOverlay />}
       <div className="flex items-center gap-3 border-b border-nas-border px-4 py-3">
         <div className="min-w-0 flex-1">
           <Breadcrumb currentPath={currentPath} onNavigate={onNavigate} />
@@ -695,6 +742,7 @@ export default function FileExplorer({
         canRename={selectedEntries.length === 1}
         hasClipboard={hasClipboard}
         isInTrashView={isInTrashView}
+        isInFavoritesView={isInFavoritesView}
         onNavigateUp={handleNavigateUp}
         onRefresh={refreshAll}
         onCreateFolder={handleCreateFolder}
@@ -724,6 +772,12 @@ export default function FileExplorer({
         </div>
       )}
 
+      {isInFavoritesView && (
+        <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
+          즐겨찾기 · 등록한 문서를 한곳에서 열어볼 수 있습니다. 속성에서 즐겨찾기를 설정하세요.
+        </div>
+      )}
+
       <input ref={uploadInputRef} type="file" multiple hidden onChange={handleUploadInput} />
 
       {error && (
@@ -739,6 +793,7 @@ export default function FileExplorer({
         selectedSet={selectedSet}
         accessMap={accessMap}
         shareMap={shareMap}
+        favoritesMap={favoritesMap}
         onOpen={handleOpen}
         onSelect={handleSelect}
         onToggleCheckbox={handleToggleCheckbox}
@@ -767,7 +822,9 @@ export default function FileExplorer({
           accessSaving={propertiesSaving}
           onChangePrivate={handlePropertiesPrivateChange}
           onChangeViewRestricted={handlePropertiesViewRestrictedChange}
-          onChangeShare={handlePropertiesShareChange}
+          onChangeShareView={handlePropertiesShareViewChange}
+          onChangeShareEdit={handlePropertiesShareEditChange}
+          onChangeFavorite={handlePropertiesFavoriteChange}
           onClose={() => {
             setPropertiesEntry(null);
             setPropertiesStat(null);

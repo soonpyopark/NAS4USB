@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { APP_BLOG_URL, APP_NAME, APP_VERSION } from './shared/constants.js';
-import { resolveAppIconPath } from './electron/appIcon.js';
+import { resolveAppIconPath, resolveAppIconImagePath } from './electron/appIcon.js';
 import {
   ensureDataRoot,
   getAppPaths,
@@ -35,7 +35,7 @@ import {
   saveWorkspace,
   writeWorkspaceFile,
 } from './electron/tempWorkspace.js';
-import { getEditorCoresStatus, updateEditorCores } from './electron/editorUpdater.js';
+import { getEditorCoresStatus } from './electron/editorUpdater.js';
 import { loginAdmin, isValidAdminSession, revokeAdminSession } from './electron/authService.js';
 import {
   assertAdminAuthenticated,
@@ -47,12 +47,13 @@ import {
   readFileBase64WithAccessFilter,
   statPathWithAccessFilter,
 } from './electron/fileAccessGuard.js';
-import { filterFileAccessMap } from './shared/fileAccessVisibility.js';
+import { filterFileAccessMap, canViewFileEntry } from './shared/fileAccessVisibility.js';
 import {
   createShareLink,
   getShareMap,
   resolveShareToken,
   revokeShareLink,
+  setShareLink,
   syncSharePathDelete,
   syncSharePathRename,
 } from './electron/shareLinkService.js';
@@ -63,12 +64,25 @@ import {
   syncFileAccessRename,
 } from './electron/fileAccessService.js';
 import {
+  getFavoritesMap,
+  listFavoriteEntries,
+  setFavorite,
+  syncFavoritesDelete,
+  syncFavoritesRename,
+} from './electron/favoritesService.js';
+import {
   deletePermanent,
   emptyTrash,
   getTrashMap,
   restorePath,
   trashPath,
 } from './electron/trashService.js';
+import {
+  syncFortuneSidecarCopy,
+  syncFortuneSidecarDelete,
+  syncFortuneSidecarRename,
+  isFortuneSidecarRelativePath,
+} from './electron/fortuneSidecarService.js';
 import { notifyFsChanged } from './electron/fsNotifyService.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -242,11 +256,11 @@ async function shutdownServer() {
 }
 
 function resolveTrayIcon() {
-  const iconPath = resolveAppIconPath();
+  const iconPath = resolveAppIconImagePath() ?? resolveAppIconPath();
   if (iconPath && fs.existsSync(iconPath)) {
     const image = nativeImage.createFromPath(iconPath);
     if (!image.isEmpty()) {
-      return image.resize({ width: 16, height: 16 });
+      return image.resize({ width: 16, height: 16, quality: 'best' });
     }
   }
 
@@ -464,14 +478,21 @@ ipcMain.handle('fs:mkdir', async (_event, relativePath) => {
 ipcMain.handle('fs:rename', async (_event, fromRelative, toRelative) => {
   await syncSharePathRename(fromRelative, toRelative, getPortableRoot());
   await syncFileAccessRename(fromRelative, toRelative, getPortableRoot());
+  await syncFavoritesRename(fromRelative, toRelative, getPortableRoot());
+  await syncFortuneSidecarRename(fromRelative, toRelative);
   const result = await fsService.renamePath(fromRelative, toRelative);
   notifyFsChanged([fromRelative, toRelative]);
   return result;
 });
 
 ipcMain.handle('fs:delete', async (_event, relativePath) => {
+  if (isFortuneSidecarRelativePath(relativePath)) {
+    throw new Error('FortuneSheet 편집용 보조 파일입니다. 연결된 스프레드시트를 삭제해 주세요.');
+  }
   await syncSharePathDelete(relativePath, getPortableRoot());
   await syncFileAccessDelete(relativePath, getPortableRoot());
+  await syncFavoritesDelete(relativePath, getPortableRoot());
+  await syncFortuneSidecarDelete(relativePath);
   const result = await fsService.deletePath(relativePath);
   notifyFsChanged(relativePath);
   return result;
@@ -493,6 +514,7 @@ ipcMain.handle('fs:writeFile', async (_event, relativePath, base64 = '') => {
 
 ipcMain.handle('fs:copy', async (_event, fromRelative, toRelative) => {
   const result = await fsService.copyPath(fromRelative, toRelative);
+  await syncFortuneSidecarCopy(fromRelative, toRelative);
   notifyFsChanged([fromRelative, toRelative]);
   return result;
 });
@@ -500,6 +522,8 @@ ipcMain.handle('fs:copy', async (_event, fromRelative, toRelative) => {
 ipcMain.handle('fs:move', async (_event, fromRelative, toRelative) => {
   await syncSharePathRename(fromRelative, toRelative, getPortableRoot());
   await syncFileAccessRename(fromRelative, toRelative, getPortableRoot());
+  await syncFavoritesRename(fromRelative, toRelative, getPortableRoot());
+  await syncFortuneSidecarRename(fromRelative, toRelative);
   const result = await fsService.movePath(fromRelative, toRelative);
   notifyFsChanged([fromRelative, toRelative]);
   return result;
@@ -509,23 +533,39 @@ ipcMain.handle('fs:stat', async (event, relativePath) =>
   statPathWithAccessFilter(relativePath, isAdminFromEvent(event), getShareTokenFromEvent(event)),
 );
 
+/**
+ * @param {import('electron').IpcMainInvokeEvent} event
+ * @param {{ shareToken?: string }} [session]
+ */
+function resolveShareTokenForSession(event, session) {
+  return session?.shareToken || getShareTokenFromEvent(event);
+}
+
 ipcMain.handle('workspace:open', async (event, relativePath, shareToken) => {
   const token = shareToken || getShareTokenFromEvent(event);
   await assertCanAccessFile(relativePath, isAdminFromEvent(event), token);
-  return openWorkspace(relativePath, getDataRoot(), getTempPath());
+  return openWorkspace(relativePath, getDataRoot(), getTempPath(), { shareToken: token });
 });
 
 ipcMain.handle('workspace:read', async (_event, sessionId) => readWorkspaceFile(sessionId));
 
 ipcMain.handle('workspace:write', async (event, sessionId, base64) => {
   const session = getSession(sessionId);
-  await assertCanEditFile(session.relativePath, isAdminFromEvent(event), getShareTokenFromEvent(event));
+  await assertCanEditFile(
+    session.relativePath,
+    isAdminFromEvent(event),
+    resolveShareTokenForSession(event, session),
+  );
   return writeWorkspaceFile(sessionId, base64);
 });
 
 ipcMain.handle('workspace:commit', async (event, sessionId) => {
   const session = getSession(sessionId);
-  await assertCanEditFile(session.relativePath, isAdminFromEvent(event), getShareTokenFromEvent(event));
+  await assertCanEditFile(
+    session.relativePath,
+    isAdminFromEvent(event),
+    resolveShareTokenForSession(event, session),
+  );
   const result = await commitWorkspace(sessionId, getDataRoot());
   notifyFsChanged(session.relativePath);
   return result;
@@ -533,7 +573,11 @@ ipcMain.handle('workspace:commit', async (event, sessionId) => {
 
 ipcMain.handle('workspace:save', async (event, sessionId, base64) => {
   const session = getSession(sessionId);
-  await assertCanEditFile(session.relativePath, isAdminFromEvent(event), getShareTokenFromEvent(event));
+  await assertCanEditFile(
+    session.relativePath,
+    isAdminFromEvent(event),
+    resolveShareTokenForSession(event, session),
+  );
   const result = await saveWorkspace(sessionId, base64, getDataRoot());
   notifyFsChanged(session.relativePath);
   return result;
@@ -541,11 +585,17 @@ ipcMain.handle('workspace:save', async (event, sessionId, base64) => {
 
 ipcMain.handle('workspace:rename', async (event, sessionId, newRelativePath) => {
   const session = getSession(sessionId);
-  await assertCanEditFile(session.relativePath, isAdminFromEvent(event), getShareTokenFromEvent(event));
+  await assertCanEditFile(
+    session.relativePath,
+    isAdminFromEvent(event),
+    resolveShareTokenForSession(event, session),
+  );
   const fromPath = session.relativePath;
   const result = await renameWorkspace(sessionId, newRelativePath, getDataRoot());
   await syncSharePathRename(fromPath, result.relativePath, getPortableRoot());
   await syncFileAccessRename(fromPath, result.relativePath, getPortableRoot());
+  await syncFavoritesRename(fromPath, result.relativePath, getPortableRoot());
+  await syncFortuneSidecarRename(fromPath, result.relativePath);
   notifyFsChanged([fromPath, result.relativePath]);
   return result;
 });
@@ -553,8 +603,6 @@ ipcMain.handle('workspace:rename', async (event, sessionId, newRelativePath) => 
 ipcMain.handle('workspace:close', async (_event, sessionId) => closeWorkspace(sessionId));
 
 ipcMain.handle('editors:getStatus', async () => getEditorCoresStatus(getPortableRoot()));
-
-ipcMain.handle('editors:update', async () => updateEditorCores(getPortableRoot()));
 
 ipcMain.handle('auth:login', async (_event, { id, password } = {}) =>
   loginAdmin(id, password, getPortableRoot()),
@@ -565,9 +613,16 @@ ipcMain.handle('share:getMap', async (event) => {
   return getShareMap(getPortableRoot());
 });
 
-ipcMain.handle('share:create', async (event, { path: relativePath } = {}) => {
+ipcMain.handle('share:create', async (event, { path: relativePath, mode } = {}) => {
   assertAdminAuthenticated(isAdminFromEvent(event));
-  const result = await createShareLink(relativePath, getPortableRoot());
+  const result = await createShareLink(relativePath, mode, getPortableRoot());
+  notifyFsChanged(relativePath);
+  return result;
+});
+
+ipcMain.handle('share:setMode', async (event, { path: relativePath, mode } = {}) => {
+  assertAdminAuthenticated(isAdminFromEvent(event));
+  const result = await setShareLink(relativePath, mode ?? null, getPortableRoot());
   notifyFsChanged(relativePath);
   return result;
 });
@@ -605,6 +660,33 @@ ipcMain.handle('fileAccess:canEdit', async (event, relativePath) => {
       message: error instanceof Error ? error.message : '공개된 문서만 편집할 수 있습니다.',
     };
   }
+});
+
+ipcMain.handle('favorites:getMap', async (event) => {
+  const map = await getFavoritesMap(getPortableRoot());
+  const isAdmin = isAdminFromEvent(event);
+  if (isAdmin) return map;
+
+  const accessMap = await getFileAccessMap(getPortableRoot());
+  return Object.fromEntries(
+    Object.entries(map).filter(([path]) => canViewFileEntry(path, accessMap, isAdmin)),
+  );
+});
+
+ipcMain.handle('favorites:listEntries', async (event) => {
+  const entries = await listFavoriteEntries(getPortableRoot());
+  const isAdmin = isAdminFromEvent(event);
+  if (isAdmin) return entries;
+
+  const accessMap = await getFileAccessMap(getPortableRoot());
+  return entries.filter((entry) => canViewFileEntry(entry.relativePath, accessMap, isAdmin));
+});
+
+ipcMain.handle('favorites:set', async (event, { path: relativePath, favorited } = {}) => {
+  assertAdminAuthenticated(isAdminFromEvent(event));
+  const result = await setFavorite(relativePath, Boolean(favorited), getPortableRoot());
+  notifyFsChanged(relativePath);
+  return result;
 });
 
 ipcMain.handle('trash:getMap', async (event) => {
@@ -660,6 +742,9 @@ if (gotSingleInstanceLock) {
 
   app.whenReady().then(async () => {
     Menu.setApplicationMenu(null);
+    if (process.platform === 'win32') {
+      app.setAppUserModelId('com.nas4usb.app');
+    }
     createSplashWindow();
 
     const portableRoot = resolvePortableRoot(isDev);

@@ -2,6 +2,11 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { TRASH_FOLDER } from '../shared/constants.js';
 import {
+  syncFortuneSidecarDelete,
+  syncFortuneSidecarMoveTree,
+  isFortuneSidecarRelativePath,
+} from './fortuneSidecarService.js';
+import {
   getBlockAssetSidecarPath,
   isBlockAssetSidecarRelativePath,
   isBlockDocumentRelativePath,
@@ -12,6 +17,7 @@ import { getPortableRoot } from './appContext.js';
 import * as fsService from './fsService.js';
 import { syncSharePathDelete, syncSharePathMoveTree } from './shareLinkService.js';
 import { syncFileAccessDelete, syncFileAccessMoveTree } from './fileAccessService.js';
+import { syncFavoritesDelete, syncFavoritesMoveTree } from './favoritesService.js';
 
 const TRASH_INDEX_FILE = '.nas4usb-trash.json';
 
@@ -115,6 +121,8 @@ async function ensureTrashFolder() {
 async function syncMetadataMoveTree(fromRelative, toRelative, portableRoot) {
   await syncSharePathMoveTree(fromRelative, toRelative, portableRoot);
   await syncFileAccessMoveTree(fromRelative, toRelative, portableRoot);
+  await syncFavoritesMoveTree(fromRelative, toRelative, portableRoot);
+  await syncFortuneSidecarMoveTree(fromRelative, toRelative);
 }
 
 /**
@@ -178,6 +186,12 @@ export async function trashPath(relativePath, portableRoot = getPortableRoot()) 
   if (isBlockAssetSidecarRelativePath(normalized)) {
     throw new Error(
       'BlockNote 편집용 임시 폴더입니다. 연결된 .block 파일을 삭제해 주세요.',
+    );
+  }
+
+  if (isFortuneSidecarRelativePath(normalized)) {
+    throw new Error(
+      'FortuneSheet 편집용 보조 파일입니다. 연결된 스프레드시트를 삭제해 주세요.',
     );
   }
 
@@ -261,6 +275,8 @@ export async function deletePermanent(trashRelativePath, portableRoot = getPorta
   await purgeYjsRoomsForPathTree(normalized);
   await syncSharePathDelete(normalized, portableRoot);
   await syncFileAccessDelete(normalized, portableRoot);
+  await syncFavoritesDelete(normalized, portableRoot);
+  await syncFortuneSidecarDelete(normalized);
   await fsService.deletePath(normalized);
 
   const store = await loadIndex(portableRoot);

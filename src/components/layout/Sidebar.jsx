@@ -16,6 +16,7 @@ import { useFileSystem } from '../../hooks/useFileSystem.js';
 import { useAppConfirm } from '../../hooks/useAppConfirm.jsx';
 import { useShareLinks } from '../../hooks/useShareLinks.js';
 import { useFileAccess } from '../../hooks/useFileAccess.js';
+import { useFavorites } from '../../hooks/useFavorites.js';
 import { useTrash } from '../../hooks/useTrash.js';
 import { useFileDropZone } from '../../hooks/useFileDropZone.js';
 import { useAdminAuthContext } from '../../context/AdminAuthContext.jsx';
@@ -27,6 +28,11 @@ import {
   openShareLinkForEntry,
   revokeShareLinkForEntry,
 } from '../../lib/shareLinkActions.js';
+import {
+  handleShareModeToggle,
+  SHARE_LINK_MODE_EDIT,
+  SHARE_LINK_MODE_VIEW,
+} from '../../lib/shareProperties.js';
 import {
   buildBackgroundContextMenuItems,
   buildEntryContextMenuItems,
@@ -42,6 +48,7 @@ import { downloadFileEntries } from '../../lib/downloadEntries.js';
 import { moveEntries } from '../../lib/moveEntries.js';
 import { TRASH_ACCESS_DENIED_MESSAGE } from '../../../shared/constants.js';
 import { isTrashPath, isTrashSubfolder, TRASH_FOLDER } from '../../lib/trashPaths.js';
+import { FAVORITES_FOLDER, isFavoritesPath } from '../../lib/favoritesPaths.js';
 import { guardOpenFileEntry } from '../../lib/openFileGuard.js';
 import {
   createFolderAtPath,
@@ -65,11 +72,13 @@ export default function Sidebar({
   const { hasClipboard, copyEntries, cutEntries, pasteEntries } = useFileClipboard();
   const { shareMap, refreshShareMap } = useShareLinks();
   const { accessMap, refreshAccessMap, setFileAccess } = useFileAccess();
+  const { favoritesMap, favoritesCount, refreshFavoritesMap, setFavorite } = useFavorites();
   const { isAdminLoggedIn } = useAdminAuthContext();
   const { notifyLocalChange } = useFsSync();
   const { count: trashCount, refresh: refreshTrash } = useTrash({ enabled: isAdminLoggedIn });
 
   const isInTrashView = isTrashPath(currentPath);
+  const isInFavoritesView = isFavoritesPath(currentPath);
 
   const [contextMenu, setContextMenu] = useState(null);
   const [propertiesEntry, setPropertiesEntry] = useState(null);
@@ -88,6 +97,7 @@ export default function Sidebar({
   const refreshMaps = async () => {
     await refreshShareMap();
     await refreshAccessMap();
+    await refreshFavoritesMap();
     await refreshTrash();
   };
 
@@ -308,6 +318,7 @@ export default function Sidebar({
     await tree.refreshTree();
     await refreshShareMap();
     await refreshAccessMap();
+    await refreshFavoritesMap();
     await refreshTrash();
 
     if (wasInTrashView) {
@@ -385,23 +396,58 @@ export default function Sidebar({
     }
   };
 
-  const handlePropertiesShareChange = async (checked) => {
+  const handlePropertiesShareViewChange = async (checked) => {
+    if (!propertiesEntry) return;
+    if (!checked && !propertiesEntryStatus?.isShareViewOnly) return;
+
+    setPropertiesSaving(true);
+    try {
+      const result = await handleShareModeToggle({
+        entry: propertiesEntry,
+        checked,
+        mode: SHARE_LINK_MODE_VIEW,
+        syncInfo,
+        shareMap,
+        refreshShareMap,
+      });
+      if (result) setShareLinkDialog(result);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : '공유 설정 변경에 실패했습니다.');
+    } finally {
+      setPropertiesSaving(false);
+    }
+  };
+
+  const handlePropertiesShareEditChange = async (checked) => {
+    if (!propertiesEntry) return;
+    if (!checked && !propertiesEntryStatus?.isShareEditable) return;
+
+    setPropertiesSaving(true);
+    try {
+      const result = await handleShareModeToggle({
+        entry: propertiesEntry,
+        checked,
+        mode: SHARE_LINK_MODE_EDIT,
+        syncInfo,
+        shareMap,
+        refreshShareMap,
+      });
+      if (result) setShareLinkDialog(result);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : '공유 설정 변경에 실패했습니다.');
+    } finally {
+      setPropertiesSaving(false);
+    }
+  };
+
+  const handlePropertiesFavoriteChange = async (checked) => {
     if (!propertiesEntry) return;
     setPropertiesSaving(true);
     try {
-      if (checked) {
-        const result = await openShareLinkForEntry({
-          entry: propertiesEntry,
-          syncInfo,
-          shareMap,
-          refreshShareMap,
-        });
-        setShareLinkDialog(result);
-      } else {
-        await revokeShareLinkForEntry({ entry: propertiesEntry, refreshShareMap });
-      }
+      await setFavorite(propertiesEntry.relativePath, checked);
+      await notifyChange();
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : '공유 설정 변경에 실패했습니다.');
+      window.alert(err instanceof Error ? err.message : '즐겨찾기 설정 변경에 실패했습니다.');
     } finally {
       setPropertiesSaving(false);
     }
@@ -443,7 +489,7 @@ export default function Sidebar({
   const contextTargetPath = contextMenu?.targetPath ?? currentPath;
   const propertiesEntryStatus =
     propertiesEntry && !propertiesEntry.isDirectory
-      ? resolveFileEntryStatus(propertiesEntry.relativePath, accessMap, shareMap)
+      ? resolveFileEntryStatus(propertiesEntry.relativePath, accessMap, shareMap, favoritesMap)
       : null;
 
   const contextItems = contextTarget
@@ -451,6 +497,7 @@ export default function Sidebar({
         entry: contextTarget,
         targetCount: 1,
         isInTrashView,
+        isInFavoritesView,
         hasClipboard,
         onOpen: handleOpen,
         onUpload: contextTarget?.isDirectory ? triggerUpload : undefined,
@@ -474,6 +521,7 @@ export default function Sidebar({
     : buildBackgroundContextMenuItems({
         targetPath: contextTargetPath,
         isInTrashView,
+        isInFavoritesView,
         hasClipboard,
         onCreateFolder: () => openCreateFolderDialog(contextTargetPath),
         onCreateFile: () => openCreateFileDialog(contextTargetPath),
@@ -546,7 +594,27 @@ export default function Sidebar({
         </div>
       )}
 
-      <div className="mt-auto border-t border-slate-700 px-2 py-2">
+      <div className="mt-auto border-t border-slate-700 px-2 py-2 space-y-1">
+        <button
+          type="button"
+          onClick={() => onNavigate(FAVORITES_FOLDER)}
+          className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-[10pt] transition-colors ${
+            isInFavoritesView
+              ? 'bg-nas-accent text-white'
+              : 'text-slate-300 hover:bg-nas-sidebarHover hover:text-white'
+          }`}
+        >
+          <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12 2.25l2.52 5.11 5.64.82-4.08 3.98.96 5.62L12 15.9l-5.04 2.88.96-5.62-4.08-3.98 5.64-.82L12 2.25z" />
+          </svg>
+          <span className="truncate">즐겨찾기</span>
+          {favoritesCount > 0 && (
+            <span className="ml-auto rounded-full bg-slate-600 px-1.5 py-0.5 text-[10px] text-slate-100">
+              {favoritesCount}
+            </span>
+          )}
+        </button>
+
         <button
           type="button"
           onClick={() => {
@@ -630,7 +698,9 @@ export default function Sidebar({
           accessSaving={propertiesSaving}
           onChangePrivate={handlePropertiesPrivateChange}
           onChangeViewRestricted={handlePropertiesViewRestrictedChange}
-          onChangeShare={handlePropertiesShareChange}
+          onChangeShareView={handlePropertiesShareViewChange}
+          onChangeShareEdit={handlePropertiesShareEditChange}
+          onChangeFavorite={handlePropertiesFavoriteChange}
           onClose={() => {
             setPropertiesEntry(null);
             setPropertiesStat(null);

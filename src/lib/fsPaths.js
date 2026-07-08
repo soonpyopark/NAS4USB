@@ -52,6 +52,8 @@ export function validateEntryName(name) {
   return { ok: true, name: sanitized };
 }
 
+export { splitEntryExtension, validateRenameEntryName } from '../../shared/entryNames.js';
+
 /**
  * @param {string} relativePath
  */

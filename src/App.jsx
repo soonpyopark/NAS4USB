@@ -18,6 +18,7 @@ import { hasNas4usbApi } from './lib/runtime.js';
 import { guardOpenFileEntry } from './lib/openFileGuard.js';
 import { useTrashGuardedNavigate } from './hooks/useTrashGuardedNavigate.js';
 import { getShareTokenFromUrl } from './lib/shareAccess.js';
+import { isShareViewOnly, resolveOpenShareMode } from './lib/shareLinkAccess.js';
 import { AUDIO_EXTENSIONS, VIDEO_EXTENSIONS } from './lib/media/mediaTypes.js';
 
 const OPENABLE_EXTENSIONS = {
@@ -45,6 +46,9 @@ const OPENABLE_EXTENSIONS = {
 function OpenEditorLayer({ openEditor, syncInfo, allowClose, fullscreen = false, onClose, onRenamed }) {
   if (!openEditor) return null;
 
+  const shareMode = openEditor.shareMode ?? null;
+  const shareViewOnly = isShareViewOnly(shareMode);
+
   if (openEditor.type === 'hwpx') {
     return (
       <HwpxEditorShell
@@ -54,6 +58,8 @@ function OpenEditorLayer({ openEditor, syncInfo, allowClose, fullscreen = false,
         onClose={onClose}
         allowClose={allowClose}
         fullscreen={fullscreen}
+        shareMode={shareMode}
+        readOnly={shareViewOnly}
       />
     );
   }
@@ -67,6 +73,8 @@ function OpenEditorLayer({ openEditor, syncInfo, allowClose, fullscreen = false,
         onClose={onClose}
         onRenamed={onRenamed}
         allowClose={allowClose}
+        shareMode={shareMode}
+        readOnly={shareViewOnly}
       />
     );
   }
@@ -80,6 +88,8 @@ function OpenEditorLayer({ openEditor, syncInfo, allowClose, fullscreen = false,
         onClose={onClose}
         allowClose={allowClose}
         fullscreen={fullscreen}
+        shareMode={shareMode}
+        readOnly={shareViewOnly}
       />
     );
   }
@@ -94,6 +104,8 @@ function OpenEditorLayer({ openEditor, syncInfo, allowClose, fullscreen = false,
         onClose={onClose}
         allowClose={allowClose}
         fullscreen={fullscreen}
+        shareMode={shareMode}
+        readOnly={shareViewOnly}
       />
     );
   }
@@ -107,6 +119,8 @@ function OpenEditorLayer({ openEditor, syncInfo, allowClose, fullscreen = false,
         onClose={onClose}
         allowClose={allowClose}
         fullscreen={fullscreen}
+        shareMode={shareMode}
+        readOnly={shareViewOnly}
       />
     );
   }
@@ -221,6 +235,7 @@ function Nas4usbAppMain() {
         relativePath: entry.relativePath,
         name: entry.name,
         extension: entry.extension,
+        shareMode: resolveOpenShareMode(entry.mode),
       });
       return true;
     }
@@ -259,15 +274,6 @@ function Nas4usbAppMain() {
   }, [notifyRemoteChange]);
 
   useEffect(() => {
-    if (!shareToken || !window.nas4usb?.auth?.bindShareToken) return undefined;
-
-    void window.nas4usb.auth.bindShareToken(shareToken);
-    return () => {
-      void window.nas4usb.auth.bindShareToken('');
-    };
-  }, [shareToken]);
-
-  useEffect(() => {
     if (!shareToken || !window.nas4usb?.share?.resolve) return undefined;
 
     let cancelled = false;
@@ -277,6 +283,11 @@ function Nas4usbAppMain() {
       setShareError('');
 
       try {
+        // 비공개·열람제한 파일도 fs.stat / workspace 편집 검사가 통과하도록 먼저 바인딩
+        if (window.nas4usb?.auth?.bindShareToken) {
+          await window.nas4usb.auth.bindShareToken(shareToken);
+        }
+
         const entry = await window.nas4usb.share.resolve({ token: shareToken });
         if (cancelled) return;
 
@@ -299,6 +310,7 @@ function Nas4usbAppMain() {
 
     return () => {
       cancelled = true;
+      void window.nas4usb?.auth?.bindShareToken?.('');
     };
   }, [shareToken, handleOpenFile]);
 

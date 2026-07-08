@@ -81,6 +81,8 @@ export default function BlockEditorView({
   }, [editor, onReady]);
 
   useEffect(() => {
+    if (readOnly) return undefined;
+
     const onKeyDown = (event) => {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
         event.preventDefault();
@@ -90,7 +92,7 @@ export default function BlockEditorView({
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onSave]);
+  }, [onSave, readOnly]);
 
   return (
     <div className="block-editor-shell">
@@ -98,13 +100,13 @@ export default function BlockEditorView({
         editor={editor}
         editable={!readOnly}
         theme="light"
-        slashMenu
-        sideMenu
-        filePanel
-        formattingToolbar
-        linkToolbar
-        emojiPicker
-        tableHandles
+        slashMenu={!readOnly}
+        sideMenu={!readOnly}
+        filePanel={!readOnly}
+        formattingToolbar={!readOnly}
+        linkToolbar={!readOnly}
+        emojiPicker={!readOnly}
+        tableHandles={!readOnly}
       />
     </div>
   );

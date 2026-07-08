@@ -58,7 +58,7 @@ function SyncBadge({ syncInfo, loading }) {
           ? '클립보드에 복사됨'
           : '클릭하여 LAN 접속 링크·포트 복사 (Shift+클릭: 서버 IP 설정)'
       }
-      className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10pt] font-medium text-emerald-700 hover:bg-emerald-100"
+      className="hidden items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10pt] font-medium text-emerald-700 hover:bg-emerald-100 lg:inline-flex"
     >
       <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
       {copied ? 'Y.js 복사됨' : `Y.js ${label}`}

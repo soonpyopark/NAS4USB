@@ -2,7 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { joinRelativePath, readFileAsBase64, resolveUniqueName, validateFolderName } from '../lib/fsPaths.js';
 import { readDirWithRetry } from '../lib/readDirWithRetry.js';
 import { filterTrashFromEntries, isFsNotFoundError, isTrashPath } from '../lib/trashPaths.js';
+import { isFavoritesPath } from '../lib/favoritesPaths.js';
 import { filterBlockAssetSidecarFromEntries } from '../../shared/blockAssetPaths.js';
+import { filterFortuneSidecarFromEntries } from '../../shared/fortuneSheetSidecar.js';
 import { buildNewFileContent, resolveNewFileName } from '../lib/files/newFileFactory.js';
 import { convertHwpBase64ToHwpx, isHwpFileName, toHwpxFileName } from '@nas4usb/rhwp/hwpConvert.js';
 
@@ -16,8 +18,13 @@ export function useFileSystem(currentPath) {
     setError(null);
 
     try {
-      const result = await readDirWithRetry(currentPath);
-      setEntries(filterBlockAssetSidecarFromEntries(filterTrashFromEntries(result, currentPath)));
+      if (isFavoritesPath(currentPath)) {
+        const result = await window.nas4usb.favorites.listEntries();
+        setEntries(Array.isArray(result) ? result : []);
+      } else {
+        const result = await readDirWithRetry(currentPath);
+        setEntries(filterFortuneSidecarFromEntries(filterBlockAssetSidecarFromEntries(filterTrashFromEntries(result, currentPath))));
+      }
     } catch (err) {
       if (isFsNotFoundError(err)) {
         setEntries([]);
@@ -109,8 +116,8 @@ export function useFileSystem(currentPath) {
 
   const uploadFiles = useCallback(
     async (/** @type {File[]} */ files) => {
-      if (isTrashPath(currentPath)) {
-        throw new Error('휴지통에는 파일을 추가할 수 없습니다.');
+      if (isTrashPath(currentPath) || isFavoritesPath(currentPath)) {
+        throw new Error('이 위치에는 파일을 추가할 수 없습니다.');
       }
 
       for (const file of files) {

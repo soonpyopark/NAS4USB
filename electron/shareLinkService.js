@@ -3,11 +3,12 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { getPortableRoot, resolvePortablePath } from './appContext.js';
 import { LEGACY_SHARE_FILE } from '../shared/legacyConfig.js';
+import { SHARE_LINK_MODE_EDIT, SHARE_LINK_MODE_VIEW } from '../shared/shareLinkModes.js';
 
 const SHARE_FILE = '.nas4usb-shares.json';
 
 /**
- * @typedef {{ token: string, createdAt: string }} ShareLinkRecord
+ * @typedef {{ token: string, createdAt: string, mode?: 'view' | 'edit' }} ShareLinkRecord
  * @typedef {{ links: Record<string, ShareLinkRecord> }} ShareLinkStore
  */
 
@@ -60,14 +61,33 @@ export async function getShareStatus(relativePath, portableRoot = getPortableRoo
 
 /**
  * @param {string} relativePath
+ * @param {'view' | 'edit'} [mode]
  * @param {string} [portableRoot]
  */
-export async function createShareLink(relativePath, portableRoot = getPortableRoot()) {
+export async function createShareLink(
+  relativePath,
+  mode = SHARE_LINK_MODE_VIEW,
+  portableRoot = getPortableRoot(),
+) {
+  return setShareLink(relativePath, mode, portableRoot);
+}
+
+/**
+ * @param {string} relativePath
+ * @param {'view' | 'edit' | null} mode
+ * @param {string} [portableRoot]
+ */
+export async function setShareLink(relativePath, mode, portableRoot = getPortableRoot()) {
   const normalizedPath = String(relativePath ?? '').replace(/\\/g, '/');
   if (!normalizedPath || normalizedPath === '.') {
     throw new Error('공유할 파일 경로가 올바르지 않습니다.');
   }
 
+  if (mode === null) {
+    return revokeShareLink(normalizedPath, portableRoot);
+  }
+
+  const shareMode = mode === SHARE_LINK_MODE_EDIT ? SHARE_LINK_MODE_EDIT : SHARE_LINK_MODE_VIEW;
   const absolute = resolvePortablePath(normalizedPath);
   const stat = await fs.stat(absolute);
   if (stat.isDirectory()) {
@@ -77,11 +97,13 @@ export async function createShareLink(relativePath, portableRoot = getPortableRo
   const store = await loadStore(portableRoot);
   const existing = store.links[normalizedPath];
   if (existing) {
+    existing.mode = shareMode;
+    await saveStore(portableRoot, store);
     return { relativePath: normalizedPath, ...existing };
   }
 
   const token = crypto.randomBytes(16).toString('hex');
-  const record = { token, createdAt: new Date().toISOString() };
+  const record = { token, createdAt: new Date().toISOString(), mode: shareMode };
   store.links[normalizedPath] = record;
   await saveStore(portableRoot, store);
 
@@ -126,10 +148,12 @@ export async function resolveShareToken(token, portableRoot = getPortableRoot())
       }
 
       const fileName = path.basename(absolute);
+      const mode = link.mode === SHARE_LINK_MODE_EDIT ? SHARE_LINK_MODE_EDIT : SHARE_LINK_MODE_VIEW;
       return {
         relativePath,
         token: link.token,
         createdAt: link.createdAt,
+        mode,
         name: fileName,
         extension: path.extname(fileName).slice(1).toLowerCase() || null,
         isDirectory: false,

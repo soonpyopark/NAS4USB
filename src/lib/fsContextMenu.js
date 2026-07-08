@@ -200,6 +200,7 @@ export function buildEntryContextMenuItems({
  *   targetPath: string,
  *   hasClipboard: boolean,
  *   isInTrashView?: boolean,
+ *   isInFavoritesView?: boolean,
  *   onCreateFolder: () => void,
  *   onCreateFile: () => void,
  *   onUpload: () => void,
@@ -213,6 +214,7 @@ export function buildBackgroundContextMenuItems({
   targetPath,
   hasClipboard,
   isInTrashView = false,
+  isInFavoritesView = false,
   onCreateFolder,
   onCreateFile,
   onUpload,
@@ -226,6 +228,10 @@ export function buildBackgroundContextMenuItems({
   }
 
   const showTrashMenu = isTrashPath(targetPath);
+
+  if (isInFavoritesView) {
+    return [{ id: 'refresh', label: '새로고침', onClick: onRefresh }];
+  }
 
   if (showTrashMenu) {
     return [

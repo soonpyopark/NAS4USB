@@ -1,5 +1,6 @@
 import { sortEntries } from './fsPaths.js';
 import { isBlockAssetSidecarRelativePath } from '../../shared/blockAssetPaths.js';
+import { isFortuneSidecarRelativePath } from '../../shared/fortuneSheetSidecar.js';
 
 /**
  * @param {string} query
@@ -24,6 +25,7 @@ export async function searchFileEntries(query, { maxResults = 200, signal } = {}
       if (signal?.aborted || truncated) return;
 
       if (isBlockAssetSidecarRelativePath(entry.relativePath)) continue;
+      if (isFortuneSidecarRelativePath(entry.relativePath)) continue;
 
       if (entry.name.toLowerCase().includes(normalized)) {
         results.push(entry);

@@ -8,9 +8,11 @@ import { getPortableRoot } from './appContext.js';
 import * as fsService from './fsService.js';
 import { getFileAccessMap } from './fileAccessService.js';
 import { resolveShareToken } from './shareLinkService.js';
+import { SHARE_LINK_MODE_EDIT } from '../shared/shareLinkModes.js';
 
 const ACCESS_DENIED_MESSAGE = '이 파일에 접근할 권한이 없습니다.';
 export const EDIT_DENIED_MESSAGE = '공개된 문서만 편집할 수 있습니다.';
+export const SHARE_VIEW_ONLY_MESSAGE = '공유 링크는 보기 전용입니다.';
 
 /**
  * @param {string} relativePath
@@ -43,6 +45,7 @@ export async function assertCanAccessFile(
     throw new Error(TRASH_ACCESS_DENIED_MESSAGE);
   }
 
+  // 유효한 공유 링크(보기/편집)는 비공개·열람제한과 무관하게 열람 허용
   if (await canAccessViaShareToken(normalizedPath, shareToken, portableRoot)) {
     return;
   }
@@ -69,8 +72,17 @@ export async function assertCanEditFile(
 
   if (isAdminAuthenticated) return;
 
-  const accessMap = await getFileAccessMap(portableRoot);
   const normalizedPath = String(relativePath ?? '').replace(/\\/g, '/');
+  if (shareToken) {
+    const sharedEntry = await resolveShareToken(shareToken, portableRoot);
+    if (sharedEntry?.relativePath === normalizedPath) {
+      // 공유(편집 가능): 비공개·열람제한과 무관하게 편집 허용
+      if (sharedEntry.mode === SHARE_LINK_MODE_EDIT) return;
+      throw new Error(SHARE_VIEW_ONLY_MESSAGE);
+    }
+  }
+
+  const accessMap = await getFileAccessMap(portableRoot);
   if (!canEditFileEntry(normalizedPath, accessMap, isAdminAuthenticated)) {
     throw new Error(EDIT_DENIED_MESSAGE);
   }

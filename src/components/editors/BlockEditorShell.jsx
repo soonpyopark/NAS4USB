@@ -27,6 +27,8 @@ const BlockEditorView = lazy(() => import('./BlockEditorView.jsx'));
  *   onClose: () => void,
  *   allowClose?: boolean,
  *   fullscreen?: boolean,
+ *   shareMode?: 'view' | 'edit' | null,
+ *   readOnly?: boolean,
  * }} props
  */
 export default function BlockEditorShell({
@@ -36,6 +38,7 @@ export default function BlockEditorShell({
   onClose,
   allowClose = true,
   fullscreen = false,
+  readOnly: shareReadOnly = false,
 }) {
   const workspace = useWorkspaceSession(relativePath);
   const collaborationEnabled = syncInfo != null;
@@ -134,6 +137,7 @@ export default function BlockEditorShell({
   }, []);
 
   const handleSave = useCallback(async () => {
+    if (shareReadOnly) return;
     if (!workspace.ready || !editorRef.current) return;
     setSaving(true);
     try {
@@ -162,7 +166,7 @@ export default function BlockEditorShell({
     } finally {
       setSaving(false);
     }
-  }, [doc, fileName, relativePath, workspace]);
+  }, [doc, fileName, relativePath, shareReadOnly, workspace]);
 
   const handleClose = useCallback(async () => {
     if (closingRef.current) return;
@@ -181,7 +185,8 @@ export default function BlockEditorShell({
   const lanEndpoints = getLanWsEndpoints(syncInfo, roomId).join(' · ');
   const isLoading = workspace.loading || !doc || !contentReady || initialBlocks == null;
   const waitingSync = collaborationEnabled && contentReady && !roomReady;
-  const readOnly = collaborationEnabled && (!synced || waitingSync);
+  const syncReadOnly = collaborationEnabled && (!synced || waitingSync);
+  const readOnly = shareReadOnly || syncReadOnly;
   const displayStatus = collaborationEnabled ? status : 'connected';
   const displaySynced = collaborationEnabled ? synced && roomReady : true;
 
@@ -194,6 +199,7 @@ export default function BlockEditorShell({
       peerCount={peerCount}
       saving={saving}
       saveDisabled={readOnly}
+      hideSave={shareReadOnly}
       onSave={handleSave}
       onClose={handleClose}
       allowClose={allowClose}
@@ -206,13 +212,15 @@ export default function BlockEditorShell({
       )}
 
       <div className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs text-nas-muted">
-        {waitingSync
-          ? status === 'connecting'
-            ? 'BlockNote · 재연결 중… Y.js 동기화 후 편집 가능'
-            : 'BlockNote · Y.js 동기화 후 편집 가능 · LAN 실시간 협업'
-          : collaborationEnabled
-            ? 'BlockNote · 블록 편집 · 미디어·첨부 업로드 · 원격 커서 · Ctrl+S 저장'
-            : 'BlockNote · 오프라인 편집 · 미디어·첨부 업로드 · Ctrl+S 저장'}
+        {shareReadOnly
+          ? 'BlockNote · 공유(보기 전용) · 편집·저장 불가'
+          : waitingSync
+            ? status === 'connecting'
+              ? 'BlockNote · 재연결 중… Y.js 동기화 후 편집 가능'
+              : 'BlockNote · Y.js 동기화 후 편집 가능 · LAN 실시간 협업'
+            : collaborationEnabled
+              ? 'BlockNote · 블록 편집 · 미디어·첨부 업로드 · 원격 커서 · Ctrl+S 저장'
+              : 'BlockNote · 오프라인 편집 · 미디어·첨부 업로드 · Ctrl+S 저장'}
       </div>
 
       <div className="relative flex min-h-0 flex-1 flex-col">

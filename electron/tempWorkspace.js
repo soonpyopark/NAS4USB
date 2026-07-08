@@ -1,15 +1,32 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { assertRenamePreservesExtension } from '../shared/entryNames.js';
 
-/** @type {Map<string, { relativePath: string, sessionDir: string, workingPath: string, dirty: boolean }>} */
+/**
+ * @typedef {{
+ *   relativePath: string,
+ *   sessionDir: string,
+ *   workingPath: string,
+ *   dirty: boolean,
+ *   shareToken?: string,
+ * }} WorkspaceSession
+ */
+
+/** @type {Map<string, WorkspaceSession>} */
 const sessions = new Map();
 
 function getSessionsRoot(tempRoot) {
   return path.join(tempRoot, 'nas4usb', 'sessions');
 }
 
-export async function openWorkspace(relativePath, dataRoot, tempRoot) {
+/**
+ * @param {string} relativePath
+ * @param {string} dataRoot
+ * @param {string} tempRoot
+ * @param {{ shareToken?: string | null }} [options]
+ */
+export async function openWorkspace(relativePath, dataRoot, tempRoot, options = {}) {
   const sessionId = crypto.randomUUID();
   const sessionDir = path.join(getSessionsRoot(tempRoot), sessionId);
   await fs.mkdir(sessionDir, { recursive: true });
@@ -17,6 +34,7 @@ export async function openWorkspace(relativePath, dataRoot, tempRoot) {
   const fileName = path.basename(relativePath);
   const sourcePath = path.join(dataRoot, relativePath);
   const workingPath = path.join(sessionDir, fileName);
+  const shareToken = String(options.shareToken ?? '').trim() || undefined;
 
   try {
     await fs.copyFile(sourcePath, workingPath);
@@ -33,7 +51,7 @@ export async function openWorkspace(relativePath, dataRoot, tempRoot) {
     'utf8',
   );
 
-  sessions.set(sessionId, { relativePath, sessionDir, workingPath, dirty: false });
+  sessions.set(sessionId, { relativePath, sessionDir, workingPath, dirty: false, shareToken });
 
   return { sessionId, fileName };
 }
@@ -97,6 +115,7 @@ export async function renameWorkspace(sessionId, newRelativePath, dataRoot) {
   }
 
   const newFileName = path.basename(normalized);
+  assertRenamePreservesExtension(path.basename(session.relativePath), newFileName, false);
   const newWorkingPath = path.join(session.sessionDir, newFileName);
   if (session.workingPath !== newWorkingPath) {
     await fs.rename(session.workingPath, newWorkingPath);

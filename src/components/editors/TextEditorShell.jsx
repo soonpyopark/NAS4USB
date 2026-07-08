@@ -10,9 +10,28 @@ import { getLanWsEndpoints } from '../../sync/buildWsUrl.js';
 import { decodeTextBase64, encodeTextBase64 } from '../../lib/text/textIO.js';
 
 /**
- * @param {{ relativePath: string, fileName: string, extension: string, syncInfo: object, onClose: () => void }} props
+ * @param {{
+ *   relativePath: string,
+ *   fileName: string,
+ *   extension: string,
+ *   syncInfo: object,
+ *   onClose: () => void,
+ *   allowClose?: boolean,
+ *   fullscreen?: boolean,
+ *   shareMode?: 'view' | 'edit' | null,
+ *   readOnly?: boolean,
+ * }} props
  */
-export default function TextEditorShell({ relativePath, fileName, extension, syncInfo, onClose, allowClose = true, fullscreen = false }) {
+export default function TextEditorShell({
+  relativePath,
+  fileName,
+  extension,
+  syncInfo,
+  onClose,
+  allowClose = true,
+  fullscreen = false,
+  readOnly: shareReadOnly = false,
+}) {
   const isMarkdown = extension === 'md';
   const workspace = useWorkspaceSession(relativePath);
   const { doc, status, synced, roomId, provider } = useYjsSession(relativePath, syncInfo, {
@@ -83,6 +102,7 @@ export default function TextEditorShell({ relativePath, fileName, extension, syn
       synced: true,
       provider,
       diskRevision: diskRevisionRef.current,
+      readOnly: shareReadOnly,
       onSynced: () => setBound(true),
     });
 
@@ -92,13 +112,14 @@ export default function TextEditorShell({ relativePath, fileName, extension, syn
       editorHandle.setEditable?.(false);
       setBound(false);
     };
-  }, [ready, doc, editorHandle, provider, synced]);
+  }, [ready, doc, editorHandle, provider, synced, shareReadOnly]);
 
   const handleEditorReady = useCallback((editor) => {
     setEditorHandle(editor);
   }, []);
 
   const handleSave = useCallback(async () => {
+    if (shareReadOnly) return;
     if (!workspace.ready || !editorHandleRef.current) return;
     setSaving(true);
     try {
@@ -116,7 +137,7 @@ export default function TextEditorShell({ relativePath, fileName, extension, syn
     } finally {
       setSaving(false);
     }
-  }, [doc, relativePath, workspace]);
+  }, [doc, relativePath, shareReadOnly, workspace]);
 
   const handleClose = async () => {
     unbindRef.current?.();
@@ -138,6 +159,8 @@ export default function TextEditorShell({ relativePath, fileName, extension, syn
       synced={synced}
       peerCount={peerCount}
       saving={saving}
+      saveDisabled={shareReadOnly || waitingSync}
+      hideSave={shareReadOnly}
       onSave={handleSave}
       onClose={handleClose}
       allowClose={allowClose}
@@ -150,10 +173,12 @@ export default function TextEditorShell({ relativePath, fileName, extension, syn
       )}
 
       <div className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs text-nas-muted">
-        {waitingSync
-          ? `${fileLabel} 에디터 · Y.js 동기화 후 편집 가능`
-          : `${fileLabel} 에디터 · 줄번호 · 찾기/바꾸기 · Ctrl+S 저장 · LAN 실시간 동시 편집`}
-        {isMarkdown ? ' · Markdown 미리보기(편집/분할/미리보기)' : ''}
+        {shareReadOnly
+          ? `${fileLabel} 에디터 · 공유(보기 전용) · 편집·저장 불가`
+          : waitingSync
+            ? `${fileLabel} 에디터 · Y.js 동기화 후 편집 가능`
+            : `${fileLabel} 에디터 · 줄번호 · 찾기/바꾸기 · Ctrl+S 저장 · LAN 실시간 동시 편집`}
+        {!shareReadOnly && isMarkdown ? ' · Markdown 미리보기(편집/분할/미리보기)' : ''}
       </div>
 
       {isLoading ? (

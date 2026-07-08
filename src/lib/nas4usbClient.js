@@ -180,7 +180,6 @@ export function createHttpNas4usbClient() {
 
     editors: {
       getStatus: () => apiFetch('/editors/status'),
-      update: () => apiFetch('/editors/update', { method: 'POST', body: '{}' }),
     },
 
     auth: {
@@ -200,10 +199,15 @@ export function createHttpNas4usbClient() {
 
     share: {
       getMap: () => apiFetch('/share/map'),
-      create: ({ path }) =>
+      create: ({ path, mode }) =>
         apiFetch('/share/create', {
           method: 'POST',
-          body: JSON.stringify({ path }),
+          body: JSON.stringify({ path, mode }),
+        }),
+      setMode: ({ path, mode }) =>
+        apiFetch('/share/set-mode', {
+          method: 'POST',
+          body: JSON.stringify({ path, mode }),
         }),
       revoke: ({ path }) =>
         apiFetch('/share/revoke', {
@@ -222,6 +226,16 @@ export function createHttpNas4usbClient() {
         apiFetch('/file-access/set', {
           method: 'POST',
           body: JSON.stringify({ path, visibility, viewRestricted }),
+        }),
+    },
+
+    favorites: {
+      getMap: () => apiFetch('/favorites/map'),
+      listEntries: () => apiFetch('/favorites/listEntries'),
+      set: ({ path, favorited }) =>
+        apiFetch('/favorites/set', {
+          method: 'POST',
+          body: JSON.stringify({ path, favorited }),
         }),
     },
 

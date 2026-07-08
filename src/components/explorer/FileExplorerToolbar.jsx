@@ -27,6 +27,7 @@ export default function FileExplorerToolbar({
   onProperties,
   canShowProperties = false,
   isInTrashView = false,
+  isInFavoritesView = false,
   onEmptyTrash,
   onRestore,
   isAdminLoggedIn = true,
@@ -112,7 +113,7 @@ export default function FileExplorerToolbar({
           새로고침
         </button>
         <span className="mx-1 hidden h-4 w-px bg-nas-border sm:inline" />
-        {!isInTrashView && (
+        {!isInTrashView && !isInFavoritesView && (
           <>
             <button type="button" className="nas-btn-ghost" onClick={onCreateFolder}>
               새 폴더

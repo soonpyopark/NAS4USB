@@ -35,10 +35,19 @@ export const DEPARTMENT_CODE_PATTERN = /^\d{7}$/;
 /** Trash folder name under data root (visible in readDir). */
 export const TRASH_FOLDER = '__trash';
 
+/** Virtual folder path for the favorites document list in the explorer. */
+export const FAVORITES_FOLDER = '__favorites';
+
 /** @param {string} relativePath */
 export function isTrashRelativePath(relativePath) {
   const normalized = String(relativePath ?? '').replace(/\\/g, '/');
   return normalized === TRASH_FOLDER || normalized.startsWith(`${TRASH_FOLDER}/`);
+}
+
+/** @param {string} relativePath */
+export function isFavoritesRelativePath(relativePath) {
+  const normalized = String(relativePath ?? '').replace(/\\/g, '/');
+  return normalized === FAVORITES_FOLDER || normalized.startsWith(`${FAVORITES_FOLDER}/`);
 }
 
 export const TRASH_ACCESS_DENIED_MESSAGE = '휴지통은 총괄관리자만 접근할 수 있습니다.';

@@ -1,6 +1,6 @@
-import { TRASH_FOLDER, isTrashRelativePath } from '../../shared/constants.js';
+import { TRASH_FOLDER, FAVORITES_FOLDER, isTrashRelativePath } from '../../shared/constants.js';
 
-export { TRASH_FOLDER };
+export { TRASH_FOLDER, FAVORITES_FOLDER };
 
 /**
  * @param {string} relativePath
@@ -48,7 +48,9 @@ export function filterTrashFromEntries(entries, currentPath) {
  * @param {string} segment
  */
 export function formatBreadcrumbSegment(segment) {
-  return segment === TRASH_FOLDER ? '휴지통' : segment;
+  if (segment === TRASH_FOLDER) return '휴지통';
+  if (segment === FAVORITES_FOLDER) return '즐겨찾기';
+  return segment;
 }
 
 /**

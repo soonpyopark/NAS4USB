@@ -1,23 +1,14 @@
 const LOCAL_ORIGIN = Symbol('nas4usb-local-fortune-sheet');
 const DISK_SNAPSHOT_ORIGIN = Symbol('nas4usb-disk-snapshot');
 
+const SNAPSHOT_FLUSH_MS = 400;
+
 /**
  * @param {import('yjs').Map<string, unknown>} meta
  */
 function getSnapshotDiskRevision(meta) {
   const value = meta.get('workbook:diskRevision');
   return typeof value === 'string' ? value : '';
-}
-
-/**
- * @param {import('yjs').Map<string, unknown>} meta
- * @param {string | undefined} diskRevision
- */
-function shouldPreferDiskSheets(meta, diskRevision) {
-  if (!diskRevision) return false;
-  const snapshotRevision = getSnapshotDiskRevision(meta);
-  if (!snapshotRevision) return false;
-  return diskRevision > snapshotRevision;
 }
 
 /**
@@ -92,6 +83,22 @@ export function getOpsArray(ydoc) {
 }
 
 /**
+ * @param {import('yjs').Map<string, unknown>} snapshotMap
+ * @returns {import('@fortune-sheet/core').Sheet[] | null}
+ */
+function readSnapshotSheets(snapshotMap) {
+  const snapshotRaw = snapshotMap.get('sheets');
+  if (typeof snapshotRaw !== 'string' || !snapshotRaw) return null;
+
+  try {
+    const parsed = JSON.parse(snapshotRaw);
+    return isFortuneSheetArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * @param {{
  *   getSheets: () => import('@fortune-sheet/core').Sheet[],
  *   updateSheets: (sheets: import('@fortune-sheet/core').Sheet[]) => void,
@@ -116,6 +123,25 @@ export function bindFortuneSheetEditor(
   const meta = ydoc.getMap('meta');
   let applyingRemote = false;
   let appliedOpCount = 0;
+  let snapshotFlushTimer = null;
+
+  const flushSnapshot = () => {
+    snapshotFlushTimer = null;
+    try {
+      const sheets = editor.getSheets();
+      if (!isFortuneSheetArray(sheets)) return;
+      ydoc.transact(() => {
+        snapshotMap.set('sheets', JSON.stringify(sheets));
+      }, LOCAL_ORIGIN);
+    } catch {
+      // Ignore snapshots that cannot be serialized.
+    }
+  };
+
+  const scheduleSnapshotFlush = () => {
+    if (snapshotFlushTimer) window.clearTimeout(snapshotFlushTimer);
+    snapshotFlushTimer = window.setTimeout(flushSnapshot, SNAPSHOT_FLUSH_MS);
+  };
 
   const applyRemoteBatch = (ops) => {
     if (!Array.isArray(ops) || ops.length === 0) return;
@@ -158,41 +184,20 @@ export function bindFortuneSheetEditor(
   };
 
   const bootstrapFromYjs = () => {
-    if (shouldPreferDiskSheets(meta, diskRevision)) {
-      applySheetsSafely(editor, initialSheets, initialSheets);
-      setWorkbookSnapshot(ydoc, initialSheets, { diskRevision });
+    const snapshotSheets = readSnapshotSheets(snapshotMap);
+    if (snapshotSheets) {
+      applySheetsSafely(editor, snapshotSheets, initialSheets);
     } else {
-      const snapshotRaw = snapshotMap.get('sheets');
-      if (typeof snapshotRaw === 'string' && snapshotRaw) {
-        try {
-          const snapshotSheets = JSON.parse(snapshotRaw);
-          if (isFortuneSheetArray(snapshotSheets)) {
-            applySheetsSafely(editor, snapshotSheets, initialSheets);
-          } else {
-            applySheetsSafely(editor, initialSheets, initialSheets);
-            setWorkbookSnapshot(ydoc, initialSheets, { diskRevision });
-          }
-        } catch {
-          applySheetsSafely(editor, initialSheets, initialSheets);
-          setWorkbookSnapshot(ydoc, initialSheets, { diskRevision });
-        }
-      } else {
-        applySheetsSafely(editor, initialSheets, initialSheets);
-        seedSnapshotIfEmpty();
-      }
+      applySheetsSafely(editor, initialSheets, initialSheets);
+      seedSnapshotIfEmpty();
     }
 
     replayRemoteOps(0);
   };
 
   const resyncFromYjs = () => {
-    if (shouldPreferDiskSheets(meta, diskRevision)) {
-      applySheetsSafely(editor, initialSheets, initialSheets);
-      setWorkbookSnapshot(ydoc, initialSheets, { diskRevision });
-      replayRemoteOps(0);
-      return;
-    }
-
+    // Y.js ops + snapshot are the collaboration source of truth.
+    // Never reload stale initialSheets from disk when another peer saved.
     replayRemoteOps(appliedOpCount);
   };
 
@@ -216,6 +221,7 @@ export function bindFortuneSheetEditor(
     }, LOCAL_ORIGIN);
 
     appliedOpCount = yops.length;
+    scheduleSnapshotFlush();
   };
 
   const unobserveEditor = editor.onOp((ops) => {
@@ -236,6 +242,11 @@ export function bindFortuneSheetEditor(
     },
     destroy() {
       cancelBootstrap?.();
+      if (snapshotFlushTimer) {
+        window.clearTimeout(snapshotFlushTimer);
+        snapshotFlushTimer = null;
+        flushSnapshot();
+      }
       unobserveEditor();
       yops.unobserve(observeOps);
     },
@@ -247,14 +258,12 @@ export function bindFortuneSheetEditor(
     };
     provider.on('sync', onSync);
     return () => {
-      cancelBootstrap?.();
-      provider.off('sync', onSync);
       binder.destroy();
+      provider.off('sync', onSync);
     };
   }
 
   return () => {
-    cancelBootstrap?.();
     binder.destroy();
   };
 }
@@ -279,3 +288,5 @@ export function mapToCells(ycells) {
   });
   return cells;
 }
+
+export { getSnapshotDiskRevision };

@@ -16,7 +16,15 @@ import { getParentPath, joinRelativePath, resolveUniqueName } from '../../lib/fs
 
 const Wb4sEditorView = lazy(() => import('../../wb4s/Wb4sEditorView.jsx'));
 
-export default function Wb4sEditorShell({ relativePath, fileName, syncInfo, onClose, onRenamed, allowClose = true }) {
+export default function Wb4sEditorShell({
+  relativePath,
+  fileName,
+  syncInfo,
+  onClose,
+  onRenamed,
+  allowClose = true,
+  readOnly: shareReadOnly = false,
+}) {
   const workspace = useWorkspaceSession(relativePath);
   const relativePathRef = useRef(relativePath);
   const fileNameRef = useRef(fileName);
@@ -79,6 +87,7 @@ export default function Wb4sEditorShell({ relativePath, fileName, syncInfo, onCl
   }, []);
 
   const saveToHost = useCallback(async (titleOverride, { includeThumbnail = false } = {}) => {
+    if (shareReadOnly) return false;
     if (!workspace.ready || !exportApiRef.current) return false;
 
     const json = exportApiRef.current.exportDocument({ includeThumbnail });
@@ -95,9 +104,10 @@ export default function Wb4sEditorShell({ relativePath, fileName, syncInfo, onCl
     documentJsonRef.current = normalized;
     lastCommittedJsonRef.current = normalized;
     return true;
-  }, [workspace]);
+  }, [shareReadOnly, workspace]);
 
   const handleRenameTitle = useCallback(async (nextTitle) => {
+    if (shareReadOnly) return;
     try {
       const trimmedTitle = nextTitle.trim() || '제목 없음';
       const parent = getParentPath(relativePathRef.current);
@@ -125,7 +135,7 @@ export default function Wb4sEditorShell({ relativePath, fileName, syncInfo, onCl
       setLoadError(err instanceof Error ? err.message : 'Rename failed');
       throw err;
     }
-  }, [onRenamed, saveToHost, workspace]);
+  }, [onRenamed, saveToHost, shareReadOnly, workspace]);
 
   const handleClose = useCallback(async () => {
     if (closingRef.current) return;
@@ -136,7 +146,9 @@ export default function Wb4sEditorShell({ relativePath, fileName, syncInfo, onCl
       : { retries: 0, delayMs: 0 };
 
     try {
-      await retryAsync(() => saveToHost(undefined, { includeThumbnail: false }), retryOptions);
+      if (!shareReadOnly) {
+        await retryAsync(() => saveToHost(undefined, { includeThumbnail: false }), retryOptions);
+      }
     } catch (err) {
       closingRef.current = false;
       setLoadError(formatNetworkError(err));
@@ -146,7 +158,7 @@ export default function Wb4sEditorShell({ relativePath, fileName, syncInfo, onCl
     exportApiRef.current = null;
     onClose();
     void workspace.close();
-  }, [onClose, saveToHost, workspace]);
+  }, [onClose, saveToHost, shareReadOnly, workspace]);
 
   const isLoading = !loadError && (workspace.loading || !contentReady || !editorReady);
 
@@ -158,7 +170,13 @@ export default function Wb4sEditorShell({ relativePath, fileName, syncInfo, onCl
         </div>
       )}
 
-      <div className="relative flex min-h-0 flex-1 flex-col">
+      {shareReadOnly && (
+        <div className="shrink-0 border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs text-nas-muted">
+          공유(보기 전용) · 편집·저장 불가
+        </div>
+      )}
+
+      <div className={`relative flex min-h-0 flex-1 flex-col${shareReadOnly ? ' pointer-events-none select-none' : ''}`}>
         {isLoading && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-white text-sm text-nas-muted">
             <span>화이트보드 편집기 준비 중…</span>

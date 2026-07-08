@@ -27,6 +27,7 @@ export default function FileList({
   selectedSet,
   accessMap = {},
   shareMap = {},
+  favoritesMap = {},
   onOpen,
   onSelect,
   onToggleCheckbox,
@@ -113,6 +114,7 @@ export default function FileList({
                   entry={entry}
                   accessMap={accessMap}
                   shareMap={shareMap}
+                  favoritesMap={favoritesMap}
                   onShareLinkClick={onShareLinkClick}
                   onPropertiesClick={onPropertiesClick}
                 />
@@ -193,6 +195,7 @@ export default function FileList({
                     entry={entry}
                     accessMap={accessMap}
                     shareMap={shareMap}
+                    favoritesMap={favoritesMap}
                     onShareLinkClick={onShareLinkClick}
                     onPropertiesClick={onPropertiesClick}
                   />

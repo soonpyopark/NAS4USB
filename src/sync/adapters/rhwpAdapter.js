@@ -132,7 +132,7 @@ export function bindRhwpEditor(ydoc, editor, options = {}) {
 
     await binder.flushRemoteApply();
     if (disposed) return;
-    editor.setEditable?.(true);
+    editor.setEditable?.(options.readOnly ? false : true);
     options.onSynced?.();
   };
 

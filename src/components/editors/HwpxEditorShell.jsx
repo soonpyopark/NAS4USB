@@ -11,7 +11,15 @@ import { loadRhwpModule } from '../../lib/rhwp/loadRhwp.js';
 const RHWP_VERSION = '0.7.17';
 const MOUNT_TIMEOUT_MS = 200_000;
 
-export default function HwpxEditorShell({ relativePath, fileName, syncInfo, onClose, allowClose = true, fullscreen = false }) {
+export default function HwpxEditorShell({
+  relativePath,
+  fileName,
+  syncInfo,
+  onClose,
+  allowClose = true,
+  fullscreen = false,
+  readOnly: shareReadOnly = false,
+}) {
   const workspace = useWorkspaceSession(relativePath);
   const { doc, status, synced, roomId, provider } = useYjsSession(relativePath, syncInfo, {
     syncReady: syncInfo != null,
@@ -168,6 +176,7 @@ export default function HwpxEditorShell({ relativePath, fileName, syncInfo, onCl
       synced: true,
       provider,
       diskRevision: diskRevisionRef.current,
+      readOnly: shareReadOnly,
     });
     setBound(true);
 
@@ -177,9 +186,10 @@ export default function HwpxEditorShell({ relativePath, fileName, syncInfo, onCl
       editorHandle.setEditable?.(false);
       setBound(false);
     };
-  }, [editorReady, doc, editorHandle, provider]);
+  }, [editorReady, doc, editorHandle, provider, shareReadOnly]);
 
   const handleSave = async () => {
+    if (shareReadOnly) return;
     if (!workspace.ready || !editorHandle) return;
     setSaving(true);
     try {
@@ -222,6 +232,8 @@ export default function HwpxEditorShell({ relativePath, fileName, syncInfo, onCl
       synced={synced}
       peerCount={peerCount}
       saving={saving}
+      saveDisabled={shareReadOnly || waitingSync}
+      hideSave={shareReadOnly}
       onSave={handleSave}
       onClose={handleClose}
       allowClose={allowClose}
@@ -234,15 +246,17 @@ export default function HwpxEditorShell({ relativePath, fileName, syncInfo, onCl
       )}
 
       <div className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs text-nas-muted">
-        {loadError
-          ? 'rhwp 로드 실패'
-          : editorHandle
-            ? waitingSync
-              ? `rhwp ${RHWP_VERSION} · rhwp-studio · Y.js 연결 중…`
-              : remotePeerCount != null && remotePeerCount > 0
-                ? `rhwp ${RHWP_VERSION} · rhwp-studio · LAN 협업 편집 (협업자 ${remotePeerCount}명 · room ${roomId})`
-                : `rhwp ${RHWP_VERSION} · rhwp-studio · HWPX LAN 협업 편집 · room ${roomId} · 작성 내용 저장 시 HWPX 유지`
-            : `rhwp ${RHWP_VERSION} · rhwp-studio 초기화 중…`}
+        {shareReadOnly
+          ? `rhwp ${RHWP_VERSION} · 공유(보기 전용) · 편집·저장 불가`
+          : loadError
+            ? 'rhwp 로드 실패'
+            : editorHandle
+              ? waitingSync
+                ? `rhwp ${RHWP_VERSION} · rhwp-studio · Y.js 연결 중…`
+                : remotePeerCount != null && remotePeerCount > 0
+                  ? `rhwp ${RHWP_VERSION} · rhwp-studio · LAN 협업 편집 (협업자 ${remotePeerCount}명 · room ${roomId})`
+                  : `rhwp ${RHWP_VERSION} · rhwp-studio · HWPX LAN 협업 편집 · room ${roomId} · 작성 내용 저장 시 HWPX 유지`
+              : `rhwp ${RHWP_VERSION} · rhwp-studio 초기화 중…`}
       </div>
 
       <div className="relative flex min-h-0 flex-1 flex-col">

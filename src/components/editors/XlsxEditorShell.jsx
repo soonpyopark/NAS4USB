@@ -7,11 +7,20 @@ import { useWorkspaceSession } from '../../hooks/useWorkspaceSession.js';
 import { bindFortuneSheetEditor, setWorkbookSnapshot } from '../../sync/adapters/xlsxAdapter.js';
 import { bindFortuneSheetPresence } from '../../sync/adapters/xlsxPresenceAdapter.js';
 import { getLanWsEndpoints } from '../../sync/buildWsUrl.js';
-import { parseSpreadsheetBase64, buildSpreadsheetBase64 } from '../../lib/xlsx/xlsxIO.js';
+import { buildSpreadsheetBase64 } from '../../lib/xlsx/xlsxIO.js';
+import { loadSpreadsheetDocument, writeFortuneSidecar } from '../../lib/xlsx/fortuneSidecar.js';
 
 const FORTUNE_SHEET_VERSION = '1.0.4';
 
-export default function XlsxEditorShell({ relativePath, fileName, syncInfo, onClose, allowClose = true, fullscreen = false }) {
+export default function XlsxEditorShell({
+  relativePath,
+  fileName,
+  syncInfo,
+  onClose,
+  allowClose = true,
+  fullscreen = false,
+  readOnly: shareReadOnly = false,
+}) {
   const workspace = useWorkspaceSession(relativePath);
   const { doc, status, synced, roomId, provider } = useYjsSession(relativePath, syncInfo, {
     syncReady: syncInfo != null,
@@ -55,7 +64,7 @@ export default function XlsxEditorShell({ relativePath, fileName, syncInfo, onCl
           // diskRevision is optional; load should still succeed.
         }
 
-        const parsed = await parseSpreadsheetBase64(base64);
+        const parsed = await loadSpreadsheetDocument(relativePath, base64);
         if (cancelled) return;
         setSheetSummary(
           parsed.sheetNames.length > 1
@@ -109,11 +118,13 @@ export default function XlsxEditorShell({ relativePath, fileName, syncInfo, onCl
   }, [editorHandle, doc, initialSheets, provider]);
 
   const handleSave = async () => {
+    if (shareReadOnly) return;
     if (!workspace.ready || !editorHandle) return;
     setSaving(true);
     try {
       const bookType = fileName.toLowerCase().endsWith('.xls') ? 'biff8' : 'xlsx';
       const sheets = editorHandle.getSheets();
+      await writeFortuneSidecar(relativePath, sheets);
       const base64 = buildSpreadsheetBase64(sheets, { bookType });
       await workspace.writeBinary(base64);
       await workspace.commit();
@@ -152,6 +163,8 @@ export default function XlsxEditorShell({ relativePath, fileName, syncInfo, onCl
       synced={synced}
       peerCount={peerCount}
       saving={saving}
+      saveDisabled={shareReadOnly || waitingSync}
+      hideSave={shareReadOnly}
       onSave={handleSave}
       onClose={handleClose}
       allowClose={allowClose}
@@ -164,15 +177,17 @@ export default function XlsxEditorShell({ relativePath, fileName, syncInfo, onCl
       )}
 
       <div className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs text-nas-muted">
-        {loadError
-          ? 'FortuneSheet 로드 실패'
-          : editorHandle
-            ? waitingSync
-              ? `FortuneSheet ${FORTUNE_SHEET_VERSION} · Y.js 연결 중…`
-              : remotePeerCount != null && remotePeerCount > 0
-                ? `FortuneSheet ${FORTUNE_SHEET_VERSION} · LAN 협업 편집 (협업자 ${remotePeerCount}명 · 서식·시트 포함 · room ${roomId})`
-                : `FortuneSheet ${FORTUNE_SHEET_VERSION} · 스프레드시트 LAN 협업 · room ${roomId} · 작성 내용 저장 시 XLS/XLSX 유지`
-            : `FortuneSheet ${FORTUNE_SHEET_VERSION} · 편집기 초기화 중…`}
+        {shareReadOnly
+          ? `FortuneSheet ${FORTUNE_SHEET_VERSION} · 공유(보기 전용) · 편집·저장 불가`
+          : loadError
+            ? 'FortuneSheet 로드 실패'
+            : editorHandle
+              ? waitingSync
+                ? `FortuneSheet ${FORTUNE_SHEET_VERSION} · Y.js 연결 중…`
+                : remotePeerCount != null && remotePeerCount > 0
+                  ? `FortuneSheet ${FORTUNE_SHEET_VERSION} · LAN 협업 편집 (협업자 ${remotePeerCount}명 · 서식·시트 포함 · room ${roomId})`
+                  : `FortuneSheet ${FORTUNE_SHEET_VERSION} · 스프레드시트 LAN 협업 · room ${roomId} · 저장 시 서식·이미지 등 전체 상태 보존`
+              : `FortuneSheet ${FORTUNE_SHEET_VERSION} · 편집기 초기화 중…`}
       </div>
 
       <div className="relative flex min-h-0 flex-1 flex-col">
@@ -183,10 +198,12 @@ export default function XlsxEditorShell({ relativePath, fileName, syncInfo, onCl
         )}
 
         {initialSheets != null && (
-          <FortuneSheetGrid
-            initialSheets={initialSheets}
-            onReady={(editor) => setEditorHandle(editor)}
-          />
+          <div className={shareReadOnly ? 'pointer-events-none min-h-0 flex-1 select-none' : 'min-h-0 flex-1'}>
+            <FortuneSheetGrid
+              initialSheets={initialSheets}
+              onReady={(editor) => setEditorHandle(editor)}
+            />
+          </div>
         )}
       </div>
     </EditorModal>
