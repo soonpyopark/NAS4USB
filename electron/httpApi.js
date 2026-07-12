@@ -3,6 +3,7 @@ import {
   getAppPaths,
   getDataRoot,
   getPortableRoot,
+  getInstallRoot,
   getSyncInfo,
   getTempPath,
 } from './appContext.js';
@@ -374,7 +375,7 @@ export async function handleHttpApiRequest(req, res) {
     }
 
     if (method === 'GET' && url.pathname === '/api/editors/status') {
-      sendJson(res, 200, await getEditorCoresStatus(getPortableRoot()));
+      sendJson(res, 200, await getEditorCoresStatus(getPortableRoot(), getInstallRoot()));
       return true;
     }
 

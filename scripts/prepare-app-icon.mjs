@@ -4,12 +4,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pngToIco from 'png-to-ico';
 import sharp from 'sharp';
+import { extractIconSourceFromSheet } from './extract-icon-from-sheet.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '..');
 const buildDir = path.join(projectRoot, 'build');
 const publicDir = path.join(projectRoot, 'public');
 const electronDir = path.join(projectRoot, 'electron');
+const sheetPath = path.join(buildDir, 'icon-sheet.png');
 const sourceCandidates = [
   path.join(buildDir, 'icon-source.png'),
   path.join(buildDir, 'icon-source.jpg'),
@@ -184,6 +186,22 @@ async function generatePlatformIcons(icon512Path) {
   }
 }
 
+const sizes = [
+  { size: 16, out: 'icon-16.png' },
+  { size: 32, out: 'icon-32.png' },
+  { size: 48, out: 'icon-48.png' },
+  { size: 64, out: 'icon-64.png' },
+  { size: 128, out: 'icon-128.png' },
+  { size: 256, out: 'icon-256.png' },
+  { size: 512, out: 'icon-512.png' },
+  { size: 1024, out: 'icon-1024.png' },
+];
+
+// Prefer regenerating icon-source.png from the design sheet when present.
+if (fs.existsSync(sheetPath)) {
+  await extractIconSourceFromSheet(sheetPath);
+}
+
 const source = sourceCandidates.find((candidate) => fs.existsSync(candidate));
 if (!source) {
   console.warn('[icons] build/icon-source.(png|jpg|jpeg) not found — syncing existing public/icon.png only.');
@@ -197,17 +215,6 @@ if (!source) {
   }
   process.exit(0);
 }
-
-const sizes = [
-  { size: 16, out: 'icon-16.png' },
-  { size: 32, out: 'icon-32.png' },
-  { size: 48, out: 'icon-48.png' },
-  { size: 64, out: 'icon-64.png' },
-  { size: 128, out: 'icon-128.png' },
-  { size: 256, out: 'icon-256.png' },
-  { size: 512, out: 'icon-512.png' },
-  { size: 1024, out: 'icon-1024.png' },
-];
 
 const roundedMaster = await buildRoundedMaster(
   source,

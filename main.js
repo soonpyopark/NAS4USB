@@ -9,6 +9,7 @@ import {
   getAppPaths,
   getDataRoot,
   getPortableRoot,
+  getInstallRoot,
   getSyncInfo,
   getTempPath,
   initAppContext,
@@ -90,13 +91,16 @@ const isDev = !app.isPackaged;
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
-  dialog.showMessageBoxSync({
-    type: 'info',
-    title: APP_NAME,
-    message: '프로그램이 이미 실행중입니다.',
-    buttons: ['확인'],
+  // dialog requires app ready — defer the notice, then exit.
+  app.whenReady().then(() => {
+    dialog.showMessageBoxSync({
+      type: 'info',
+      title: APP_NAME,
+      message: '프로그램이 이미 실행중입니다.',
+      buttons: ['확인'],
+    });
+    app.exit(0);
   });
-  app.quit();
 }
 
 /** @type {{ port: number, addresses: string[], appUrl?: string } | null} */
@@ -620,7 +624,7 @@ ipcMain.handle('workspace:rename', async (event, sessionId, newRelativePath) => 
 
 ipcMain.handle('workspace:close', async (_event, sessionId) => closeWorkspace(sessionId));
 
-ipcMain.handle('editors:getStatus', async () => getEditorCoresStatus(getPortableRoot()));
+ipcMain.handle('editors:getStatus', async () => getEditorCoresStatus(getPortableRoot(), getInstallRoot()));
 
 ipcMain.handle('auth:login', async (_event, { id, password } = {}) =>
   loginAdmin(id, password, getPortableRoot()),
@@ -772,6 +776,7 @@ if (gotSingleInstanceLock) {
 
     initAppContext({
       portableRoot,
+      installRoot: app.getAppPath(),
       dataRoot,
       tempPath: app.getPath('temp'),
       isDev,

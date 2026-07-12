@@ -8,7 +8,7 @@ import { setTextDiskRevision } from '../../sync/adapters/textEditorAdapter.js';
 import { getLanWsEndpoints } from '../../sync/buildWsUrl.js';
 import { loadRhwpModule } from '../../lib/rhwp/loadRhwp.js';
 
-const RHWP_VERSION = '0.7.17';
+const RHWP_VERSION = '0.7.18';
 const MOUNT_TIMEOUT_MS = 200_000;
 
 export default function HwpxEditorShell({

@@ -58,8 +58,9 @@ export default function EditorUpdateButton() {
         ) : (
           <div className="modal-body space-y-3 !mb-4 !text-[#323130]">
             <p className="text-sm text-slate-600">
-              현재 USB에 포함된 에디터 코어 버전입니다. 업데이트는 `update_all.bat` 또는 `npm run update:all`로
-              진행해 주세요.
+              현재 앱에 포함된 에디터 코어 버전입니다. 개발 폴더 업데이트는 `update_all.bat` 또는
+              `npm run update:all`, 포터블 exe에 반영하려면 `update_all.bat build` 또는
+              `npm run build:dist:exe`로 다시 빌드해 주세요.
             </p>
 
             <div className="overflow-hidden rounded border border-slate-200">

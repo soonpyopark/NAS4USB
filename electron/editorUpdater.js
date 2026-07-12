@@ -4,6 +4,81 @@ import path from 'node:path';
 import { CORES_MANIFEST_PATH, EDITOR_CORES } from '../shared/editorCores.js';
 
 /**
+ * Packaged apps keep node_modules inside the asar (installRoot),
+ * while portableRoot is the USB/exe folder (lib/, data/, …).
+ * @param {string} portableRoot
+ * @param {string} [installRoot]
+ */
+function resolveRoots(portableRoot, installRoot = portableRoot) {
+  if (!installRoot || installRoot === portableRoot) {
+    return [portableRoot];
+  }
+  return [installRoot, portableRoot];
+}
+
+/**
+ * @param {string} label
+ */
+function extractVersionTokens(label) {
+  if (!label || label === 'not-installed' || label === 'unknown' || label === '확인 불가') {
+    return [];
+  }
+  return [...String(label).matchAll(/\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?/g)].map((match) => match[0]);
+}
+
+/**
+ * @param {string} a
+ * @param {string} b
+ * @returns {number}
+ */
+function compareSemver(a, b) {
+  const pa = a.split('.').map((part) => Number.parseInt(part, 10) || 0);
+  const pb = b.split('.').map((part) => Number.parseInt(part, 10) || 0);
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i += 1) {
+    const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+/**
+ * @param {string[]} tokens
+ */
+function maxSemver(tokens) {
+  return tokens.reduce((best, token) => {
+    if (!best) return token;
+    return compareSemver(token, best) > 0 ? token : best;
+  }, /** @type {string|null} */ (null));
+}
+
+/**
+ * @param {string} current
+ * @param {string | null} available
+ */
+function isUpdateAvailable(current, available) {
+  if (!available || available === '확인 불가') return false;
+  if (!current || current === 'not-installed' || current === 'unknown') return true;
+
+  const currentTokens = extractVersionTokens(current);
+  const availableTokens = extractVersionTokens(available);
+  if (availableTokens.length === 0) {
+    // e.g. GitHub tag "WhiteBoard4Share" with no semver — not a usable update signal
+    return false;
+  }
+  if (currentTokens.length === 0) {
+    return true;
+  }
+
+  const currentMax = maxSemver(currentTokens);
+  const availableMax = maxSemver(availableTokens);
+  if (!currentMax || !availableMax) {
+    return current.trim() !== available.trim();
+  }
+  return compareSemver(availableMax, currentMax) > 0;
+}
+
+/**
  * @param {string} appPath
  * @param {string} relativePath
  */
@@ -100,28 +175,42 @@ async function readNpmPackageVersion(appPath, packageName) {
  * @param {import('../shared/editorCores.js').EditorCoreDefinition} core
  */
 async function readCoreVersion(appPath, core) {
+  return readCoreVersionFromRoots([appPath], core);
+}
+
+/**
+ * @param {string[]} roots
+ * @param {import('../shared/editorCores.js').EditorCoreDefinition} core
+ */
+async function readCoreVersionFromRoots(roots, core) {
   const npmPackages = getNpmPackages(core);
   if (npmPackages.length > 0) {
-    const versions = [];
-    for (const packageName of npmPackages) {
-      const version = await readNpmPackageVersion(appPath, packageName);
-      if (version !== 'not-installed') {
-        versions.push(`${packageName}@${version}`);
+    for (const root of roots) {
+      const versions = [];
+      for (const packageName of npmPackages) {
+        const version = await readNpmPackageVersion(root, packageName);
+        if (version !== 'not-installed') {
+          versions.push(`${packageName}@${version}`);
+        }
       }
-    }
-    if (versions.length > 0) {
-      return versions.join(', ');
+      if (versions.length > 0) {
+        return versions.join(', ');
+      }
     }
   }
 
-  const packagePath = path.join(appPath, core.libDir, 'package.json');
-  try {
-    const raw = await fs.readFile(packagePath, 'utf8');
-    const parsed = JSON.parse(raw);
-    return parsed.version ?? parsed.name ?? 'unknown';
-  } catch {
-    return 'not-installed';
+  for (const root of roots) {
+    try {
+      const packagePath = path.join(root, core.libDir, 'package.json');
+      const raw = await fs.readFile(packagePath, 'utf8');
+      const parsed = JSON.parse(raw);
+      return parsed.version ?? parsed.name ?? 'unknown';
+    } catch {
+      // try next root
+    }
   }
+
+  return 'not-installed';
 }
 
 /**
@@ -166,8 +255,16 @@ async function readAvailableCoreVersion(core) {
       );
       if (response.ok) {
         const data = await response.json();
-        const tag = typeof data.tag_name === 'string' ? data.tag_name.replace(/^v/, '') : null;
-        if (tag) return tag;
+        const candidates = [data.tag_name, data.name]
+          .filter((value) => typeof value === 'string')
+          .map((value) => value.replace(/^v/, ''));
+        for (const candidate of candidates) {
+          const match = String(candidate).match(/(\d+\.\d+\.\d+)/);
+          if (match) return match[1];
+        }
+        // fall back to tag only when it looks like a version-ish label
+        const tag = candidates[0];
+        if (tag && /\d/.test(tag)) return tag;
       }
     } catch {
       // offline — available unknown
@@ -178,27 +275,37 @@ async function readAvailableCoreVersion(core) {
 }
 
 /**
- * @param {string} appPath
+ * @param {string} portableRoot USB/exe (or project) root
+ * @param {string} [installRoot] asar/project root that contains node_modules
  */
-export async function getEditorCoresStatus(appPath) {
-  const manifest = await readManifest(appPath);
+export async function getEditorCoresStatus(portableRoot, installRoot = portableRoot) {
+  const roots = resolveRoots(portableRoot, installRoot);
+  const projectRoot = roots[roots.length - 1];
+  const manifest = await readManifestFromRoots(roots);
   const cores = {};
 
   for (const core of EDITOR_CORES) {
-    const version = await readCoreVersion(appPath, core);
+    let version = await readCoreVersionFromRoots(roots, core);
+    if (
+      (version === 'not-installed' || version === 'unknown') &&
+      typeof manifest?.cores?.[core.id]?.version === 'string' &&
+      manifest.cores[core.id].version
+    ) {
+      version = manifest.cores[core.id].version;
+    }
+
     const availableVersion = await readAvailableCoreVersion(core);
-    const hasGit = (await isGitRepository(appPath)) && (await hasSubmoduleCheckout(appPath, core.submodulePath));
-    const hasLocalPackage = await pathExists(appPath, core.updatePackageDir);
+    const hasGit =
+      (await isGitRepository(projectRoot)) &&
+      (await hasSubmoduleCheckout(projectRoot, core.submodulePath));
+    const hasLocalPackage = await pathExists(projectRoot, core.updatePackageDir);
 
     cores[core.id] = {
       id: core.id,
       label: core.label,
       version,
       availableVersion: availableVersion ?? '확인 불가',
-      updateAvailable:
-        availableVersion != null &&
-        availableVersion !== '확인 불가' &&
-        availableVersion !== version,
+      updateAvailable: isUpdateAvailable(version, availableVersion),
       libDir: core.libDir,
       hasGitSource: hasGit,
       hasLocalUpdatePackage: hasLocalPackage,
@@ -220,8 +327,19 @@ async function readManifest(appPath) {
     const raw = await fs.readFile(path.join(appPath, CORES_MANIFEST_PATH), 'utf8');
     return JSON.parse(raw);
   } catch {
-    return { updatedAt: null, cores: {} };
+    return null;
   }
+}
+
+/**
+ * @param {string[]} roots
+ */
+async function readManifestFromRoots(roots) {
+  for (const root of roots) {
+    const manifest = await readManifest(root);
+    if (manifest) return manifest;
+  }
+  return { updatedAt: null, cores: {} };
 }
 
 /**
@@ -394,17 +512,67 @@ async function updateSingleCore(appPath, core) {
 }
 
 /**
+ * Keep adapter package.json / UI version label in sync with npm @rhwp/* versions.
+ * @param {string} appPath
+ * @param {string} versionLabel
+ */
+async function syncRhwpAdapterVersion(appPath, versionLabel) {
+  const token = extractVersionTokens(versionLabel)[0];
+  if (!token) return;
+
+  const adapterPackagePath = path.join(appPath, 'lib', 'rhwp', 'package.json');
+  try {
+    const raw = await fs.readFile(adapterPackagePath, 'utf8');
+    const parsed = JSON.parse(raw);
+    parsed.version = token;
+    if (parsed.dependencies && typeof parsed.dependencies === 'object') {
+      if (parsed.dependencies['@rhwp/editor']) {
+        parsed.dependencies['@rhwp/editor'] = `^${token}`;
+      }
+      if (parsed.dependencies['@rhwp/core']) {
+        parsed.dependencies['@rhwp/core'] = `^${token}`;
+      }
+    }
+    await fs.writeFile(adapterPackagePath, `${JSON.stringify(parsed, null, 2)}\n`, 'utf8');
+  } catch {
+    // adapter may be absent in some environments
+  }
+
+  const labelFiles = [
+    path.join(appPath, 'lib', 'rhwp', 'mountRhwp.js'),
+    path.join(appPath, 'src', 'components', 'editors', 'HwpxEditorShell.jsx'),
+  ];
+  for (const filePath of labelFiles) {
+    try {
+      const text = await fs.readFile(filePath, 'utf8');
+      const next = text.replace(
+        /const RHWP_VERSION = '[^']+'/,
+        `const RHWP_VERSION = '${token}'`,
+      );
+      if (next !== text) {
+        await fs.writeFile(filePath, next, 'utf8');
+      }
+    } catch {
+      // optional labels
+    }
+  }
+}
+
+/**
  * @param {string} appPath
  */
 export async function updateEditorCores(appPath) {
   /** @type {Array<Record<string, unknown>>} */
   const results = [];
-  const manifest = await readManifest(appPath);
+  const manifest = (await readManifest(appPath)) ?? { updatedAt: null, cores: {} };
   const updatedAt = new Date().toISOString();
 
   for (const core of EDITOR_CORES) {
     try {
       const result = await updateSingleCore(appPath, core);
+      if (core.id === 'rhwp' && result.success) {
+        await syncRhwpAdapterVersion(appPath, String(result.version ?? ''));
+      }
       results.push(result);
       manifest.cores = manifest.cores ?? {};
       manifest.cores[core.id] = {
