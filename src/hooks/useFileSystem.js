@@ -137,6 +137,10 @@ export function useFileSystem(currentPath) {
 
   const stat = useCallback(async (relativePath) => window.nas4usb.fs.stat(relativePath), []);
 
+  const openInSystem = useCallback(async (relativePath) => {
+    await window.nas4usb.fs.openPath(relativePath);
+  }, []);
+
   return {
     entries,
     loading,
@@ -156,5 +160,6 @@ export function useFileSystem(currentPath) {
     moveTo,
     uploadFiles,
     stat,
+    openInSystem,
   };
 }

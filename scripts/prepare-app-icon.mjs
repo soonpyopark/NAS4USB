@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pngToIco from 'png-to-ico';
+import sharp from 'sharp';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '..');
@@ -14,6 +15,84 @@ const sourceCandidates = [
   path.join(buildDir, 'icon-source.jpg'),
   path.join(buildDir, 'icon-source.jpeg'),
 ];
+
+// 둥근 모서리 반경 비율 (아이콘 한 변 대비). iOS 스퀘어클 대비 살짝 보수적으로 18%.
+const CORNER_RADIUS_RATIO = 0.18;
+// 밝은 체커 배경(흰색/연회색)으로 간주할 임계값. 이보다 밝으면 배경으로 취급.
+const LIGHT_BG_THRESHOLD = 185;
+
+/**
+ * 소스 이미지에서 실제 아트워크 영역을 검출해 정사각형으로 크롭하고,
+ * 둥근 모서리(투명)를 적용한 마스터 PNG를 생성한다.
+ * @param {string} sourcePath
+ * @param {string} outPath
+ * @param {number} masterSize
+ * @returns {Promise<string>} 생성된 마스터 PNG 경로
+ */
+async function buildRoundedMaster(sourcePath, outPath, masterSize = 1024) {
+  const { data, info } = await sharp(sourcePath)
+    .ensureAlpha()
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const { width, height, channels } = info;
+
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const idx = (y * width + x) * channels;
+      const r = data[idx];
+      const g = data[idx + 1];
+      const b = data[idx + 2];
+      const a = channels >= 4 ? data[idx + 3] : 255;
+      const isLightBg =
+        a < 8 || (r > LIGHT_BG_THRESHOLD && g > LIGHT_BG_THRESHOLD && b > LIGHT_BG_THRESHOLD);
+      if (isLightBg) continue;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+  }
+
+  if (maxX < 0) {
+    minX = 0;
+    minY = 0;
+    maxX = width - 1;
+    maxY = height - 1;
+  }
+
+  const cropW = maxX - minX + 1;
+  const cropH = maxY - minY + 1;
+
+  const squared = await sharp(sourcePath)
+    .ensureAlpha()
+    .extract({ left: minX, top: minY, width: cropW, height: cropH })
+    .resize(masterSize, masterSize, { fit: 'fill' })
+    .png()
+    .toBuffer();
+
+  const radius = Math.round(masterSize * CORNER_RADIUS_RATIO);
+  const maskSvg = Buffer.from(
+    `<svg width="${masterSize}" height="${masterSize}"><rect x="0" y="0" width="${masterSize}" height="${masterSize}" rx="${radius}" ry="${radius}" fill="#fff"/></svg>`,
+  );
+
+  const rounded = await sharp(squared)
+    .composite([{ input: maskSvg, blend: 'dest-in' }])
+    .png()
+    .toBuffer();
+
+  fs.writeFileSync(outPath, rounded);
+  console.log(
+    `[icons] rounded master (crop ${cropW}x${cropH} → ${masterSize}px, corner ${Math.round(
+      CORNER_RADIUS_RATIO * 100,
+    )}%) → ${path.relative(projectRoot, outPath)}`,
+  );
+  return outPath;
+}
 
 function run(command, args) {
   const result = spawnSync(command, args, { stdio: 'inherit', shell: process.platform === 'win32' });
@@ -130,8 +209,24 @@ const sizes = [
   { size: 1024, out: 'icon-1024.png' },
 ];
 
+const roundedMaster = await buildRoundedMaster(
+  source,
+  path.join(buildDir, 'icon-rounded-master.png'),
+  1024,
+);
+
 for (const { size, out } of sizes) {
-  run('npx', ['--yes', 'sharp-cli', '-i', source, '-o', path.join(buildDir, out), 'resize', String(size), String(size)]);
+  run('npx', [
+    '--yes',
+    'sharp-cli',
+    '-i',
+    roundedMaster,
+    '-o',
+    path.join(buildDir, out),
+    'resize',
+    String(size),
+    String(size),
+  ]);
 }
 
 const icon512Path = path.join(buildDir, 'icon-512.png');

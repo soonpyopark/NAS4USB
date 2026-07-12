@@ -90,6 +90,12 @@ const isDev = !app.isPackaged;
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
+  dialog.showMessageBoxSync({
+    type: 'info',
+    title: APP_NAME,
+    message: '프로그램이 이미 실행중입니다.',
+    buttons: ['확인'],
+  });
   app.quit();
 }
 
@@ -364,6 +370,18 @@ ipcMain.handle('app:openExternal', async (_event, url) => {
     throw new Error('Invalid external URL');
   }
   await shell.openExternal(url);
+  return true;
+});
+
+ipcMain.handle('fs:openPath', async (_event, relativePath) => {
+  if (typeof relativePath !== 'string' || !relativePath) {
+    throw new Error('열 파일 경로가 올바르지 않습니다.');
+  }
+  const absolutePath = resolvePortablePath(relativePath);
+  const errorMessage = await shell.openPath(absolutePath);
+  if (errorMessage) {
+    throw new Error(errorMessage);
+  }
   return true;
 });
 

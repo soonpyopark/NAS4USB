@@ -500,6 +500,7 @@ export default function Sidebar({
         isInFavoritesView,
         hasClipboard,
         onOpen: handleOpen,
+        onOpenSystem: (entry) => fs.openInSystem(entry.relativePath),
         onUpload: contextTarget?.isDirectory ? triggerUpload : undefined,
         onCopy: () => copyEntries([contextTarget]),
         onCut: () => cutEntries([contextTarget]),

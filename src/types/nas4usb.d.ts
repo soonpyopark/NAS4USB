@@ -61,6 +61,7 @@ window.nas4usb = {
     move: (fromRelative, toRelative) => {},
     stat: (relativePath) => {},
     writeFileAbsolute: (params) => {},
+    openPath: (relativePath) => {},
   },
   workspace: {
     open: (relativePath) => {},

@@ -161,8 +161,8 @@
   display: flex;
   width: calc(100vw - 2rem);
   max-width: calc(100vw - 2rem);
-  max-height: 85vh;
-  height: 85vh;
+  max-height: calc(100vh - 2rem);
+  height: calc(100vh - 2rem);
   flex-direction: column;
   overflow: hidden;
   padding: 0;

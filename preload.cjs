@@ -35,6 +35,7 @@ contextBridge.exposeInMainWorld('nas4usb', {
     move: (fromRelative, toRelative) => ipcRenderer.invoke('fs:move', fromRelative, toRelative),
     stat: (relativePath) => ipcRenderer.invoke('fs:stat', relativePath),
     writeFileAbsolute: (params) => ipcRenderer.invoke('fs:writeFileAbsolute', params),
+    openPath: (relativePath) => ipcRenderer.invoke('fs:openPath', relativePath),
   },
 
   workspace: {

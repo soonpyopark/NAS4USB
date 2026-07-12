@@ -1,3 +1,9 @@
 {
-  "items": {}
+  "items": {
+    "__trash/NoName.block": {
+      "originalPath": "NoName.block",
+      "deletedAt": "2026-07-08T15:29:15.022Z",
+      "isDirectory": false
+    }
+  }
 }

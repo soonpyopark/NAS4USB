@@ -149,11 +149,90 @@ async function stripEmbedBlockers(outDir) {
   }
 }
 
+/**
+ * 셀 안 표 만들기 버그 우회: 스튜디오 UI가 cellPath를 JSON 문자열로 넘겨
+ * WASM(`createTableInCellEx`)이 "cellPath JSON은 배열이어야 합니다" 오류를 던진다.
+ * 래퍼에서 cellPath가 문자열이면 배열로 정규화한다.
+ */
+async function patchNestedTableCellPath(outDir) {
+  const assetsDir = path.join(outDir, 'assets');
+  let files = [];
+  try {
+    files = (await fs.readdir(assetsDir)).filter((name) => name.endsWith('.js'));
+  } catch {
+    return;
+  }
+
+  const marker =
+    'createTableInCellEx(e){if(!this.doc)throw Error(`문서가 로드되지 않았습니다`);return JSON.parse(this.doc.createTableInCellEx(JSON.stringify(e)))}';
+  const patched =
+    'createTableInCellEx(e){if(!this.doc)throw Error(`문서가 로드되지 않았습니다`);if(e&&typeof e.cellPath==="string"){try{e={...e,cellPath:JSON.parse(e.cellPath)}}catch{}}if(e&&Array.isArray(e.cellPath)&&e.cellPath.length){let _l=e.cellPath[e.cellPath.length-1]||{};e={...e,controlIdx:e.controlIdx??_l.controlIndex??_l.controlIdx,cellIdx:e.cellIdx??_l.cellIndex??_l.cellIdx,cellParaIdx:e.cellParaIdx??_l.cellParaIndex??_l.cellParaIdx}}return JSON.parse(this.doc.createTableInCellEx(JSON.stringify(e)))}';
+
+  for (const name of files) {
+    const filePath = path.join(assetsDir, name);
+    const source = await fs.readFile(filePath, 'utf8');
+    if (!source.includes(marker)) continue;
+    await fs.writeFile(filePath, source.replaceAll(marker, patched), 'utf8');
+    console.log(`[rhwp-studio] patched nested-table cellPath → assets/${name}`);
+    return;
+  }
+  console.warn('[rhwp-studio] nested-table cellPath marker not found — skipped (upstream may have fixed it)');
+}
+
+/**
+ * PC에 설치된 로컬 글꼴을 편집기에서 원본 이름 그대로 쓸 수 있게 등록한다.
+ * - 번들의 등록 글꼴 집합 `P`에 이름을 추가하면 대체 테이블(`Ze`)을 우회해
+ *   글꼴 스택 맨 앞에 원본명이 놓이고, 설치돼 있으면 시스템 글꼴로 렌더된다.
+ *   미설치 시에는 `rt()`의 명조/고딕 폴백으로 자연스럽게 대체된다.
+ * - 글꼴 드롭다운(index.html)에도 선택 항목을 추가한다.
+ * @see public/rhwp-studio/assets/index-*.js (`at`/`it`/`rt` 글꼴 스택 빌더)
+ */
+const PC_LOCAL_FONTS = ['휴먼명조', '휴먼고딕'];
+
+async function patchPcLocalFonts(outDir) {
+  const assetsDir = path.join(outDir, 'assets');
+  const marker = 'P=new Set(N.map(e=>e.name))';
+  const replacement = `P=new Set([...N.map(e=>e.name),${PC_LOCAL_FONTS.map((n) => `\`${n}\``).join(',')}])`;
+
+  let files = [];
+  try {
+    files = (await fs.readdir(assetsDir)).filter((name) => name.endsWith('.js'));
+  } catch {
+    files = [];
+  }
+  let bundlePatched = false;
+  for (const name of files) {
+    const filePath = path.join(assetsDir, name);
+    const source = await fs.readFile(filePath, 'utf8');
+    if (!source.includes(marker)) continue;
+    await fs.writeFile(filePath, source.replaceAll(marker, replacement), 'utf8');
+    console.log(`[rhwp-studio] registered PC fonts (${PC_LOCAL_FONTS.join(', ')}) → assets/${name}`);
+    bundlePatched = true;
+    break;
+  }
+  if (!bundlePatched) {
+    console.warn('[rhwp-studio] font-registry marker not found — skipped (upstream may have changed)');
+  }
+
+  const indexPath = path.join(outDir, 'index.html');
+  let html = await fs.readFile(indexPath, 'utf8');
+  const anchor = '<option value="궁서">궁서</option>';
+  const options = PC_LOCAL_FONTS.map((n) => `<option value="${n}">${n}</option>`);
+  const missing = options.filter((opt) => !html.includes(opt));
+  if (html.includes(anchor) && missing.length) {
+    html = html.replace(anchor, `${anchor}\n        ${missing.join('\n        ')}`);
+    await fs.writeFile(indexPath, html, 'utf8');
+    console.log(`[rhwp-studio] added PC font options → index.html`);
+  }
+}
+
 async function publishDist() {
   const distDir = path.join(rhwpStudio, 'dist');
   await fs.rm(publicOut, { recursive: true, force: true });
   await fs.cp(distDir, publicOut, { recursive: true });
   await stripEmbedBlockers(publicOut);
+  await patchNestedTableCellPath(publicOut);
+  await patchPcLocalFonts(publicOut);
   console.log(`[rhwp-studio] published → ${publicOut}`);
 }
 

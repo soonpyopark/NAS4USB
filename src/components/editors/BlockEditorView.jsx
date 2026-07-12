@@ -6,6 +6,7 @@ import '@blocknote/react/style.css';
 import '@blocknote/mantine/style.css';
 import '../../styles/block-editor.css';
 import { BLOCKNOTE_FRAGMENT } from '../../lib/blocknote/seedRoom.js';
+import { BLOCKNOTE_TABLE_OPTIONS } from '../../lib/blocknote/editorConfig.js';
 import {
   createBlocknoteResolveFileUrl,
   createBlocknoteUploadFile,
@@ -51,6 +52,7 @@ export default function BlockEditorView({
     {
       uploadFile,
       resolveFileUrl,
+      tables: BLOCKNOTE_TABLE_OPTIONS,
       ...(collaboration
         ? {
             collaboration: {

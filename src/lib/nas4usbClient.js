@@ -141,6 +141,10 @@ export function createHttpNas4usbClient() {
         }),
       stat: (relativePath) =>
         apiFetch(`/fs/stat?path=${encodeURIComponent(relativePath)}`),
+      openPath: () =>
+        Promise.reject(
+          new Error('시스템으로 열기는 NAS4USB 앱에서만 사용할 수 있습니다. 브라우저에서는 다운로드를 이용해 주세요.'),
+        ),
     },
 
     workspace: {

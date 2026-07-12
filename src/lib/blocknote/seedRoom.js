@@ -1,5 +1,6 @@
 import { BlockNoteEditor } from '@blocknote/core';
 import { blocksToYXmlFragment } from '@blocknote/core/yjs';
+import { BLOCKNOTE_TABLE_OPTIONS } from './editorConfig.js';
 
 export const BLOCKNOTE_FRAGMENT = 'blocknote';
 const SEED_ORIGIN = 'block-seed';
@@ -51,7 +52,10 @@ export function seedBlocknoteRoomFromDisk(ydoc, blocks, { diskRevision = '' } = 
       clearXmlFragment(fragment);
     }
 
-    const editor = BlockNoteEditor.create({ initialContent: initialBlocks });
+    const editor = BlockNoteEditor.create({
+      initialContent: initialBlocks,
+      tables: BLOCKNOTE_TABLE_OPTIONS,
+    });
     blocksToYXmlFragment(editor, editor.document, fragment);
     meta.set(`${BLOCKNOTE_FRAGMENT}:seeded`, true);
     if (diskRevision) {

@@ -73,6 +73,7 @@ export default function FileExplorer({
     copyTo,
     uploadFiles,
     stat,
+    openInSystem,
   } = useFileSystem(currentPath);
 
   const {
@@ -616,6 +617,7 @@ export default function FileExplorer({
         isInFavoritesView,
         hasClipboard,
         onOpen: handleOpen,
+        onOpenSystem: (entry) => openInSystem(entry.relativePath),
         onUpload: contextTarget?.isDirectory ? triggerUpload : undefined,
         onCopy: () => handleCopy(contextTarget),
         onCut: () => handleCut(contextTarget),

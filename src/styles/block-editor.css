@@ -20,7 +20,8 @@ html:has(.block-editor-shell) {
 
 /* Keep BlockNote's 54px inline gutter for + / drag-handle side menu */
 .block-editor-shell .bn-editor {
-  max-width: 820px;
+  max-width: none;
+  width: 90%;
   margin: 0 auto;
   padding-block: 1.5rem 3rem;
   padding-inline: 54px;
