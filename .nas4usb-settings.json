@@ -1,0 +1,18 @@
+{
+  "allowedIpCidrs": [
+    {
+      "cidr": "192.168.0.1/24",
+      "description": "내 공유기 IP 대역"
+    }
+  ],
+  "guestPermissions": {
+    "view": true,
+    "read": true,
+    "write": true
+  },
+  "loggedInPermissions": {
+    "view": true,
+    "read": true,
+    "write": true
+  }
+}

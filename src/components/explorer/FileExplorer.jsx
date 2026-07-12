@@ -42,6 +42,7 @@ import { uploadFilesAtPath } from '../../lib/fsWriteActions.js';
 import { isTrashPath, isTrashSubfolder, TRASH_FOLDER } from '../../lib/trashPaths.js';
 import { FAVORITES_FOLDER, isFavoritesPath } from '../../lib/favoritesPaths.js';
 import { guardOpenFileEntry } from '../../lib/openFileGuard.js';
+import { nativeAlert } from '../../lib/nativeDialog.js';
 import { useTrash } from '../../hooks/useTrash.js';
 import { useAppConfirm } from '../../hooks/useAppConfirm.jsx';
 import { useFileDropZone } from '../../hooks/useFileDropZone.js';
@@ -49,7 +50,8 @@ import { useAdminAuthContext } from '../../context/AdminAuthContext.jsx';
 import { useFsSync } from '../../context/FsSyncContext.jsx';
 import { useFsRemoteRefresh } from '../../hooks/useFsRemoteRefresh.js';
 import FileDropOverlay from '../common/FileDropOverlay.jsx';
-import { canOpenFileForEdit, VIEW_OPEN_DENIED_MESSAGE } from '../../lib/fileEditAccess.js';
+import { canOpenFileForEdit, VIEW_OPEN_DENIED_MESSAGE, GUEST_READ_DENIED_MESSAGE } from '../../lib/fileEditAccess.js';
+import { useGuestPermissions } from '../../hooks/useGuestPermissions.js';
 
 export default function FileExplorer({
   currentPath,
@@ -93,6 +95,8 @@ export default function FileExplorer({
   const { accessMap, refreshAccessMap, setFileAccess } = useFileAccess();
   const { favoritesMap, refreshFavoritesMap, setFavorite } = useFavorites();
   const { isAdminLoggedIn } = useAdminAuthContext();
+  const { effectivePermissions } = useGuestPermissions();
+  const canWrite = effectivePermissions.write;
   const { notifyLocalChange } = useFsSync();
   const { refresh: refreshTrash } = useTrash();
   const { confirm: appConfirm, alert: appAlert, dialog: confirmDialog } = useAppConfirm();
@@ -164,12 +168,12 @@ export default function FileExplorer({
       await uploadFiles(files);
       await refreshAll();
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : '파일 업로드에 실패했습니다.');
+      nativeAlert(err instanceof Error ? err.message : '파일 업로드에 실패했습니다.');
     }
   };
 
   const { isFileDragOver, dropZoneProps } = useFileDropZone(handleFileDrop, {
-    enabled: !isInTrashView && !isInFavoritesView && isAdminLoggedIn,
+    enabled: !isInTrashView && !isInFavoritesView && canWrite,
   });
 
   useEffect(() => {
@@ -208,7 +212,7 @@ export default function FileExplorer({
       await createNewTypedFile(type);
       await refreshAll();
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : '새 파일을 만들 수 없습니다.');
+      nativeAlert(err instanceof Error ? err.message : '새 파일을 만들 수 없습니다.');
     }
   };
 
@@ -230,7 +234,7 @@ export default function FileExplorer({
       await uploadFilesAtPath(uploadTargetPathRef.current, files);
       await refreshAll();
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : '파일 업로드에 실패했습니다.');
+      nativeAlert(err instanceof Error ? err.message : '파일 업로드에 실패했습니다.');
     }
   };
 
@@ -239,7 +243,7 @@ export default function FileExplorer({
     try {
       await downloadFileEntries(targets);
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : '다운로드에 실패했습니다.');
+      nativeAlert(err instanceof Error ? err.message : '다운로드에 실패했습니다.');
     }
   };
 
@@ -253,7 +257,7 @@ export default function FileExplorer({
       });
       setShareLinkDialog(result);
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : '공유 링크를 열 수 없습니다.');
+      nativeAlert(err instanceof Error ? err.message : '공유 링크를 열 수 없습니다.');
     }
   };
 
@@ -413,7 +417,7 @@ export default function FileExplorer({
   const handleMove = (entry) => {
     const targets = getTargetEntries(entry);
     if (!targets.length) {
-      window.alert('이동할 항목을 선택해 주세요.');
+      nativeAlert('이동할 항목을 선택해 주세요.');
       return;
     }
     setMoveDialogEntries(targets);
@@ -471,8 +475,12 @@ export default function FileExplorer({
     }
     const canOpen = await guardOpenFileEntry(entry, { onMissing: () => void refreshAll() });
     if (!canOpen) return;
-    if (!canOpenFileForEdit(entry.relativePath, accessMap, isAdminLoggedIn)) {
-      window.alert(VIEW_OPEN_DENIED_MESSAGE);
+    if (!canOpenFileForEdit(entry.relativePath, accessMap, isAdminLoggedIn, effectivePermissions)) {
+      nativeAlert(
+        !effectivePermissions.write && effectivePermissions.read === false
+          ? GUEST_READ_DENIED_MESSAGE
+          : VIEW_OPEN_DENIED_MESSAGE,
+      );
       return;
     }
     onOpenFile(entry);
@@ -494,7 +502,7 @@ export default function FileExplorer({
         visibility: checked ? 'private' : 'public',
       });
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : '공개 설정 변경에 실패했습니다.');
+      nativeAlert(err instanceof Error ? err.message : '공개 설정 변경에 실패했습니다.');
     } finally {
       setPropertiesSaving(false);
     }
@@ -508,7 +516,7 @@ export default function FileExplorer({
         viewRestricted: checked,
       });
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : '열람 제한 설정 변경에 실패했습니다.');
+      nativeAlert(err instanceof Error ? err.message : '열람 제한 설정 변경에 실패했습니다.');
     } finally {
       setPropertiesSaving(false);
     }
@@ -530,7 +538,7 @@ export default function FileExplorer({
       });
       if (result) setShareLinkDialog(result);
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : '공유 설정 변경에 실패했습니다.');
+      nativeAlert(err instanceof Error ? err.message : '공유 설정 변경에 실패했습니다.');
     } finally {
       setPropertiesSaving(false);
     }
@@ -552,7 +560,7 @@ export default function FileExplorer({
       });
       if (result) setShareLinkDialog(result);
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : '공유 설정 변경에 실패했습니다.');
+      nativeAlert(err instanceof Error ? err.message : '공유 설정 변경에 실패했습니다.');
     } finally {
       setPropertiesSaving(false);
     }
@@ -565,7 +573,7 @@ export default function FileExplorer({
       await setFavorite(propertiesEntry.relativePath, checked);
       await refreshAll();
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : '즐겨찾기 설정 변경에 실패했습니다.');
+      nativeAlert(err instanceof Error ? err.message : '즐겨찾기 설정 변경에 실패했습니다.');
     } finally {
       setPropertiesSaving(false);
     }
@@ -632,9 +640,10 @@ export default function FileExplorer({
         onDownload: () => handleDownload(contextTarget),
         canDownload: contextTargets.some((target) => !target.isDirectory),
         canEditOpen: contextTarget
-          ? canOpenFileForEdit(contextTarget.relativePath, accessMap, isAdminLoggedIn)
+          ? canOpenFileForEdit(contextTarget.relativePath, accessMap, isAdminLoggedIn, effectivePermissions)
           : false,
         isAdminLoggedIn,
+        canWrite,
       })
     : buildBackgroundContextMenuItems({
         targetPath: contextTargetPath,
@@ -648,6 +657,7 @@ export default function FileExplorer({
         onRefresh: refreshAll,
         onEmptyTrash: handleEmptyTrash,
         isAdminLoggedIn,
+        canWrite,
       });
 
   keyHandlersRef.current = {
@@ -766,6 +776,7 @@ export default function FileExplorer({
         onProperties={() => handleShowProperties()}
         canShowProperties={selectedEntries.length === 1}
         isAdminLoggedIn={isAdminLoggedIn}
+        canWrite={canWrite}
       />
 
       {isInTrashView && (

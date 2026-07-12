@@ -23,6 +23,7 @@ import { isTrashPath } from './trashPaths.js';
  *   canDownload?: boolean,
  *   canEditOpen?: boolean,
  *   isAdminLoggedIn?: boolean,
+ *   canWrite?: boolean,
  * }} options
  */
 export function buildEntryContextMenuItems({
@@ -47,11 +48,12 @@ export function buildEntryContextMenuItems({
   canDownload = false,
   canEditOpen = true,
   isAdminLoggedIn = true,
+  canWrite = true,
 }) {
   const showTrashMenu = Boolean(entry && isTrashPath(entry.relativePath));
 
   if (showTrashMenu) {
-    if (!isAdminLoggedIn) {
+    if (!canWrite) {
       return [];
     }
 
@@ -78,7 +80,7 @@ export function buildEntryContextMenuItems({
     ];
   }
 
-  if (!isAdminLoggedIn) {
+  if (!canWrite) {
     if (entry?.isDirectory) {
       return [
         {
@@ -234,6 +236,7 @@ export function buildEntryContextMenuItems({
  *   onRefresh: () => void,
  *   onEmptyTrash?: () => void,
  *   isAdminLoggedIn?: boolean,
+ *   canWrite?: boolean,
  * }} options
  */
 export function buildBackgroundContextMenuItems({
@@ -248,18 +251,18 @@ export function buildBackgroundContextMenuItems({
   onRefresh,
   onEmptyTrash,
   isAdminLoggedIn = true,
+  canWrite = true,
 }) {
-  if (!isAdminLoggedIn) {
-    return [];
-  }
-
-  const showTrashMenu = isTrashPath(targetPath);
-
   if (isInFavoritesView) {
     return [{ id: 'refresh', label: '새로고침', onClick: onRefresh }];
   }
 
+  const showTrashMenu = isTrashPath(targetPath);
+
   if (showTrashMenu) {
+    if (!canWrite) {
+      return [{ id: 'refresh', label: '새로고침', onClick: onRefresh }];
+    }
     return [
       {
         id: 'empty-trash',
@@ -269,6 +272,10 @@ export function buildBackgroundContextMenuItems({
       },
       { id: 'refresh', label: '새로고침', onClick: onRefresh },
     ];
+  }
+
+  if (!canWrite) {
+    return [{ id: 'refresh', label: '새로고침', onClick: onRefresh }];
   }
 
   return [

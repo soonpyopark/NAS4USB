@@ -1,7 +1,8 @@
 import crypto from 'node:crypto';
 import { resolveAdminCredentials } from './envConfig.js';
+import { findActiveMemberByCredentials } from './membersService.js';
 
-/** @type {Map<string, { adminId: string, createdAt: number }>} */
+/** @type {Map<string, { adminId: string, role?: string, createdAt: number }>} */
 const adminSessions = new Map();
 
 /**
@@ -13,11 +14,20 @@ export function isValidAdminSession(token) {
 }
 
 /**
- * @param {string} adminId
+ * @param {string | null | undefined} token
  */
-function createAdminSession(adminId) {
+export function getAdminSession(token) {
+  if (!token || typeof token !== 'string') return null;
+  return adminSessions.get(token) ?? null;
+}
+
+/**
+ * @param {string} adminId
+ * @param {string} [role]
+ */
+function createAdminSession(adminId, role = 'super_admin') {
   const token = crypto.randomBytes(24).toString('hex');
-  adminSessions.set(token, { adminId, createdAt: Date.now() });
+  adminSessions.set(token, { adminId, role, createdAt: Date.now() });
   return token;
 }
 
@@ -55,13 +65,23 @@ export function verifyAdminLogin(id, password, portableRoot) {
  * @param {string} password
  * @param {string} portableRoot
  */
-export function loginAdmin(id, password, portableRoot) {
-  const valid = verifyAdminLogin(id, password, portableRoot);
-  if (!valid) {
+export async function loginAdmin(id, password, portableRoot) {
+  if (verifyAdminLogin(id, password, portableRoot)) {
+    const { adminId } = resolveAdminCredentials(portableRoot);
+    const token = createAdminSession(adminId, 'super_admin');
+    return { success: true, adminId, role: 'super_admin', token };
+  }
+
+  const member = await findActiveMemberByCredentials(id, password, portableRoot);
+  if (!member) {
     return { success: false };
   }
 
-  const { adminId } = resolveAdminCredentials(portableRoot);
-  const token = createAdminSession(adminId);
-  return { success: true, adminId, token };
+  const token = createAdminSession(member.loginId, member.role);
+  return {
+    success: true,
+    adminId: member.loginId,
+    role: member.role,
+    token,
+  };
 }

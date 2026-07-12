@@ -1,27 +1,28 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useAdminAuthContext } from '../context/AdminAuthContext.jsx';
+import { useGuestPermissions } from './useGuestPermissions.js';
 import { isTrashPath } from '../lib/trashPaths.js';
 
 /**
  * @param {string} [initialPath]
  */
 export function useTrashGuardedNavigate(initialPath = '.') {
-  const { isAdminLoggedIn } = useAdminAuthContext();
+  const { effectivePermissions } = useGuestPermissions();
+  const canAccessTrash = effectivePermissions.write;
   const [currentPath, setCurrentPath] = useState(initialPath);
 
   const navigate = useCallback(
     (path) => {
-      if (isTrashPath(path) && !isAdminLoggedIn) return;
+      if (isTrashPath(path) && !canAccessTrash) return;
       setCurrentPath(path);
     },
-    [isAdminLoggedIn],
+    [canAccessTrash],
   );
 
   useEffect(() => {
-    if (isTrashPath(currentPath) && !isAdminLoggedIn) {
+    if (isTrashPath(currentPath) && !canAccessTrash) {
       setCurrentPath('.');
     }
-  }, [currentPath, isAdminLoggedIn]);
+  }, [currentPath, canAccessTrash]);
 
   return { currentPath, navigate };
 }

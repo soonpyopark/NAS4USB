@@ -1,0 +1,12 @@
+{
+  "members": [
+    {
+      "id": "member-80d319ed",
+      "loginId": "subadmin",
+      "displayName": "subadmin",
+      "passwordHash": "4f26df273004e2f93a68344e7ad82b3c9239deaacc6a356acd6904ddeefdf462",
+      "role": "member",
+      "active": true
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { copyTextToClipboard } from '../../lib/shareLink.js';
+import { nativeAlert } from '../../lib/nativeDialog.js';
 import { AppModal, AppModalActions, AppModalBody, AppModalButton } from './AppModal.jsx';
 
 /**
@@ -37,7 +38,7 @@ export default function ShareLinkModal({ open, url, fileName, onRevoke, onClose 
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
-      window.alert('클립보드 복사에 실패했습니다.');
+      nativeAlert('클립보드 복사에 실패했습니다.');
     }
   };
 
@@ -48,7 +49,7 @@ export default function ShareLinkModal({ open, url, fileName, onRevoke, onClose 
       await onRevoke();
       onClose();
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : '공유 해제에 실패했습니다.');
+      nativeAlert(err instanceof Error ? err.message : '공유 해제에 실패했습니다.');
     } finally {
       setRevoking(false);
     }

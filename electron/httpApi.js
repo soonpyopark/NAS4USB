@@ -25,6 +25,7 @@ import {
   assertCanAccessFile,
   assertCanAccessTrash,
   assertCanEditFile,
+  assertGuestCanWrite,
   pathExistsWithAccessFilter,
   readDirWithAccessFilter,
   readFileBase64WithAccessFilter,
@@ -60,6 +61,8 @@ import {
   restorePath,
   trashPath,
 } from './trashService.js';
+import { getAppSettings, getAccessPermissionsBundle, getEffectiveAccessPermissions, updateAppSettings } from './settingsService.js';
+import { listMembers, saveMembersPayload } from './membersService.js';
 import {
   syncFortuneSidecarCopy,
   syncFortuneSidecarDelete,
@@ -163,6 +166,7 @@ export async function handleHttpApiRequest(req, res) {
     }
 
     if (method === 'POST' && url.pathname === '/api/fs/mkdir') {
+      await assertGuestCanWrite(isAdminAuthenticated(req));
       const body = await readJsonBody(req);
       const result = await fsService.mkdir(body.path);
       notifyFsChanged(body.path);
@@ -171,6 +175,7 @@ export async function handleHttpApiRequest(req, res) {
     }
 
     if (method === 'POST' && url.pathname === '/api/fs/delete') {
+      await assertGuestCanWrite(isAdminAuthenticated(req));
       const body = await readJsonBody(req);
       if (isFortuneSidecarRelativePath(body.path)) {
         sendJson(res, 400, { error: 'FortuneSheet 편집용 보조 파일입니다. 연결된 스프레드시트를 삭제해 주세요.' });
@@ -187,6 +192,7 @@ export async function handleHttpApiRequest(req, res) {
     }
 
     if (method === 'POST' && url.pathname === '/api/fs/rename') {
+      await assertGuestCanWrite(isAdminAuthenticated(req));
       const body = await readJsonBody(req);
       await syncSharePathRename(body.from, body.to, getPortableRoot());
       await syncFileAccessRename(body.from, body.to, getPortableRoot());
@@ -225,6 +231,7 @@ export async function handleHttpApiRequest(req, res) {
     }
 
     if (method === 'POST' && url.pathname === '/api/fs/writeFile') {
+      await assertGuestCanWrite(isAdminAuthenticated(req));
       const body = await readJsonBody(req);
       const result = await fsService.writeFileBase64(body.path, body.base64 ?? '');
       notifyFsChanged(body.path);
@@ -233,6 +240,7 @@ export async function handleHttpApiRequest(req, res) {
     }
 
     if (method === 'POST' && url.pathname === '/api/fs/copy') {
+      await assertGuestCanWrite(isAdminAuthenticated(req));
       const body = await readJsonBody(req);
       const result = await fsService.copyPath(body.from, body.to);
       await syncFortuneSidecarCopy(body.from, body.to);
@@ -242,6 +250,7 @@ export async function handleHttpApiRequest(req, res) {
     }
 
     if (method === 'POST' && url.pathname === '/api/fs/move') {
+      await assertGuestCanWrite(isAdminAuthenticated(req));
       const body = await readJsonBody(req);
       await syncSharePathRename(body.from, body.to, getPortableRoot());
       await syncFileAccessRename(body.from, body.to, getPortableRoot());
@@ -380,35 +389,45 @@ export async function handleHttpApiRequest(req, res) {
     }
 
     if (method === 'GET' && url.pathname === '/api/favorites/map') {
-      const map = await getFavoritesMap(getPortableRoot());
       const isAdmin = isAdminAuthenticated(req);
-      if (isAdmin) {
-        sendJson(res, 200, map);
+      const perms = await getEffectiveAccessPermissions(isAdmin, getPortableRoot());
+      if (!perms.view && !perms.write) {
+        sendJson(res, 200, {});
         return true;
       }
+      if (perms.write) {
+        sendJson(res, 200, await getFavoritesMap(getPortableRoot()));
+        return true;
+      }
+      const map = await getFavoritesMap(getPortableRoot());
       const accessMap = await getFileAccessMap(getPortableRoot());
       sendJson(
         res,
         200,
         Object.fromEntries(
-          Object.entries(map).filter(([path]) => canViewFileEntry(path, accessMap, isAdmin)),
+          Object.entries(map).filter(([path]) => canViewFileEntry(path, accessMap, false)),
         ),
       );
       return true;
     }
 
     if (method === 'GET' && url.pathname === '/api/favorites/listEntries') {
-      const entries = await listFavoriteEntries(getPortableRoot());
       const isAdmin = isAdminAuthenticated(req);
-      if (isAdmin) {
-        sendJson(res, 200, entries);
+      const perms = await getEffectiveAccessPermissions(isAdmin, getPortableRoot());
+      if (!perms.view && !perms.write) {
+        sendJson(res, 200, []);
         return true;
       }
+      if (perms.write) {
+        sendJson(res, 200, await listFavoriteEntries(getPortableRoot()));
+        return true;
+      }
+      const entries = await listFavoriteEntries(getPortableRoot());
       const accessMap = await getFileAccessMap(getPortableRoot());
       sendJson(
         res,
         200,
-        entries.filter((entry) => canViewFileEntry(entry.relativePath, accessMap, isAdmin)),
+        entries.filter((entry) => canViewFileEntry(entry.relativePath, accessMap, false)),
       );
       return true;
     }
@@ -424,7 +443,7 @@ export async function handleHttpApiRequest(req, res) {
 
     if (method === 'POST' && url.pathname === '/api/auth/login') {
       const body = await readJsonBody(req);
-      sendJson(res, 200, loginAdmin(body.id, body.password, getPortableRoot()));
+      sendJson(res, 200, await loginAdmin(body.id, body.password, getPortableRoot()));
       return true;
     }
 
@@ -474,7 +493,14 @@ export async function handleHttpApiRequest(req, res) {
 
     if (method === 'GET' && url.pathname === '/api/file-access/map') {
       const accessMap = await getFileAccessMap(getPortableRoot());
-      sendJson(res, 200, filterFileAccessMap(accessMap, isAdminAuthenticated(req)));
+      sendJson(
+        res,
+        200,
+        filterFileAccessMap(
+          accessMap,
+          Boolean((await getEffectiveAccessPermissions(isAdminAuthenticated(req), getPortableRoot())).write),
+        ),
+      );
       return true;
     }
 
@@ -506,12 +532,13 @@ export async function handleHttpApiRequest(req, res) {
     }
 
     if (method === 'GET' && url.pathname === '/api/trash/map') {
-      assertCanAccessTrash(isAdminAuthenticated(req));
+      await assertCanAccessTrash(isAdminAuthenticated(req));
       sendJson(res, 200, await getTrashMap(getPortableRoot()));
       return true;
     }
 
     if (method === 'POST' && url.pathname === '/api/trash/move') {
+      await assertGuestCanWrite(isAdminAuthenticated(req));
       const body = await readJsonBody(req);
       const result = await trashPath(body.path, getPortableRoot());
       notifyFsChanged(body.path);
@@ -520,7 +547,7 @@ export async function handleHttpApiRequest(req, res) {
     }
 
     if (method === 'POST' && url.pathname === '/api/trash/restore') {
-      assertCanAccessTrash(isAdminAuthenticated(req));
+      await assertCanAccessTrash(isAdminAuthenticated(req));
       const body = await readJsonBody(req);
       const result = await restorePath(body.path, getPortableRoot());
       notifyFsChanged(body.path);
@@ -529,7 +556,7 @@ export async function handleHttpApiRequest(req, res) {
     }
 
     if (method === 'POST' && url.pathname === '/api/trash/empty') {
-      assertCanAccessTrash(isAdminAuthenticated(req));
+      await assertCanAccessTrash(isAdminAuthenticated(req));
       const result = await emptyTrash(getPortableRoot());
       notifyFsChanged();
       sendJson(res, 200, result);
@@ -537,10 +564,45 @@ export async function handleHttpApiRequest(req, res) {
     }
 
     if (method === 'POST' && url.pathname === '/api/trash/deletePermanent') {
-      assertCanAccessTrash(isAdminAuthenticated(req));
+      await assertCanAccessTrash(isAdminAuthenticated(req));
       const body = await readJsonBody(req);
       const result = await deletePermanent(body.path, getPortableRoot());
       notifyFsChanged(body.path);
+      sendJson(res, 200, result);
+      return true;
+    }
+
+    if (method === 'GET' && url.pathname === '/api/settings') {
+      assertAdminAuthenticated(isAdminAuthenticated(req));
+      sendJson(res, 200, await getAppSettings(getPortableRoot()));
+      return true;
+    }
+
+    if (method === 'GET' && url.pathname === '/api/settings/guest-permissions') {
+      sendJson(res, 200, await getAccessPermissionsBundle(getPortableRoot()));
+      return true;
+    }
+
+    if (method === 'PUT' && url.pathname === '/api/settings') {
+      assertAdminAuthenticated(isAdminAuthenticated(req));
+      const body = await readJsonBody(req);
+      const result = await updateAppSettings(body ?? {}, getPortableRoot());
+      notifyFsChanged();
+      sendJson(res, 200, result);
+      return true;
+    }
+
+    if (method === 'GET' && url.pathname === '/api/members') {
+      assertAdminAuthenticated(isAdminAuthenticated(req));
+      sendJson(res, 200, await listMembers(getPortableRoot()));
+      return true;
+    }
+
+    if (method === 'PUT' && url.pathname === '/api/members') {
+      assertAdminAuthenticated(isAdminAuthenticated(req));
+      const body = await readJsonBody(req);
+      const result = await saveMembersPayload(body ?? {}, getPortableRoot());
+      if (result.ok) notifyFsChanged();
       sendJson(res, 200, result);
       return true;
     }

@@ -13,7 +13,9 @@ export default function DesktopShell({
   syncInfo,
   infoLoading,
   currentPath,
+  mainView = 'explorer',
   onNavigate,
+  onOpenSettings,
   onHome,
   onOpenFile,
 }) {
@@ -83,8 +85,10 @@ export default function DesktopShell({
         >
           <Sidebar
             currentPath={currentPath}
+            mainView={mainView}
             syncInfo={syncInfo}
             onNavigate={onNavigate}
+            onOpenSettings={onOpenSettings}
             onOpenFile={onOpenFile}
           />
         </div>

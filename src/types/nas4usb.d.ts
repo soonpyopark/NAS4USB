@@ -88,6 +88,22 @@ window.nas4usb = {
     listEntries: () => {},
     set: ({ path, favorited }) => {},
   },
+  trash: {
+    getMap: () => {},
+    move: (relativePath) => {},
+    restore: (relativePath) => {},
+    empty: () => {},
+    deletePermanent: (relativePath) => {},
+  },
+  settings: {
+    get: () => {},
+    getGuestPermissions: () => {},
+    update: (patch) => {},
+  },
+  members: {
+    list: () => {},
+    save: (payload) => {},
+  },
 };
 
 export {};

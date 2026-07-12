@@ -50,6 +50,7 @@ export function useAdminAuth({ onAuthChange } = {}) {
   const [error, setError] = useState('');
 
   useEffect(() => {
+    setLoggingIn(false);
     void bindAdminToken(readStoredAdminToken());
   }, []);
 
@@ -74,6 +75,7 @@ export function useAdminAuth({ onAuthChange } = {}) {
         sessionStorage.setItem(ADMIN_TOKEN_STORAGE_KEY, token);
         setAdminId(result.adminId);
         setAdminToken(token);
+        setLoggingIn(false);
         await bindAdminToken(token);
         onAuthChange?.();
         return true;

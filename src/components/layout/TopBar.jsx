@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useUserProfile } from '../../hooks/useUserProfile.js';
-import { formatUserDisplayNameInput, normalizeDisplayName, USER_NAME_PREFIX } from '../../lib/userProfile.js';
+import { formatUserDisplayNameInput, USER_NAME_PREFIX } from '../../lib/userProfile.js';
 import { loadSyncHost, saveSyncHost } from '../../lib/syncHost.js';
 import { copyTextToClipboard } from '../../lib/shareLink.js';
 import { buildLanAccessClipboardText } from '../../sync/buildWsUrl.js';
@@ -8,6 +8,7 @@ import { APP_VERSION, APP_NAME_LONG } from '../../../shared/constants.js';
 import AppLogo from '../common/AppLogo.jsx';
 import SplashOverlay from '../common/SplashOverlay.jsx';
 import AdminLoginForm from './AdminLoginForm.jsx';
+import { nativeAlert, nativePrompt } from '../../lib/nativeDialog.js';
 
 function SyncBadge({ syncInfo, loading }) {
   const [copied, setCopied] = useState(false);
@@ -25,7 +26,7 @@ function SyncBadge({ syncInfo, loading }) {
       : `로컬 :${syncInfo?.port ?? '—'}`;
 
   const handleConfigureHost = () => {
-    const nextHost = window.prompt(
+    const nextHost = nativePrompt(
       '동기화 서버 IP (호스트 PC 주소). 비우면 현재 접속 주소를 사용합니다.',
       configuredHost || primaryAddress || '127.0.0.1',
     );
@@ -45,7 +46,7 @@ function SyncBadge({ syncInfo, loading }) {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
-      window.alert('클립보드 복사에 실패했습니다.');
+      nativeAlert('클립보드 복사에 실패했습니다.');
     }
   };
 
@@ -80,29 +81,41 @@ function BrandMark({ onHome }) {
   );
 }
 
-function UserNameField({ loading, saving, displayName, onChange, onCommit, onKeyDown }) {
+function UserNameField({ loading, saving, displayName, readOnly, onChange, onCommit, onKeyDown }) {
   const handleNameChange = (event) => {
+    if (readOnly) return;
     onChange({ target: { value: formatUserDisplayNameInput(event.target.value) } });
   };
 
+  if (loading) {
+    return <span className="text-[10pt] text-slate-400">…</span>;
+  }
+
   return (
-    <div className="flex shrink-0 items-center gap-1.5">
+    <div className="inline-flex shrink-0 items-center gap-1.5">
       <label htmlFor="user-name" className="sr-only">
         사용자명
       </label>
-      <input
-        id="user-name"
-        type="text"
-        inputMode="numeric"
-        value={loading ? '' : displayName}
-        onChange={handleNameChange}
-        onBlur={onCommit}
-        onKeyDown={onKeyDown}
-        disabled={loading}
-        placeholder={loading ? '…' : `${USER_NAME_PREFIX}001`}
-        maxLength={6}
-        className="h-8 w-[6.25rem] shrink-0 rounded-md border border-nas-border bg-white px-2 text-[10pt] text-slate-700 outline-none transition-colors placeholder:text-slate-400 hover:border-slate-300 focus:border-nas-accent focus:ring-1 focus:ring-nas-accent disabled:cursor-wait disabled:opacity-60"
-      />
+      <div className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-2.5 py-1 text-[10pt] font-medium text-emerald-700">
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" aria-hidden="true" />
+        <input
+          id="user-name"
+          type="text"
+          inputMode={readOnly ? 'text' : 'numeric'}
+          value={displayName}
+          onChange={handleNameChange}
+          onBlur={onCommit}
+          onKeyDown={onKeyDown}
+          readOnly={readOnly}
+          title={readOnly ? '로그인 사용자 ID' : '사용자명'}
+          placeholder={`${USER_NAME_PREFIX}001`}
+          maxLength={readOnly ? 64 : 6}
+          size={Math.max(6, Math.min(displayName.length || 6, 16))}
+          className={`min-w-0 border-0 bg-transparent p-0 text-[10pt] font-medium text-emerald-700 outline-none placeholder:text-emerald-400 ${
+            readOnly ? 'cursor-default' : 'cursor-text'
+          }`}
+        />
+      </div>
       {saving && <span className="shrink-0 text-[10pt] text-slate-400">저장 중…</span>}
     </div>
   );
@@ -117,6 +130,7 @@ export default function TopBar({ syncInfo, infoLoading, onHome }) {
       loading={userProfile.loading}
       saving={userProfile.saving}
       displayName={userProfile.displayName}
+      readOnly={userProfile.readOnly}
       onChange={userProfile.handleChange}
       onCommit={userProfile.handleCommit}
       onKeyDown={userProfile.handleKeyDown}

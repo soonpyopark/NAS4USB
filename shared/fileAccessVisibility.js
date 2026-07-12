@@ -10,14 +10,16 @@ export function normalizeFileAccessRecord(record) {
 }
 
 /**
+ * elevatedAccess: 총괄관리자 또는 쓰기 권한이 있는 일반 사용자
  * @param {string} relativePath
  * @param {Record<string, { visibility?: string, viewRestricted?: boolean }>} accessMap
- * @param {boolean} isAdminLoggedIn 총괄관리자 로그인 여부
+ * @param {boolean} elevatedAccess
  */
-export function canViewFileEntry(relativePath, accessMap, isAdminLoggedIn) {
+export function canViewFileEntry(relativePath, accessMap, elevatedAccess) {
+  if (elevatedAccess) return true;
   const access = normalizeFileAccessRecord(accessMap[relativePath]);
-  if (access.viewRestricted && !isAdminLoggedIn) return false;
-  if (access.visibility === 'private' && !isAdminLoggedIn) return false;
+  if (access.viewRestricted) return false;
+  if (access.visibility === 'private') return false;
   return true;
 }
 
@@ -32,37 +34,38 @@ export function isPublicDocument(relativePath, accessMap) {
 }
 
 /**
+ * elevatedAccess: 총괄관리자 또는 쓰기 권한이 있는 일반 사용자
  * @param {string} relativePath
  * @param {Record<string, { visibility?: string, viewRestricted?: boolean }>} accessMap
- * @param {boolean} isAdminLoggedIn
+ * @param {boolean} elevatedAccess
  */
-export function canEditFileEntry(relativePath, accessMap, isAdminLoggedIn) {
-  if (isAdminLoggedIn) return true;
+export function canEditFileEntry(relativePath, accessMap, elevatedAccess) {
+  if (elevatedAccess) return true;
   return isPublicDocument(relativePath, accessMap);
 }
 
 /**
  * @param {Array<{ relativePath: string, isDirectory?: boolean }>} entries
  * @param {Record<string, { visibility?: string, viewRestricted?: boolean }>} accessMap
- * @param {boolean} isAdminLoggedIn
+ * @param {boolean} elevatedAccess
  */
-export function filterEntriesByFileAccess(entries, accessMap, isAdminLoggedIn) {
-  if (isAdminLoggedIn) return entries;
+export function filterEntriesByFileAccess(entries, accessMap, elevatedAccess) {
+  if (elevatedAccess) return entries;
   return entries.filter(
-    (entry) => entry.isDirectory || canViewFileEntry(entry.relativePath, accessMap, isAdminLoggedIn),
+    (entry) => entry.isDirectory || canViewFileEntry(entry.relativePath, accessMap, false),
   );
 }
 
 /**
  * @param {Record<string, { visibility?: string, viewRestricted?: boolean }>} accessMap
- * @param {boolean} isAdminLoggedIn
+ * @param {boolean} elevatedAccess
  */
-export function filterFileAccessMap(accessMap, isAdminLoggedIn) {
-  if (isAdminLoggedIn) return accessMap;
+export function filterFileAccessMap(accessMap, elevatedAccess) {
+  if (elevatedAccess) return accessMap;
   /** @type {Record<string, { visibility?: string, viewRestricted?: boolean }>} */
   const filtered = {};
   for (const [relativePath, record] of Object.entries(accessMap)) {
-    if (canViewFileEntry(relativePath, accessMap, isAdminLoggedIn)) {
+    if (canViewFileEntry(relativePath, accessMap, false)) {
       filtered[relativePath] = record;
     }
   }

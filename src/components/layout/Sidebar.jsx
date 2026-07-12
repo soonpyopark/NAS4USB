@@ -43,13 +43,15 @@ import {
   resolveUniqueName,
 } from '../../lib/fsPaths.js';
 import { resolveFileEntryStatus } from '../../lib/fileEntryStatus.js';
-import { canOpenFileForEdit, VIEW_OPEN_DENIED_MESSAGE } from '../../lib/fileEditAccess.js';
+import { canOpenFileForEdit, VIEW_OPEN_DENIED_MESSAGE, GUEST_READ_DENIED_MESSAGE } from '../../lib/fileEditAccess.js';
+import { useGuestPermissions } from '../../hooks/useGuestPermissions.js';
 import { downloadFileEntries } from '../../lib/downloadEntries.js';
 import { moveEntries } from '../../lib/moveEntries.js';
 import { TRASH_ACCESS_DENIED_MESSAGE } from '../../../shared/constants.js';
 import { isTrashPath, isTrashSubfolder, TRASH_FOLDER } from '../../lib/trashPaths.js';
 import { FAVORITES_FOLDER, isFavoritesPath } from '../../lib/favoritesPaths.js';
 import { guardOpenFileEntry } from '../../lib/openFileGuard.js';
+import { nativeAlert } from '../../lib/nativeDialog.js';
 import {
   createFolderAtPath,
   createNewTypedFileAtPath,
@@ -58,7 +60,9 @@ import {
 
 export default function Sidebar({
   currentPath,
+  mainView = 'explorer',
   onNavigate,
+  onOpenSettings,
   onOpenFile,
   syncInfo,
 }) {
@@ -74,8 +78,10 @@ export default function Sidebar({
   const { accessMap, refreshAccessMap, setFileAccess } = useFileAccess();
   const { favoritesMap, favoritesCount, refreshFavoritesMap, setFavorite } = useFavorites();
   const { isAdminLoggedIn } = useAdminAuthContext();
+  const { effectivePermissions } = useGuestPermissions();
+  const canWrite = effectivePermissions.write;
   const { notifyLocalChange } = useFsSync();
-  const { count: trashCount, refresh: refreshTrash } = useTrash({ enabled: isAdminLoggedIn });
+  const { count: trashCount, refresh: refreshTrash } = useTrash({ enabled: canWrite });
 
   const isInTrashView = isTrashPath(currentPath);
   const isInFavoritesView = isFavoritesPath(currentPath);
@@ -140,7 +146,7 @@ export default function Sidebar({
       await tree.expandPath(targetPath);
       await notifyChange();
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : '폴더를 만들 수 없습니다.');
+      nativeAlert(err instanceof Error ? err.message : '폴더를 만들 수 없습니다.');
     }
   };
 
@@ -158,7 +164,7 @@ export default function Sidebar({
       await tree.expandPath(targetPath);
       await notifyChange();
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : '새 파일을 만들 수 없습니다.');
+      nativeAlert(err instanceof Error ? err.message : '새 파일을 만들 수 없습니다.');
     }
   };
 
@@ -174,26 +180,26 @@ export default function Sidebar({
       await tree.expandPath(targetPath);
       await notifyChange();
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : '파일 업로드에 실패했습니다.');
+      nativeAlert(err instanceof Error ? err.message : '파일 업로드에 실패했습니다.');
     }
   };
 
   const { isFileDragOver, dropZoneProps } = useFileDropZone(
     (files) => handleUploadFiles(files, currentPath),
-    { enabled: !isInTrashView && isAdminLoggedIn },
+    { enabled: !isInTrashView && canWrite },
   );
 
   const handleDownload = async (entry = downloadTarget) => {
     const target = entry && !entry.isDirectory ? entry : downloadTarget;
     if (!target) {
-      window.alert('다운로드할 파일을 선택해 주세요.');
+      nativeAlert('다운로드할 파일을 선택해 주세요.');
       return;
     }
 
     try {
       await downloadFileEntries([target]);
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : '다운로드에 실패했습니다.');
+      nativeAlert(err instanceof Error ? err.message : '다운로드에 실패했습니다.');
     }
   };
 
@@ -376,7 +382,7 @@ export default function Sidebar({
         visibility: checked ? 'private' : 'public',
       });
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : '공개 설정 변경에 실패했습니다.');
+      nativeAlert(err instanceof Error ? err.message : '공개 설정 변경에 실패했습니다.');
     } finally {
       setPropertiesSaving(false);
     }
@@ -390,7 +396,7 @@ export default function Sidebar({
         viewRestricted: checked,
       });
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : '열람 제한 설정 변경에 실패했습니다.');
+      nativeAlert(err instanceof Error ? err.message : '열람 제한 설정 변경에 실패했습니다.');
     } finally {
       setPropertiesSaving(false);
     }
@@ -412,7 +418,7 @@ export default function Sidebar({
       });
       if (result) setShareLinkDialog(result);
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : '공유 설정 변경에 실패했습니다.');
+      nativeAlert(err instanceof Error ? err.message : '공유 설정 변경에 실패했습니다.');
     } finally {
       setPropertiesSaving(false);
     }
@@ -434,7 +440,7 @@ export default function Sidebar({
       });
       if (result) setShareLinkDialog(result);
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : '공유 설정 변경에 실패했습니다.');
+      nativeAlert(err instanceof Error ? err.message : '공유 설정 변경에 실패했습니다.');
     } finally {
       setPropertiesSaving(false);
     }
@@ -447,7 +453,7 @@ export default function Sidebar({
       await setFavorite(propertiesEntry.relativePath, checked);
       await notifyChange();
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : '즐겨찾기 설정 변경에 실패했습니다.');
+      nativeAlert(err instanceof Error ? err.message : '즐겨찾기 설정 변경에 실패했습니다.');
     } finally {
       setPropertiesSaving(false);
     }
@@ -465,8 +471,12 @@ export default function Sidebar({
     }
     const canOpen = await guardOpenFileEntry(entry, { onMissing: notifyChange });
     if (!canOpen) return;
-    if (!canOpenFileForEdit(entry.relativePath, accessMap, isAdminLoggedIn)) {
-      window.alert(VIEW_OPEN_DENIED_MESSAGE);
+    if (!canOpenFileForEdit(entry.relativePath, accessMap, isAdminLoggedIn, effectivePermissions)) {
+      nativeAlert(
+        !effectivePermissions.write && effectivePermissions.read === false
+          ? GUEST_READ_DENIED_MESSAGE
+          : VIEW_OPEN_DENIED_MESSAGE,
+      );
       return;
     }
     onOpenFile(entry);
@@ -515,9 +525,10 @@ export default function Sidebar({
         onDownload: () => handleDownload(contextTarget),
         canDownload: Boolean(contextTarget && !contextTarget.isDirectory),
         canEditOpen: contextTarget
-          ? canOpenFileForEdit(contextTarget.relativePath, accessMap, isAdminLoggedIn)
+          ? canOpenFileForEdit(contextTarget.relativePath, accessMap, isAdminLoggedIn, effectivePermissions)
           : false,
         isAdminLoggedIn,
+        canWrite,
       })
     : buildBackgroundContextMenuItems({
         targetPath: contextTargetPath,
@@ -531,6 +542,7 @@ export default function Sidebar({
         onRefresh: notifyChange,
         onEmptyTrash: handleEmptyTrash,
         isAdminLoggedIn,
+        canWrite,
       });
 
   return (
@@ -600,7 +612,7 @@ export default function Sidebar({
           type="button"
           onClick={() => onNavigate(FAVORITES_FOLDER)}
           className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-[10pt] transition-colors ${
-            isInFavoritesView
+            mainView !== 'settings' && isInFavoritesView
               ? 'bg-nas-accent text-white'
               : 'text-slate-300 hover:bg-nas-sidebarHover hover:text-white'
           }`}
@@ -619,7 +631,7 @@ export default function Sidebar({
         <button
           type="button"
           onClick={() => {
-            if (isAdminLoggedIn) {
+            if (canWrite) {
               onNavigate(TRASH_FOLDER);
               return;
             }
@@ -644,7 +656,8 @@ export default function Sidebar({
             event.stopPropagation();
           }}
           className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-[10pt] transition-colors ${
-            isAdminLoggedIn &&
+            mainView !== 'settings' &&
+            canWrite &&
             (currentPath === TRASH_FOLDER || currentPath.startsWith(`${TRASH_FOLDER}/`))
               ? 'bg-nas-accent text-white'
               : 'text-slate-300 hover:bg-nas-sidebarHover hover:text-white'
@@ -654,11 +667,35 @@ export default function Sidebar({
             <path d="M9 3h6l1 2h4v2H4V5h4l1-2zm1 6h2v9h-2V9zm3 0h2v9h-2V9zM6 9h2v9H6V9z" />
           </svg>
           <span className="truncate">휴지통</span>
-          {isAdminLoggedIn && trashCount > 0 && (
+          {canWrite && trashCount > 0 && (
             <span className="ml-auto rounded-full bg-slate-600 px-1.5 py-0.5 text-[10px] text-slate-100">
               {trashCount}
             </span>
           )}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            if (isAdminLoggedIn) {
+              onOpenSettings?.();
+              return;
+            }
+            void appAlert({
+              title: '환경설정',
+              body: '환경설정은 총괄관리자 로그인 후 이용할 수 있습니다.',
+            });
+          }}
+          className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-[10pt] transition-colors ${
+            isAdminLoggedIn && mainView === 'settings'
+              ? 'bg-nas-accent text-white'
+              : 'text-slate-300 hover:bg-nas-sidebarHover hover:text-white'
+          }`}
+        >
+          <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.49.49 0 00-.59-.22l-2.39.96a7.07 7.07 0 00-1.63-.94l-.36-2.54a.48.48 0 00-.48-.41h-3.84a.48.48 0 00-.48.41l-.36 2.54c-.59.24-1.13.55-1.63.94l-2.39-.96a.49.49 0 00-.59.22L2.77 8.87a.48.48 0 00.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94L2.89 14.52a.49.49 0 00-.12.61l1.92 3.32c.12.22.39.3.59.22l2.39-.96c.5.39 1.04.71 1.63.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.48-.41l.36-2.54c.59-.24 1.13-.55 1.63-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 00-.12-.61l-2.03-1.58zM12 15.6A3.6 3.6 0 1115.6 12 3.6 3.6 0 0112 15.6z" />
+          </svg>
+          <span className="truncate">환경설정</span>
         </button>
       </div>
 

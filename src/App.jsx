@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import DesktopShell from './components/layout/DesktopShell.jsx';
 import BrowserOnlyNotice from './components/layout/BrowserOnlyNotice.jsx';
 import FileExplorer from './components/explorer/FileExplorer.jsx';
+import SettingsView from './components/settings/SettingsView.jsx';
 import HwpxEditorShell from './components/editors/HwpxEditorShell.jsx';
 import Wb4sEditorShell from './components/editors/Wb4sEditorShell.jsx';
 import XlsxEditorShell from './components/editors/XlsxEditorShell.jsx';
@@ -12,10 +13,12 @@ import VideoPlayerShell from './components/editors/VideoPlayerShell.jsx';
 import { ShareLinkError, ShareLinkLoading } from './components/share/ShareLinkScreen.jsx';
 import { AdminAuthProvider } from './context/AdminAuthContext.jsx';
 import { FsSyncProvider, useFsSync } from './context/FsSyncContext.jsx';
+import AppDialogHost from './components/common/AppDialogHost.jsx';
 import { useAppInfo } from './hooks/useAppInfo.js';
 import { useFsChangeSync } from './hooks/useFsChangeSync.js';
 import { hasNas4usbApi } from './lib/runtime.js';
 import { guardOpenFileEntry } from './lib/openFileGuard.js';
+import { nativeAlert } from './lib/nativeDialog.js';
 import { useTrashGuardedNavigate } from './hooks/useTrashGuardedNavigate.js';
 import { getShareTokenFromUrl } from './lib/shareAccess.js';
 import { isShareViewOnly, resolveOpenShareMode } from './lib/shareLinkAccess.js';
@@ -164,6 +167,24 @@ function Nas4usbDesktop({
   onEditorRenamed,
 }) {
   const { currentPath, navigate } = useTrashGuardedNavigate('.');
+  const [mainView, setMainView] = useState('explorer');
+
+  const handleNavigate = useCallback(
+    (nextPath) => {
+      setMainView('explorer');
+      navigate(nextPath);
+    },
+    [navigate],
+  );
+
+  const handleOpenSettings = useCallback(() => {
+    setMainView('settings');
+  }, []);
+
+  const handleHome = useCallback(() => {
+    setMainView('explorer');
+    navigate('.');
+  }, [navigate]);
 
   return (
     <>
@@ -172,17 +193,23 @@ function Nas4usbDesktop({
         syncInfo={syncInfo}
         infoLoading={infoLoading}
         currentPath={currentPath}
-        onNavigate={navigate}
-        onHome={() => navigate('.')}
+        mainView={mainView}
+        onNavigate={handleNavigate}
+        onOpenSettings={handleOpenSettings}
+        onHome={handleHome}
         onOpenFile={onOpenFile}
       >
-        <FileExplorer
-          currentPath={currentPath}
-          onNavigate={navigate}
-          onOpenFile={onOpenFile}
-          syncInfo={syncInfo}
-          isEditorOpen={Boolean(openEditor)}
-        />
+        {mainView === 'settings' ? (
+          <SettingsView />
+        ) : (
+          <FileExplorer
+            currentPath={currentPath}
+            onNavigate={handleNavigate}
+            onOpenFile={onOpenFile}
+            syncInfo={syncInfo}
+            isEditorOpen={Boolean(openEditor)}
+          />
+        )}
       </DesktopShell>
 
       <OpenEditorLayer
@@ -244,7 +271,7 @@ function Nas4usbAppMain() {
       throw new Error('이 파일 형식은 공유 링크로 미리볼 수 없습니다.');
     }
 
-    window.alert('이 파일 형식은 앱에서 편집할 수 없습니다.');
+    nativeAlert('이 파일 형식은 앱에서 편집할 수 없습니다.');
     return false;
   }, [isShareMode, notifyRemoteChange]);
 
@@ -370,6 +397,7 @@ function Nas4usbAppMain() {
 function Nas4usbApp() {
   return (
     <FsSyncProvider>
+      <AppDialogHost />
       <Nas4usbAppMain />
     </FsSyncProvider>
   );

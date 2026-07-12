@@ -144,7 +144,7 @@ export default function FilePropertiesDialog({
                 <span>즐겨찾기</span>
               </label>
               {!canEditAccessOptions && (
-                <p className="modal-access-hint">총괄관리자 로그인 시 변경할 수 있습니다.</p>
+                <p className="modal-access-hint">비공개·열람제한·공유·즐겨찾기는 총괄관리자만 변경할 수 있습니다.</p>
               )}
             </div>
           )}

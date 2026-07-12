@@ -5,6 +5,7 @@ import os from 'node:os';
 import { WebSocketServer } from 'ws';
 import { handleHttpApiRequest } from './httpApi.js';
 import { serveStaticDist } from './staticServer.js';
+import { rejectIfIpNotAllowed, rejectUpgradeIfIpNotAllowed } from './ipAccessGuard.js';
 
 const require = createRequire(import.meta.url);
 const { setupWSConnection } = require('y-websocket/bin/utils');
@@ -58,6 +59,7 @@ export function startSyncServer(distRoot) {
   staticDistRoot = distRoot ?? null;
 
   syncServer = http.createServer(async (req, res) => {
+    if (await rejectIfIpNotAllowed(req, res)) return;
     if (await handleHttpApiRequest(req, res)) return;
 
     if (staticDistRoot && (await serveStaticDist(req, res, staticDistRoot))) {
@@ -68,7 +70,14 @@ export function startSyncServer(distRoot) {
     res.end(`${APP_NAME} sync server`);
   });
 
-  syncWss = new WebSocketServer({ server: syncServer });
+  syncWss = new WebSocketServer({ noServer: true });
+
+  syncServer.on('upgrade', async (req, socket, head) => {
+    if (await rejectUpgradeIfIpNotAllowed(req, socket)) return;
+    syncWss.handleUpgrade(req, socket, head, (wsSocket) => {
+      syncWss.emit('connection', wsSocket, req);
+    });
+  });
 
   syncWss.on('connection', (socket, req) => {
     const docName = (req.url ?? '/').slice(1).split('?')[0] || 'default';

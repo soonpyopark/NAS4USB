@@ -9,6 +9,7 @@ import { handleHttpApiRequest } from './httpApi.js';
 import { getLocalIPv4Addresses } from './syncServer.js';
 import { readEnvFile } from './envConfig.js';
 import { parseAllowedHosts } from '../shared/viteHosts.js';
+import { rejectIfIpNotAllowed, rejectUpgradeIfIpNotAllowed } from './ipAccessGuard.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -105,14 +106,17 @@ export async function startDevServer() {
       }
     });
 
+    if (await rejectIfIpNotAllowed(req, res)) return;
     if (await handleHttpApiRequest(req, res)) return;
     vite.middlewares(req, res);
   });
 
   const wss = new WebSocketServer({ noServer: true });
 
-  server.on('upgrade', (req, socket, head) => {
+  server.on('upgrade', async (req, socket, head) => {
     if (isViteHmrUpgrade(req)) return;
+
+    if (await rejectUpgradeIfIpNotAllowed(req, socket)) return;
 
     wss.handleUpgrade(req, socket, head, (wsSocket) => {
       const docName = (req.url ?? '/').slice(1).split('?')[0] || 'default';

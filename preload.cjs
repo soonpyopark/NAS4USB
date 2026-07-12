@@ -89,4 +89,15 @@ contextBridge.exposeInMainWorld('nas4usb', {
     deletePermanent: (relativePath) =>
       ipcRenderer.invoke('trash:deletePermanent', { path: relativePath }),
   },
+
+  settings: {
+    get: () => ipcRenderer.invoke('settings:get'),
+    getGuestPermissions: () => ipcRenderer.invoke('settings:getGuestPermissions'),
+    update: (patch) => ipcRenderer.invoke('settings:update', patch),
+  },
+
+  members: {
+    list: () => ipcRenderer.invoke('members:list'),
+    save: (payload) => ipcRenderer.invoke('members:save', payload ?? {}),
+  },
 });

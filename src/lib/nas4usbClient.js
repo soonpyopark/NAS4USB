@@ -262,5 +262,24 @@ export function createHttpNas4usbClient() {
           body: JSON.stringify({ path: relativePath }),
         }),
     },
+
+    settings: {
+      get: () => apiFetch('/settings'),
+      getGuestPermissions: () => apiFetch('/settings/guest-permissions'),
+      update: (patch) =>
+        apiFetch('/settings', {
+          method: 'PUT',
+          body: JSON.stringify(patch ?? {}),
+        }),
+    },
+
+    members: {
+      list: () => apiFetch('/members'),
+      save: (payload) =>
+        apiFetch('/members', {
+          method: 'PUT',
+          body: JSON.stringify(payload ?? {}),
+        }),
+    },
   };
 }
