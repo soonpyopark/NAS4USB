@@ -13,11 +13,12 @@ import {
 } from '../shared/blockAssetPaths.js';
 import { LEGACY_TRASH_INDEX_FILE } from '../shared/legacyConfig.js';
 import { purgeYjsRoomsForPathTree } from './yjsRoomTree.js';
-import { getPortableRoot } from './appContext.js';
+import { getDataRoot, getPortableRoot } from './appContext.js';
 import * as fsService from './fsService.js';
 import { syncSharePathDelete, syncSharePathMoveTree } from './shareLinkService.js';
 import { syncFileAccessDelete, syncFileAccessMoveTree } from './fileAccessService.js';
 import { syncFavoritesDelete, syncFavoritesMoveTree } from './favoritesService.js';
+import { syncFileHistoryDelete, syncFileHistoryMoveTree } from './fileHistoryService.js';
 
 const TRASH_INDEX_FILE = '.nas4usb-trash.json';
 
@@ -123,6 +124,7 @@ async function syncMetadataMoveTree(fromRelative, toRelative, portableRoot) {
   await syncFileAccessMoveTree(fromRelative, toRelative, portableRoot);
   await syncFavoritesMoveTree(fromRelative, toRelative, portableRoot);
   await syncFortuneSidecarMoveTree(fromRelative, toRelative);
+  await syncFileHistoryMoveTree(fromRelative, toRelative, getDataRoot(), portableRoot);
 }
 
 /**
@@ -277,6 +279,7 @@ export async function deletePermanent(trashRelativePath, portableRoot = getPorta
   await syncFileAccessDelete(normalized, portableRoot);
   await syncFavoritesDelete(normalized, portableRoot);
   await syncFortuneSidecarDelete(normalized);
+  await syncFileHistoryDelete(normalized, portableRoot);
   await fsService.deletePath(normalized);
 
   const store = await loadIndex(portableRoot);
@@ -295,10 +298,20 @@ export async function deletePermanent(trashRelativePath, portableRoot = getPorta
  * @param {string} [portableRoot]
  */
 export async function emptyTrash(portableRoot = getPortableRoot()) {
+  /** @type {Error[]} */
+  const failures = [];
+
   try {
     const entries = await fsService.readDir(TRASH_FOLDER);
     for (const entry of entries) {
-      await deletePermanent(entry.relativePath, portableRoot);
+      try {
+        await deletePermanent(entry.relativePath, portableRoot);
+      } catch (error) {
+        // A single locked item (e.g. a file just moved into trash whose handle Windows hasn't
+        // released yet — see withDeleteRetry in fsService.js) shouldn't abort the whole batch
+        // and leave every other item undeleted. Keep going and report failures afterwards.
+        failures.push(error instanceof Error ? error : new Error(String(error)));
+      }
     }
   } catch (error) {
     if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') {
@@ -307,8 +320,16 @@ export async function emptyTrash(portableRoot = getPortableRoot()) {
   }
 
   const store = await loadIndex(portableRoot);
-  store.items = {};
+  const remaining = await fsService.readDir(TRASH_FOLDER).catch(() => []);
+  const remainingKeys = new Set(remaining.map((entry) => entry.relativePath));
+  for (const key of Object.keys(store.items)) {
+    if (!remainingKeys.has(key)) delete store.items[key];
+  }
   await saveIndex(portableRoot, store);
+
+  if (failures.length > 0) {
+    throw new Error(`${failures.length}개 항목을 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.`);
+  }
 
   return true;
 }

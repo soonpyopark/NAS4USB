@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import EditorModal from './EditorModal.jsx';
+import HistoryModal from './HistoryModal.jsx';
 import TextEditor from './TextEditor.jsx';
 import { useYjsSession } from '../../hooks/useYjsSession.js';
 import { useAwarenessPeerCount } from '../../hooks/useAwarenessPeerCount.js';
@@ -43,6 +44,7 @@ export default function TextEditorShell({
   const [ready, setReady] = useState(false);
   const [editorHandle, setEditorHandle] = useState(null);
   const [bound, setBound] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const unbindRef = useRef(null);
   const initialTextRef = useRef('');
   const diskRevisionRef = useRef('');
@@ -145,6 +147,25 @@ export default function TextEditorShell({
     onClose();
   };
 
+  // Restore already overwrote the file on disk (and archived the pre-restore state) —
+  // push the restored text into the live handle + Y.doc snapshot, mirroring handleSave.
+  const handleRestoreHistory = useCallback(
+    async (base64) => {
+      const text = decodeTextBase64(base64);
+      editorHandleRef.current?.setText?.(text, 'restore');
+      initialTextRef.current = text;
+      await workspace.writeBinary(base64);
+      try {
+        const statInfo = await window.nas4usb.fs.stat(relativePath);
+        diskRevisionRef.current = statInfo?.modifiedAt ?? '';
+        if (doc) setTextDiskRevision(doc, 'document', diskRevisionRef.current);
+      } catch {
+        // diskRevision is optional
+      }
+    },
+    [doc, relativePath, workspace],
+  );
+
   const peerCount = useAwarenessPeerCount(provider);
   const lanEndpoints = getLanWsEndpoints(syncInfo, roomId).join(' · ');
   const isLoading = workspace.loading || !doc || !ready;
@@ -152,47 +173,60 @@ export default function TextEditorShell({
   const fileLabel = isMarkdown ? 'Markdown' : 'Text';
 
   return (
-    <EditorModal
-      title={fileName}
-      subtitle={`${fileLabel} · room ${roomId} · ${lanEndpoints}`}
-      status={status}
-      synced={synced}
-      peerCount={peerCount}
-      saving={saving}
-      saveDisabled={shareReadOnly || waitingSync}
-      hideSave={shareReadOnly}
-      onSave={handleSave}
-      onClose={handleClose}
-      allowClose={allowClose}
-      fullscreen={fullscreen}
-    >
-      {(workspace.error || loadError) && (
-        <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
-          {workspace.error || loadError}
-        </div>
-      )}
+    <>
+      <EditorModal
+        title={fileName}
+        subtitle={`${fileLabel} · room ${roomId} · ${lanEndpoints}`}
+        status={status}
+        synced={synced}
+        peerCount={peerCount}
+        saving={saving}
+        saveDisabled={shareReadOnly || waitingSync}
+        hideSave={shareReadOnly}
+        hideHistory={shareReadOnly}
+        onShowHistory={() => setShowHistory(true)}
+        onSave={handleSave}
+        onClose={handleClose}
+        allowClose={allowClose}
+        fullscreen={fullscreen}
+      >
+        {(workspace.error || loadError) && (
+          <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
+            {workspace.error || loadError}
+          </div>
+        )}
 
-      <div className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs text-nas-muted">
-        {shareReadOnly
-          ? `${fileLabel} 에디터 · 공유(보기 전용) · 편집·저장 불가`
-          : waitingSync
-            ? `${fileLabel} 에디터 · Y.js 동기화 후 편집 가능`
-            : `${fileLabel} 에디터 · 줄번호 · 찾기/바꾸기 · Ctrl+S 저장 · LAN 실시간 동시 편집`}
-        {!shareReadOnly && isMarkdown ? ' · Markdown 미리보기(편집/분할/미리보기)' : ''}
-      </div>
-
-      {isLoading ? (
-        <div className="flex flex-1 items-center justify-center text-sm text-nas-muted">
-          파일 로드 및 Y.js 세션 준비 중…
+        <div className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs text-nas-muted">
+          {shareReadOnly
+            ? `${fileLabel} 에디터 · 공유(보기 전용) · 편집·저장 불가`
+            : waitingSync
+              ? `${fileLabel} 에디터 · Y.js 동기화 후 편집 가능`
+              : `${fileLabel} 에디터 · 줄번호 · 찾기/바꾸기 · Ctrl+S 저장 · LAN 실시간 동시 편집`}
+          {!shareReadOnly && isMarkdown ? ' · Markdown 미리보기(편집/분할/미리보기)' : ''}
         </div>
-      ) : (
-        <TextEditor
-          initialText={initialText}
-          isMarkdown={isMarkdown}
-          onReady={handleEditorReady}
-          onSave={handleSave}
-        />
-      )}
-    </EditorModal>
+
+        {isLoading ? (
+          <div className="flex flex-1 items-center justify-center text-sm text-nas-muted">
+            파일 로드 및 Y.js 세션 준비 중…
+          </div>
+        ) : (
+          <TextEditor
+            initialText={initialText}
+            isMarkdown={isMarkdown}
+            onReady={handleEditorReady}
+            onSave={handleSave}
+          />
+        )}
+      </EditorModal>
+
+      <HistoryModal
+        open={showHistory}
+        onClose={() => setShowHistory(false)}
+        relativePath={relativePath}
+        fileName={fileName}
+        extension={extension}
+        onRestored={handleRestoreHistory}
+      />
+    </>
   );
 }

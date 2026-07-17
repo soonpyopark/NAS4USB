@@ -1,3 +1,19 @@
 {
-  "items": {}
+  "items": {
+    "__trash/NoName.block": {
+      "originalPath": "NoName.block",
+      "deletedAt": "2026-07-17T16:23:13.724Z",
+      "isDirectory": false
+    },
+    "__trash/NoName.xlsx": {
+      "originalPath": "NoName.xlsx",
+      "deletedAt": "2026-07-17T16:23:13.741Z",
+      "isDirectory": false
+    },
+    "__trash/NoName.xlsx.fortune.json": {
+      "originalPath": "NoName.xlsx.fortune.json",
+      "deletedAt": "2026-07-17T16:03:29.638Z",
+      "isDirectory": false
+    }
+  }
 }

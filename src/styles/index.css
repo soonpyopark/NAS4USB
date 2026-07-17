@@ -144,6 +144,7 @@
 }
 
 .modal-dialog {
+  position: relative;
   width: 100%;
   max-width: 420px;
   background: #ffffff;
@@ -152,8 +153,40 @@
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
 }
 
+.modal-close-btn {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.85rem;
+  display: flex;
+  height: 2rem;
+  width: 2rem;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 9999px;
+  background: transparent;
+  color: #605e5c;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.modal-close-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #1a1a1a;
+}
+
 .modal-dialog--wide {
   max-width: 32rem;
+}
+
+/* Revision-history list: wide enough that each entry's timestamp/size and its
+   [미리보기]/[복원]/[삭제] buttons stay on a single line. */
+.modal-dialog--history {
+  max-width: 44rem;
+}
+
+.modal-dialog--history .modal-title {
+  padding-right: 2rem;
 }
 
 .modal-dialog--editor,

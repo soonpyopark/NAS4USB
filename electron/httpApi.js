@@ -79,6 +79,15 @@ import {
 import { streamFile } from './mediaStream.js';
 import { getAudioMimeType, getVideoMimeType, isAudioExtension, isVideoExtension } from '../shared/mediaTypes.js';
 import { handleFsEventsRequest, notifyFsChanged, getFsRevisionPayload } from './fsNotifyService.js';
+import {
+  deleteFileHistoryEntry,
+  listFileHistory,
+  readFileHistoryBase64,
+  readFileHistorySidecarSheets,
+  restoreFileHistoryEntry,
+  syncFileHistoryDelete,
+  syncFileHistoryRename,
+} from './fileHistoryService.js';
 
 /**
  * @param {import('node:http').ServerResponse} res
@@ -214,6 +223,7 @@ export async function handleHttpApiRequest(req, res) {
       await syncFileAccessDelete(body.path, getPortableRoot());
       await syncFavoritesDelete(body.path, getPortableRoot());
       await syncFortuneSidecarDelete(body.path);
+      await syncFileHistoryDelete(body.path, getPortableRoot());
       const result = await fsService.deletePath(body.path);
       notifyFsChanged(body.path);
       sendJson(res, 200, result);
@@ -227,6 +237,7 @@ export async function handleHttpApiRequest(req, res) {
       await syncFileAccessRename(body.from, body.to, getPortableRoot());
       await syncFavoritesRename(body.from, body.to, getPortableRoot());
       await syncFortuneSidecarRename(body.from, body.to);
+      await syncFileHistoryRename(body.from, body.to, getPortableRoot());
       const result = await fsService.renamePath(body.from, body.to);
       notifyFsChanged([body.from, body.to]);
       sendJson(res, 200, result);
@@ -281,6 +292,7 @@ export async function handleHttpApiRequest(req, res) {
       await syncFileAccessRename(body.from, body.to, getPortableRoot());
       await syncFavoritesRename(body.from, body.to, getPortableRoot());
       await syncFortuneSidecarRename(body.from, body.to);
+      await syncFileHistoryRename(body.from, body.to, getPortableRoot());
       const result = await fsService.movePath(body.from, body.to);
       notifyFsChanged([body.from, body.to]);
       sendJson(res, 200, result);
@@ -387,6 +399,7 @@ export async function handleHttpApiRequest(req, res) {
       await syncFileAccessRename(fromPath, result.relativePath, getPortableRoot());
       await syncFavoritesRename(fromPath, result.relativePath, getPortableRoot());
       await syncFortuneSidecarRename(fromPath, result.relativePath);
+      await syncFileHistoryRename(fromPath, result.relativePath, getPortableRoot());
       notifyFsChanged([fromPath, result.relativePath]);
       sendJson(res, 200, result);
       return true;
@@ -582,6 +595,47 @@ export async function handleHttpApiRequest(req, res) {
       await assertCanAccessTrash(getAccessAuth(req));
       const body = await readJsonBody(req);
       const result = await deletePermanent(body.path, getPortableRoot());
+      notifyFsChanged(body.path);
+      sendJson(res, 200, result);
+      return true;
+    }
+
+    if (method === 'GET' && url.pathname === '/api/history/list') {
+      const relativePath = url.searchParams.get('path') ?? '';
+      await assertCanAccessFile(relativePath, getAccessAuth(req), getShareTokenFromQuery(url));
+      sendJson(res, 200, await listFileHistory(relativePath, getPortableRoot()));
+      return true;
+    }
+
+    if (method === 'GET' && url.pathname === '/api/history/read') {
+      const relativePath = url.searchParams.get('path') ?? '';
+      const entryId = url.searchParams.get('entryId') ?? '';
+      await assertCanAccessFile(relativePath, getAccessAuth(req), getShareTokenFromQuery(url));
+      sendJson(res, 200, await readFileHistoryBase64(relativePath, entryId, getPortableRoot()));
+      return true;
+    }
+
+    if (method === 'GET' && url.pathname === '/api/history/readSidecar') {
+      const relativePath = url.searchParams.get('path') ?? '';
+      const entryId = url.searchParams.get('entryId') ?? '';
+      await assertCanAccessFile(relativePath, getAccessAuth(req), getShareTokenFromQuery(url));
+      sendJson(res, 200, await readFileHistorySidecarSheets(relativePath, entryId, getPortableRoot()));
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/history/delete') {
+      const body = await readJsonBody(req);
+      await assertCanEditFile(body.path ?? '', getAccessAuth(req), getShareTokenFromQuery(url));
+      const result = await deleteFileHistoryEntry(body.path, body.entryId, getPortableRoot());
+      notifyFsChanged(body.path);
+      sendJson(res, 200, result);
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/history/restore') {
+      const body = await readJsonBody(req);
+      await assertCanEditFile(body.path ?? '', getAccessAuth(req), getShareTokenFromQuery(url));
+      const result = await restoreFileHistoryEntry(body.path, body.entryId, getDataRoot(), getPortableRoot());
       notifyFsChanged(body.path);
       sendJson(res, 200, result);
       return true;

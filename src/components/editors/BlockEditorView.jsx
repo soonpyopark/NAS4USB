@@ -22,6 +22,7 @@ import {
  *     user: { name: string, color: string },
  *   } | null,
  *   readOnly?: boolean,
+ *   resolveFileUrl?: (url: string) => Promise<string>,
  *   onReady?: (editor: import('@blocknote/core').BlockNoteEditor) => void,
  *   onSave?: () => void,
  * }} props
@@ -31,6 +32,7 @@ export default function BlockEditorView({
   initialBlocks,
   collaboration,
   readOnly = false,
+  resolveFileUrl: resolveFileUrlProp,
   onReady,
   onSave,
 }) {
@@ -43,10 +45,13 @@ export default function BlockEditorView({
     () => createBlocknoteUploadFile(relativePath),
     [relativePath],
   );
-  const resolveFileUrl = useMemo(
+  // Read-only history previews pass a blob-URL resolver so embedded images render
+  // without touching the live .block.assets sidecar (side-effect-free preview).
+  const defaultResolveFileUrl = useMemo(
     () => createBlocknoteResolveFileUrl(relativePath),
     [relativePath],
   );
+  const resolveFileUrl = resolveFileUrlProp ?? defaultResolveFileUrl;
 
   const editor = useCreateBlockNote(
     {

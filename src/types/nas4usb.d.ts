@@ -96,6 +96,13 @@ window.nas4usb = {
     empty: () => {},
     deletePermanent: (relativePath) => {},
   },
+  history: {
+    list: (relativePath, shareToken) => {},
+    read: (relativePath, entryId, shareToken) => {},
+    readSidecar: (relativePath, entryId, shareToken) => {},
+    deleteEntry: (relativePath, entryId, shareToken) => {},
+    restore: (relativePath, entryId, shareToken) => {},
+  },
   settings: {
     get: () => {},
     getGuestPermissions: () => {},

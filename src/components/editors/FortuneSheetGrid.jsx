@@ -4,6 +4,17 @@ import '@fortune-sheet/react/dist/index.css';
 import '../../styles/fortune-sheet.css';
 import { cloneFortuneSheets } from '../../lib/xlsx/cloneFortuneSheets.js';
 
+// FortuneSheet's built-in toolbar "insert image" button (see insertImage/saveImage in
+// @fortune-sheet/core) embeds the picked file as a raw base64 data URL directly in the sheet's
+// state — there is no hook to intercept/upload it instead. Every subsequent edit then re-clones
+// that state (Immer draft + our own cloneFortuneSheets) and re-serializes the *entire* workbook
+// for the Yjs snapshot/disk sidecar with that string still embedded, so a several-MB photo can
+// spike memory/CPU enough to freeze or crash the renderer (reported as "선택하면 프로그램이
+// 다운되네"). Reject oversized files before FortuneSheet's own hidden
+// `<input id="fortune-img-upload">` handler ever sees them.
+const MAX_IMAGE_INSERT_BYTES = 4 * 1024 * 1024;
+const FORTUNE_IMAGE_INPUT_ID = 'fortune-img-upload';
+
 /**
  * @param {{
  *   initialSheets: import('@fortune-sheet/core').Sheet[],
@@ -110,6 +121,32 @@ export default function FortuneSheetGrid({ initialSheets, onReady }) {
     const timer = window.setTimeout(() => notifyReady(), 0);
     return () => window.clearTimeout(timer);
   }, [notifyReady, initialSheets]);
+
+  useEffect(() => {
+    const host = hostRef.current;
+    if (!host) return undefined;
+
+    // Capture-phase listener on an ancestor of the toolbar fires before the event ever reaches
+    // the `<input>` (and therefore before React's own bubble-phase onChange), so calling
+    // stopPropagation() here fully prevents FortuneSheet from processing an oversized file.
+    const onChangeCapture = (event) => {
+      const input = event.target;
+      if (!(input instanceof HTMLInputElement) || input.id !== FORTUNE_IMAGE_INPUT_ID) return;
+      const file = input.files?.[0];
+      if (!file || file.size <= MAX_IMAGE_INSERT_BYTES) return;
+
+      event.stopPropagation();
+      event.preventDefault();
+      input.value = '';
+      window.alert(
+        `이미지 용량이 너무 커서 삽입할 수 없습니다 (${(file.size / (1024 * 1024)).toFixed(1)}MB).\n` +
+          `${(MAX_IMAGE_INSERT_BYTES / (1024 * 1024)).toFixed(0)}MB 이하의 이미지를 사용해 주세요.`,
+      );
+    };
+
+    host.addEventListener('change', onChangeCapture, true);
+    return () => host.removeEventListener('change', onChangeCapture, true);
+  }, []);
 
   const handleOp = useCallback((ops) => {
     if (applyingRemoteRef.current) return;

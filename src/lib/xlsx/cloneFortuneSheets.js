@@ -31,6 +31,44 @@ export function dataMatrixToCelldata(data) {
 }
 
 /**
+ * FortuneSheet's own merge action (see `refreshLocalMergeData` in @fortune-sheet/core)
+ * stamps an `mc` marker onto every covered cell — the renderer relies on that per-cell
+ * marker, not just `config.merge`, to know a cell belongs to a merged range. Sheets
+ * built from sources that only know about `config.merge` (raw XLSX import/history, or
+ * a sidecar saved before this backfill existed) would otherwise render as unmerged.
+ * Idempotent: re-applies the same markers already present from a live editor session.
+ * @param {import('@fortune-sheet/core').CellWithRowAndCol[]} celldata
+ * @param {NonNullable<import('@fortune-sheet/core').SheetConfig['merge']>} merge
+ */
+function backfillMergeMarkers(celldata, merge) {
+  const indexByKey = new Map();
+  celldata.forEach((entry, index) => indexByKey.set(`${entry.r}_${entry.c}`, index));
+
+  for (const anchor of Object.values(merge)) {
+    for (let r = anchor.r; r < anchor.r + anchor.rs; r += 1) {
+      for (let c = anchor.c; c < anchor.c + anchor.cs; c += 1) {
+        const isAnchor = r === anchor.r && c === anchor.c;
+        const mc = isAnchor
+          ? { r: anchor.r, c: anchor.c, rs: anchor.rs, cs: anchor.cs }
+          : { r: anchor.r, c: anchor.c };
+
+        const key = `${r}_${c}`;
+        const existingIndex = indexByKey.get(key);
+        if (existingIndex != null) {
+          celldata[existingIndex] = {
+            ...celldata[existingIndex],
+            v: { ...celldata[existingIndex].v, mc },
+          };
+        } else {
+          indexByKey.set(key, celldata.length);
+          celldata.push({ r, c, v: { mc } });
+        }
+      }
+    }
+  }
+}
+
+/**
  * @param {import('@fortune-sheet/core').Sheet} sheet
  * @returns {import('@fortune-sheet/core').Sheet}
  */
@@ -44,6 +82,10 @@ function normalizeSheetForEditor(sheet) {
 
   if (!hasCelldata && hasData) {
     next.celldata = dataMatrixToCelldata(next.data);
+  }
+
+  if (next.config?.merge && Array.isArray(next.celldata)) {
+    backfillMergeMarkers(next.celldata, next.config.merge);
   }
 
   // Workbook init always rebuilds `data` from `celldata`; keep payload celldata-only.

@@ -50,8 +50,9 @@ function normalizeXlsxStyle(style) {
 /**
  * @param {import('xlsx-js-style').WorkBook['Styles']} styles
  * @param {number} xfIndex
+ * @param {Array<Record<string, { style: string, color?: { rgb: string } }>>} [bordersOverride]
  */
-function composeStyleFromXf(styles, xfIndex) {
+function composeStyleFromXf(styles, xfIndex, bordersOverride) {
   if (!styles?.CellXf?.[xfIndex]) return undefined;
 
   const xf = styles.CellXf[xfIndex];
@@ -75,7 +76,46 @@ function composeStyleFromXf(styles, xfIndex) {
     composed.alignment = { ...(xf.alignment ?? xf.Alignment) };
   }
 
+  // xlsx-js-style's XLSX.read() leaves workbook.Styles.Borders as empty stub objects — the
+  // border XML is written correctly (see applyBorderInfoToWorksheet) but the reader never
+  // populates this table — so we always resolve borders from our own xl/styles.xml parse
+  // (bordersOverride, see parseBordersFromStylesXml) via the xf's borderId instead.
+  const borderId = Number(xf.borderId ?? xf.borderid ?? 0);
+  const borderDef = bordersOverride?.[borderId];
+  if (borderDef && Object.keys(borderDef).length > 0) {
+    composed.border = borderDef;
+  }
+
   return Object.keys(composed).length > 0 ? composed : undefined;
+}
+
+/**
+ * xlsx-js-style parses `<borders>` from styles.xml into empty placeholder objects on read
+ * (workbook.Styles.Borders[i] === {}), so border style/color is otherwise unrecoverable once
+ * a file round-trips through XLSX.read(). Parse the raw XML ourselves; array order matches
+ * the `borderId` index referenced by cellXfs entries.
+ * @param {string} xml
+ * @returns {Array<Record<string, { style: string, color?: { rgb: string } }>>}
+ */
+function parseBordersFromStylesXml(xml) {
+  const bordersBlock = xml.match(/<borders\b[^>]*>([\s\S]*?)<\/borders>/)?.[1] ?? '';
+  const borderElements = bordersBlock.match(/<border\b[^>]*>[\s\S]*?<\/border>|<border\b[^>]*\/>/g) ?? [];
+
+  return borderElements.map((element) => {
+    /** @type {Record<string, { style: string, color?: { rgb: string } }>} */
+    const sides = {};
+    for (const sideName of ['left', 'right', 'top', 'bottom']) {
+      const sideMatch = element.match(
+        new RegExp(`<${sideName}\\b([^>]*?)(?:/>|>([\\s\\S]*?)</${sideName}>)`),
+      );
+      if (!sideMatch) continue;
+      const style = sideMatch[1]?.match(/\bstyle="([^"]+)"/)?.[1];
+      if (!style) continue;
+      const rgb = sideMatch[2]?.match(/<color\b[^>]*\brgb="([^"]+)"/)?.[1];
+      sides[sideName] = rgb ? { style, color: { rgb } } : { style };
+    }
+    return sides;
+  });
 }
 
 /**
@@ -103,16 +143,19 @@ function parseStyleIndexMapFromSheetXml(xml) {
  */
 async function buildStyleIndexMaps(buffer, workbook) {
   /** @type {Map<string, Map<string, number>>} */
-  const maps = new Map();
+  const sheetStyleIndexMaps = new Map();
   const zip = await JSZip.loadAsync(buffer);
 
   for (let index = 0; index < workbook.SheetNames.length; index += 1) {
     const sheetName = workbook.SheetNames[index];
     const xml = await zip.file(`xl/worksheets/sheet${index + 1}.xml`)?.async('string');
-    maps.set(sheetName, xml ? parseStyleIndexMapFromSheetXml(xml) : new Map());
+    sheetStyleIndexMaps.set(sheetName, xml ? parseStyleIndexMapFromSheetXml(xml) : new Map());
   }
 
-  return maps;
+  const stylesXml = await zip.file('xl/styles.xml')?.async('string');
+  const borders = stylesXml ? parseBordersFromStylesXml(stylesXml) : [];
+
+  return { sheetStyleIndexMaps, borders };
 }
 
 /**
@@ -120,18 +163,19 @@ async function buildStyleIndexMaps(buffer, workbook) {
  * @param {import('xlsx-js-style').CellObject | undefined} cell
  * @param {string} address
  * @param {Map<string, number>} styleIndexMap
+ * @param {Array<Record<string, { style: string, color?: { rgb: string } }>>} [borders]
  */
-function resolveXlsxCellStyle(workbook, cell, address, styleIndexMap) {
+function resolveXlsxCellStyle(workbook, cell, address, styleIndexMap, borders) {
   const styles = workbook.Styles;
   if (!styles || !cell) return undefined;
 
   const xfIndex = styleIndexMap.get(address);
   if (xfIndex != null) {
-    return composeStyleFromXf(styles, xfIndex) ?? normalizeXlsxStyle(cell.s);
+    return composeStyleFromXf(styles, xfIndex, borders) ?? normalizeXlsxStyle(cell.s);
   }
 
   if (typeof cell.s === 'number') {
-    return composeStyleFromXf(styles, cell.s);
+    return composeStyleFromXf(styles, cell.s, borders);
   }
 
   return normalizeXlsxStyle(cell.s);
@@ -325,7 +369,7 @@ function xlsxCellToFortuneCell(cell, resolvedStyle) {
  * @param {import('xlsx-js-style').WorkSheet} sheet
  * @returns {import('@fortune-sheet/core').SheetConfig | undefined}
  */
-function extractSheetConfigFromXlsx(sheet, workbook, styleIndexMap) {
+function extractSheetConfigFromXlsx(sheet, workbook, styleIndexMap, borders) {
   /** @type {import('@fortune-sheet/core').SheetConfig} */
   const config = {};
 
@@ -375,7 +419,7 @@ function extractSheetConfigFromXlsx(sheet, workbook, styleIndexMap) {
     if (Object.keys(merge).length > 0) config.merge = merge;
   }
 
-  const borderInfo = extractBorderInfoFromXlsxSheet(sheet, workbook, styleIndexMap);
+  const borderInfo = extractBorderInfoFromXlsxSheet(sheet, workbook, styleIndexMap, borders);
   if (borderInfo?.length) config.borderInfo = borderInfo;
 
   return Object.keys(config).length > 0 ? config : undefined;
@@ -452,14 +496,14 @@ function xlsxBorderSideToFortune(side) {
  * @param {import('xlsx-js-style').WorkBook} workbook
  * @param {Map<string, number>} styleIndexMap
  */
-function extractBorderInfoFromXlsxSheet(sheet, workbook, styleIndexMap) {
+function extractBorderInfoFromXlsxSheet(sheet, workbook, styleIndexMap, borders) {
   /** @type {import('@fortune-sheet/core').SheetConfig['borderInfo']} */
   const borderInfo = [];
 
   for (const [address, cell] of Object.entries(sheet)) {
     if (address.startsWith('!')) continue;
     const decoded = XLSX.utils.decode_cell(address);
-    const resolvedStyle = resolveXlsxCellStyle(workbook, cell, address, styleIndexMap);
+    const resolvedStyle = resolveXlsxCellStyle(workbook, cell, address, styleIndexMap, borders);
     const border = resolvedStyle?.border;
     if (!border) continue;
 
@@ -600,6 +644,43 @@ function getSheetBounds(sheet) {
 }
 
 /**
+ * FortuneSheet's own merge action (see `refreshLocalMergeData` in @fortune-sheet/core)
+ * stamps an `mc` marker onto every covered cell, not just the `config.merge` bookkeeping
+ * map — the renderer relies on that per-cell marker to know a cell belongs to a merged
+ * range. Plain XLSX `!merges` only gives us `config.merge`, so without this backfill the
+ * sheet reports the merge in its config but renders every cell unmerged.
+ * @param {import('@fortune-sheet/core').CellWithRowAndCol[]} celldata
+ * @param {NonNullable<import('@fortune-sheet/core').SheetConfig['merge']>} merge
+ */
+function applyMergeMarkersToCelldata(celldata, merge) {
+  const indexByKey = new Map();
+  celldata.forEach((entry, index) => indexByKey.set(`${entry.r}_${entry.c}`, index));
+
+  for (const anchor of Object.values(merge)) {
+    for (let r = anchor.r; r < anchor.r + anchor.rs; r += 1) {
+      for (let c = anchor.c; c < anchor.c + anchor.cs; c += 1) {
+        const isAnchor = r === anchor.r && c === anchor.c;
+        const mc = isAnchor
+          ? { r: anchor.r, c: anchor.c, rs: anchor.rs, cs: anchor.cs }
+          : { r: anchor.r, c: anchor.c };
+
+        const key = `${r}_${c}`;
+        const existingIndex = indexByKey.get(key);
+        if (existingIndex != null) {
+          celldata[existingIndex] = {
+            ...celldata[existingIndex],
+            v: { ...celldata[existingIndex].v, mc },
+          };
+        } else {
+          indexByKey.set(key, celldata.length);
+          celldata.push({ r, c, v: { mc } });
+        }
+      }
+    }
+  }
+}
+
+/**
  * @param {import('xlsx-js-style').WorkSheet} sheet
  * @param {string} name
  * @param {string} id
@@ -609,7 +690,7 @@ function getSheetBounds(sheet) {
  * @param {Map<string, number>} styleIndexMap
  * @returns {import('@fortune-sheet/core').Sheet}
  */
-function xlsxSheetToFortuneSheet(sheet, name, id, order, isActive, workbook, styleIndexMap) {
+function xlsxSheetToFortuneSheet(sheet, name, id, order, isActive, workbook, styleIndexMap, borders) {
   const bounds = getSheetBounds(sheet);
   /** @type {import('@fortune-sheet/core').CellWithRowAndCol[]} */
   const celldata = [];
@@ -617,10 +698,15 @@ function xlsxSheetToFortuneSheet(sheet, name, id, order, isActive, workbook, sty
   for (const [address, cell] of Object.entries(sheet)) {
     if (address.startsWith('!')) continue;
     const decoded = XLSX.utils.decode_cell(address);
-    const resolvedStyle = resolveXlsxCellStyle(workbook, cell, address, styleIndexMap);
+    const resolvedStyle = resolveXlsxCellStyle(workbook, cell, address, styleIndexMap, borders);
     const fortuneCell = xlsxCellToFortuneCell(cell, resolvedStyle);
     if (!fortuneCell) continue;
     celldata.push({ r: decoded.r, c: decoded.c, v: fortuneCell });
+  }
+
+  const config = extractSheetConfigFromXlsx(sheet, workbook, styleIndexMap, borders);
+  if (config?.merge) {
+    applyMergeMarkersToCelldata(celldata, config.merge);
   }
 
   return {
@@ -631,7 +717,7 @@ function xlsxSheetToFortuneSheet(sheet, name, id, order, isActive, workbook, sty
     row: bounds.rows,
     column: bounds.cols,
     celldata,
-    config: extractSheetConfigFromXlsx(sheet, workbook, styleIndexMap),
+    config,
   };
 }
 
@@ -641,7 +727,7 @@ function xlsxSheetToFortuneSheet(sheet, name, id, order, isActive, workbook, sty
  */
 export async function xlsxBufferToFortuneSheets(buffer) {
   const workbook = XLSX.read(buffer, { type: 'array', cellStyles: true, cellNF: true });
-  const styleMaps = await buildStyleIndexMaps(buffer, workbook);
+  const { sheetStyleIndexMaps, borders } = await buildStyleIndexMaps(buffer, workbook);
 
   return workbook.SheetNames.map((name, index) =>
     xlsxSheetToFortuneSheet(
@@ -651,7 +737,8 @@ export async function xlsxBufferToFortuneSheets(buffer) {
       index,
       index === 0,
       workbook,
-      styleMaps.get(name) ?? new Map(),
+      sheetStyleIndexMaps.get(name) ?? new Map(),
+      borders,
     ),
   );
 }

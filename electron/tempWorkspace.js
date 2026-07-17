@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { assertRenamePreservesExtension } from '../shared/entryNames.js';
+import { archiveCurrentVersion } from './fileHistoryService.js';
 
 /**
  * @typedef {{
@@ -79,6 +80,9 @@ export async function writeWorkspaceFile(sessionId, base64) {
 export async function commitWorkspace(sessionId, dataRoot) {
   const session = getSession(sessionId);
   const destination = path.join(dataRoot, session.relativePath);
+  // Archive whatever is currently on disk before it gets overwritten, so it becomes
+  // a restorable "이력" entry (no-op for unsupported extensions or first-time saves).
+  await archiveCurrentVersion(session.relativePath, dataRoot).catch(() => {});
   await fs.mkdir(path.dirname(destination), { recursive: true });
   await fs.copyFile(session.workingPath, destination);
   session.dirty = false;

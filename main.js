@@ -100,6 +100,15 @@ import {
   isFortuneSidecarRelativePath,
 } from './electron/fortuneSidecarService.js';
 import { notifyFsChanged } from './electron/fsNotifyService.js';
+import {
+  deleteFileHistoryEntry,
+  listFileHistory,
+  readFileHistoryBase64,
+  readFileHistorySidecarSheets,
+  restoreFileHistoryEntry,
+  syncFileHistoryDelete,
+  syncFileHistoryRename,
+} from './electron/fileHistoryService.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = !app.isPackaged;
@@ -539,6 +548,7 @@ ipcMain.handle('fs:rename', async (event, fromRelative, toRelative) => {
   await syncFileAccessRename(fromRelative, toRelative, getPortableRoot());
   await syncFavoritesRename(fromRelative, toRelative, getPortableRoot());
   await syncFortuneSidecarRename(fromRelative, toRelative);
+  await syncFileHistoryRename(fromRelative, toRelative, getPortableRoot());
   const result = await fsService.renamePath(fromRelative, toRelative);
   notifyFsChanged([fromRelative, toRelative]);
   return result;
@@ -553,6 +563,7 @@ ipcMain.handle('fs:delete', async (event, relativePath) => {
   await syncFileAccessDelete(relativePath, getPortableRoot());
   await syncFavoritesDelete(relativePath, getPortableRoot());
   await syncFortuneSidecarDelete(relativePath);
+  await syncFileHistoryDelete(relativePath, getPortableRoot());
   const result = await fsService.deletePath(relativePath);
   notifyFsChanged(relativePath);
   return result;
@@ -587,6 +598,7 @@ ipcMain.handle('fs:move', async (event, fromRelative, toRelative) => {
   await syncFileAccessRename(fromRelative, toRelative, getPortableRoot());
   await syncFavoritesRename(fromRelative, toRelative, getPortableRoot());
   await syncFortuneSidecarRename(fromRelative, toRelative);
+  await syncFileHistoryRename(fromRelative, toRelative, getPortableRoot());
   const result = await fsService.movePath(fromRelative, toRelative);
   notifyFsChanged([fromRelative, toRelative]);
   return result;
@@ -651,11 +663,46 @@ ipcMain.handle('workspace:rename', async (event, sessionId, newRelativePath) => 
   await syncFileAccessRename(fromPath, result.relativePath, getPortableRoot());
   await syncFavoritesRename(fromPath, result.relativePath, getPortableRoot());
   await syncFortuneSidecarRename(fromPath, result.relativePath);
+  await syncFileHistoryRename(fromPath, result.relativePath, getPortableRoot());
   notifyFsChanged([fromPath, result.relativePath]);
   return result;
 });
 
 ipcMain.handle('workspace:close', async (_event, sessionId) => closeWorkspace(sessionId));
+
+ipcMain.handle('history:list', async (event, relativePath, shareToken) => {
+  const token = shareToken || getShareTokenFromEvent(event);
+  await assertCanAccessFile(relativePath, getAccessAuthFromEvent(event), token);
+  return listFileHistory(relativePath, getPortableRoot());
+});
+
+ipcMain.handle('history:read', async (event, relativePath, entryId, shareToken) => {
+  const token = shareToken || getShareTokenFromEvent(event);
+  await assertCanAccessFile(relativePath, getAccessAuthFromEvent(event), token);
+  return readFileHistoryBase64(relativePath, entryId, getPortableRoot());
+});
+
+ipcMain.handle('history:readSidecar', async (event, relativePath, entryId, shareToken) => {
+  const token = shareToken || getShareTokenFromEvent(event);
+  await assertCanAccessFile(relativePath, getAccessAuthFromEvent(event), token);
+  return readFileHistorySidecarSheets(relativePath, entryId, getPortableRoot());
+});
+
+ipcMain.handle('history:delete', async (event, relativePath, entryId, shareToken) => {
+  const token = shareToken || getShareTokenFromEvent(event);
+  await assertCanEditFile(relativePath, getAccessAuthFromEvent(event), token);
+  const result = await deleteFileHistoryEntry(relativePath, entryId, getPortableRoot());
+  notifyFsChanged(relativePath);
+  return result;
+});
+
+ipcMain.handle('history:restore', async (event, relativePath, entryId, shareToken) => {
+  const token = shareToken || getShareTokenFromEvent(event);
+  await assertCanEditFile(relativePath, getAccessAuthFromEvent(event), token);
+  const result = await restoreFileHistoryEntry(relativePath, entryId, getDataRoot(), getPortableRoot());
+  notifyFsChanged(relativePath);
+  return result;
+});
 
 ipcMain.handle('editors:getStatus', async () => getEditorCoresStatus(getPortableRoot(), getInstallRoot()));
 

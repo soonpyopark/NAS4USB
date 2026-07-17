@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Per-user MSI for NAS4USB (Electron).
+  Built by scripts/build-msi.mjs with:
+    -d ProductVersion=x.y.z.0 -d ProductCode={guid}
+    -bindpath <repo>/msi
+  Staged payload: msi/NAS4USB/**
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+  <Package
+    Name="NAS4USB"
+    Manufacturer="NAS4USB"
+    Version="$(ProductVersion)"
+    ProductCode="$(ProductCode)"
+    UpgradeCode="578A4F01-B61C-4CD9-9304-ACDC6E09A09C"
+    Scope="perUser"
+    Compressed="yes">
+
+    <SummaryInformation Description="NAS4USB — Offline LAN NAS &amp; real-time collaborative editor" />
+
+    <MajorUpgrade
+      AllowSameVersionUpgrades="yes"
+      Schedule="afterInstallInitialize"
+      DowngradeErrorMessage="Newer version of NAS4USB is already installed." />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <Icon Id="AppIcon.ico" SourceFile="NAS4USB\app-icon.ico" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon.ico" />
+    <Property Id="ARPURLINFOABOUT" Value="https://note4all.tistory.com" />
+
+    <ui:WixUI Id="WixUI_Minimal" />
+    <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
+
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="INSTALLFOLDER" Name="NAS4USB" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ApplicationProgramsFolder" Name="NAS4USB" />
+    </StandardDirectory>
+
+    <StandardDirectory Id="DesktopFolder" />
+
+    <Feature Id="ProductFeature" Title="NAS4USB" Level="1">
+      <!-- Mutable app data (data/, settings, history) is created at first launch —
+           build-msi.mjs excludes it from staging so Windows Installer never harvests/locks it. -->
+      <Files Directory="INSTALLFOLDER" Include="NAS4USB\**" />
+
+      <Component
+        Id="StartMenuShortcut"
+        Directory="ApplicationProgramsFolder"
+        Guid="557F6264-E7A0-41F6-861F-A6DF06513923">
+        <Shortcut
+          Id="StartMenuShortcutLink"
+          Name="NAS4USB"
+          Description="NAS4USB"
+          Target="[INSTALLFOLDER]NAS4USB.exe"
+          WorkingDirectory="INSTALLFOLDER"
+          Icon="AppIcon.ico" />
+        <RemoveFolder Id="RemoveApplicationProgramsFolder" Directory="ApplicationProgramsFolder" On="uninstall" />
+        <RegistryValue
+          Root="HKCU"
+          Key="Software\NAS4USB\NAS4USB"
+          Name="StartMenuShortcut"
+          Type="integer"
+          Value="1"
+          KeyPath="yes" />
+      </Component>
+
+      <Component
+        Id="DesktopShortcut"
+        Directory="DesktopFolder"
+        Guid="CD8ABB9F-30CB-491C-B631-6A8255521E8B">
+        <Shortcut
+          Id="DesktopShortcutLink"
+          Name="NAS4USB"
+          Description="NAS4USB"
+          Target="[INSTALLFOLDER]NAS4USB.exe"
+          WorkingDirectory="INSTALLFOLDER"
+          Icon="AppIcon.ico" />
+        <RegistryValue
+          Root="HKCU"
+          Key="Software\NAS4USB\NAS4USB"
+          Name="DesktopShortcut"
+          Type="integer"
+          Value="1"
+          KeyPath="yes" />
+      </Component>
+    </Feature>
+  </Package>
+</Wix>

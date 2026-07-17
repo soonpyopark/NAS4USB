@@ -4,7 +4,7 @@
       "id": "member-bootstrap-admin",
       "loginId": "admin",
       "displayName": "admin",
-      "passwordHash": "5820c168393301bc70ddb70be21249c58609bb369edd686b9347449c3fedf4a3",
+      "passwordHash": "76e2cb53ff8ae06c9a74c79e94449e50b8380691c813f1ad96bc3072310a1382",
       "role": "super_admin",
       "active": true,
       "permissions": {

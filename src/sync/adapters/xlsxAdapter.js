@@ -3,6 +3,16 @@ const DISK_SNAPSHOT_ORIGIN = Symbol('nas4usb-disk-snapshot');
 
 const SNAPSHOT_FLUSH_MS = 400;
 
+// FortuneSheet occasionally throws while applying a remote "addSheet"-style op (see
+// ErrorBoundary recovery in XlsxEditorShell.jsx), which forces this peer to remount and
+// re-bootstrap. If we bootstrap from the Yjs snapshot at that exact moment, the peer who
+// pushed the op may not have flushed their own (debounced) snapshot yet — bootstrapping
+// from a stale snapshot while marking the just-received op as "applied" silently drops
+// that change for this peer forever. Waiting briefly for a fresher snapshot closes that
+// race in the overwhelming majority of real-world (sub-second) sync latencies.
+const SNAPSHOT_STALE_WAIT_MS = 2000;
+const SNAPSHOT_OP_COUNT_KEY = 'workbook:snapshotOpCount';
+
 /**
  * @param {import('yjs').Map<string, unknown>} meta
  */
@@ -89,10 +99,12 @@ export function setWorkbookSnapshot(ydoc, sheets, { diskRevision } = {}) {
 
   const snapshotMap = getWorkbookSnapshotMap(ydoc);
   const meta = ydoc.getMap('meta');
+  const yops = getOpsArray(ydoc);
 
   try {
     ydoc.transact(() => {
       snapshotMap.set('sheets', JSON.stringify(sheets));
+      meta.set(SNAPSHOT_OP_COUNT_KEY, yops.length);
       if (diskRevision) {
         meta.set('workbook:diskRevision', diskRevision);
       }
@@ -158,6 +170,44 @@ export function bindFortuneSheetEditor(
   let applyingRemote = false;
   let appliedOpCount = 0;
   let snapshotFlushTimer = null;
+  let destroyed = false;
+
+  const getSnapshotOpCount = () => {
+    const value = meta.get(SNAPSHOT_OP_COUNT_KEY);
+    return typeof value === 'number' ? value : null;
+  };
+
+  /**
+   * Resolves once the snapshot's recorded op-count reaches `targetOpCount`, or after
+   * `timeoutMs` elapses — whichever comes first. Resolves immediately if the snapshot
+   * is already fresh enough, or if we've never seen a tracked op-count for this doc
+   * (legacy/pre-existing docs written before this tracking existed) so we don't stall
+   * every load of an older collaborative document.
+   * @param {number} targetOpCount
+   * @param {number} timeoutMs
+   */
+  const waitForFreshSnapshot = (targetOpCount, timeoutMs) => new Promise((resolve) => {
+    const current = getSnapshotOpCount();
+    if (current == null || current >= targetOpCount) {
+      resolve();
+      return;
+    }
+
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      meta.unobserve(onMetaChange);
+      window.clearTimeout(timer);
+      resolve();
+    };
+    function onMetaChange() {
+      const next = getSnapshotOpCount();
+      if (next != null && next >= targetOpCount) finish();
+    }
+    const timer = window.setTimeout(finish, timeoutMs);
+    meta.observe(onMetaChange);
+  });
 
   const flushSnapshot = () => {
     snapshotFlushTimer = null;
@@ -166,6 +216,7 @@ export function bindFortuneSheetEditor(
       if (!isFortuneSheetArray(sheets)) return;
       ydoc.transact(() => {
         snapshotMap.set('sheets', JSON.stringify(sheets));
+        meta.set(SNAPSHOT_OP_COUNT_KEY, yops.length);
       }, LOCAL_ORIGIN);
     } catch {
       // Ignore snapshots that cannot be serialized.
@@ -206,6 +257,7 @@ export function bindFortuneSheetEditor(
       ydoc.transact(() => {
         snapshotMap.set('sheets', JSON.stringify(sheets));
         meta.set('workbook:seeded', true);
+        meta.set(SNAPSHOT_OP_COUNT_KEY, yops.length);
         if (diskRevision) {
           meta.set('workbook:diskRevision', diskRevision);
         }
@@ -220,9 +272,23 @@ export function bindFortuneSheetEditor(
     writeDiskSnapshot(initialSheets);
   };
 
-  const bootstrapFromYjs = () => {
-    const snapshotSheets = readSnapshotSheets(snapshotMap);
+  const bootstrapFromYjs = async () => {
+    // Snapshot the target op-count *before* waiting — any ops pushed while we wait
+    // will simply be picked up by `observeOps` once bound, same as always.
+    const targetOpCount = yops.length;
     const diskCellCount = countSheetCells(initialSheets);
+    const preSnapshotSheets = readSnapshotSheets(snapshotMap);
+    const preferDisk = isFortuneSheetArray(initialSheets) && diskCellCount > 0
+      && (shouldPreferDiskContent(meta, diskRevision) || !preSnapshotSheets || countSheetCells(preSnapshotSheets) === 0);
+
+    // Only worth waiting when we're actually going to trust the Yjs snapshot below —
+    // if disk content wins anyway, or there's no ops yet, staleness is moot.
+    if (!preferDisk && targetOpCount > 0) {
+      await waitForFreshSnapshot(targetOpCount, SNAPSHOT_STALE_WAIT_MS);
+    }
+    if (destroyed) return;
+
+    const snapshotSheets = readSnapshotSheets(snapshotMap);
     const snapshotCellCount = countSheetCells(snapshotSheets);
 
     // Prefer newer disk content, or recover when the Yjs snapshot is empty but disk is not.
@@ -251,10 +317,13 @@ export function bindFortuneSheetEditor(
     }
 
     // The snapshot already reflects every op applied so far (each local/remote
-    // op schedules a snapshot flush), so replaying the full ops log on top of it
-    // would double-apply history and can corrupt sheets whose ids were
-    // regenerated on this load. Only ops pushed *after* we bootstrap need to be
-    // replayed, which `observeOps` handles going forward.
+    // op schedules a snapshot flush, and we just waited for that flush to land when
+    // it looked stale), so replaying the full ops log on top of it would double-apply
+    // history and can corrupt sheets whose ids were regenerated on this load. Only
+    // ops pushed *after* we bootstrap need to be replayed, which `observeOps` handles
+    // going forward. If the wait above timed out (peer never flushed — e.g. it
+    // disconnected), we fall back to whatever snapshot is available rather than
+    // replaying the op that's known to crash this reducer.
     appliedOpCount = yops.length;
   };
 
@@ -264,9 +333,20 @@ export function bindFortuneSheetEditor(
     replayRemoteOps(appliedOpCount);
   };
 
+  // Guards observeOps/resync from touching the editor before the initial bootstrap
+  // (which may be awaiting a fresher snapshot, see waitForFreshSnapshot) has actually
+  // established a base state — applying ops on top of nothing risks a fresh crash.
+  let bootstrapped = false;
+
   let cancelBootstrap = () => {};
   const runBootstrap = () => {
-    bootstrapFromYjs();
+    bootstrapFromYjs()
+      .catch(() => {
+        // Ignore — bootstrap already guards its own state mutations.
+      })
+      .finally(() => {
+        bootstrapped = true;
+      });
   };
 
   if (typeof editor.getMountElement === 'function' && !editor.getMountElement()) {
@@ -294,6 +374,7 @@ export function bindFortuneSheetEditor(
 
   const observeOps = (event) => {
     if (event.transaction.origin === LOCAL_ORIGIN) return;
+    if (!bootstrapped) return;
     replayRemoteOps(appliedOpCount);
   };
 
@@ -301,9 +382,11 @@ export function bindFortuneSheetEditor(
 
   const binder = {
     resync() {
+      if (!bootstrapped) return;
       resyncFromYjs();
     },
     destroy() {
+      destroyed = true;
       cancelBootstrap?.();
       if (snapshotFlushTimer) {
         window.clearTimeout(snapshotFlushTimer);

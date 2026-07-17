@@ -394,7 +394,15 @@ export default function FileExplorer({
       onNavigate(TRASH_FOLDER);
     }
 
-    await emptyTrash();
+    let emptyError = null;
+    try {
+      await emptyTrash();
+    } catch (err) {
+      // Some items may still be locked (e.g. just moved into trash on Windows) even after the
+      // backend's own retries — refresh below regardless so whatever *did* get deleted disappears,
+      // then surface the failure instead of leaving the user thinking nothing happened.
+      emptyError = err;
+    }
     clearSelection();
 
     if (wasInTrashView) {
@@ -402,6 +410,13 @@ export default function FileExplorer({
     }
 
     await refreshAll();
+
+    if (emptyError) {
+      await appAlert({
+        title: '휴지통 비우기 실패',
+        body: emptyError instanceof Error ? emptyError.message : '일부 항목을 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+      });
+    }
   };
 
   const handleCopy = (entry) => {

@@ -152,6 +152,30 @@ export async function mkdir(relativePath) {
   return true;
 }
 
+const DELETE_RETRY_CODES = new Set(['EBUSY', 'EPERM', 'EACCES', 'ENOTEMPTY', 'EMFILE', 'ENFILE']);
+
+/**
+ * A file just moved into the trash (or whose Y.js room we just purged) can briefly stay
+ * locked on Windows — the OS/AV scanner/websocket teardown hasn't released its handle yet.
+ * `fs.rm`'s own retry option only covers the recursive-directory path, so a single unlink can
+ * still throw EBUSY/EPERM on the very first attempt (this is the "휴지통 비우기 최초 1회 실패"
+ * symptom). Retrying briefly resolves it without requiring the user to click twice.
+ * @param {() => Promise<void>} action
+ */
+async function withDeleteRetry(action) {
+  const maxAttempts = 5;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      await action();
+      return;
+    } catch (error) {
+      const code = error && typeof error === 'object' && 'code' in error ? error.code : null;
+      if (attempt >= maxAttempts || !DELETE_RETRY_CODES.has(code)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 150 * attempt));
+    }
+  }
+}
+
 export async function deletePath(relativePath) {
   const { purgeYjsRoomsForPathTree } = await import('./yjsRoomTree.js');
   await purgeYjsRoomsForPathTree(relativePath);
@@ -166,9 +190,9 @@ export async function deletePath(relativePath) {
 
   try {
     if (stat.isDirectory()) {
-      await fs.rm(absolute, { recursive: true });
+      await withDeleteRetry(() => fs.rm(absolute, { recursive: true, maxRetries: 3, retryDelay: 150 }));
     } else {
-      await fs.unlink(absolute);
+      await withDeleteRetry(() => fs.unlink(absolute));
     }
   } catch (error) {
     throw toUserFsError(error);

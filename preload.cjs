@@ -91,6 +91,18 @@ contextBridge.exposeInMainWorld('nas4usb', {
       ipcRenderer.invoke('trash:deletePermanent', { path: relativePath }),
   },
 
+  history: {
+    list: (relativePath, shareToken) => ipcRenderer.invoke('history:list', relativePath, shareToken),
+    read: (relativePath, entryId, shareToken) =>
+      ipcRenderer.invoke('history:read', relativePath, entryId, shareToken),
+    readSidecar: (relativePath, entryId, shareToken) =>
+      ipcRenderer.invoke('history:readSidecar', relativePath, entryId, shareToken),
+    deleteEntry: (relativePath, entryId, shareToken) =>
+      ipcRenderer.invoke('history:delete', relativePath, entryId, shareToken),
+    restore: (relativePath, entryId, shareToken) =>
+      ipcRenderer.invoke('history:restore', relativePath, entryId, shareToken),
+  },
+
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),
     getGuestPermissions: () => ipcRenderer.invoke('settings:getGuestPermissions'),

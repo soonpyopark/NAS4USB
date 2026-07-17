@@ -18,6 +18,7 @@
     "build": "npm run prepare:icons && npm run build:rhwp-studio && npm run build:wb4s-editor && npm run prepare:wb4s-src && vite build",
     "build:dist:exe": "npm run prepare:icons && node scripts/build-dist-exe.mjs",
     "build:dist:mac": "npm run prepare:icons && node scripts/build-dist-mac.mjs",
+    "build:msi": "npm run prepare:icons && node scripts/build-msi.mjs",
     "update:all": "node scripts/update-all.mjs",
     "build:update_all": "update_all.bat _inner build",
     "start": "npm run build && electron .",

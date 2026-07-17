@@ -7,6 +7,9 @@ exe/
 exe_new/
 mac/
 usb/
+msi/NAS4USB/
+msi/*.msi
+msi/*.wixpdb
 *.log
 .DS_Store
 Thumbs.db

@@ -212,6 +212,18 @@ export async function removeBlockAssetsSidecar(blockRelativePath) {
 }
 
 /**
+ * @param {string} blockRelativePath
+ * @param {string} assetsDir
+ * @param {Set<string>} referenced
+ */
+async function readReferencedSidecarAssets(blockRelativePath, assetsDir, referenced) {
+  const allAssets = await readSidecarAssets(blockRelativePath);
+  return allAssets.filter((asset) =>
+    referenced.has(normalizeAssetPath(joinRelativePath(assetsDir, asset.fileName))),
+  );
+}
+
+/**
  * @param {{
  *   title: string,
  *   exportedAt?: string,
@@ -224,10 +236,18 @@ export async function packBlockFileFromSidecar(input) {
   const normalizedContent = normalizeBlockAssetUrls(input.content, input.blockRelativePath);
   const assetsDir = getBlockAssetsDir(input.blockRelativePath);
   const referenced = collectReferencedAssetPaths(normalizedContent, input.blockRelativePath);
-  const allAssets = await readSidecarAssets(input.blockRelativePath);
-  const assets = allAssets.filter((asset) =>
-    referenced.has(normalizeAssetPath(joinRelativePath(assetsDir, asset.fileName))),
-  );
+
+  let assets = await readReferencedSidecarAssets(input.blockRelativePath, assetsDir, referenced);
+
+  // Guard against a rare race where the sidecar directory listing doesn't yet reflect an
+  // asset that was just written moments earlier (e.g. an image upload whose fs.writeFile
+  // resolved just before this save) — retry a couple of times rather than silently packing a
+  // document whose image blocks point at nothing (permanently "losing" the picture).
+  for (let attempt = 0; attempt < 2 && assets.length < referenced.size; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    assets = await readReferencedSidecarAssets(input.blockRelativePath, assetsDir, referenced);
+  }
+
   const bytes = await packBlockPackage({
     title: input.title,
     exportedAt: input.exportedAt,

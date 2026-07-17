@@ -30,15 +30,18 @@ function clearXmlFragment(fragment) {
  *
  * @param {import('yjs').Doc} ydoc
  * @param {import('@blocknote/core').PartialBlock[]} blocks
- * @param {{ diskRevision?: string }} [options]
+ * @param {{ diskRevision?: string, force?: boolean }} [options]
  * @returns {boolean} whether seeding ran
  */
-export function seedBlocknoteRoomFromDisk(ydoc, blocks, { diskRevision = '' } = {}) {
+export function seedBlocknoteRoomFromDisk(ydoc, blocks, { diskRevision = '', force = false } = {}) {
   const meta = ydoc.getMap('meta');
   const fragment = ydoc.getXmlFragment(BLOCKNOTE_FRAGMENT);
-  const preferDisk = shouldPreferDiskContent(meta, diskRevision);
+  const preferDisk = force || shouldPreferDiskContent(meta, diskRevision);
   const fragmentEmpty = fragment.length === 0;
 
+  // `force` is used for explicit user actions (history restore) — the room may be mid
+  // WebSocket reconnect right after a server-side purge (see fileHistoryService.restoreFileHistoryEntry),
+  // so the usual "only seed if empty/stale" guards must not block an intentional overwrite.
   if (!preferDisk && !fragmentEmpty) return false;
   if (!preferDisk && meta.get(`${BLOCKNOTE_FRAGMENT}:seeded`)) return false;
 

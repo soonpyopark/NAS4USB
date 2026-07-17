@@ -278,6 +278,32 @@ export function createHttpNas4usbClient() {
         }),
     },
 
+    // The share token is already appended to every request URL by `buildApiUrl`, so it
+    // doesn't need to be forwarded explicitly here — the `shareToken` param only exists
+    // to keep the call signature identical to the Electron preload API.
+    history: {
+      list: (relativePath) =>
+        apiFetch(`/history/list?path=${encodeURIComponent(relativePath ?? '')}`),
+      read: (relativePath, entryId) =>
+        apiFetch(
+          `/history/read?path=${encodeURIComponent(relativePath ?? '')}&entryId=${encodeURIComponent(entryId ?? '')}`,
+        ),
+      readSidecar: (relativePath, entryId) =>
+        apiFetch(
+          `/history/readSidecar?path=${encodeURIComponent(relativePath ?? '')}&entryId=${encodeURIComponent(entryId ?? '')}`,
+        ),
+      deleteEntry: (relativePath, entryId) =>
+        apiFetch('/history/delete', {
+          method: 'POST',
+          body: JSON.stringify({ path: relativePath, entryId }),
+        }),
+      restore: (relativePath, entryId) =>
+        apiFetch('/history/restore', {
+          method: 'POST',
+          body: JSON.stringify({ path: relativePath, entryId }),
+        }),
+    },
+
     settings: {
       get: () => apiFetch('/settings'),
       getGuestPermissions: () => apiFetch('/settings/guest-permissions'),

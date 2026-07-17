@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import EditorModal from './EditorModal.jsx';
+import HistoryModal from './HistoryModal.jsx';
 import { useYjsSession } from '../../hooks/useYjsSession.js';
 import { useAwarenessPeerCount } from '../../hooks/useAwarenessPeerCount.js';
 import { useWorkspaceSession } from '../../hooks/useWorkspaceSession.js';
@@ -31,6 +32,7 @@ export default function HwpxEditorShell({
   const [editorReady, setEditorReady] = useState(false);
   const [editorHandle, setEditorHandle] = useState(null);
   const [bound, setBound] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const mountRef = useRef(null);
   const unbindRef = useRef(null);
   const hwpxBase64Ref = useRef('');
@@ -218,6 +220,21 @@ export default function HwpxEditorShell({
     onClose();
   };
 
+  // Restore already overwrote the file on disk (and archived the pre-restore state) —
+  // push the restored bytes into the live rhwp handle + Y.doc snapshot, mirroring handleSave.
+  const handleRestoreHistory = async (base64) => {
+    await editorHandle?.setHwpxBase64?.(base64, 'restore');
+    hwpxBase64Ref.current = base64;
+    await workspace.writeBinary(base64);
+    try {
+      const statInfo = await window.nas4usb.fs.stat(relativePath);
+      diskRevisionRef.current = statInfo?.modifiedAt ?? '';
+      if (doc) setTextDiskRevision(doc, 'documentBase64', diskRevisionRef.current);
+    } catch {
+      // diskRevision is optional
+    }
+  };
+
   const peerCount = useAwarenessPeerCount(provider);
   const remotePeerCount = peerCount != null ? Math.max(0, peerCount - 1) : null;
   const lanEndpoints = getLanWsEndpoints(syncInfo, roomId).join(' · ');
@@ -225,52 +242,65 @@ export default function HwpxEditorShell({
   const waitingSync = editorReady && Boolean(editorHandle) && Boolean(doc) && !bound;
 
   return (
-    <EditorModal
-      title={fileName}
-      subtitle={`HWPX · room ${roomId} · ${lanEndpoints}`}
-      status={status}
-      synced={synced}
-      peerCount={peerCount}
-      saving={saving}
-      saveDisabled={shareReadOnly || waitingSync}
-      hideSave={shareReadOnly}
-      onSave={handleSave}
-      onClose={handleClose}
-      allowClose={allowClose}
-      fullscreen={fullscreen}
-    >
-      {(workspace.error || loadError) && (
-        <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
-          {workspace.error || loadError}
-        </div>
-      )}
-
-      <div className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs text-nas-muted">
-        {shareReadOnly
-          ? `rhwp ${RHWP_VERSION} · 공유(보기 전용) · 편집·저장 불가`
-          : loadError
-            ? 'rhwp 로드 실패'
-            : editorHandle
-              ? waitingSync
-                ? `rhwp ${RHWP_VERSION} · rhwp-studio · Y.js 연결 중…`
-                : remotePeerCount != null && remotePeerCount > 0
-                  ? `rhwp ${RHWP_VERSION} · rhwp-studio · LAN 협업 편집 (협업자 ${remotePeerCount}명 · room ${roomId})`
-                  : `rhwp ${RHWP_VERSION} · rhwp-studio · HWPX LAN 협업 편집 · room ${roomId} · 작성 내용 저장 시 HWPX 유지`
-              : `rhwp ${RHWP_VERSION} · rhwp-studio 초기화 중…`}
-      </div>
-
-      <div className="relative flex min-h-0 flex-1 flex-col">
-        {isLoading && (
-          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-white/80 text-sm text-nas-muted">
-            <span>{loadingStatus || 'HWPX 로드 및 rhwp-studio 마운트 중…'}</span>
-            <span className="text-xs text-slate-400">
-              WASM 초기화·문서 렌더링 중입니다. 큰 문서는 최대 3분까지 걸릴 수 있습니다.
-            </span>
+    <>
+      <EditorModal
+        title={fileName}
+        subtitle={`HWPX · room ${roomId} · ${lanEndpoints}`}
+        status={status}
+        synced={synced}
+        peerCount={peerCount}
+        saving={saving}
+        saveDisabled={shareReadOnly || waitingSync}
+        hideSave={shareReadOnly}
+        hideHistory={shareReadOnly}
+        onShowHistory={() => setShowHistory(true)}
+        onSave={handleSave}
+        onClose={handleClose}
+        allowClose={allowClose}
+        fullscreen={fullscreen}
+      >
+        {(workspace.error || loadError) && (
+          <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
+            {workspace.error || loadError}
           </div>
         )}
 
-        <div ref={mountRef} className="min-h-0 flex-1 overflow-hidden" />
-      </div>
-    </EditorModal>
+        <div className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs text-nas-muted">
+          {shareReadOnly
+            ? `rhwp ${RHWP_VERSION} · 공유(보기 전용) · 편집·저장 불가`
+            : loadError
+              ? 'rhwp 로드 실패'
+              : editorHandle
+                ? waitingSync
+                  ? `rhwp ${RHWP_VERSION} · rhwp-studio · Y.js 연결 중…`
+                  : remotePeerCount != null && remotePeerCount > 0
+                    ? `rhwp ${RHWP_VERSION} · rhwp-studio · LAN 협업 편집 (협업자 ${remotePeerCount}명 · room ${roomId})`
+                    : `rhwp ${RHWP_VERSION} · rhwp-studio · HWPX LAN 협업 편집 · room ${roomId} · 작성 내용 저장 시 HWPX 유지`
+                : `rhwp ${RHWP_VERSION} · rhwp-studio 초기화 중…`}
+        </div>
+
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          {isLoading && (
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-white/80 text-sm text-nas-muted">
+              <span>{loadingStatus || 'HWPX 로드 및 rhwp-studio 마운트 중…'}</span>
+              <span className="text-xs text-slate-400">
+                WASM 초기화·문서 렌더링 중입니다. 큰 문서는 최대 3분까지 걸릴 수 있습니다.
+              </span>
+            </div>
+          )}
+
+          <div ref={mountRef} className="min-h-0 flex-1 overflow-hidden" />
+        </div>
+      </EditorModal>
+
+      <HistoryModal
+        open={showHistory}
+        onClose={() => setShowHistory(false)}
+        relativePath={relativePath}
+        fileName={fileName}
+        extension="hwpx"
+        onRestored={handleRestoreHistory}
+      />
+    </>
   );
 }

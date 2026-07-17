@@ -33,22 +33,30 @@ export async function setShareLinkForEntry({
 }
 
 /**
+ * Shows the link-copy dialog for an entry that *already* has an active share link
+ * (e.g. clicking its 공유(편집 가능)/공유(보기 전용) badge). Must not change the
+ * existing share mode — it only reads the current token, it never calls
+ * `share.setMode`, otherwise clicking the edit-mode badge would silently downgrade
+ * the link to view-only.
  * @param {{
  *   entry: { relativePath: string, name?: string, isDirectory?: boolean },
  *   syncInfo: { port?: number, addresses?: string[] } | null | undefined,
- *   shareMap: Record<string, { token?: string }>,
+ *   shareMap: Record<string, { token?: string, mode?: string }>,
  *   refreshShareMap: () => Promise<void>,
  * }} options
  * @returns {Promise<{ url: string, fileName?: string, entry: { relativePath: string, name?: string } }>}
  */
-export async function openShareLinkForEntry({ entry, syncInfo, shareMap, refreshShareMap }) {
-  return setShareLinkForEntry({
+export async function openShareLinkForEntry({ entry, syncInfo, shareMap }) {
+  const existing = shareMap?.[entry.relativePath];
+  if (!existing?.token) {
+    throw new Error('이 파일에 활성화된 공유링크가 없습니다.');
+  }
+
+  return {
+    url: buildShareLinkUrl(existing.token, syncInfo),
+    fileName: entry.name,
     entry,
-    mode: SHARE_LINK_MODE_VIEW,
-    syncInfo,
-    shareMap,
-    refreshShareMap,
-  });
+  };
 }
 
 /**

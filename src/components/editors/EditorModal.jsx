@@ -41,6 +41,8 @@ export default function EditorModal({
   onClose,
   allowClose = true,
   fullscreen = false,
+  hideHistory = false,
+  onShowHistory,
   children,
 }) {
   return (
@@ -59,9 +61,12 @@ export default function EditorModal({
         />
 
         <AppModalActions className="modal-editor-header__actions !mb-0 shrink-0">
+          {!hideHistory && (
+            <AppModalButton onClick={onShowHistory}>이력보기</AppModalButton>
+          )}
           {!hideSave && (
             <AppModalButton variant="primary" onClick={onSave} disabled={saving || saveDisabled}>
-              {saving ? '저장 중…' : '작성 내용 저장'}
+              {saving ? '저장 중…' : '이력저장'}
             </AppModalButton>
           )}
           {allowClose && <AppModalButton onClick={onClose}>닫기</AppModalButton>}
