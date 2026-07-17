@@ -1,12 +1,30 @@
 {
   "members": [
     {
+      "id": "member-bootstrap-admin",
+      "loginId": "admin",
+      "displayName": "admin",
+      "passwordHash": "5820c168393301bc70ddb70be21249c58609bb369edd686b9347449c3fedf4a3",
+      "role": "super_admin",
+      "active": true,
+      "permissions": {
+        "view": true,
+        "read": true,
+        "write": true
+      }
+    },
+    {
       "id": "member-80d319ed",
       "loginId": "subadmin",
       "displayName": "subadmin",
       "passwordHash": "4f26df273004e2f93a68344e7ad82b3c9239deaacc6a356acd6904ddeefdf462",
       "role": "member",
-      "active": true
+      "active": true,
+      "permissions": {
+        "view": true,
+        "read": true,
+        "write": true
+      }
     }
   ]
 }

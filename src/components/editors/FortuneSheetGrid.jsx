@@ -21,6 +21,7 @@ import { cloneFortuneSheets } from '../../lib/xlsx/cloneFortuneSheets.js';
  */
 export default function FortuneSheetGrid({ initialSheets, onReady }) {
   const [sheets, setSheets] = useState(() => cloneFortuneSheets(initialSheets));
+  const [workbookEpoch, setWorkbookEpoch] = useState(0);
   const sheetsRef = useRef(initialSheets);
   const applyingRemoteRef = useRef(false);
   const listenersRef = useRef(new Set());
@@ -42,6 +43,8 @@ export default function FortuneSheetGrid({ initialSheets, onReady }) {
     const mutableSheets = cloneFortuneSheets(nextSheets);
     sheetsRef.current = mutableSheets;
     setSheets(mutableSheets);
+    // Workbook only expands celldata on mount; force remount for full snapshot replaces.
+    setWorkbookEpoch((epoch) => epoch + 1);
   }, []);
 
   const applyOp = useCallback((ops) => {
@@ -91,6 +94,8 @@ export default function FortuneSheetGrid({ initialSheets, onReady }) {
     sheetsRef.current = mutableSheets;
     setSheets(mutableSheets);
     readyRef.current = false;
+    // Remount Workbook so celldata→data init runs for the new document.
+    setWorkbookEpoch((epoch) => epoch + 1);
   }, [initialSheets]);
 
   useEffect(() => {
@@ -134,6 +139,7 @@ export default function FortuneSheetGrid({ initialSheets, onReady }) {
   return (
     <div ref={hostRef} className="fortune-sheet-host relative min-h-0 flex-1">
       <Workbook
+        key={workbookEpoch}
         ref={workbookRef}
         data={sheets}
         onChange={handleChange}

@@ -2,7 +2,7 @@
 export const DEFAULT_SYNC_PORT = 3008;
 
 /** Application display version. */
-export const APP_VERSION = '1.0.2';
+export const APP_VERSION = '1.0.3';
 
 /** Application display name. */
 export const APP_NAME = 'NAS4USB';

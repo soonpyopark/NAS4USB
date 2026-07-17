@@ -72,6 +72,7 @@ window.nas4usb = {
   },
   editors: {
     getStatus: () => {},
+    update: () => {},
   },
   auth: {
     login: ({ id, password }) => {},
@@ -102,6 +103,7 @@ window.nas4usb = {
   },
   members: {
     list: () => {},
+    export: () => {},
     save: (payload) => {},
   },
 };

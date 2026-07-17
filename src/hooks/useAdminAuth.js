@@ -7,13 +7,83 @@ import {
 
 const ADMIN_ID_STORAGE_KEY = 'nas4usb.adminSession';
 const ADMIN_TOKEN_STORAGE_KEY = 'nas4usb.adminToken';
+const ADMIN_ROLE_STORAGE_KEY = 'nas4usb.adminRole';
+const ADMIN_REMEMBER_KEY = 'nas4usb.adminRemember';
+
+/**
+ * @param {string} key
+ * @param {string} [legacyKey]
+ */
+function readAuthValue(key, legacyKey) {
+  try {
+    const fromLocal = localStorage.getItem(key);
+    if (fromLocal) return fromLocal;
+  } catch {
+    // ignore
+  }
+  return readStorageWithLegacy(sessionStorage, key, legacyKey);
+}
+
+function clearAuthValue(key) {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // ignore
+  }
+  try {
+    sessionStorage.removeItem(key);
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * @param {boolean} rememberMe
+ * @param {string} adminId
+ * @param {string} token
+ * @param {string} [role]
+ */
+function writeAuthSession(rememberMe, adminId, token, role = '') {
+  const primary = rememberMe ? localStorage : sessionStorage;
+  const secondary = rememberMe ? sessionStorage : localStorage;
+  const normalizedRole = role === 'super_admin' ? 'super_admin' : role === 'member' ? 'member' : '';
+  try {
+    primary.setItem(ADMIN_ID_STORAGE_KEY, adminId);
+    primary.setItem(ADMIN_TOKEN_STORAGE_KEY, token);
+    if (normalizedRole) {
+      primary.setItem(ADMIN_ROLE_STORAGE_KEY, normalizedRole);
+    } else {
+      primary.removeItem(ADMIN_ROLE_STORAGE_KEY);
+    }
+    localStorage.setItem(ADMIN_REMEMBER_KEY, rememberMe ? '1' : '0');
+  } catch {
+    // ignore
+  }
+  try {
+    secondary.removeItem(ADMIN_ID_STORAGE_KEY);
+    secondary.removeItem(ADMIN_TOKEN_STORAGE_KEY);
+    secondary.removeItem(ADMIN_ROLE_STORAGE_KEY);
+  } catch {
+    // ignore
+  }
+}
 
 function readStoredAdminId() {
-  return readStorageWithLegacy(sessionStorage, ADMIN_ID_STORAGE_KEY, LEGACY_ADMIN_ID_STORAGE_KEY);
+  return (
+    readAuthValue(ADMIN_ID_STORAGE_KEY, LEGACY_ADMIN_ID_STORAGE_KEY) ||
+    readStorageWithLegacy(sessionStorage, ADMIN_ID_STORAGE_KEY, LEGACY_ADMIN_ID_STORAGE_KEY)
+  );
 }
 
 function readStoredAdminToken() {
-  return readStorageWithLegacy(sessionStorage, ADMIN_TOKEN_STORAGE_KEY, LEGACY_ADMIN_TOKEN_STORAGE_KEY);
+  return (
+    readAuthValue(ADMIN_TOKEN_STORAGE_KEY, LEGACY_ADMIN_TOKEN_STORAGE_KEY) ||
+    readStorageWithLegacy(sessionStorage, ADMIN_TOKEN_STORAGE_KEY, LEGACY_ADMIN_TOKEN_STORAGE_KEY)
+  );
+}
+
+function readStoredAdminRole() {
+  return readAuthValue(ADMIN_ROLE_STORAGE_KEY) || '';
 }
 
 async function bindAdminToken(token) {
@@ -46,6 +116,7 @@ async function logoutAdminSession(token) {
 export function useAdminAuth({ onAuthChange } = {}) {
   const [adminId, setAdminId] = useState(readStoredAdminId);
   const [adminToken, setAdminToken] = useState(readStoredAdminToken);
+  const [role, setRole] = useState(readStoredAdminRole);
   const [loggingIn, setLoggingIn] = useState(false);
   const [error, setError] = useState('');
 
@@ -55,7 +126,7 @@ export function useAdminAuth({ onAuthChange } = {}) {
   }, []);
 
   const login = useCallback(
-    async (id, password) => {
+    async (id, password, rememberMe = true) => {
       setLoggingIn(true);
       setError('');
 
@@ -71,10 +142,11 @@ export function useAdminAuth({ onAuthChange } = {}) {
         }
 
         const token = result.token ?? '';
-        sessionStorage.setItem(ADMIN_ID_STORAGE_KEY, result.adminId);
-        sessionStorage.setItem(ADMIN_TOKEN_STORAGE_KEY, token);
+        const nextRole = result.role === 'super_admin' ? 'super_admin' : 'member';
+        writeAuthSession(Boolean(rememberMe), result.adminId, token, nextRole);
         setAdminId(result.adminId);
         setAdminToken(token);
+        setRole(nextRole);
         setLoggingIn(false);
         await bindAdminToken(token);
         onAuthChange?.();
@@ -92,20 +164,32 @@ export function useAdminAuth({ onAuthChange } = {}) {
   const logout = useCallback(async () => {
     const token = readStoredAdminToken();
     await logoutAdminSession(token);
-    sessionStorage.removeItem(ADMIN_ID_STORAGE_KEY);
-    sessionStorage.removeItem(ADMIN_TOKEN_STORAGE_KEY);
+    clearAuthValue(ADMIN_ID_STORAGE_KEY);
+    clearAuthValue(ADMIN_TOKEN_STORAGE_KEY);
+    clearAuthValue(ADMIN_ROLE_STORAGE_KEY);
+    try {
+      localStorage.removeItem(ADMIN_REMEMBER_KEY);
+    } catch {
+      // ignore
+    }
     await bindAdminToken('');
     setAdminId('');
     setAdminToken('');
+    setRole('');
     setError('');
     onAuthChange?.();
   }, [onAuthChange]);
 
+  const isLoggedIn = Boolean(adminId);
+  const isSuperAdmin = isLoggedIn && role === 'super_admin';
+
   return {
     adminId,
     adminToken,
-    isLoggedIn: Boolean(adminId),
-    isAdminLoggedIn: Boolean(adminId),
+    role,
+    isLoggedIn,
+    isAdminLoggedIn: isLoggedIn,
+    isSuperAdmin,
     login,
     logout,
     loggingIn,

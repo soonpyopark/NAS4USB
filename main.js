@@ -23,7 +23,7 @@ import {
   getSyncPort,
   getLocalIPv4Addresses,
 } from './electron/syncServer.js';
-import { resolveServerEnv, resolveDataRoot, isDefaultDataRoot } from './electron/envConfig.js';
+import { resolveServerEnv, resolveDataRoot } from './electron/envConfig.js';
 import { resolvePortableRoot } from './electron/portablePaths.js';
 import {
   closeWorkspace,
@@ -36,10 +36,17 @@ import {
   saveWorkspace,
   writeWorkspaceFile,
 } from './electron/tempWorkspace.js';
-import { getEditorCoresStatus } from './electron/editorUpdater.js';
-import { loginAdmin, isValidAdminSession, revokeAdminSession } from './electron/authService.js';
+import { getEditorCoresStatus, updateEditorCores } from './electron/editorUpdater.js';
+import {
+  loginAdmin,
+  isValidAdminSession,
+  revokeAdminSession,
+  getAdminSession,
+  isSuperAdminSession,
+} from './electron/authService.js';
 import {
   assertAdminAuthenticated,
+  assertSuperAdminAuthenticated,
   assertCanAccessTrash,
   assertCanAccessFile,
   assertCanEditFile,
@@ -80,7 +87,12 @@ import {
   trashPath,
 } from './electron/trashService.js';
 import { getAppSettings, getAccessPermissionsBundle, getEffectiveAccessPermissions, updateAppSettings } from './electron/settingsService.js';
-import { listMembers, saveMembersPayload } from './electron/membersService.js';
+import {
+  listMembers,
+  saveMembersPayload,
+  ensureBootstrapAdmin,
+  getMembersExportRecords,
+} from './electron/membersService.js';
 import {
   syncFortuneSidecarCopy,
   syncFortuneSidecarDelete,
@@ -449,10 +461,30 @@ const adminTokenBySender = new Map();
 
 /**
  * @param {import('electron').IpcMainInvokeEvent} event
+ * @returns {{ isLoggedIn: boolean, loginId: string | null }}
+ */
+function getAccessAuthFromEvent(event) {
+  const token = adminTokenBySender.get(event.sender.id);
+  const session = getAdminSession(token);
+  return {
+    isLoggedIn: Boolean(session),
+    loginId: session?.adminId ?? null,
+  };
+}
+
+/**
+ * @param {import('electron').IpcMainInvokeEvent} event
  */
 function isAdminFromEvent(event) {
+  return getAccessAuthFromEvent(event).isLoggedIn;
+}
+
+/**
+ * @param {import('electron').IpcMainInvokeEvent} event
+ */
+function isSuperAdminFromEvent(event) {
   const token = adminTokenBySender.get(event.sender.id);
-  return isValidAdminSession(token);
+  return isSuperAdminSession(token);
 }
 
 /** @type {Map<number, string>} */
@@ -491,18 +523,18 @@ ipcMain.handle('auth:logout', (event) => {
 });
 
 ipcMain.handle('fs:readDir', async (event, relativePath = '.') =>
-  readDirWithAccessFilter(relativePath, isAdminFromEvent(event), getPortableRoot()),
+  readDirWithAccessFilter(relativePath, getAccessAuthFromEvent(event), getPortableRoot()),
 );
 
 ipcMain.handle('fs:mkdir', async (event, relativePath) => {
-  await assertGuestCanWrite(isAdminFromEvent(event));
+  await assertCanEditFile(relativePath, getAccessAuthFromEvent(event), getShareTokenFromEvent(event));
   const result = await fsService.mkdir(relativePath);
   notifyFsChanged(relativePath);
   return result;
 });
 
 ipcMain.handle('fs:rename', async (event, fromRelative, toRelative) => {
-  await assertGuestCanWrite(isAdminFromEvent(event));
+  await assertGuestCanWrite(getAccessAuthFromEvent(event));
   await syncSharePathRename(fromRelative, toRelative, getPortableRoot());
   await syncFileAccessRename(fromRelative, toRelative, getPortableRoot());
   await syncFavoritesRename(fromRelative, toRelative, getPortableRoot());
@@ -513,7 +545,7 @@ ipcMain.handle('fs:rename', async (event, fromRelative, toRelative) => {
 });
 
 ipcMain.handle('fs:delete', async (event, relativePath) => {
-  await assertGuestCanWrite(isAdminFromEvent(event));
+  await assertGuestCanWrite(getAccessAuthFromEvent(event));
   if (isFortuneSidecarRelativePath(relativePath)) {
     throw new Error('FortuneSheet 편집용 보조 파일입니다. 연결된 스프레드시트를 삭제해 주세요.');
   }
@@ -527,22 +559,22 @@ ipcMain.handle('fs:delete', async (event, relativePath) => {
 });
 
 ipcMain.handle('fs:exists', async (event, relativePath) =>
-  pathExistsWithAccessFilter(relativePath, isAdminFromEvent(event), getShareTokenFromEvent(event)),
+  pathExistsWithAccessFilter(relativePath, getAccessAuthFromEvent(event), getShareTokenFromEvent(event)),
 );
 
 ipcMain.handle('fs:readFile', async (event, relativePath) =>
-  readFileBase64WithAccessFilter(relativePath, isAdminFromEvent(event), getShareTokenFromEvent(event)),
+  readFileBase64WithAccessFilter(relativePath, getAccessAuthFromEvent(event), getShareTokenFromEvent(event)),
 );
 
 ipcMain.handle('fs:writeFile', async (event, relativePath, base64 = '') => {
-  await assertGuestCanWrite(isAdminFromEvent(event));
+  await assertCanEditFile(relativePath, getAccessAuthFromEvent(event), getShareTokenFromEvent(event));
   const result = await fsService.writeFileBase64(relativePath, base64);
   notifyFsChanged(relativePath);
   return result;
 });
 
 ipcMain.handle('fs:copy', async (event, fromRelative, toRelative) => {
-  await assertGuestCanWrite(isAdminFromEvent(event));
+  await assertGuestCanWrite(getAccessAuthFromEvent(event));
   const result = await fsService.copyPath(fromRelative, toRelative);
   await syncFortuneSidecarCopy(fromRelative, toRelative);
   notifyFsChanged([fromRelative, toRelative]);
@@ -550,7 +582,7 @@ ipcMain.handle('fs:copy', async (event, fromRelative, toRelative) => {
 });
 
 ipcMain.handle('fs:move', async (event, fromRelative, toRelative) => {
-  await assertGuestCanWrite(isAdminFromEvent(event));
+  await assertGuestCanWrite(getAccessAuthFromEvent(event));
   await syncSharePathRename(fromRelative, toRelative, getPortableRoot());
   await syncFileAccessRename(fromRelative, toRelative, getPortableRoot());
   await syncFavoritesRename(fromRelative, toRelative, getPortableRoot());
@@ -561,7 +593,7 @@ ipcMain.handle('fs:move', async (event, fromRelative, toRelative) => {
 });
 
 ipcMain.handle('fs:stat', async (event, relativePath) =>
-  statPathWithAccessFilter(relativePath, isAdminFromEvent(event), getShareTokenFromEvent(event)),
+  statPathWithAccessFilter(relativePath, getAccessAuthFromEvent(event), getShareTokenFromEvent(event)),
 );
 
 /**
@@ -574,7 +606,7 @@ function resolveShareTokenForSession(event, session) {
 
 ipcMain.handle('workspace:open', async (event, relativePath, shareToken) => {
   const token = shareToken || getShareTokenFromEvent(event);
-  await assertCanAccessFile(relativePath, isAdminFromEvent(event), token);
+  await assertCanAccessFile(relativePath, getAccessAuthFromEvent(event), token);
   return openWorkspace(relativePath, getDataRoot(), getTempPath(), { shareToken: token });
 });
 
@@ -582,9 +614,7 @@ ipcMain.handle('workspace:read', async (_event, sessionId) => readWorkspaceFile(
 
 ipcMain.handle('workspace:write', async (event, sessionId, base64) => {
   const session = getSession(sessionId);
-  await assertCanEditFile(
-    session.relativePath,
-    isAdminFromEvent(event),
+  await assertCanEditFile(session.relativePath, getAccessAuthFromEvent(event),
     resolveShareTokenForSession(event, session),
   );
   return writeWorkspaceFile(sessionId, base64);
@@ -592,9 +622,7 @@ ipcMain.handle('workspace:write', async (event, sessionId, base64) => {
 
 ipcMain.handle('workspace:commit', async (event, sessionId) => {
   const session = getSession(sessionId);
-  await assertCanEditFile(
-    session.relativePath,
-    isAdminFromEvent(event),
+  await assertCanEditFile(session.relativePath, getAccessAuthFromEvent(event),
     resolveShareTokenForSession(event, session),
   );
   const result = await commitWorkspace(sessionId, getDataRoot());
@@ -604,9 +632,7 @@ ipcMain.handle('workspace:commit', async (event, sessionId) => {
 
 ipcMain.handle('workspace:save', async (event, sessionId, base64) => {
   const session = getSession(sessionId);
-  await assertCanEditFile(
-    session.relativePath,
-    isAdminFromEvent(event),
+  await assertCanEditFile(session.relativePath, getAccessAuthFromEvent(event),
     resolveShareTokenForSession(event, session),
   );
   const result = await saveWorkspace(sessionId, base64, getDataRoot());
@@ -616,9 +642,7 @@ ipcMain.handle('workspace:save', async (event, sessionId, base64) => {
 
 ipcMain.handle('workspace:rename', async (event, sessionId, newRelativePath) => {
   const session = getSession(sessionId);
-  await assertCanEditFile(
-    session.relativePath,
-    isAdminFromEvent(event),
+  await assertCanEditFile(session.relativePath, getAccessAuthFromEvent(event),
     resolveShareTokenForSession(event, session),
   );
   const fromPath = session.relativePath;
@@ -634,6 +658,14 @@ ipcMain.handle('workspace:rename', async (event, sessionId, newRelativePath) => 
 ipcMain.handle('workspace:close', async (_event, sessionId) => closeWorkspace(sessionId));
 
 ipcMain.handle('editors:getStatus', async () => getEditorCoresStatus(getPortableRoot(), getInstallRoot()));
+
+ipcMain.handle('editors:update', async (event) => {
+  if (!isDev) {
+    throw new Error('에디터 업데이트는 개발 모드에서만 사용할 수 있습니다.');
+  }
+  assertAdminAuthenticated(isAdminFromEvent(event));
+  return updateEditorCores(getInstallRoot());
+});
 
 ipcMain.handle('auth:login', async (_event, { id, password } = {}) =>
   loginAdmin(id, password, getPortableRoot()),
@@ -671,8 +703,8 @@ ipcMain.handle('share:resolve', async (_event, { token } = {}) =>
 
 ipcMain.handle('fileAccess:getMap', async (event) => {
   const accessMap = await getFileAccessMap(getPortableRoot());
-  const isAdmin = isAdminFromEvent(event);
-  const perms = await getEffectiveAccessPermissions(isAdmin, getPortableRoot());
+  const auth = getAccessAuthFromEvent(event);
+  const perms = await getEffectiveAccessPermissions(auth, getPortableRoot());
   return filterFileAccessMap(accessMap, Boolean(perms.write));
 });
 
@@ -685,7 +717,7 @@ ipcMain.handle('fileAccess:set', async (event, { path: relativePath, visibility,
 
 ipcMain.handle('fileAccess:canEdit', async (event, relativePath) => {
   try {
-    await assertCanEditFile(relativePath, isAdminFromEvent(event), getShareTokenFromEvent(event));
+    await assertCanEditFile(relativePath, getAccessAuthFromEvent(event), getShareTokenFromEvent(event));
     return { canEdit: true };
   } catch (error) {
     return {
@@ -696,8 +728,8 @@ ipcMain.handle('fileAccess:canEdit', async (event, relativePath) => {
 });
 
 ipcMain.handle('favorites:getMap', async (event) => {
-  const isAdmin = isAdminFromEvent(event);
-  const perms = await getEffectiveAccessPermissions(isAdmin, getPortableRoot());
+  const auth = getAccessAuthFromEvent(event);
+  const perms = await getEffectiveAccessPermissions(auth, getPortableRoot());
   if (!perms.view && !perms.write) return {};
   if (perms.write) {
     return getFavoritesMap(getPortableRoot());
@@ -710,8 +742,8 @@ ipcMain.handle('favorites:getMap', async (event) => {
 });
 
 ipcMain.handle('favorites:listEntries', async (event) => {
-  const isAdmin = isAdminFromEvent(event);
-  const perms = await getEffectiveAccessPermissions(isAdmin, getPortableRoot());
+  const auth = getAccessAuthFromEvent(event);
+  const perms = await getEffectiveAccessPermissions(auth, getPortableRoot());
   if (!perms.view && !perms.write) return [];
   if (perms.write) {
     return listFavoriteEntries(getPortableRoot());
@@ -729,59 +761,68 @@ ipcMain.handle('favorites:set', async (event, { path: relativePath, favorited } 
 });
 
 ipcMain.handle('trash:getMap', async (event) => {
-  await assertCanAccessTrash(isAdminFromEvent(event));
+  await assertCanAccessTrash(getAccessAuthFromEvent(event));
   return getTrashMap(getPortableRoot());
 });
 
 ipcMain.handle('trash:move', async (event, { path: relativePath } = {}) => {
-  await assertGuestCanWrite(isAdminFromEvent(event));
+  await assertGuestCanWrite(getAccessAuthFromEvent(event));
   const result = await trashPath(relativePath, getPortableRoot());
   notifyFsChanged(relativePath);
   return result;
 });
 
 ipcMain.handle('trash:restore', async (event, { path: relativePath } = {}) => {
-  await assertCanAccessTrash(isAdminFromEvent(event));
+  await assertCanAccessTrash(getAccessAuthFromEvent(event));
   const result = await restorePath(relativePath, getPortableRoot());
   notifyFsChanged(relativePath);
   return result;
 });
 
 ipcMain.handle('trash:empty', async (event) => {
-  await assertCanAccessTrash(isAdminFromEvent(event));
+  await assertCanAccessTrash(getAccessAuthFromEvent(event));
   const result = await emptyTrash(getPortableRoot());
   notifyFsChanged();
   return result;
 });
 
 ipcMain.handle('trash:deletePermanent', async (event, { path: relativePath } = {}) => {
-  await assertCanAccessTrash(isAdminFromEvent(event));
+  await assertCanAccessTrash(getAccessAuthFromEvent(event));
   const result = await deletePermanent(relativePath, getPortableRoot());
   notifyFsChanged(relativePath);
   return result;
 });
 
 ipcMain.handle('settings:get', async (event) => {
-  assertAdminAuthenticated(isAdminFromEvent(event));
+  assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
   return getAppSettings(getPortableRoot());
 });
 
-ipcMain.handle('settings:getGuestPermissions', async () => getAccessPermissionsBundle(getPortableRoot()));
+ipcMain.handle('settings:getGuestPermissions', async (event) => getAccessPermissionsBundle(getPortableRoot(), getAccessAuthFromEvent(event)));
 
 ipcMain.handle('settings:update', async (event, patch = {}) => {
-  assertAdminAuthenticated(isAdminFromEvent(event));
+  assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
   const result = await updateAppSettings(patch, getPortableRoot());
   notifyFsChanged();
   return result;
 });
 
 ipcMain.handle('members:list', async (event) => {
-  assertAdminAuthenticated(isAdminFromEvent(event));
+  assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
   return listMembers(getPortableRoot());
 });
 
+ipcMain.handle('members:export', async (event) => {
+  assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
+  const settings = await getAppSettings(getPortableRoot());
+  return {
+    members: await getMembersExportRecords(getPortableRoot()),
+    guestPermissions: settings.guestPermissions,
+  };
+});
+
 ipcMain.handle('members:save', async (event, payload = {}) => {
-  assertAdminAuthenticated(isAdminFromEvent(event));
+  assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
   const result = await saveMembersPayload(payload, getPortableRoot());
   if (result.ok) notifyFsChanged();
   return result;
@@ -830,7 +871,12 @@ if (gotSingleInstanceLock) {
       }),
     });
 
-    await ensureDataRoot({ seedDefaultDepartment: isDefaultDataRoot(dataRoot, portableRoot) });
+    await ensureDataRoot();
+    try {
+      await ensureBootstrapAdmin(portableRoot);
+    } catch (err) {
+      console.warn('[auth] bootstrap admin seed failed:', err);
+    }
 
     try {
       await ensureServer();

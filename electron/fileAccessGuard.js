@@ -9,6 +9,11 @@ import { getFileAccessMap } from './fileAccessService.js';
 import { getEffectiveAccessPermissions } from './settingsService.js';
 import { resolveShareToken } from './shareLinkService.js';
 import { SHARE_LINK_MODE_EDIT } from '../shared/shareLinkModes.js';
+import {
+  getSpreadsheetPathForFortuneSidecar,
+  isFortuneSidecarRelativePath,
+} from '../shared/fortuneSheetSidecar.js';
+import { getBlockAssetSidecarPath } from '../shared/blockAssetPaths.js';
 
 const ACCESS_DENIED_MESSAGE = '이 파일에 접근할 권한이 없습니다.';
 export const EDIT_DENIED_MESSAGE = '공개된 문서만 편집할 수 있습니다.';
@@ -24,49 +29,74 @@ export const GUEST_READ_DENIED_MESSAGE = ACCESS_READ_DENIED_MESSAGE;
 export const GUEST_WRITE_DENIED_MESSAGE = ACCESS_WRITE_DENIED_MESSAGE;
 
 /**
+ * @typedef {import('./settingsService.js').AccessAuth} AccessAuth
+ */
+
+/**
  * @param {string} relativePath
- * @param {boolean} isAdminAuthenticated
  * @param {string | null | undefined} shareToken
  * @param {string} [portableRoot]
  */
+/**
+ * @param {string} relativePath
+ * @param {string} sharedRelativePath
+ */
+function isPathCoveredByShareLink(relativePath, sharedRelativePath) {
+  const normalizedPath = String(relativePath ?? '').replace(/\\/g, '/');
+  const sharedPath = String(sharedRelativePath ?? '').replace(/\\/g, '/');
+  if (!normalizedPath || !sharedPath) return false;
+  if (normalizedPath === sharedPath) return true;
+  // FortuneSheet sidecar (e.g. report.xlsx.fortune.json) for the shared spreadsheet
+  if (isFortuneSidecarRelativePath(normalizedPath)) {
+    return getSpreadsheetPathForFortuneSidecar(normalizedPath) === sharedPath;
+  }
+  // Block editor asset sidecar dir/files (e.g. Note.block.assets/image.png) for the shared block doc
+  const assetsDir = getBlockAssetSidecarPath(sharedPath);
+  if (normalizedPath === assetsDir || normalizedPath.startsWith(`${assetsDir}/`)) {
+    return true;
+  }
+  return false;
+}
+
 async function canAccessViaShareToken(relativePath, shareToken, portableRoot = getPortableRoot()) {
   if (!shareToken) return false;
   const entry = await resolveShareToken(shareToken, portableRoot);
-  return entry?.relativePath === String(relativePath ?? '').replace(/\\/g, '/');
+  if (!entry?.relativePath) return false;
+  return isPathCoveredByShareLink(relativePath, entry.relativePath);
 }
 
 /**
- * @param {boolean} isLoggedIn
+ * @param {AccessAuth} auth
  * @param {string} [portableRoot]
  */
-export async function assertCanWriteFs(isLoggedIn, portableRoot = getPortableRoot()) {
-  const perms = await getEffectiveAccessPermissions(isLoggedIn, portableRoot);
+export async function assertCanWriteFs(auth, portableRoot = getPortableRoot()) {
+  const perms = await getEffectiveAccessPermissions(auth, portableRoot);
   if (!perms.write) {
     throw new Error(ACCESS_WRITE_DENIED_MESSAGE);
   }
 }
 
 /** @deprecated use assertCanWriteFs */
-export async function assertGuestCanWrite(isLoggedIn, portableRoot = getPortableRoot()) {
-  return assertCanWriteFs(isLoggedIn, portableRoot);
+export async function assertGuestCanWrite(auth, portableRoot = getPortableRoot()) {
+  return assertCanWriteFs(auth, portableRoot);
 }
 
 /**
  * @param {string} relativePath
- * @param {boolean} isLoggedIn
+ * @param {AccessAuth} auth
  * @param {string | null | undefined} [shareToken]
  * @param {string} [portableRoot]
  */
 export async function assertCanAccessFile(
   relativePath,
-  isLoggedIn,
+  auth,
   shareToken,
   portableRoot = getPortableRoot(),
 ) {
   const normalizedPath = String(relativePath ?? '').replace(/\\/g, '/');
   if (!normalizedPath || normalizedPath === '.') return;
 
-  const perms = await getEffectiveAccessPermissions(isLoggedIn, portableRoot);
+  const perms = await getEffectiveAccessPermissions(auth, portableRoot);
   const elevatedAccess = Boolean(perms.write);
 
   if (isTrashRelativePath(normalizedPath) && !elevatedAccess) {
@@ -89,42 +119,42 @@ export async function assertCanAccessFile(
 
 /**
  * @param {string} relativePath
- * @param {boolean} isLoggedIn
+ * @param {AccessAuth} auth
  * @param {string | null | undefined} [shareToken]
  * @param {string} [portableRoot]
  */
 export async function assertCanEditFile(
   relativePath,
-  isLoggedIn,
+  auth,
   shareToken,
   portableRoot = getPortableRoot(),
 ) {
-  await assertCanAccessFile(relativePath, isLoggedIn, shareToken, portableRoot);
+  await assertCanAccessFile(relativePath, auth, shareToken, portableRoot);
 
   const normalizedPath = String(relativePath ?? '').replace(/\\/g, '/');
   if (shareToken) {
     const sharedEntry = await resolveShareToken(shareToken, portableRoot);
-    if (sharedEntry?.relativePath === normalizedPath) {
+    if (sharedEntry && isPathCoveredByShareLink(normalizedPath, sharedEntry.relativePath)) {
       if (sharedEntry.mode === SHARE_LINK_MODE_EDIT) return;
       throw new Error(SHARE_VIEW_ONLY_MESSAGE);
     }
   }
 
-  await assertCanWriteFs(isLoggedIn, portableRoot);
+  await assertCanWriteFs(auth, portableRoot);
 }
 
 /**
  * @param {string} [relativePath]
- * @param {boolean} isLoggedIn
+ * @param {AccessAuth} auth
  * @param {string} [portableRoot]
  */
 export async function readDirWithAccessFilter(
   relativePath = '.',
-  isLoggedIn,
+  auth,
   portableRoot = getPortableRoot(),
 ) {
   const normalizedPath = String(relativePath ?? '.').replace(/\\/g, '/');
-  const perms = await getEffectiveAccessPermissions(isLoggedIn, portableRoot);
+  const perms = await getEffectiveAccessPermissions(auth, portableRoot);
   const elevatedAccess = Boolean(perms.write);
 
   if (isTrashRelativePath(normalizedPath) && !elevatedAccess) {
@@ -146,18 +176,18 @@ export async function readDirWithAccessFilter(
 
 /**
  * @param {string} relativePath
- * @param {boolean} isLoggedIn
+ * @param {AccessAuth} auth
  * @param {string | null | undefined} [shareToken]
  * @param {string} [portableRoot]
  */
 export async function pathExistsWithAccessFilter(
   relativePath,
-  isLoggedIn,
+  auth,
   shareToken,
   portableRoot = getPortableRoot(),
 ) {
   try {
-    await assertCanAccessFile(relativePath, isLoggedIn, shareToken, portableRoot);
+    await assertCanAccessFile(relativePath, auth, shareToken, portableRoot);
   } catch {
     return false;
   }
@@ -166,48 +196,59 @@ export async function pathExistsWithAccessFilter(
 
 export async function statPathWithAccessFilter(
   relativePath,
-  isLoggedIn,
+  auth,
   shareToken,
   portableRoot = getPortableRoot(),
 ) {
-  await assertCanAccessFile(relativePath, isLoggedIn, shareToken, portableRoot);
+  await assertCanAccessFile(relativePath, auth, shareToken, portableRoot);
   return fsService.statPath(relativePath);
 }
 
 export async function readFileBase64WithAccessFilter(
   relativePath,
-  isLoggedIn,
+  auth,
   shareToken,
   portableRoot = getPortableRoot(),
 ) {
-  await assertCanAccessFile(relativePath, isLoggedIn, shareToken, portableRoot);
+  await assertCanAccessFile(relativePath, auth, shareToken, portableRoot);
   return fsService.readFileBase64(relativePath);
 }
 
 export async function readFileBufferWithAccessFilter(
   relativePath,
-  isLoggedIn,
+  auth,
   shareToken,
   portableRoot = getPortableRoot(),
 ) {
-  await assertCanAccessFile(relativePath, isLoggedIn, shareToken, portableRoot);
+  await assertCanAccessFile(relativePath, auth, shareToken, portableRoot);
   return fsService.readFileBuffer(relativePath);
 }
 
 /**
- * @param {boolean} isAdminAuthenticated
+ * Any logged-in session (일반사용자 포함).
+ * @param {boolean} isAuthenticated
  */
-export function assertAdminAuthenticated(isAdminAuthenticated) {
-  if (!isAdminAuthenticated) {
-    throw new Error('총괄관리자 권한이 필요합니다.');
+export function assertAdminAuthenticated(isAuthenticated) {
+  if (!isAuthenticated) {
+    throw new Error('로그인이 필요합니다.');
   }
 }
 
 /**
- * 휴지통: 쓰기 권한이 있는 사용자(일반/로그인)
- * @param {boolean} isLoggedIn
+ * 총괄관리자(super_admin) 세션만 허용.
+ * @param {boolean} isSuperAdmin
+ */
+export function assertSuperAdminAuthenticated(isSuperAdmin) {
+  if (!isSuperAdmin) {
+    throw new Error('환경설정은 총괄관리자만 이용할 수 있습니다.');
+  }
+}
+
+/**
+ * 휴지통: 쓰기 권한이 있는 사용자
+ * @param {AccessAuth} auth
  * @param {string} [portableRoot]
  */
-export async function assertCanAccessTrash(isLoggedIn, portableRoot = getPortableRoot()) {
-  await assertCanWriteFs(isLoggedIn, portableRoot);
+export async function assertCanAccessTrash(auth, portableRoot = getPortableRoot()) {
+  await assertCanWriteFs(auth, portableRoot);
 }

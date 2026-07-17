@@ -12,6 +12,40 @@ function getSnapshotDiskRevision(meta) {
 }
 
 /**
+ * @param {import('yjs').Map<string, unknown>} meta
+ * @param {string | undefined} diskRevision
+ */
+function shouldPreferDiskContent(meta, diskRevision) {
+  if (!diskRevision) return false;
+  const snapshotRevision = getSnapshotDiskRevision(meta);
+  if (!snapshotRevision) return false;
+  return diskRevision > snapshotRevision;
+}
+
+/**
+ * @param {import('@fortune-sheet/core').Sheet[] | null | undefined} sheets
+ */
+function countSheetCells(sheets) {
+  if (!Array.isArray(sheets)) return 0;
+  let count = 0;
+  for (const sheet of sheets) {
+    if (!sheet || typeof sheet !== 'object') continue;
+    if (Array.isArray(sheet.celldata) && sheet.celldata.length > 0) {
+      count += sheet.celldata.length;
+      continue;
+    }
+    if (!Array.isArray(sheet.data)) continue;
+    for (const row of sheet.data) {
+      if (!Array.isArray(row)) continue;
+      for (const cell of row) {
+        if (cell != null) count += 1;
+      }
+    }
+  }
+  return count;
+}
+
+/**
  * @param {unknown} value
  * @returns {value is import('@fortune-sheet/core').Sheet[]}
  */
@@ -166,25 +200,49 @@ export function bindFortuneSheetEditor(
     appliedOpCount = yops.length;
   };
 
-  const seedSnapshotIfEmpty = () => {
-    if (snapshotMap.get('sheets') || !isFortuneSheetArray(initialSheets)) return;
-
+  const writeDiskSnapshot = (sheets) => {
+    if (!isFortuneSheetArray(sheets)) return;
     try {
       ydoc.transact(() => {
-        if (snapshotMap.get('sheets')) return;
-        snapshotMap.set('sheets', JSON.stringify(initialSheets));
+        snapshotMap.set('sheets', JSON.stringify(sheets));
         meta.set('workbook:seeded', true);
         if (diskRevision) {
           meta.set('workbook:diskRevision', diskRevision);
         }
-      }, 'seed');
+      }, DISK_SNAPSHOT_ORIGIN);
     } catch {
-      // Ignore invalid seed payloads.
+      // Ignore snapshots that cannot be serialized.
     }
+  };
+
+  const seedSnapshotIfEmpty = () => {
+    if (snapshotMap.get('sheets') || !isFortuneSheetArray(initialSheets)) return;
+    writeDiskSnapshot(initialSheets);
   };
 
   const bootstrapFromYjs = () => {
     const snapshotSheets = readSnapshotSheets(snapshotMap);
+    const diskCellCount = countSheetCells(initialSheets);
+    const snapshotCellCount = countSheetCells(snapshotSheets);
+
+    // Prefer newer disk content, or recover when the Yjs snapshot is empty but disk is not.
+    if (
+      isFortuneSheetArray(initialSheets)
+      && diskCellCount > 0
+      && (
+        shouldPreferDiskContent(meta, diskRevision)
+        || !snapshotSheets
+        || snapshotCellCount === 0
+      )
+    ) {
+      applySheetsSafely(editor, initialSheets, initialSheets);
+      if (!snapshotSheets || snapshotCellCount === 0 || shouldPreferDiskContent(meta, diskRevision)) {
+        writeDiskSnapshot(initialSheets);
+      }
+      appliedOpCount = yops.length;
+      return;
+    }
+
     if (snapshotSheets) {
       applySheetsSafely(editor, snapshotSheets, initialSheets);
     } else {
@@ -192,7 +250,12 @@ export function bindFortuneSheetEditor(
       seedSnapshotIfEmpty();
     }
 
-    replayRemoteOps(0);
+    // The snapshot already reflects every op applied so far (each local/remote
+    // op schedules a snapshot flush), so replaying the full ops log on top of it
+    // would double-apply history and can corrupt sheets whose ids were
+    // regenerated on this load. Only ops pushed *after* we bootstrap need to be
+    // replayed, which `observeOps` handles going forward.
+    appliedOpCount = yops.length;
   };
 
   const resyncFromYjs = () => {

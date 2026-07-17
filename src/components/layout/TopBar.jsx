@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useUserProfile } from '../../hooks/useUserProfile.js';
+import { useAdminAuthContext } from '../../context/AdminAuthContext.jsx';
 import { formatUserDisplayNameInput, USER_NAME_PREFIX } from '../../lib/userProfile.js';
 import { loadSyncHost, saveSyncHost } from '../../lib/syncHost.js';
 import { copyTextToClipboard } from '../../lib/shareLink.js';
@@ -9,6 +10,9 @@ import AppLogo from '../common/AppLogo.jsx';
 import SplashOverlay from '../common/SplashOverlay.jsx';
 import AdminLoginForm from './AdminLoginForm.jsx';
 import { nativeAlert, nativePrompt } from '../../lib/nativeDialog.js';
+
+const settingsIconBtnClass =
+  'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-transparent text-slate-500 transition-colors hover:border-slate-200 hover:bg-slate-100 hover:text-slate-800';
 
 function SyncBadge({ syncInfo, loading }) {
   const [copied, setCopied] = useState(false);
@@ -67,13 +71,13 @@ function SyncBadge({ syncInfo, loading }) {
   );
 }
 
-function BrandMark({ onHome }) {
+function BrandMark() {
   return (
     <button
       type="button"
-      title="홈"
-      aria-label="홈"
-      onClick={onHome}
+      title="새로고침"
+      aria-label="새로고침"
+      onClick={() => window.location.reload()}
       className="inline-flex shrink-0 items-center justify-center rounded-md transition-opacity hover:opacity-90"
     >
       <AppLogo size={32} />
@@ -121,8 +125,14 @@ function UserNameField({ loading, saving, displayName, readOnly, onChange, onCom
   );
 }
 
-export default function TopBar({ syncInfo, infoLoading, onHome }) {
+export default function TopBar({
+  syncInfo,
+  infoLoading,
+  onOpenSettings,
+  settingsOpen = false,
+}) {
   const userProfile = useUserProfile();
+  const { isSuperAdmin } = useAdminAuthContext();
   const [splashOpen, setSplashOpen] = useState(false);
 
   const userNameField = (
@@ -142,7 +152,7 @@ export default function TopBar({ syncInfo, infoLoading, onHome }) {
       <SplashOverlay open={splashOpen} onClose={() => setSplashOpen(false)} />
       <div className="nas-topbar flex min-w-0 items-center gap-3">
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <BrandMark onHome={onHome} />
+          <BrandMark />
 
           <button
             type="button"
@@ -158,6 +168,23 @@ export default function TopBar({ syncInfo, infoLoading, onHome }) {
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           <SyncBadge syncInfo={syncInfo} loading={infoLoading} />
           {userNameField}
+          {isSuperAdmin ? (
+            <button
+              type="button"
+              className={settingsIconBtnClass}
+              aria-label="환경설정"
+              title="환경설정 (총괄관리자)"
+              aria-pressed={settingsOpen}
+              onClick={() => onOpenSettings?.()}
+            >
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                <path
+                  fill="currentColor"
+                  d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"
+                />
+              </svg>
+            </button>
+          ) : null}
           <AdminLoginForm />
         </div>
       </div>

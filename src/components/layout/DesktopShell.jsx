@@ -16,7 +16,6 @@ export default function DesktopShell({
   mainView = 'explorer',
   onNavigate,
   onOpenSettings,
-  onHome,
   onOpenFile,
 }) {
   const layoutRef = useRef(null);
@@ -76,7 +75,12 @@ export default function DesktopShell({
 
   return (
     <div className="flex h-full flex-col bg-slate-100">
-      <TopBar syncInfo={syncInfo} infoLoading={infoLoading} onHome={onHome} />
+      <TopBar
+        syncInfo={syncInfo}
+        infoLoading={infoLoading}
+        onOpenSettings={onOpenSettings}
+        settingsOpen={mainView === 'settings'}
+      />
 
       <div ref={layoutRef} className="flex min-h-0 flex-1">
         <div
@@ -88,7 +92,6 @@ export default function DesktopShell({
             mainView={mainView}
             syncInfo={syncInfo}
             onNavigate={onNavigate}
-            onOpenSettings={onOpenSettings}
             onOpenFile={onOpenFile}
           />
         </div>

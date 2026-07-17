@@ -10,7 +10,22 @@ const API_PREFIX = '/api';
 const ADMIN_TOKEN_STORAGE_KEY = 'nas4usb.adminToken';
 
 function readAdminToken() {
+  try {
+    const fromLocal = localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY);
+    if (fromLocal) return fromLocal;
+  } catch {
+    // ignore
+  }
   return readStorageWithLegacy(sessionStorage, ADMIN_TOKEN_STORAGE_KEY, LEGACY_ADMIN_TOKEN_STORAGE_KEY);
+}
+
+/**
+ * Exposed so plain resource URLs (e.g. `<img src>`, `<video src>`) can carry the admin
+ * token as a query param — those elements issue browser-level GETs that can't attach the
+ * `X-Admin-Token` header the way `apiFetch` does.
+ */
+export function getStoredAdminToken() {
+  return readAdminToken() || '';
 }
 
 /**
@@ -275,6 +290,7 @@ export function createHttpNas4usbClient() {
 
     members: {
       list: () => apiFetch('/members'),
+      export: () => apiFetch('/members/export'),
       save: (payload) =>
         apiFetch('/members', {
           method: 'PUT',

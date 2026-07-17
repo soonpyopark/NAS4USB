@@ -2,7 +2,15 @@ import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { getPortableRoot } from './appContext.js';
-import { normalizeMemberRole } from '../shared/members.js';
+import { resolveAdminCredentials } from './envConfig.js';
+import {
+  BOOTSTRAP_ADMIN_MEMBER_ID,
+  DEFAULT_MEMBER_PERMISSIONS,
+  isBootstrapAdminMemberId,
+  normalizeMemberPermissions,
+  normalizeMemberPermissionsFromUi,
+  normalizeMemberRole,
+} from '../shared/members.js';
 
 const MEMBERS_FILE = '.nas4usb-members.json';
 const PASSWORD_SALT =
@@ -52,6 +60,7 @@ function normalizeStoredMember(raw) {
   const loginId = String(record.loginId ?? '').trim();
   const passwordHash = String(record.passwordHash ?? '').trim();
   if (!id || !loginId || !passwordHash) return null;
+  const hasPermissionsField = 'permissions' in record;
   return {
     id,
     loginId,
@@ -59,6 +68,9 @@ function normalizeStoredMember(raw) {
     passwordHash,
     role: normalizeMemberRole(record.role),
     active: record.active !== false,
+    permissions: hasPermissionsField
+      ? normalizeMemberPermissionsFromUi(record.permissions)
+      : normalizeMemberPermissions(DEFAULT_MEMBER_PERMISSIONS),
   };
 }
 
@@ -102,7 +114,131 @@ function toPublicMember(member) {
     displayName: member.displayName,
     role: member.role,
     active: member.active,
+    permissions: normalizeMemberPermissions(member.permissions),
+    isBootstrapAdmin: isBootstrapAdminMemberId(member.id),
   };
+}
+
+/**
+ * @param {string} loginId
+ * @param {string} [portableRoot]
+ * @returns {Promise<import('../shared/members.js').MemberAccessPermissions | null>}
+ */
+export async function getMemberAccessPermissionsByLoginId(
+  loginId,
+  portableRoot = getPortableRoot(),
+) {
+  const key = String(loginId ?? '').trim().toLowerCase();
+  if (!key) return null;
+  const members = await loadMembers(portableRoot);
+  const member = members.find((entry) => entry.loginId.toLowerCase() === key);
+  if (!member) return null;
+  return normalizeMemberPermissions(member.permissions);
+}
+
+/**
+ * Seed the .env admin into the member list so 회원관리 can change its password.
+ * Never resets an existing password hash (UI override wins over .env).
+ * @param {string} [portableRoot]
+ */
+export async function ensureBootstrapAdmin(portableRoot = getPortableRoot()) {
+  const { adminId, adminPassword } = resolveAdminCredentials(portableRoot);
+  const loginId = String(adminId).trim() || 'admin';
+  const members = await loadMembers(portableRoot);
+  const bootstrap = members.find((member) => isBootstrapAdminMemberId(member.id));
+
+  if (!bootstrap) {
+    const byLogin = members.find(
+      (member) => member.loginId.toLowerCase() === loginId.toLowerCase(),
+    );
+    if (byLogin) {
+      const next = members.map((member) =>
+        member.id === byLogin.id
+          ? {
+              ...member,
+              id: BOOTSTRAP_ADMIN_MEMBER_ID,
+              loginId,
+              displayName: member.displayName || loginId,
+              role: /** @type {MemberRole} */ ('super_admin'),
+              active: true,
+              permissions: normalizeMemberPermissions(member.permissions),
+            }
+          : member,
+      );
+      await writeMembers(next, portableRoot);
+      return;
+    }
+
+    members.unshift({
+      id: BOOTSTRAP_ADMIN_MEMBER_ID,
+      loginId,
+      displayName: loginId,
+      passwordHash: hashMemberPassword(adminPassword),
+      role: 'super_admin',
+      active: true,
+      permissions: { ...DEFAULT_MEMBER_PERMISSIONS },
+    });
+    await writeMembers(members, portableRoot);
+    return;
+  }
+
+  let dirty = false;
+  const nextBootstrap = { ...bootstrap };
+  if (bootstrap.loginId !== loginId) {
+    nextBootstrap.loginId = loginId;
+    dirty = true;
+  }
+  if (bootstrap.role !== 'super_admin') {
+    nextBootstrap.role = 'super_admin';
+    dirty = true;
+  }
+  if (!bootstrap.active) {
+    nextBootstrap.active = true;
+    dirty = true;
+  }
+  if (!bootstrap.permissions) {
+    nextBootstrap.permissions = { ...DEFAULT_MEMBER_PERMISSIONS };
+    dirty = true;
+  }
+  if (dirty) {
+    await writeMembers(
+      members.map((member) => (isBootstrapAdminMemberId(member.id) ? nextBootstrap : member)),
+      portableRoot,
+    );
+  }
+}
+
+/**
+ * Persist default permissions onto members that predate the permissions field.
+ * @param {string} [portableRoot]
+ */
+async function ensureMemberPermissionsPersisted(portableRoot = getPortableRoot()) {
+  let rawItems = [];
+  try {
+    const raw = await fs.readFile(membersFilePath(portableRoot), 'utf8');
+    const parsed = JSON.parse(raw);
+    rawItems = Array.isArray(parsed) ? parsed : parsed?.members;
+    if (!Array.isArray(rawItems)) return;
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+      return;
+    }
+    throw error;
+  }
+
+  const missing = rawItems.some(
+    (item) => !item || typeof item !== 'object' || !('permissions' in item),
+  );
+  if (!missing) return;
+
+  const members = await loadMembers(portableRoot);
+  await writeMembers(
+    members.map((member) => ({
+      ...member,
+      permissions: normalizeMemberPermissions(member.permissions),
+    })),
+    portableRoot,
+  );
 }
 
 /**
@@ -110,8 +246,27 @@ function toPublicMember(member) {
  * @returns {Promise<{ members: PublicMember[] }>}
  */
 export async function listMembers(portableRoot = getPortableRoot()) {
+  await ensureBootstrapAdmin(portableRoot);
+  await ensureMemberPermissionsPersisted(portableRoot);
   const members = await loadMembers(portableRoot);
-  return { members: members.map(toPublicMember) };
+  const sorted = [...members].sort((a, b) => {
+    const aBoot = isBootstrapAdminMemberId(a.id) ? 0 : 1;
+    const bBoot = isBootstrapAdminMemberId(b.id) ? 0 : 1;
+    if (aBoot !== bBoot) return aBoot - bBoot;
+    return a.loginId.localeCompare(b.loginId, 'en', { sensitivity: 'base' });
+  });
+  return { members: sorted.map(toPublicMember) };
+}
+
+/**
+ * @param {string} loginId
+ * @param {string} [portableRoot]
+ */
+export async function hasMemberLoginId(loginId, portableRoot = getPortableRoot()) {
+  const key = String(loginId ?? '').trim();
+  if (!key) return false;
+  const members = await loadMembers(portableRoot);
+  return members.some((member) => member.loginId.toLowerCase() === key.toLowerCase());
 }
 
 /**
@@ -146,9 +301,37 @@ export async function findActiveMemberByCredentials(
  *   role?: MemberRole | string,
  *   active?: boolean,
  *   password?: string,
+ *   passwordHash?: string,
+ *   permissions?: import('../shared/members.js').MemberAccessPermissions,
  *   _delete?: boolean,
  * }} MemberSaveItem
  */
+
+/**
+ * Export members including password hashes (for backup/restore).
+ * @param {string} [portableRoot]
+ */
+export async function getMembersExportRecords(portableRoot = getPortableRoot()) {
+  await ensureBootstrapAdmin(portableRoot);
+  await ensureMemberPermissionsPersisted(portableRoot);
+  const members = await loadMembers(portableRoot);
+  const sorted = [...members].sort((a, b) => {
+    const aBoot = isBootstrapAdminMemberId(a.id) ? 0 : 1;
+    const bBoot = isBootstrapAdminMemberId(b.id) ? 0 : 1;
+    if (aBoot !== bBoot) return aBoot - bBoot;
+    return a.loginId.localeCompare(b.loginId, 'en', { sensitivity: 'base' });
+  });
+  return sorted.map((member) => ({
+    id: member.id,
+    loginId: member.loginId,
+    displayName: member.displayName,
+    role: member.role,
+    active: member.active,
+    permissions: normalizeMemberPermissions(member.permissions),
+    passwordHash: member.passwordHash,
+    isBootstrapAdmin: isBootstrapAdminMemberId(member.id),
+  }));
+}
 
 /**
  * @param {{ members?: MemberSaveItem[] }} payload
@@ -161,10 +344,18 @@ export async function saveMembersPayload(payload, portableRoot = getPortableRoot
     return { ok: false, message: '회원 목록이 올바르지 않습니다.' };
   }
 
+  await ensureBootstrapAdmin(portableRoot);
+  const { adminId } = resolveAdminCredentials(portableRoot);
+  const bootstrapLoginKey = String(adminId).trim().toLowerCase();
+
   const existingMembers = await loadMembers(portableRoot);
   const deleteIds = new Set(
     memberPayload.filter((item) => item?._delete && item.id).map((item) => String(item.id)),
   );
+
+  if (deleteIds.has(BOOTSTRAP_ADMIN_MEMBER_ID)) {
+    return { ok: false, message: '기본 관리자(admin) 계정은 삭제할 수 없습니다.' };
+  }
 
   /** @type {MemberRecord[]} */
   let nextMembers = existingMembers.filter((member) => !deleteIds.has(member.id));
@@ -177,8 +368,14 @@ export async function saveMembersPayload(payload, portableRoot = getPortableRoot
       return { ok: false, message: '수정할 회원을 찾을 수 없습니다.' };
     }
 
-    const loginId = String(patch.loginId ?? '').trim();
-    const displayName = String(patch.displayName ?? loginId).trim() || loginId;
+    const isBootstrap = isBootstrapAdminMemberId(existing.id);
+    let loginId = String(patch.loginId ?? '').trim();
+    if (isBootstrap) {
+      loginId = existing.loginId;
+    }
+    const displayName = isBootstrap
+      ? existing.displayName || loginId
+      : String(patch.displayName ?? loginId).trim() || loginId;
     if (!loginId) {
       return { ok: false, message: '로그인 아이디를 입력해 주세요.' };
     }
@@ -195,12 +392,20 @@ export async function saveMembersPayload(payload, portableRoot = getPortableRoot
 
     let passwordHash = existing.passwordHash;
     const password = String(patch.password ?? '').trim();
+    const importedHash = String(patch.passwordHash ?? '').trim();
     if (password) {
       if (password.length < 6) {
         return { ok: false, message: '비밀번호는 6자 이상이어야 합니다.' };
       }
       passwordHash = hashMemberPassword(password);
+    } else if (importedHash && /^[a-f0-9]{64}$/i.test(importedHash)) {
+      passwordHash = importedHash.toLowerCase();
     }
+
+    const permissions =
+      patch.permissions !== undefined
+        ? normalizeMemberPermissionsFromUi(patch.permissions)
+        : normalizeMemberPermissions(existing.permissions);
 
     nextMembers = nextMembers.map((member) =>
       member.id === existing.id
@@ -208,9 +413,10 @@ export async function saveMembersPayload(payload, portableRoot = getPortableRoot
             ...member,
             loginId,
             displayName,
-            role: normalizeMemberRole(patch.role ?? member.role),
-            active: patch.active !== false,
+            role: isBootstrap ? 'super_admin' : normalizeMemberRole(patch.role ?? member.role),
+            active: isBootstrap ? true : patch.active !== false,
             passwordHash,
+            permissions,
           }
         : member,
     );
@@ -223,31 +429,47 @@ export async function saveMembersPayload(payload, portableRoot = getPortableRoot
     const loginId = String(patch.loginId ?? '').trim();
     const displayName = String(patch.displayName ?? loginId).trim() || loginId;
     const password = String(patch.password ?? '').trim();
+    const importedHash = String(patch.passwordHash ?? '').trim();
     if (!loginId) {
       return { ok: false, message: '새 회원의 로그인 아이디를 입력해 주세요.' };
     }
-    if (!password || password.length < 6) {
+    if (password && password.length < 6) {
       return { ok: false, message: '새 회원 비밀번호는 6자 이상이어야 합니다.' };
+    }
+    if (!password && !(importedHash && /^[a-f0-9]{64}$/i.test(importedHash))) {
+      return {
+        ok: false,
+        message: '새 회원은 비밀번호(6자 이상) 또는 내보내기 해시가 필요합니다.',
+      };
     }
     if (loginIds.has(loginId.toLowerCase())) {
       return { ok: false, message: `아이디 「${loginId}」가 이미 사용 중입니다.` };
+    }
+    if (loginId.toLowerCase() === bootstrapLoginKey) {
+      return {
+        ok: false,
+        message: `아이디 「${loginId}」는 기본 관리자 계정과 겹칠 수 없습니다.`,
+      };
     }
 
     nextMembers.push({
       id: `member-${crypto.randomUUID().slice(0, 8)}`,
       loginId,
       displayName,
-      passwordHash: hashMemberPassword(password),
+      passwordHash: password
+        ? hashMemberPassword(password)
+        : importedHash.toLowerCase(),
       role: normalizeMemberRole(patch.role),
       active: patch.active !== false,
+      permissions:
+        patch.permissions !== undefined
+          ? normalizeMemberPermissionsFromUi(patch.permissions)
+          : { ...DEFAULT_MEMBER_PERMISSIONS },
     });
     loginIds.add(loginId.toLowerCase());
   }
 
-  // Env bootstrap admin always remains available, so an empty / member-only
-  // list is allowed. Still block removing the last active super when others exist
-  // only if that would leave zero supers while members remain — skip for NAS4USB.
-
   await writeMembers(nextMembers, portableRoot);
-  return { ok: true, members: nextMembers.map(toPublicMember) };
+  const listed = await listMembers(portableRoot);
+  return { ok: true, members: listed.members };
 }

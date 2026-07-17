@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import EditorModal from './EditorModal.jsx';
+import ErrorBoundary from '../common/ErrorBoundary.jsx';
 import FortuneSheetGrid from './FortuneSheetGrid.jsx';
 import { useYjsSession } from '../../hooks/useYjsSession.js';
 import { useAwarenessPeerCount } from '../../hooks/useAwarenessPeerCount.js';
@@ -32,10 +33,29 @@ export default function XlsxEditorShell({
   const [sheetSummary, setSheetSummary] = useState('Sheet1');
   const [editorHandle, setEditorHandle] = useState(null);
   const [bound, setBound] = useState(false);
+  const [recoveryKey, setRecoveryKey] = useState(0);
   const unbindRef = useRef(null);
   const unbindPresenceRef = useRef(null);
   const diskRevisionRef = useRef('');
+  const crashCountRef = useRef(0);
   diskRevisionRef.current = diskRevision;
+
+  // FortuneSheet occasionally throws while applying a remote collaboration op
+  // (e.g. another peer adding a sheet). Rather than leaving a blank/white
+  // screen with no error boundary, force a full remount so the editor
+  // re-bootstraps from the latest Y.js snapshot instead of replaying ops.
+  const handleGridCrash = (error) => {
+    // eslint-disable-next-line no-console
+    console.warn('FortuneSheet editor crashed, recovering by remounting.', error);
+    crashCountRef.current += 1;
+    if (crashCountRef.current > 5) {
+      setLoadError('스프레드시트 편집기에서 반복적인 오류가 발생했습니다. 새로고침 해 주세요.');
+      return;
+    }
+    setEditorHandle(null);
+    setBound(false);
+    setRecoveryKey((key) => key + 1);
+  };
 
   useEffect(() => {
     setInitialSheets(null);
@@ -199,10 +219,20 @@ export default function XlsxEditorShell({
 
         {initialSheets != null && (
           <div className={shareReadOnly ? 'pointer-events-none min-h-0 flex-1 select-none' : 'min-h-0 flex-1'}>
-            <FortuneSheetGrid
-              initialSheets={initialSheets}
-              onReady={(editor) => setEditorHandle(editor)}
-            />
+            <ErrorBoundary
+              key={recoveryKey}
+              onError={handleGridCrash}
+              fallback={(
+                <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-nas-muted">
+                  편집기를 복구하는 중…
+                </div>
+              )}
+            >
+              <FortuneSheetGrid
+                initialSheets={initialSheets}
+                onReady={(editor) => setEditorHandle(editor)}
+              />
+            </ErrorBoundary>
           </div>
         )}
       </div>

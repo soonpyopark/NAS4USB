@@ -1,104 +1,45 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  isValidIpOrCidr,
-  normalizeAllowedIpCidrs,
-} from '../../../shared/ipCidrCore.js';
-import {
   DEFAULT_GUEST_PERMISSIONS,
-  DEFAULT_LOGGED_IN_PERMISSIONS,
   normalizeGuestPermissionsFromUi,
 } from '../../../shared/guestPermissions.js';
+import { isValidIpOrCidr, normalizeAllowedIpCidrs } from '../../../shared/ipCidrCore.js';
+import {
+  buildIpAllowlistPayload,
+  ipAllowlistExportFilename,
+  parseIpAllowlistPayload,
+} from '../../../shared/ipAllowlistIo.js';
+import { downloadTextFile, readFileAsText } from '../../lib/downloadTextFile.js';
 import { useAppConfirm } from '../../hooks/useAppConfirm.jsx';
 import MembersSettingsPanel from './MembersSettingsPanel.jsx';
 
 /**
  * @typedef {{ cidr: string, description?: string }} AllowedIpEntry
- * @typedef {{ view: boolean, read: boolean, write: boolean }} AccessPermissionFlags
- * @typedef {'access' | 'ip' | 'members'} SettingsTabId
+ * @typedef {'ip' | 'members'} SettingsTabId
  */
 
 /** @type {{ id: SettingsTabId, label: string }[]} */
 const SETTINGS_TABS = [
-  { id: 'access', label: '접근 권한 설정' },
-  { id: 'ip', label: '접근 가능 IP 대역' },
   { id: 'members', label: '회원 관리' },
+  { id: 'ip', label: '접근 가능 IP 대역' },
 ];
 
-/**
- * @param {{
- *   label: string,
- *   value: AccessPermissionFlags,
- *   onToggle: (key: 'view' | 'read' | 'write') => void,
- * }} props
- */
-function PermissionRow({ label, value, onToggle }) {
-  return (
-    <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-800">
-      <span className="w-28 shrink-0 font-medium text-slate-700">{label}</span>
-      <label className="inline-flex items-center gap-2">
-        <input
-          type="checkbox"
-          className="h-4 w-4 rounded border-slate-300"
-          checked={value.view}
-          onChange={() => onToggle('view')}
-        />
-        <span>보기</span>
-      </label>
-      <label className="inline-flex items-center gap-2">
-        <input
-          type="checkbox"
-          className="h-4 w-4 rounded border-slate-300"
-          checked={value.read}
-          disabled={!value.view}
-          onChange={() => onToggle('read')}
-        />
-        <span className={!value.view ? 'text-slate-400' : undefined}>읽기</span>
-      </label>
-      <label className="inline-flex items-center gap-2">
-        <input
-          type="checkbox"
-          className="h-4 w-4 rounded border-slate-300"
-          checked={value.write}
-          disabled={!value.view}
-          onChange={() => onToggle('write')}
-        />
-        <span className={!value.view ? 'text-slate-400' : undefined}>쓰기</span>
-      </label>
-    </div>
-  );
-}
-
 export default function SettingsView() {
-  const { alert: appAlert, dialog: settingsDialog } = useAppConfirm();
+  const { alert: appAlert, confirm: appConfirm, dialog: settingsDialog } = useAppConfirm();
   /** @type {[AllowedIpEntry[], Function]} */
   const [allowedIpCidrs, setAllowedIpCidrs] = useState([]);
-  /** @type {[AccessPermissionFlags, Function]} */
-  const [guestPermissions, setGuestPermissions] = useState({ ...DEFAULT_GUEST_PERMISSIONS });
-  /** @type {[AccessPermissionFlags, Function]} */
-  const [loggedInPermissions, setLoggedInPermissions] = useState({
-    ...DEFAULT_LOGGED_IN_PERMISSIONS,
-  });
   /** @type {[SettingsTabId, Function]} */
-  const [activeTab, setActiveTab] = useState('access');
+  const [activeTab, setActiveTab] = useState('members');
   const [ipCidrDraft, setIpCidrDraft] = useState('');
   const [ipDescriptionDraft, setIpDescriptionDraft] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState('');
   const descriptionSaveTimerRef = useRef(/** @type {ReturnType<typeof setTimeout> | null} */ (null));
+  const ipImportInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
 
   const applySettings = useCallback((settings) => {
     setAllowedIpCidrs(normalizeAllowedIpCidrs(settings?.allowedIpCidrs ?? []));
-    setGuestPermissions(
-      settings?.guestPermissions
-        ? normalizeGuestPermissionsFromUi(settings.guestPermissions)
-        : { ...DEFAULT_GUEST_PERMISSIONS },
-    );
-    setLoggedInPermissions(
-      settings?.loggedInPermissions
-        ? normalizeGuestPermissionsFromUi(settings.loggedInPermissions)
-        : { ...DEFAULT_LOGGED_IN_PERMISSIONS },
-    );
   }, []);
 
   const loadSettings = useCallback(async () => {
@@ -129,23 +70,20 @@ export default function SettingsView() {
   }, []);
 
   /**
-   * @param {{
-   *   allowedIpCidrs?: AllowedIpEntry[],
-   *   guestPermissions?: AccessPermissionFlags,
-   *   loggedInPermissions?: AccessPermissionFlags,
-   * }} patch
+   * @param {{ allowedIpCidrs?: AllowedIpEntry[] }} patch
    * @param {{ silent?: boolean }} [options]
    */
   const persistSettings = async (patch, { silent = true } = {}) => {
     setSaving(true);
     try {
+      const current = await window.nas4usb.settings.get();
       const next = await window.nas4usb.settings.update({
         allowedIpCidrs: normalizeAllowedIpCidrs(patch.allowedIpCidrs ?? allowedIpCidrs),
         guestPermissions: normalizeGuestPermissionsFromUi(
-          patch.guestPermissions ?? guestPermissions,
+          current?.guestPermissions ?? DEFAULT_GUEST_PERMISSIONS,
         ),
         loggedInPermissions: normalizeGuestPermissionsFromUi(
-          patch.loggedInPermissions ?? loggedInPermissions,
+          current?.loggedInPermissions ?? DEFAULT_GUEST_PERMISSIONS,
         ),
       });
       applySettings(next);
@@ -161,27 +99,6 @@ export default function SettingsView() {
       return false;
     } finally {
       setSaving(false);
-    }
-  };
-
-  /**
-   * @param {'guest' | 'loggedIn'} role
-   * @param {'view' | 'read' | 'write'} key
-   */
-  const togglePermission = (role, key) => {
-    const current = role === 'guest' ? guestPermissions : loggedInPermissions;
-    const nextValue = !current[key];
-    const nextFlags =
-      key === 'view' && !nextValue
-        ? { view: false, read: false, write: false }
-        : { ...current, [key]: nextValue };
-
-    if (role === 'guest') {
-      setGuestPermissions(nextFlags);
-      void persistSettings({ guestPermissions: nextFlags });
-    } else {
-      setLoggedInPermissions(nextFlags);
-      void persistSettings({ loggedInPermissions: nextFlags });
     }
   };
 
@@ -218,6 +135,62 @@ export default function SettingsView() {
     const nextList = allowedIpCidrs.filter((item) => item.cidr !== cidr);
     setAllowedIpCidrs(nextList);
     await persistSettings({ allowedIpCidrs: nextList });
+  };
+
+  const handleExportIp = () => {
+    try {
+      const payload = buildIpAllowlistPayload(allowedIpCidrs);
+      downloadTextFile(
+        ipAllowlistExportFilename(),
+        `${JSON.stringify(payload, null, 2)}\n`,
+      );
+      void appAlert({
+        title: '내보내기',
+        body:
+          allowedIpCidrs.length === 0
+            ? '허용 IP가 비어 있는 목록을 내보냈습니다.'
+            : `허용 IP ${allowedIpCidrs.length}건을 내보냈습니다.`,
+      });
+    } catch (error) {
+      void appAlert({
+        title: '내보내기',
+        body: error instanceof Error ? error.message : '내보내기에 실패했습니다.',
+      });
+    }
+  };
+
+  const handleImportIp = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    try {
+      const text = await readFileAsText(file);
+      const { allowedIpCidrs: nextList } = parseIpAllowlistPayload(text);
+      const ok = await appConfirm({
+        title: '가져오기',
+        body:
+          nextList.length === 0
+            ? `「${file.name}」의 허용 IP가 비어 있습니다.\n현재 목록을 모두 지울까요?`
+            : `「${file.name}」에서 허용 IP ${nextList.length}건을 가져옵니다.\n현재 목록을 이 내용으로 바꿀까요?`,
+        confirmLabel: '가져오기',
+      });
+      if (!ok) return;
+      const saved = await persistSettings({ allowedIpCidrs: nextList });
+      if (saved) {
+        void appAlert({
+          title: '가져오기',
+          body:
+            nextList.length === 0
+              ? '허용 IP 목록을 비웠습니다.'
+              : `허용 IP ${nextList.length}건을 가져왔습니다.`,
+        });
+      }
+    } catch (error) {
+      void appAlert({
+        title: '가져오기',
+        body: error instanceof Error ? error.message : '가져오기에 실패했습니다.',
+      });
+    }
   };
 
   const updateAllowedIpDescription = (cidr, description) => {
@@ -265,57 +238,68 @@ export default function SettingsView() {
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto p-6">
-        {loading ? (
-          <p className="text-sm text-slate-500">설정을 불러오는 중…</p>
-        ) : loadError ? (
-          <div className="space-y-2">
-            <p className="text-sm text-red-600">{loadError}</p>
-            <button
-              type="button"
-              className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
-              onClick={() => void loadSettings()}
-            >
-              다시 시도
-            </button>
+        {activeTab === 'members' ? (
+          <div className="max-w-3xl">
+            <MembersSettingsPanel />
           </div>
-        ) : (
-          <div className="max-w-2xl space-y-6">
-            {activeTab === 'access' && (
-              <section className="space-y-4" role="tabpanel">
-                <PermissionRow
-                  label="손님 :"
-                  value={guestPermissions}
-                  onToggle={(key) => togglePermission('guest', key)}
-                />
-                <PermissionRow
-                  label="일반사용자 :"
-                  value={loggedInPermissions}
-                  onToggle={(key) => togglePermission('loggedIn', key)}
-                />
-                <p className="text-sm leading-relaxed text-slate-600">
-                  체크된 권한만 해당 사용자에게 부여됩니다. 보기가 꺼져 있으면 폴더·파일 목록이
-                  표시되지 않습니다. 읽기는 열기·다운로드, 쓰기는 새 폴더/파일·수정·삭제·휴지통 등
-                  파일 조작 권한입니다(속성에서 비공개·공유·즐겨찾기 설정과 환경설정은
-                  총괄관리자만 가능).
-                </p>
-                {saving ? <p className="text-sm text-slate-500">저장 중…</p> : null}
-              </section>
-            )}
+        ) : null}
 
-            {activeTab === 'ip' && (
+        {activeTab === 'ip' ? (
+          loading ? (
+            <p className="text-sm text-slate-500">설정을 불러오는 중…</p>
+          ) : loadError ? (
+            <div className="space-y-2">
+              <p className="text-sm text-red-600">{loadError}</p>
+              <button
+                type="button"
+                className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+                onClick={() => void loadSettings()}
+              >
+                다시 시도
+              </button>
+            </div>
+          ) : (
+            <div className="max-w-3xl space-y-6">
               <section className="space-y-4" role="tabpanel">
-                <p className="text-sm leading-relaxed text-slate-600">
-                  목록이 비어 있으면 모든 IP에서 접속할 수 있습니다. 항목을 추가하면 등록된
-                  주소·대역·범위에서만 NAS4USB에 접속할 수 있습니다. 단일 IP, CIDR(
-                  <code className="rounded bg-slate-100 px-1 text-[12px]">192.168.0.0/24</code>
-                  ), 범위(
-                  <code className="rounded bg-slate-100 px-1 text-[12px]">
-                    221.168.1.0-221.168.12.255
-                  </code>
-                  ) 형식을 지원합니다. 서버 PC의{' '}
-                  <code className="rounded bg-slate-100 px-1 text-[12px]">127.0.0.1</code> 은 항상
-                  허용됩니다.
-                </p>
+                <div className="space-y-3">
+                  <p className="text-sm leading-relaxed text-slate-600">
+                    목록이 비어 있으면 모든 IP에서 접속할 수 있습니다. 항목을 추가하면 등록된
+                    주소·대역·범위에서만 NAS4USB에 접속할 수 있습니다. 단일 IP, CIDR(
+                    <code className="rounded bg-slate-100 px-1 text-[12px]">192.168.0.0/24</code>
+                    ), 범위(
+                    <code className="rounded bg-slate-100 px-1 text-[12px]">
+                      221.168.1.0-221.168.12.255
+                    </code>
+                    ) 형식을 지원합니다. 서버 PC의{' '}
+                    <code className="rounded bg-slate-100 px-1 text-[12px]">127.0.0.1</code> 은
+                    항상 허용됩니다.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                      disabled={saving}
+                      onClick={handleExportIp}
+                    >
+                      내보내기
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                      disabled={saving}
+                      onClick={() => ipImportInputRef.current?.click()}
+                    >
+                      가져오기
+                    </button>
+                    <input
+                      ref={ipImportInputRef}
+                      type="file"
+                      accept="application/json,.json"
+                      className="hidden"
+                      onChange={(event) => void handleImportIp(event)}
+                    />
+                  </div>
+                </div>
 
                 <ul className="space-y-3">
                   {allowedIpCidrs.length === 0 ? (
@@ -401,15 +385,9 @@ export default function SettingsView() {
                   </button>
                 </div>
               </section>
-            )}
-
-            {activeTab === 'members' ? (
-              <section role="tabpanel">
-                <MembersSettingsPanel />
-              </section>
-            ) : null}
-          </div>
-        )}
+            </div>
+          )
+        ) : null}
       </div>
     </div>
   );

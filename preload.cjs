@@ -51,6 +51,7 @@ contextBridge.exposeInMainWorld('nas4usb', {
 
   editors: {
     getStatus: () => ipcRenderer.invoke('editors:getStatus'),
+    update: () => ipcRenderer.invoke('editors:update'),
   },
 
   auth: {
@@ -98,6 +99,7 @@ contextBridge.exposeInMainWorld('nas4usb', {
 
   members: {
     list: () => ipcRenderer.invoke('members:list'),
+    export: () => ipcRenderer.invoke('members:export'),
     save: (payload) => ipcRenderer.invoke('members:save', payload ?? {}),
   },
 });

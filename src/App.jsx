@@ -11,7 +11,7 @@ import BlockEditorShell from './components/editors/BlockEditorShell.jsx';
 import AudioPlayerShell from './components/editors/AudioPlayerShell.jsx';
 import VideoPlayerShell from './components/editors/VideoPlayerShell.jsx';
 import { ShareLinkError, ShareLinkLoading } from './components/share/ShareLinkScreen.jsx';
-import { AdminAuthProvider } from './context/AdminAuthContext.jsx';
+import { AdminAuthProvider, useAdminAuthContext } from './context/AdminAuthContext.jsx';
 import { FsSyncProvider, useFsSync } from './context/FsSyncContext.jsx';
 import AppDialogHost from './components/common/AppDialogHost.jsx';
 import { useAppInfo } from './hooks/useAppInfo.js';
@@ -166,8 +166,15 @@ function Nas4usbDesktop({
   onCloseEditor,
   onEditorRenamed,
 }) {
+  const { isSuperAdmin } = useAdminAuthContext();
   const { currentPath, navigate } = useTrashGuardedNavigate('.');
   const [mainView, setMainView] = useState('explorer');
+
+  useEffect(() => {
+    if (mainView === 'settings' && !isSuperAdmin) {
+      setMainView('explorer');
+    }
+  }, [isSuperAdmin, mainView]);
 
   const handleNavigate = useCallback(
     (nextPath) => {
@@ -178,13 +185,12 @@ function Nas4usbDesktop({
   );
 
   const handleOpenSettings = useCallback(() => {
+    if (!isSuperAdmin) {
+      void nativeAlert('환경설정은 총괄관리자만 이용할 수 있습니다.');
+      return;
+    }
     setMainView('settings');
-  }, []);
-
-  const handleHome = useCallback(() => {
-    setMainView('explorer');
-    navigate('.');
-  }, [navigate]);
+  }, [isSuperAdmin]);
 
   return (
     <>
@@ -196,10 +202,9 @@ function Nas4usbDesktop({
         mainView={mainView}
         onNavigate={handleNavigate}
         onOpenSettings={handleOpenSettings}
-        onHome={handleHome}
         onOpenFile={onOpenFile}
       >
-        {mainView === 'settings' ? (
+        {mainView === 'settings' && isSuperAdmin ? (
           <SettingsView />
         ) : (
           <FileExplorer
@@ -324,8 +329,14 @@ function Nas4usbAppMain() {
           return;
         }
 
-        await handleOpenFile(entry);
+        const opened = await handleOpenFile(entry);
         if (cancelled) return;
+
+        if (!opened) {
+          setShareError('공유 파일을 열 수 없습니다.');
+          setShareStatus('error');
+          return;
+        }
 
         setShareStatus('ready');
       } catch (err) {
@@ -368,14 +379,16 @@ function Nas4usbAppMain() {
     }
 
     return (
-      <OpenEditorLayer
-        openEditor={openEditor}
-        syncInfo={syncInfo}
-        allowClose={false}
-        fullscreen
-        onClose={handleCloseEditor}
-        onRenamed={handleEditorRenamed}
-      />
+      <div className="flex h-full min-h-full w-full flex-col bg-white">
+        <OpenEditorLayer
+          openEditor={openEditor}
+          syncInfo={syncInfo}
+          allowClose={false}
+          fullscreen
+          onClose={handleCloseEditor}
+          onRenamed={handleEditorRenamed}
+        />
+      </div>
     );
   }
 

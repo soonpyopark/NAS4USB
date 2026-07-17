@@ -1,6 +1,9 @@
 import crypto from 'node:crypto';
 import { resolveAdminCredentials } from './envConfig.js';
-import { findActiveMemberByCredentials } from './membersService.js';
+import {
+  findActiveMemberByCredentials,
+  hasMemberLoginId,
+} from './membersService.js';
 
 /** @type {Map<string, { adminId: string, role?: string, createdAt: number }>} */
 const adminSessions = new Map();
@@ -19,6 +22,14 @@ export function isValidAdminSession(token) {
 export function getAdminSession(token) {
   if (!token || typeof token !== 'string') return null;
   return adminSessions.get(token) ?? null;
+}
+
+/**
+ * @param {string | null | undefined} token
+ */
+export function isSuperAdminSession(token) {
+  const session = getAdminSession(token);
+  return Boolean(session && session.role === 'super_admin');
 }
 
 /**
@@ -61,27 +72,38 @@ export function verifyAdminLogin(id, password, portableRoot) {
 }
 
 /**
+ * Prefers members.json (including seeded bootstrap admin). When that admin row exists,
+ * its password hash overrides the plaintext .env password.
  * @param {string} id
  * @param {string} password
  * @param {string} portableRoot
  */
 export async function loginAdmin(id, password, portableRoot) {
-  if (verifyAdminLogin(id, password, portableRoot)) {
-    const { adminId } = resolveAdminCredentials(portableRoot);
+  const providedId = String(id ?? '').trim();
+  const { adminId } = resolveAdminCredentials(portableRoot);
+  const isAdminLogin = providedId.toLowerCase() === String(adminId).trim().toLowerCase();
+
+  const member = await findActiveMemberByCredentials(id, password, portableRoot);
+  if (member) {
+    let role = member.role === 'super_admin' || isAdminLogin ? 'super_admin' : member.role;
+    const token = createAdminSession(member.loginId, role);
+    return {
+      success: true,
+      adminId: member.loginId,
+      role,
+      token,
+    };
+  }
+
+  // .env plaintext only when no members.json admin row exists yet (seed failed / legacy).
+  if (
+    isAdminLogin &&
+    !(await hasMemberLoginId(adminId, portableRoot)) &&
+    verifyAdminLogin(id, password, portableRoot)
+  ) {
     const token = createAdminSession(adminId, 'super_admin');
     return { success: true, adminId, role: 'super_admin', token };
   }
 
-  const member = await findActiveMemberByCredentials(id, password, portableRoot);
-  if (!member) {
-    return { success: false };
-  }
-
-  const token = createAdminSession(member.loginId, member.role);
-  return {
-    success: true,
-    adminId: member.loginId,
-    role: member.role,
-    token,
-  };
+  return { success: false };
 }

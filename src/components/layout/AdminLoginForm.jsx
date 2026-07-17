@@ -1,135 +1,54 @@
-import { useEffect, useState } from 'react';
-import { AppAlertDialog } from '../common/AppModal.jsx';
+import { useState } from 'react';
 import { useAdminAuthContext } from '../../context/AdminAuthContext.jsx';
-import { restoreFormControlsAfterNativeDialog } from '../../lib/nativeDialog.js';
-
-function EyeIcon({ className }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  );
-}
-
-function EyeOffIcon({ className }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a18.45 18.45 0 0 1-2.16 3.19" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M6.61 6.61A18.45 18.45 0 0 0 2 12s3 7 10 7a9.86 9.86 0 0 0 4.39-1" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="m2 2 20 20" />
-    </svg>
-  );
-}
+import LoginDialog from './LoginDialog.jsx';
 
 export default function AdminLoginForm() {
   const { isLoggedIn, login, logout, loggingIn, error, clearError } = useAdminAuthContext();
-  const [id, setId] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  /** Remount inputs after native/Electron dialogs leave them non-editable. */
-  const [inputEpoch, setInputEpoch] = useState(0);
-
-  useEffect(() => {
-    restoreFormControlsAfterNativeDialog();
-
-    const restore = () => {
-      restoreFormControlsAfterNativeDialog();
-      setInputEpoch((value) => value + 1);
-    };
-    window.addEventListener('nas4usb:restore-inputs', restore);
-    return () => {
-      window.removeEventListener('nas4usb:restore-inputs', restore);
-    };
-  }, []);
-
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    const ok = await login(id, password);
-    if (ok) {
-      setPassword('');
-    }
-  };
+  const [open, setOpen] = useState(false);
 
   if (isLoggedIn) {
     return (
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          className="h-8 rounded-md bg-nas-accent px-2.5 text-[10pt] font-medium text-white transition-colors hover:bg-blue-600"
-          onClick={() => {
-            void logout();
-          }}
-        >
-          로그아웃
-        </button>
-      </div>
+      <button
+        type="button"
+        className="h-8 rounded-md bg-nas-accent px-2.5 text-[10pt] font-medium text-white transition-colors hover:bg-blue-600"
+        onClick={() => {
+          void logout();
+        }}
+      >
+        로그아웃
+      </button>
     );
   }
 
   return (
     <>
-      <form key={inputEpoch} className="flex items-center gap-1.5" onSubmit={handleSubmit}>
-        <label className="sr-only" htmlFor="admin-id">
-          아이디
-        </label>
-        <input
-          id="admin-id"
-          type="text"
-          name="admin-id"
-          value={id}
-          onChange={(event) => {
+      <button
+        type="button"
+        className="h-8 rounded-md bg-sky-100 px-2.5 text-[10pt] font-medium text-sky-800 transition-colors hover:bg-sky-200"
+        onClick={() => {
+          clearError();
+          setOpen(true);
+        }}
+      >
+        로그인
+      </button>
+
+      <LoginDialog
+        open={open}
+        loggingIn={loggingIn}
+        error={error}
+        dismissible
+        onClose={() => {
+          setOpen(false);
+          clearError();
+        }}
+        onLogin={async (id, password, rememberMe) => {
+          const ok = await login(id, password, rememberMe);
+          if (ok) {
+            setOpen(false);
             clearError();
-            setId(event.target.value);
-          }}
-          placeholder="아이디"
-          autoComplete="off"
-          className="h-8 w-24 rounded-md border border-nas-border bg-white px-2 text-[10pt] text-slate-700 outline-none placeholder:text-slate-400 focus:border-nas-accent focus:ring-1 focus:ring-nas-accent"
-        />
-
-        <div className="relative">
-          <label className="sr-only" htmlFor="admin-password">
-            비밀번호
-          </label>
-          <input
-            id="admin-password"
-            type={showPassword ? 'text' : 'password'}
-            name="admin-password"
-            value={password}
-            onChange={(event) => {
-              clearError();
-              setPassword(event.target.value);
-            }}
-            placeholder="비밀번호"
-            autoComplete="off"
-            className="h-8 w-28 rounded-md border border-nas-border bg-white py-0 pl-2 pr-7 text-[10pt] text-slate-700 outline-none placeholder:text-slate-400 focus:border-nas-accent focus:ring-1 focus:ring-nas-accent"
-          />
-          <button
-            type="button"
-            tabIndex={-1}
-            aria-label={showPassword ? '비밀번호 숨기기' : '비밀번호 표시'}
-            className="absolute inset-y-0 right-0 flex w-7 items-center justify-center text-slate-400 hover:text-slate-600"
-            onClick={() => setShowPassword((value) => !value)}
-          >
-            {showPassword ? <EyeOffIcon className="h-3.5 w-3.5" /> : <EyeIcon className="h-3.5 w-3.5" />}
-          </button>
-        </div>
-
-        <button
-          type="submit"
-          disabled={loggingIn || !id.trim() || !password}
-          className="h-8 rounded-md bg-nas-accent px-2.5 text-[10pt] font-medium text-white transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {loggingIn ? '…' : '로그인'}
-        </button>
-      </form>
-
-      <AppAlertDialog
-        open={Boolean(error)}
-        title="로그인"
-        body={error}
-        onClose={clearError}
+          }
+        }}
       />
     </>
   );

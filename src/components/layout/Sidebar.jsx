@@ -62,7 +62,6 @@ export default function Sidebar({
   currentPath,
   mainView = 'explorer',
   onNavigate,
-  onOpenSettings,
   onOpenFile,
   syncInfo,
 }) {
@@ -672,30 +671,6 @@ export default function Sidebar({
               {trashCount}
             </span>
           )}
-        </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            if (isAdminLoggedIn) {
-              onOpenSettings?.();
-              return;
-            }
-            void appAlert({
-              title: '환경설정',
-              body: '환경설정은 총괄관리자 로그인 후 이용할 수 있습니다.',
-            });
-          }}
-          className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-[10pt] transition-colors ${
-            isAdminLoggedIn && mainView === 'settings'
-              ? 'bg-nas-accent text-white'
-              : 'text-slate-300 hover:bg-nas-sidebarHover hover:text-white'
-          }`}
-        >
-          <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.49.49 0 00-.59-.22l-2.39.96a7.07 7.07 0 00-1.63-.94l-.36-2.54a.48.48 0 00-.48-.41h-3.84a.48.48 0 00-.48.41l-.36 2.54c-.59.24-1.13.55-1.63.94l-2.39-.96a.49.49 0 00-.59.22L2.77 8.87a.48.48 0 00.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94L2.89 14.52a.49.49 0 00-.12.61l1.92 3.32c.12.22.39.3.59.22l2.39-.96c.5.39 1.04.71 1.63.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.48-.41l.36-2.54c.59-.24 1.13-.55 1.63-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 00-.12-.61l-2.03-1.58zM12 15.6A3.6 3.6 0 1115.6 12 3.6 3.6 0 0112 15.6z" />
-          </svg>
-          <span className="truncate">환경설정</span>
         </button>
       </div>
 

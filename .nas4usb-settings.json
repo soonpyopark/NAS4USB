@@ -6,9 +6,9 @@
     }
   ],
   "guestPermissions": {
-    "view": true,
-    "read": true,
-    "write": true
+    "view": false,
+    "read": false,
+    "write": false
   },
   "loggedInPermissions": {
     "view": true,

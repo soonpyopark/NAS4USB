@@ -1,4 +1,5 @@
 import { getShareTokenFromUrl } from '../shareAccess.js';
+import { getStoredAdminToken } from '../nas4usbClient.js';
 
 /**
  * @param {string} relativePath
@@ -7,6 +8,10 @@ export function buildMediaStreamUrl(relativePath) {
   const params = new URLSearchParams({ path: relativePath });
   const shareToken = getShareTokenFromUrl();
   if (shareToken) params.set('share', shareToken);
+  // <img>/<video>/<audio> issue plain GETs that can't carry the X-Admin-Token header,
+  // so pass it as a query param too — the server accepts either.
+  const adminToken = getStoredAdminToken();
+  if (adminToken) params.set('token', adminToken);
   return `/api/fs/stream?${params.toString()}`;
 }
 

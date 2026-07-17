@@ -1,6 +1,6 @@
 import path from 'node:path';
 import fs from 'node:fs/promises';
-import { DEFAULT_DEPARTMENT_CODE, TRASH_FOLDER } from '../shared/constants.js';
+import { TRASH_FOLDER } from '../shared/constants.js';
 
 /** @type {{ portableRoot: string, installRoot?: string, dataRoot: string, tempPath: string, isDev: boolean, getServerInfo: () => { port: number, addresses: string[] } } | null} */
 let appContext = null;
@@ -51,14 +51,10 @@ export function resolvePortablePath(relativePath = '') {
   return absolute;
 }
 
-export async function ensureDataRoot({ seedDefaultDepartment = true } = {}) {
+export async function ensureDataRoot() {
   const dataRoot = getDataRoot();
   await fs.mkdir(dataRoot, { recursive: true });
   await fs.mkdir(path.join(dataRoot, TRASH_FOLDER), { recursive: true });
-
-  if (seedDefaultDepartment) {
-    await fs.mkdir(path.join(dataRoot, DEFAULT_DEPARTMENT_CODE), { recursive: true });
-  }
 }
 
 export function getAppPaths() {

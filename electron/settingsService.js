@@ -8,6 +8,7 @@ import {
   normalizeAccessPermissions,
   normalizeAccessPermissionsFromUi,
 } from '../shared/guestPermissions.js';
+import { getMemberAccessPermissionsByLoginId } from './membersService.js';
 
 const SETTINGS_FILE = '.nas4usb-settings.json';
 
@@ -17,6 +18,8 @@ const SETTINGS_FILE = '.nas4usb-settings.json';
  *   guestPermissions: import('../shared/guestPermissions.js').AccessPermissionFlags,
  *   loggedInPermissions: import('../shared/guestPermissions.js').AccessPermissionFlags,
  * }} AppSettings
+ *
+ * @typedef {{ isLoggedIn?: boolean, loginId?: string | null } | boolean} AccessAuth
  */
 
 /**
@@ -76,6 +79,20 @@ async function saveStore(portableRoot, settings) {
 }
 
 /**
+ * @param {AccessAuth} auth
+ * @returns {{ isLoggedIn: boolean, loginId: string | null }}
+ */
+export function resolveAccessAuth(auth) {
+  if (typeof auth === 'boolean') {
+    return { isLoggedIn: auth, loginId: null };
+  }
+  return {
+    isLoggedIn: Boolean(auth?.isLoggedIn),
+    loginId: auth?.loginId ? String(auth.loginId) : null,
+  };
+}
+
+/**
  * @param {string} [portableRoot]
  */
 export async function getAppSettings(portableRoot = getPortableRoot()) {
@@ -107,22 +124,39 @@ export async function getLoggedInPermissions(portableRoot = getPortableRoot()) {
 }
 
 /**
- * @param {boolean} isLoggedIn
+ * Guest → settings.guestPermissions.
+ * Logged-in → that member's permissions (fallback: settings.loggedInPermissions).
+ *
+ * @param {AccessAuth} auth
  * @param {string} [portableRoot]
  */
-export async function getEffectiveAccessPermissions(isLoggedIn, portableRoot = getPortableRoot()) {
+export async function getEffectiveAccessPermissions(auth, portableRoot = getPortableRoot()) {
+  const { isLoggedIn, loginId } = resolveAccessAuth(auth);
   const settings = await loadStore(portableRoot);
-  return isLoggedIn ? settings.loggedInPermissions : settings.guestPermissions;
+  if (!isLoggedIn) {
+    return settings.guestPermissions;
+  }
+  if (loginId) {
+    const memberPerms = await getMemberAccessPermissionsByLoginId(loginId, portableRoot);
+    if (memberPerms) return memberPerms;
+  }
+  return settings.loggedInPermissions;
 }
 
 /**
  * @param {string} [portableRoot]
+ * @param {AccessAuth} [auth]
  */
-export async function getAccessPermissionsBundle(portableRoot = getPortableRoot()) {
+export async function getAccessPermissionsBundle(
+  portableRoot = getPortableRoot(),
+  auth = false,
+) {
   const settings = await loadStore(portableRoot);
+  const effectivePermissions = await getEffectiveAccessPermissions(auth, portableRoot);
   return {
     guestPermissions: settings.guestPermissions,
     loggedInPermissions: settings.loggedInPermissions,
+    effectivePermissions,
   };
 }
 
