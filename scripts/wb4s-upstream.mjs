@@ -1,7 +1,7 @@
 import path from 'node:path';
 
 /** WhiteBoard4Share version bundled into NAS4USB. */
-export const WB4S_UPSTREAM_VERSION = '1.0.4';
+export const WB4S_UPSTREAM_VERSION = '1.0.5';
 
 export const WB4S_REPO = 'https://github.com/soonpyopark/WhiteBoard4Share.git';
 

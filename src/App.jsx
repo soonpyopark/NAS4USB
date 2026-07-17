@@ -352,23 +352,6 @@ function Nas4usbAppMain() {
     };
   }, [shareToken, handleOpenFile]);
 
-  useEffect(() => {
-    if (isShareMode) return undefined;
-
-    const onKeyDown = (event) => {
-      if (
-        event.key === 'Escape' &&
-        openEditor &&
-        openEditor.type !== 'wb4s'
-      ) {
-        setOpenEditor(null);
-      }
-    };
-
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [isShareMode, openEditor]);
-
   if (isShareMode) {
     if (shareStatus === 'loading') {
       return <ShareLinkLoading />;

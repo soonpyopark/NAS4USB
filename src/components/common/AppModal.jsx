@@ -40,8 +40,12 @@ export function AppModal({
     .filter(Boolean)
     .join(' ');
 
+  // Editor/viewer windows should only close via their explicit [닫기] button,
+  // not by clicking the backdrop (avoids accidental data loss while editing).
+  const handleOverlayClick = embedded || editor ? undefined : onClose;
+
   return (
-    <div className={overlayClass} onClick={embedded ? undefined : onClose}>
+    <div className={overlayClass} onClick={handleOverlayClick}>
       <div
         className={dialogClass}
         role="dialog"

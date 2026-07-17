@@ -131,7 +131,11 @@ export async function syncWb4sEngine(root, { strategy = 'auto', force = false } 
     );
   }
 
-  if (strategy === 'auto' && (await migrateLegacyVendorCopy(root))) {
+  // Legacy vendor/whiteboard4share is a frozen, outdated snapshot kept only for
+  // first-time migration on installs that predate the .cache/wb4s-src flow. Once a
+  // cache already exists (even if its version is stale), prefer re-cloning the real
+  // upstream below instead of silently regressing to this old checked-in copy.
+  if (strategy === 'auto' && !currentVersion && (await migrateLegacyVendorCopy(root))) {
     await applyEducoworkOverlay(root);
     await ensureWb4sDependencies(root);
     return 'legacy-vendor';
