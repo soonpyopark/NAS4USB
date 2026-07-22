@@ -25,7 +25,10 @@ export default defineConfig(({ mode }) => {
         stream: path.resolve(__dirname, 'src/lib/shims/stream.js'),
         fs: path.resolve(__dirname, 'src/lib/shims/fs.js'),
       },
-      dedupe: ['yjs', 'react', 'react-dom'],
+      // Keep a single copy of BlockNote/ProseMirror — mismatched @blocknote/*
+      // versions otherwise load two cores and throw "Duplicate use of selection
+      // JSON ID multiple-node" (blank white editor).
+      dedupe: ['yjs', 'react', 'react-dom', '@blocknote/core', '@blocknote/react', 'prosemirror-state', 'prosemirror-model', 'prosemirror-view'],
     },
     optimizeDeps: {
       include: [
@@ -37,10 +40,12 @@ export default defineConfig(({ mode }) => {
         'xlsx',
         'xlsx-js-style',
         '@blocknote/core',
+        '@blocknote/core/yjs',
         '@blocknote/react',
         '@blocknote/mantine',
         '@mantine/core',
         '@mantine/hooks',
+        'y-prosemirror',
       ],
     },
     build: {

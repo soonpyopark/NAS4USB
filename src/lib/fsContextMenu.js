@@ -129,7 +129,7 @@ export function buildEntryContextMenuItems({
       },
       {
         id: 'export-html',
-        label: '브라우저용으로 내보내기',
+        label: 'HTML로 내보내기',
         disabled: !onExportHtml || !canExportHtml,
         onClick: () => onExportHtml?.(),
       },
@@ -231,7 +231,7 @@ export function buildEntryContextMenuItems({
     },
     {
       id: 'export-html',
-      label: '브라우저용으로 내보내기',
+      label: 'HTML로 내보내기',
       disabled: !onExportHtml || !canExportHtml,
       onClick: () => onExportHtml?.(),
     },

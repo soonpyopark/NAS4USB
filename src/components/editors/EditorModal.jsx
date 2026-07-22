@@ -65,7 +65,7 @@ export default function EditorModal({
         <AppModalActions className="modal-editor-header__actions !mb-0 shrink-0">
           {onExportHtml && (
             <AppModalButton onClick={onExportHtml} disabled={exportingHtml}>
-              {exportingHtml ? '내보내는 중…' : '브라우저용으로 내보내기'}
+              {exportingHtml ? '내보내는 중…' : 'HTML로 내보내기'}
             </AppModalButton>
           )}
           {!hideHistory && (

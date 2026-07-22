@@ -1,11 +1,18 @@
 import { createElement } from 'react';
 import { createRoot } from 'react-dom/client';
-import BlockEditorView from '../../components/editors/BlockEditorView.jsx';
 import { parseBlockFileBase64, readSidecarAssets } from './package.js';
 import { packageAssetUrlToFileName, normalizeBlockAssetUrls, toPackageAssetUrl } from './assetUrls.js';
 import { getBlockFileStem } from './document.js';
 import { guessMimeFromFileName } from '../../../shared/mediaTypes.js';
 import { downloadTextFile } from '../downloadTextFile.js';
+
+// Lazy-load the editor view (same as BlockEditorShell) so we never statically
+// import BlockNote into the main graph while the shell also lazy-loads it —
+// that dual path was an extra way to load @blocknote/core twice.
+async function loadBlockEditorView() {
+  const mod = await import('../../components/editors/BlockEditorView.jsx');
+  return mod.default;
+}
 
 // BlockNote/Mantine's own stylesheets, inlined verbatim so the exported page needs no
 // network access. Inter font-face (@blocknote/core/fonts/inter.css) is deliberately
@@ -127,6 +134,7 @@ async function exportBlockContentAsHtml({ relativePath, fileName, content, embed
   container.style.width = '900px';
   document.body.appendChild(container);
 
+  const BlockEditorView = await loadBlockEditorView();
   const root = createRoot(container);
   try {
     await new Promise((resolve) => {

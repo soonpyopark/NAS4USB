@@ -1,24 +1,24 @@
 {
-  "updatedAt": "2026-07-17T12:24:59.246Z",
+  "updatedAt": "2026-07-22T10:42:26.233Z",
   "cores": {
     "rhwp": {
       "version": "@rhwp/core@0.7.19, @rhwp/editor@0.7.19",
-      "updatedAt": "2026-07-17T12:24:59.246Z",
+      "updatedAt": "2026-07-22T10:42:26.233Z",
       "method": "npm"
     },
     "wb4s": {
       "version": "1.0.5",
-      "updatedAt": "2026-07-17T12:24:59.246Z",
+      "updatedAt": "2026-07-22T10:42:26.233Z",
       "method": "git-clone+build"
     },
     "fortune-sheet": {
       "version": "@fortune-sheet/react@1.0.4",
-      "updatedAt": "2026-07-17T12:24:59.246Z",
+      "updatedAt": "2026-07-22T10:42:26.233Z",
       "method": "npm"
     },
     "blocknote": {
-      "version": "@blocknote/core@0.51.4, @blocknote/react@0.51.4",
-      "updatedAt": "2026-07-17T12:24:59.246Z",
+      "version": "@blocknote/core@0.52.1, @blocknote/react@0.52.1",
+      "updatedAt": "2026-07-22T10:42:26.233Z",
       "method": "npm"
     }
   }

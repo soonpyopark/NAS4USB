@@ -218,7 +218,7 @@ export default function BlockEditorShell({
       const { exportLiveBlockContentAsHtml } = await import('../../lib/blocknote/exportHtml.jsx');
       await exportLiveBlockContentAsHtml(relativePath, fileName, editorRef.current.document);
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : '브라우저용으로 내보내기에 실패했습니다.');
+      setLoadError(err instanceof Error ? err.message : 'HTML로 내보내기에 실패했습니다.');
     } finally {
       setExportingHtml(false);
     }

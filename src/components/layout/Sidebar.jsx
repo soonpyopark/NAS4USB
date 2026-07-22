@@ -209,7 +209,7 @@ export default function Sidebar({
       const { exportBlockFileAsHtml } = await import('../../lib/blocknote/exportHtml.jsx');
       await exportBlockFileAsHtml(entry.relativePath, entry.name || entry.relativePath.split('/').pop());
     } catch (err) {
-      nativeAlert(err instanceof Error ? err.message : '브라우저용으로 내보내기에 실패했습니다.');
+      nativeAlert(err instanceof Error ? err.message : 'HTML로 내보내기에 실패했습니다.');
     }
   };
 
