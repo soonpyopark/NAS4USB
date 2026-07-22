@@ -251,6 +251,9 @@ function createMainWindow() {
 
   if (isDev) {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
+    mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+      console.log(`[renderer:${level}] ${message} (${sourceId}:${line})`);
+    });
   }
 
   mainWindow.on('close', (event) => {

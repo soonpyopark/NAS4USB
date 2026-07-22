@@ -50,6 +50,7 @@ import { moveEntries } from '../../lib/moveEntries.js';
 import { TRASH_ACCESS_DENIED_MESSAGE } from '../../../shared/constants.js';
 import { isTrashPath, isTrashSubfolder, TRASH_FOLDER } from '../../lib/trashPaths.js';
 import { FAVORITES_FOLDER, isFavoritesPath } from '../../lib/favoritesPaths.js';
+import { isBlockDocumentRelativePath } from '../../../shared/blockAssetPaths.js';
 import { guardOpenFileEntry } from '../../lib/openFileGuard.js';
 import { nativeAlert } from '../../lib/nativeDialog.js';
 import {
@@ -199,6 +200,16 @@ export default function Sidebar({
       await downloadFileEntries([target]);
     } catch (err) {
       nativeAlert(err instanceof Error ? err.message : '다운로드에 실패했습니다.');
+    }
+  };
+
+  const handleExportHtml = async (entry) => {
+    if (!entry || entry.isDirectory) return;
+    try {
+      const { exportBlockFileAsHtml } = await import('../../lib/blocknote/exportHtml.jsx');
+      await exportBlockFileAsHtml(entry.relativePath, entry.name || entry.relativePath.split('/').pop());
+    } catch (err) {
+      nativeAlert(err instanceof Error ? err.message : '브라우저용으로 내보내기에 실패했습니다.');
     }
   };
 
@@ -539,6 +550,10 @@ export default function Sidebar({
         onProperties: () => handleShowProperties(contextTarget),
         onDownload: () => handleDownload(contextTarget),
         canDownload: Boolean(contextTarget && !contextTarget.isDirectory),
+        onExportHtml: () => handleExportHtml(contextTarget),
+        canExportHtml: Boolean(
+          contextTarget && !contextTarget.isDirectory && isBlockDocumentRelativePath(contextTarget.relativePath),
+        ),
         canEditOpen: contextTarget
           ? canOpenFileForEdit(contextTarget.relativePath, accessMap, isAdminLoggedIn, effectivePermissions)
           : false,

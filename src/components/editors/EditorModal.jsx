@@ -43,6 +43,8 @@ export default function EditorModal({
   fullscreen = false,
   hideHistory = false,
   onShowHistory,
+  onExportHtml,
+  exportingHtml = false,
   children,
 }) {
   return (
@@ -61,6 +63,11 @@ export default function EditorModal({
         />
 
         <AppModalActions className="modal-editor-header__actions !mb-0 shrink-0">
+          {onExportHtml && (
+            <AppModalButton onClick={onExportHtml} disabled={exportingHtml}>
+              {exportingHtml ? '내보내는 중…' : '브라우저용으로 내보내기'}
+            </AppModalButton>
+          )}
           {!hideHistory && (
             <AppModalButton onClick={onShowHistory}>이력보기</AppModalButton>
           )}

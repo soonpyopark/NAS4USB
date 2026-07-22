@@ -98,13 +98,29 @@ export default function LoginDialog({
       role="presentation"
     >
       <form
-        className="w-full max-w-[360px] rounded-xl bg-white p-6 shadow-lg"
+        className="relative w-full max-w-[360px] rounded-xl bg-white p-6 shadow-lg"
         onClick={(event) => event.stopPropagation()}
         onSubmit={handleSubmit}
         role="dialog"
         aria-modal="true"
         aria-labelledby="login-dialog-title"
       >
+        {dismissible && (
+          <button
+            type="button"
+            className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-full border-0 bg-transparent text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+            aria-label="닫기"
+            onClick={onClose}
+            disabled={loggingIn}
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M6.4 5 5 6.4 10.6 12 5 17.6 6.4 19l5.6-5.6 5.6 5.6 1.4-1.4-5.6-5.6L19 6.4 17.6 5 12 10.6 6.4 5Z"
+              />
+            </svg>
+          </button>
+        )}
         <h2 id="login-dialog-title" className="m-0 text-lg font-medium text-slate-900">
           로그인
         </h2>

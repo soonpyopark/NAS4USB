@@ -21,6 +21,8 @@ import { isTrashPath } from './trashPaths.js';
  *   onProperties: () => void,
  *   onDownload?: () => void,
  *   canDownload?: boolean,
+ *   onExportHtml?: () => void,
+ *   canExportHtml?: boolean,
  *   canEditOpen?: boolean,
  *   isAdminLoggedIn?: boolean,
  *   canWrite?: boolean,
@@ -46,6 +48,8 @@ export function buildEntryContextMenuItems({
   onProperties,
   onDownload,
   canDownload = false,
+  onExportHtml,
+  canExportHtml = false,
   canEditOpen = true,
   isAdminLoggedIn = true,
   canWrite = true,
@@ -122,6 +126,12 @@ export function buildEntryContextMenuItems({
         label: '다운로드',
         disabled: !onDownload || !canDownload,
         onClick: () => onDownload?.(),
+      },
+      {
+        id: 'export-html',
+        label: '브라우저용으로 내보내기',
+        disabled: !onExportHtml || !canExportHtml,
+        onClick: () => onExportHtml?.(),
       },
       {
         id: 'properties',
@@ -218,6 +228,12 @@ export function buildEntryContextMenuItems({
       label: '다운로드',
       disabled: !onDownload || !canDownload,
       onClick: () => onDownload?.(),
+    },
+    {
+      id: 'export-html',
+      label: '브라우저용으로 내보내기',
+      disabled: !onExportHtml || !canExportHtml,
+      onClick: () => onExportHtml?.(),
     },
     ...sharedItems,
   ];

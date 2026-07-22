@@ -54,6 +54,7 @@ export default function BlockEditorShell({
   const [roomReady, setRoomReady] = useState(false);
   const [collabUser, setCollabUser] = useState({ name: '사용자', color: '#2563eb' });
   const [showHistory, setShowHistory] = useState(false);
+  const [exportingHtml, setExportingHtml] = useState(false);
 
   const editorRef = useRef(/** @type {import('@blocknote/core').BlockNoteEditor | null} */ (null));
   const diskRevisionRef = useRef('');
@@ -210,6 +211,19 @@ export default function BlockEditorShell({
     [collaborationEnabled, doc, relativePath, workspace],
   );
 
+  const handleExportHtml = useCallback(async () => {
+    if (exportingHtml || !editorRef.current) return;
+    setExportingHtml(true);
+    try {
+      const { exportLiveBlockContentAsHtml } = await import('../../lib/blocknote/exportHtml.jsx');
+      await exportLiveBlockContentAsHtml(relativePath, fileName, editorRef.current.document);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : '브라우저용으로 내보내기에 실패했습니다.');
+    } finally {
+      setExportingHtml(false);
+    }
+  }, [exportingHtml, fileName, relativePath]);
+
   const handleClose = useCallback(async () => {
     if (closingRef.current) return;
     closingRef.current = true;
@@ -245,6 +259,8 @@ export default function BlockEditorShell({
         hideSave={shareReadOnly}
         hideHistory={shareReadOnly}
         onShowHistory={() => setShowHistory(true)}
+        onExportHtml={isLoading ? undefined : handleExportHtml}
+        exportingHtml={exportingHtml}
         onSave={handleSave}
         onClose={handleClose}
         allowClose={allowClose}

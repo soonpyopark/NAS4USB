@@ -11,31 +11,11 @@ import { decodeTextBase64 } from '../../lib/text/textIO.js';
 import { parseBlockFileBase64 } from '../../lib/blocknote/package.js';
 import { packageAssetUrlToFileName, normalizeBlockAssetUrls } from '../../lib/blocknote/assetUrls.js';
 import { loadRhwpModule } from '../../lib/rhwp/loadRhwp.js';
-import { getAudioMimeType, getVideoMimeType, isAudioExtension, isVideoExtension } from '../../../shared/mediaTypes.js';
+import { guessMimeFromFileName } from '../../../shared/mediaTypes.js';
 
 // Matches the lazy-loading already used by BlockEditorShell.jsx — keeps BlockNote out of
 // the main bundle for the (common) case where a user never opens a .block history preview.
 const BlockEditorView = lazy(() => import('./BlockEditorView.jsx'));
-
-/** @type {Record<string, string>} */
-const IMAGE_MIME_TYPES = {
-  png: 'image/png',
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  gif: 'image/gif',
-  webp: 'image/webp',
-  svg: 'image/svg+xml',
-  bmp: 'image/bmp',
-};
-
-/** @param {string} fileName */
-function guessMimeFromFileName(fileName) {
-  const ext = (fileName.split('.').pop() ?? '').toLowerCase();
-  if (IMAGE_MIME_TYPES[ext]) return IMAGE_MIME_TYPES[ext];
-  if (isVideoExtension(ext)) return getVideoMimeType(ext);
-  if (isAudioExtension(ext)) return getAudioMimeType(ext);
-  return 'application/octet-stream';
-}
 
 /**
  * Read-only preview of a single revision-history entry. Never writes to disk,
