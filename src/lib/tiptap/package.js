@@ -1,17 +1,17 @@
 import JSZip from 'jszip';
 import { base64ToBytes, bytesToBase64 } from '../bytes.js';
 import { joinRelativePath } from '../fsPaths.js';
-import { parseBlockDocument } from './document.js';
+import { createEmptyTiptapDoc, isTiptapDoc } from './document.js';
 import {
-  getBlockAssetsDir,
-  normalizeBlockAssetUrls,
+  getTiptapAssetsDir,
   normalizeAssetPath,
+  normalizeTiptapAssetUrls,
   toPackageAssetUrl,
 } from './assetUrls.js';
 import { collectReferencedAssetPaths } from './assetCleanup.js';
 
-export const BLOCK_PACKAGE_FORMAT = 'blocknote-package';
-export const BLOCK_PACKAGE_VERSION = 1;
+export const TIPTAP_PACKAGE_FORMAT = 'tiptap-package';
+export const TIPTAP_PACKAGE_VERSION = 1;
 
 const MANIFEST_PATH = 'manifest.json';
 const DOCUMENT_PATH = 'document.json';
@@ -28,15 +28,15 @@ export function isZipBytes(bytes) {
  */
 function createManifest(title, exportedAt) {
   return {
-    format: BLOCK_PACKAGE_FORMAT,
-    version: BLOCK_PACKAGE_VERSION,
+    format: TIPTAP_PACKAGE_FORMAT,
+    version: TIPTAP_PACKAGE_VERSION,
     title,
     exportedAt: exportedAt ?? new Date().toISOString(),
   };
 }
 
 /**
- * @param {import('@blocknote/core').PartialBlock[]} content
+ * @param {import('@tiptap/core').JSONContent} content
  */
 function createDocumentJson(content) {
   return JSON.stringify({ content }, null, 2);
@@ -45,22 +45,22 @@ function createDocumentJson(content) {
 /**
  * @param {Uint8Array} bytes
  */
-async function unpackBlockPackage(bytes) {
+async function unpackTiptapPackage(bytes) {
   const zip = await JSZip.loadAsync(bytes);
   const manifestFile = zip.file(MANIFEST_PATH);
   const documentFile = zip.file(DOCUMENT_PATH);
 
   if (!manifestFile || !documentFile) {
-    throw new Error('Invalid .block package: missing manifest or document');
+    throw new Error('Invalid .tiptap package: missing manifest or document');
   }
 
   const manifest = JSON.parse(await manifestFile.async('string'));
-  if (manifest?.format !== BLOCK_PACKAGE_FORMAT) {
-    throw new Error('Invalid .block package format');
+  if (manifest?.format !== TIPTAP_PACKAGE_FORMAT) {
+    throw new Error('Invalid .tiptap package format');
   }
 
   const document = JSON.parse(await documentFile.async('string'));
-  const content = Array.isArray(document?.content) ? document.content : [];
+  const content = isTiptapDoc(document?.content) ? document.content : createEmptyTiptapDoc();
 
   /** @type {{ path: string, base64: string }[]} */
   const embeddedAssets = [];
@@ -89,11 +89,11 @@ async function unpackBlockPackage(bytes) {
  * @param {{
  *   title: string,
  *   exportedAt?: string,
- *   content: import('@blocknote/core').PartialBlock[],
+ *   content: import('@tiptap/core').JSONContent,
  *   assets: { fileName: string, base64: string }[],
  * }} input
  */
-async function packBlockPackage(input) {
+async function packTiptapPackage(input) {
   const zip = new JSZip();
   const exportedAt = input.exportedAt ?? new Date().toISOString();
 
@@ -112,62 +112,50 @@ async function packBlockPackage(input) {
  * @returns {Promise<{
  *   title: string,
  *   exportedAt: string,
- *   content: import('@blocknote/core').PartialBlock[],
+ *   content: import('@tiptap/core').JSONContent,
  *   embeddedAssets: { path: string, base64: string }[],
  * }>}
  */
-export async function parseBlockFileBase64(base64) {
+export async function parseTiptapFileBase64(base64) {
   const bytes = base64 ? base64ToBytes(base64) : new Uint8Array();
 
   if (bytes.length === 0) {
     return {
       title: 'NoName',
       exportedAt: new Date().toISOString(),
-      content: [],
+      content: createEmptyTiptapDoc(),
       embeddedAssets: [],
     };
   }
 
   if (isZipBytes(bytes)) {
-    try {
-      return await unpackBlockPackage(bytes);
-    } catch {
-      // Not our package — fall through to legacy JSON attempt
-    }
+    return unpackTiptapPackage(bytes);
   }
 
-  const text = new TextDecoder('utf-8').decode(bytes);
-  const parsed = parseBlockDocument(text);
-  return {
-    title: parsed.title,
-    exportedAt: parsed.exportedAt,
-    content: parsed.content,
-    embeddedAssets: [],
-  };
+  throw new Error('Invalid .tiptap file (expected ZIP package)');
 }
 
 /**
  * @param {string} title
  * @returns {Promise<string>}
  */
-export async function createEmptyBlockPackageBase64(title = 'NoName') {
-  const bytes = await packBlockPackage({
+export async function createEmptyTiptapPackageBase64(title = 'NoName') {
+  const bytes = await packTiptapPackage({
     title,
-    content: [],
+    content: createEmptyTiptapDoc(),
     assets: [],
   });
   return bytesToBase64(bytes);
 }
 
 /**
- * Write embedded package assets into the edit-time sidecar folder.
- * @param {string} blockRelativePath
+ * @param {string} tiptapRelativePath
  * @param {{ path: string, base64: string }[]} embeddedAssets
  */
-export async function syncEmbeddedAssetsToSidecar(blockRelativePath, embeddedAssets) {
+export async function syncEmbeddedAssetsToSidecar(tiptapRelativePath, embeddedAssets) {
   if (!embeddedAssets.length) return;
 
-  const assetsDir = getBlockAssetsDir(blockRelativePath);
+  const assetsDir = getTiptapAssetsDir(tiptapRelativePath);
   await window.nas4usb.fs.mkdir(assetsDir);
 
   for (const asset of embeddedAssets) {
@@ -180,11 +168,11 @@ export async function syncEmbeddedAssetsToSidecar(blockRelativePath, embeddedAss
 }
 
 /**
- * @param {string} blockRelativePath
+ * @param {string} tiptapRelativePath
  * @returns {Promise<{ fileName: string, base64: string }[]>}
  */
-export async function readSidecarAssets(blockRelativePath) {
-  const assetsDir = getBlockAssetsDir(blockRelativePath);
+export async function readSidecarAssets(tiptapRelativePath) {
+  const assetsDir = getTiptapAssetsDir(tiptapRelativePath);
   let entries = [];
   try {
     entries = await window.nas4usb.fs.readDir(assetsDir);
@@ -201,9 +189,9 @@ export async function readSidecarAssets(blockRelativePath) {
   return assets;
 }
 
-/** @param {string} blockRelativePath */
-export async function removeBlockAssetsSidecar(blockRelativePath) {
-  const assetsDir = getBlockAssetsDir(blockRelativePath);
+/** @param {string} tiptapRelativePath */
+export async function removeTiptapAssetsSidecar(tiptapRelativePath) {
+  const assetsDir = getTiptapAssetsDir(tiptapRelativePath);
   try {
     await window.nas4usb.fs.delete(assetsDir);
   } catch {
@@ -212,12 +200,12 @@ export async function removeBlockAssetsSidecar(blockRelativePath) {
 }
 
 /**
- * @param {string} blockRelativePath
+ * @param {string} tiptapRelativePath
  * @param {string} assetsDir
  * @param {Set<string>} referenced
  */
-async function readReferencedSidecarAssets(blockRelativePath, assetsDir, referenced) {
-  const allAssets = await readSidecarAssets(blockRelativePath);
+async function readReferencedSidecarAssets(tiptapRelativePath, assetsDir, referenced) {
+  const allAssets = await readSidecarAssets(tiptapRelativePath);
   return allAssets.filter((asset) =>
     referenced.has(normalizeAssetPath(joinRelativePath(assetsDir, asset.fileName))),
   );
@@ -227,28 +215,24 @@ async function readReferencedSidecarAssets(blockRelativePath, assetsDir, referen
  * @param {{
  *   title: string,
  *   exportedAt?: string,
- *   content: import('@blocknote/core').PartialBlock[],
- *   blockRelativePath: string,
+ *   content: import('@tiptap/core').JSONContent,
+ *   tiptapRelativePath: string,
  * }} input
  * @returns {Promise<string>}
  */
-export async function packBlockFileFromSidecar(input) {
-  const normalizedContent = normalizeBlockAssetUrls(input.content, input.blockRelativePath);
-  const assetsDir = getBlockAssetsDir(input.blockRelativePath);
-  const referenced = collectReferencedAssetPaths(normalizedContent, input.blockRelativePath);
+export async function packTiptapFileFromSidecar(input) {
+  const normalizedContent = normalizeTiptapAssetUrls(input.content, input.tiptapRelativePath);
+  const assetsDir = getTiptapAssetsDir(input.tiptapRelativePath);
+  const referenced = collectReferencedAssetPaths(normalizedContent, input.tiptapRelativePath);
 
-  let assets = await readReferencedSidecarAssets(input.blockRelativePath, assetsDir, referenced);
+  let assets = await readReferencedSidecarAssets(input.tiptapRelativePath, assetsDir, referenced);
 
-  // Guard against a rare race where the sidecar directory listing doesn't yet reflect an
-  // asset that was just written moments earlier (e.g. an image upload whose fs.writeFile
-  // resolved just before this save) — retry a couple of times rather than silently packing a
-  // document whose image blocks point at nothing (permanently "losing" the picture).
   for (let attempt = 0; attempt < 2 && assets.length < referenced.size; attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 150));
-    assets = await readReferencedSidecarAssets(input.blockRelativePath, assetsDir, referenced);
+    assets = await readReferencedSidecarAssets(input.tiptapRelativePath, assetsDir, referenced);
   }
 
-  const bytes = await packBlockPackage({
+  const bytes = await packTiptapPackage({
     title: input.title,
     exportedAt: input.exportedAt,
     content: normalizedContent,

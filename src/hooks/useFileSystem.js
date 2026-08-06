@@ -3,7 +3,7 @@ import { joinRelativePath, readFileAsBase64, resolveUniqueName, validateFolderNa
 import { readDirWithRetry } from '../lib/readDirWithRetry.js';
 import { filterTrashFromEntries, isFsNotFoundError, isTrashPath } from '../lib/trashPaths.js';
 import { isFavoritesPath } from '../lib/favoritesPaths.js';
-import { filterBlockAssetSidecarFromEntries } from '../../shared/blockAssetPaths.js';
+import { filterTiptapAssetSidecarFromEntries } from '../../shared/tiptapAssetPaths.js';
 import { filterFortuneSidecarFromEntries } from '../../shared/fortuneSheetSidecar.js';
 import { buildNewFileContent, resolveNewFileName } from '../lib/files/newFileFactory.js';
 import { convertHwpBase64ToHwpx, isHwpFileName, toHwpxFileName } from '@nas4usb/rhwp/hwpConvert.js';
@@ -23,7 +23,11 @@ export function useFileSystem(currentPath) {
         setEntries(Array.isArray(result) ? result : []);
       } else {
         const result = await readDirWithRetry(currentPath);
-        setEntries(filterFortuneSidecarFromEntries(filterBlockAssetSidecarFromEntries(filterTrashFromEntries(result, currentPath))));
+        setEntries(
+          filterFortuneSidecarFromEntries(
+            filterTiptapAssetSidecarFromEntries(filterTrashFromEntries(result, currentPath)),
+          ),
+        );
       }
     } catch (err) {
       if (isFsNotFoundError(err)) {

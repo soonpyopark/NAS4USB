@@ -1,0 +1,307 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { EditorContent, useEditor } from '@tiptap/react';
+import '../../styles/tiptap-editor.css';
+import 'tippy.js/dist/tippy.css';
+import 'katex/dist/katex.min.css';
+import 'highlight.js/styles/github.css';
+import { createEmptyTiptapDoc } from '../../lib/tiptap/document.js';
+import { createTiptapExtensions } from '../../lib/tiptap/extensions.js';
+import { createSlashCommandExtension } from '../../lib/tiptap/slashCommand.js';
+import {
+  insertTiptapMedia,
+  insertTiptapMediaAtView,
+  pickTiptapMediaFile,
+} from '../../lib/tiptap/insertMedia.js';
+import {
+  collectReferencedAssetPathsFromPmDoc,
+  cleanupUnreferencedTiptapAssets,
+  deleteTiptapAssetFiles,
+} from '../../lib/tiptap/assetCleanup.js';
+import {
+  createTiptapResolveFileUrl,
+  createTiptapUploadFile,
+} from '../../lib/tiptap/uploadFile.js';
+import TipTapToolbar from './tiptap/TipTapToolbar.jsx';
+import TipTapBubbleMenus from './tiptap/TipTapBubbleMenus.jsx';
+import TipTapTocPanel from './tiptap/TipTapTocPanel.jsx';
+
+/**
+ * TipTap editor with full open-source feature surface.
+ * @see https://github.com/ueberdosis/tiptap
+ *
+ * @param {{
+ *   relativePath: string,
+ *   initialContent: import('@tiptap/core').JSONContent,
+ *   collaboration: {
+ *     doc: import('yjs').Doc,
+ *     provider: import('y-websocket').WebsocketProvider,
+ *     user: { name: string, color: string },
+ *   } | null,
+ *   readOnly?: boolean,
+ *   resolveFileUrl?: (url: string) => Promise<string>,
+ *   onReady?: (editor: import('@tiptap/core').Editor) => void,
+ *   onSave?: () => void,
+ * }} props
+ */
+export default function TipTapEditorView({
+  relativePath,
+  initialContent,
+  collaboration,
+  readOnly = false,
+  resolveFileUrl: resolveFileUrlProp,
+  onReady,
+  onSave,
+}) {
+  const imageInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
+  const videoInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
+  const audioInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
+  const fileInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
+  const [tocOpen, setTocOpen] = useState(false);
+  const [emojiOpenRequest, setEmojiOpenRequest] = useState(0);
+  const uploadFile = useMemo(() => createTiptapUploadFile(relativePath), [relativePath]);
+  const defaultResolveFileUrl = useMemo(
+    () => createTiptapResolveFileUrl(relativePath),
+    [relativePath],
+  );
+  const resolveFileUrl = resolveFileUrlProp ?? defaultResolveFileUrl;
+
+  const collabDoc = collaboration?.doc ?? null;
+  const collabProvider = collaboration?.provider ?? null;
+  const collabUserName = collaboration?.user?.name ?? '사용자';
+  const collabUserColor = collaboration?.user?.color ?? '#2563eb';
+
+  const extensions = useMemo(() => {
+    const collab = collabDoc
+      ? {
+          doc: collabDoc,
+          provider: collabProvider,
+          user: { name: collabUserName, color: collabUserColor },
+        }
+      : null;
+
+    const base = createTiptapExtensions({
+      collaboration: collab,
+      resolveFileUrl,
+      includeImageNodeView: true,
+      includeMediaNodeView: true,
+    });
+    if (!readOnly) {
+      base.push(
+        createSlashCommandExtension({
+          onUploadImage: () => imageInputRef.current?.click(),
+          onUploadVideo: () => videoInputRef.current?.click(),
+          onUploadAudio: () => audioInputRef.current?.click(),
+          onUploadFile: () => fileInputRef.current?.click(),
+          onOpenEmojiPicker: () => setEmojiOpenRequest((n) => n + 1),
+        }),
+      );
+    }
+    return base;
+  }, [collabDoc, collabProvider, collabUserName, collabUserColor, readOnly, resolveFileUrl]);
+
+  const editor = useEditor(
+    {
+      extensions,
+      content: collabDoc ? undefined : (initialContent ?? createEmptyTiptapDoc()),
+      editable: !readOnly,
+      immediatelyRender: false,
+      editorProps: {
+        attributes: {
+          class: 'tiptap',
+          spellcheck: 'true',
+        },
+        handleDrop: (view, event) => {
+          const file = pickTiptapMediaFile(event.dataTransfer?.files);
+          if (!file || readOnly) return false;
+          event.preventDefault();
+          uploadFile(file)
+            .then((url) => {
+              insertTiptapMediaAtView(view, file, url, {
+                left: event.clientX,
+                top: event.clientY,
+              });
+            })
+            .catch((err) => {
+              window.alert(err instanceof Error ? err.message : '파일 업로드에 실패했습니다.');
+            });
+          return true;
+        },
+        handlePaste: (view, event) => {
+          const file = pickTiptapMediaFile(event.clipboardData?.files);
+          if (!file || readOnly) return false;
+          event.preventDefault();
+          uploadFile(file)
+            .then((url) => {
+              insertTiptapMediaAtView(view, file, url);
+            })
+            .catch((err) => {
+              window.alert(err instanceof Error ? err.message : '파일 업로드에 실패했습니다.');
+            });
+          return true;
+        },
+      },
+      onCreate: ({ editor: created }) => {
+        try {
+          created.commands.fixTables?.();
+        } catch {
+          // optional
+        }
+      },
+    },
+    collabDoc
+      ? [collabDoc, collabProvider, extensions, readOnly]
+      : [extensions, initialContent, readOnly],
+  );
+
+  useEffect(() => {
+    if (editor) onReady?.(editor);
+  }, [editor, onReady]);
+
+  useEffect(() => {
+    if (!editor) return;
+    editor.setEditable(!readOnly);
+  }, [editor, readOnly]);
+
+  useEffect(() => {
+    if (!editor || !collabProvider) return;
+    collabProvider.awareness?.setLocalStateField('user', {
+      name: collabUserName,
+      color: collabUserColor,
+    });
+  }, [editor, collabProvider, collabUserName, collabUserColor]);
+
+  useEffect(() => {
+    if (readOnly) return undefined;
+
+    const onKeyDown = (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        onSave?.();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onSave, readOnly]);
+
+  // When image/video/audio/file nodes are removed, delete sidecar files too.
+  useEffect(() => {
+    if (!editor || readOnly) return undefined;
+
+    let previous = collectReferencedAssetPathsFromPmDoc(editor.state.doc, relativePath);
+    /** @type {ReturnType<typeof setTimeout> | null} */
+    let timer = null;
+    /** @type {Set<string>} */
+    let pendingRemoval = new Set();
+
+    const flushRemovals = () => {
+      timer = null;
+      if (pendingRemoval.size === 0) return;
+      // Only delete files that are still unreferenced (undo may have restored them).
+      const stillMissing = [...pendingRemoval].filter((path) => !previous.has(path));
+      pendingRemoval = new Set();
+      if (stillMissing.length === 0) return;
+      deleteTiptapAssetFiles(stillMissing).catch(() => {});
+    };
+
+    const onUpdate = ({ transaction }) => {
+      if (!transaction.docChanged) return;
+      const next = collectReferencedAssetPathsFromPmDoc(editor.state.doc, relativePath);
+      for (const assetPath of previous) {
+        if (!next.has(assetPath)) pendingRemoval.add(assetPath);
+      }
+      // Re-inserted via undo: cancel pending delete.
+      for (const assetPath of next) {
+        pendingRemoval.delete(assetPath);
+      }
+      previous = next;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(flushRemovals, 800);
+    };
+
+    editor.on('update', onUpdate);
+    return () => {
+      editor.off('update', onUpdate);
+      if (timer) clearTimeout(timer);
+      // Flush: drop anything still unreferenced on unmount.
+      cleanupUnreferencedTiptapAssets(relativePath, editor.getJSON()).catch(() => {});
+    };
+  }, [editor, readOnly, relativePath]);
+
+  const handleMediaPicked = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !editor) return;
+    try {
+      const url = await uploadFile(file);
+      insertTiptapMedia(editor, file, url);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : '파일 업로드에 실패했습니다.');
+    }
+  };
+
+  const openImagePicker = () => imageInputRef.current?.click();
+  const openVideoPicker = () => videoInputRef.current?.click();
+  const openAudioPicker = () => audioInputRef.current?.click();
+  const openFilePicker = () => fileInputRef.current?.click();
+
+  if (!editor) {
+    return (
+      <div className="tiptap-editor-shell">
+        <div className="flex flex-1 items-center justify-center text-sm text-nas-muted">
+          TipTap 에디터 준비 중…
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="tiptap-editor-shell">
+      {!readOnly && (
+        <TipTapToolbar
+          editor={editor}
+          readOnly={readOnly}
+          tocOpen={tocOpen}
+          onToggleToc={() => setTocOpen((prev) => !prev)}
+          onUploadImage={openImagePicker}
+          onUploadVideo={openVideoPicker}
+          onUploadAudio={openAudioPicker}
+          onUploadFile={openFilePicker}
+          emojiOpenRequest={emojiOpenRequest}
+        />
+      )}
+
+      <TipTapBubbleMenus editor={editor} readOnly={readOnly} />
+
+      <div className="tiptap-editor-shell__body">
+        <div className="tiptap-editor-shell__scroll">
+          <EditorContent editor={editor} />
+        </div>
+        <TipTapTocPanel editor={editor} open={tocOpen} onClose={() => setTocOpen(false)} />
+      </div>
+
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={handleMediaPicked}
+      />
+      <input
+        ref={videoInputRef}
+        type="file"
+        accept="video/*"
+        hidden
+        onChange={handleMediaPicked}
+      />
+      <input
+        ref={audioInputRef}
+        type="file"
+        accept="audio/*"
+        hidden
+        onChange={handleMediaPicked}
+      />
+      <input ref={fileInputRef} type="file" hidden onChange={handleMediaPicked} />
+    </div>
+  );
+}

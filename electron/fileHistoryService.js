@@ -11,7 +11,7 @@ const MAX_HISTORY_ENTRIES = 10;
 const SNAPSHOT_ID_PATTERN = /^[0-9a-f-]{36}$/i;
 
 /** Extensions covered by the "이력보기" feature (the modal editors that have a Save button). */
-const SUPPORTED_EXTENSIONS = new Set(['xlsx', 'xls', 'hwpx', 'txt', 'md', 'block']);
+const SUPPORTED_EXTENSIONS = new Set(['xlsx', 'xls', 'hwpx', 'txt', 'md', 'tiptap']);
 
 /**
  * `.xlsx`/`.xls` extras that only FortuneSheet understands (currently: inserted images — see

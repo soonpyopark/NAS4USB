@@ -40,7 +40,7 @@ import { downloadFileEntries } from '../../lib/downloadEntries.js';
 import { moveEntries } from '../../lib/moveEntries.js';
 import { uploadFilesAtPath } from '../../lib/fsWriteActions.js';
 import { isTrashPath, isTrashSubfolder, TRASH_FOLDER } from '../../lib/trashPaths.js';
-import { isBlockDocumentRelativePath } from '../../../shared/blockAssetPaths.js';
+import { isTiptapDocumentRelativePath } from '../../../shared/tiptapAssetPaths.js';
 import { FAVORITES_FOLDER, isFavoritesPath } from '../../lib/favoritesPaths.js';
 import { guardOpenFileEntry } from '../../lib/openFileGuard.js';
 import { nativeAlert } from '../../lib/nativeDialog.js';
@@ -251,8 +251,12 @@ export default function FileExplorer({
   const handleExportHtml = async (entry) => {
     if (!entry || entry.isDirectory) return;
     try {
-      const { exportBlockFileAsHtml } = await import('../../lib/blocknote/exportHtml.jsx');
-      await exportBlockFileAsHtml(entry.relativePath, entry.name || entry.relativePath.split('/').pop());
+      const fileName = entry.name || entry.relativePath.split('/').pop();
+      if (!isTiptapDocumentRelativePath(entry.relativePath)) {
+        throw new Error('HTML 내보내기를 지원하지 않는 파일입니다.');
+      }
+      const { exportTiptapFileAsHtml } = await import('../../lib/tiptap/exportHtml.jsx');
+      await exportTiptapFileAsHtml(entry.relativePath, fileName);
     } catch (err) {
       nativeAlert(err instanceof Error ? err.message : 'HTML로 내보내기에 실패했습니다.');
     }
@@ -320,12 +324,12 @@ export default function FileExplorer({
     if (isInTrashView) {
       const label =
         targets.length === 1
-          ? `"${targets[0].name}"을(를) 영구 삭제할까요?\n\n이 작업은 되돌릴 수 없습니다.`
-          : `${targets.length}개 항목을 영구 삭제할까요?\n\n이 작업은 되돌릴 수 없습니다.`;
+          ? `"${targets[0].name}"을(를) 삭제(영구)할까요?\n\n이 작업은 되돌릴 수 없습니다.`
+          : `${targets.length}개 항목을 삭제(영구)할까요?\n\n이 작업은 되돌릴 수 없습니다.`;
       const confirmed = await appConfirm({
-        title: '영구 삭제',
+        title: '삭제(영구)',
         body: label,
-        confirmLabel: '영구 삭제',
+        confirmLabel: '삭제(영구)',
         confirmVariant: 'danger',
       });
       if (!confirmed) return;
@@ -336,12 +340,12 @@ export default function FileExplorer({
     } else {
       const label =
         targets.length === 1
-          ? `"${targets[0].name}"을(를) 휴지통으로 이동할까요?`
-          : `${targets.length}개 항목을 휴지통으로 이동할까요?`;
+          ? `"${targets[0].name}"을(를) 삭제(휴지통)할까요?`
+          : `${targets.length}개 항목을 삭제(휴지통)할까요?`;
       const confirmed = await appConfirm({
-        title: '휴지통으로 이동',
+        title: '삭제(휴지통)',
         body: label,
-        confirmLabel: '휴지통으로 이동',
+        confirmLabel: '삭제(휴지통)',
         confirmVariant: 'danger',
       });
       if (!confirmed) return;
@@ -393,7 +397,7 @@ export default function FileExplorer({
   const handleEmptyTrash = async () => {
     const confirmed = await appConfirm({
       title: '휴지통 비우기',
-      body: '휴지통의 모든 항목을 영구 삭제할까요?\n\n이 작업은 되돌릴 수 없습니다.',
+      body: '휴지통의 모든 항목을 삭제(영구)할까요?\n\n이 작업은 되돌릴 수 없습니다.',
       confirmLabel: '휴지통 비우기',
       confirmVariant: 'danger',
     });
@@ -669,7 +673,7 @@ export default function FileExplorer({
         canExportHtml:
           contextTargets.length === 1 &&
           !contextTargets[0].isDirectory &&
-          isBlockDocumentRelativePath(contextTargets[0].relativePath),
+          isTiptapDocumentRelativePath(contextTargets[0].relativePath),
         canEditOpen: contextTarget
           ? canOpenFileForEdit(contextTarget.relativePath, accessMap, isAdminLoggedIn, effectivePermissions)
           : false,
@@ -711,7 +715,6 @@ export default function FileExplorer({
       if (
         isEditorOpen ||
         document.documentElement.classList.contains('wb4s-embed-mode') ||
-        document.documentElement.classList.contains('block-embed-mode') ||
         document.querySelector('.modal-dialog--editor')
       ) {
         return;
@@ -812,7 +815,7 @@ export default function FileExplorer({
 
       {isInTrashView && (
         <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
-          휴지통 · 항목을 복원하거나 영구 삭제할 수 있습니다. 파일은 복원 후 열어 주세요.
+          휴지통 · 항목을 복원하거나 삭제(영구)할 수 있습니다. 파일은 복원 후 열어 주세요.
         </div>
       )}
 

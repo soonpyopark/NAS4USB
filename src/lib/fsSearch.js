@@ -1,5 +1,5 @@
 import { sortEntries } from './fsPaths.js';
-import { isBlockAssetSidecarRelativePath } from '../../shared/blockAssetPaths.js';
+import { isTiptapAssetSidecarRelativePath } from '../../shared/tiptapAssetPaths.js';
 import { isFortuneSidecarRelativePath } from '../../shared/fortuneSheetSidecar.js';
 
 /**
@@ -24,7 +24,7 @@ export async function searchFileEntries(query, { maxResults = 200, signal } = {}
     for (const entry of entries) {
       if (signal?.aborted || truncated) return;
 
-      if (isBlockAssetSidecarRelativePath(entry.relativePath)) continue;
+      if (isTiptapAssetSidecarRelativePath(entry.relativePath)) continue;
       if (isFortuneSidecarRelativePath(entry.relativePath)) continue;
 
       if (entry.name.toLowerCase().includes(normalized)) {

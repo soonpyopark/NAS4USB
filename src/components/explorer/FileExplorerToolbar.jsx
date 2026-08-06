@@ -100,7 +100,7 @@ export default function FileExplorerToolbar({
         )}
         {showDeleteAction && (
           <button type="button" className="nas-btn-ghost text-red-600" disabled={!hasSelection} onClick={onDelete}>
-            {isInTrashView ? '영구 삭제' : '휴지통으로'}
+            {isInTrashView ? '삭제(영구)' : '삭제(휴지통)'}
           </button>
         )}
         <button type="button" className="nas-btn-ghost" onClick={onSelectAll}>

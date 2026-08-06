@@ -1,16 +1,16 @@
 import JSZip from 'jszip';
 import { createEmptyWb4sDocument, utf8ToBase64 } from '../../wb4s/document.js';
-import { createEmptyBlockPackageBase64 } from '../blocknote/package.js';
+import { createEmptyTiptapPackageBase64 } from '../tiptap/package.js';
 import { bytesToBase64 } from '../bytes.js';
 import { resolveUniqueName } from '../fsPaths.js';
 
-/** @typedef {'hwpx' | 'md' | 'txt' | 'xlsx' | 'wb4s' | 'block'} NewFileType */
+/** @typedef {'hwpx' | 'md' | 'txt' | 'xlsx' | 'wb4s' | 'tiptap'} NewFileType */
 
 export const NEW_FILE_TYPES = /** @type {const} */ ([
   { id: 'hwpx', label: 'HWPX 문서', extension: 'hwpx', description: '한글 HWPX 협업 편집' },
   { id: 'xlsx', label: 'Excel', extension: 'xlsx', description: '스프레드시트' },
+  { id: 'tiptap', label: 'TipTap 문서', extension: 'tiptap', description: 'Notion-like TipTap 에디터' },
   { id: 'wb4s', label: '화이트보드', extension: 'wb4s', description: 'WhiteBoard4Share' },
-  { id: 'block', label: 'BlockNote 문서', extension: 'block', description: '블록 기반 리치 텍스트' },
   { id: 'md', label: 'Markdown', extension: 'md', description: '마크다운 텍스트' },
   { id: 'txt', label: '텍스트', extension: 'txt', description: '일반 텍스트' },
 ]);
@@ -120,8 +120,8 @@ export async function buildNewFileContent(type) {
       return createEmptyXlsxBase64();
     case 'wb4s':
       return utf8ToBase64(createEmptyWb4sDocument(DEFAULT_STEM));
-    case 'block':
-      return createEmptyBlockPackageBase64(DEFAULT_STEM);
+    case 'tiptap':
+      return createEmptyTiptapPackageBase64(DEFAULT_STEM);
     default:
       throw new Error(`지원하지 않는 파일 형식입니다: ${type}`);
   }

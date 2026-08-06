@@ -35,7 +35,7 @@ function randomStorageSuffix() {
 /**
  * @param {File} file
  */
-export function isBlockUploadAllowed(file) {
+export function isTiptapUploadAllowed(file) {
   if (!file || file.size <= 0) return false;
 
   const type = (file.type || '').toLowerCase();
@@ -77,10 +77,10 @@ function defaultUploadStem(file) {
 }
 
 /**
- * Disk storage file name (ASCII, short). Original `file.name` is kept in block props for display.
+ * Disk storage file name (ASCII, short). Original `file.name` is kept for display.
  * @param {File} file
  */
-export function resolveBlockUploadFileName(file) {
+export function resolveTiptapUploadFileName(file) {
   const ext = extensionFromUploadFile(file.type, file.name || '');
   const stem = defaultUploadStem(file);
   return `${stem}-${randomStorageSuffix()}.${ext}`;
@@ -89,7 +89,7 @@ export function resolveBlockUploadFileName(file) {
 /**
  * @param {File} file
  */
-export function blockUploadNotAllowedMessage(file) {
+export function tiptapUploadNotAllowedMessage(file) {
   const type = file?.type || 'unknown';
   return `업로드할 수 없는 파일입니다 (${type || '알 수 없는 형식'}).`;
 }

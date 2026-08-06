@@ -4,6 +4,7 @@ const ICON_COLORS = {
   folder: 'text-amber-500',
   hwpx: 'text-blue-600',
   wb4s: 'text-orange-500',
+  tiptap: 'text-red-400',
   xlsx: 'text-emerald-600',
   md: 'text-violet-600',
   txt: 'text-slate-600',
@@ -71,6 +72,10 @@ export default function FileIcon({ entry, className = 'h-5 w-5' }) {
 
   if (entry.extension === 'wb4s') {
     return <WhiteboardSvg className={`${className} ${ICON_COLORS.wb4s}`} />;
+  }
+
+  if (entry.extension === 'tiptap') {
+    return <DocumentSvg className={`${className} ${ICON_COLORS.tiptap}`} />;
   }
 
   if (entry.extension === 'xlsx' || entry.extension === 'xls') {

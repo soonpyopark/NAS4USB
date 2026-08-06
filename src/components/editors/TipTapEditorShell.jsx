@@ -7,18 +7,18 @@ import { useYjsSession } from '../../hooks/useYjsSession.js';
 import { getLanWsEndpoints } from '../../sync/buildWsUrl.js';
 import { loadUserDisplayName } from '../../lib/userProfile.js';
 import { pickUserColor } from '../../lib/userColors.js';
-import { getBlockFileStem } from '../../lib/blocknote/document.js';
-import { normalizeBlockAssetUrls } from '../../lib/blocknote/assetUrls.js';
-import { seedBlocknoteRoomFromDisk, setBlocknoteDiskRevision } from '../../lib/blocknote/seedRoom.js';
-import { cleanupUnreferencedBlockAssets } from '../../lib/blocknote/assetCleanup.js';
+import { getTiptapFileStem } from '../../lib/tiptap/document.js';
+import { normalizeTiptapAssetUrls } from '../../lib/tiptap/assetUrls.js';
+import { seedTiptapRoomFromDisk, setTiptapDiskRevision } from '../../lib/tiptap/seedRoom.js';
+import { cleanupUnreferencedTiptapAssets } from '../../lib/tiptap/assetCleanup.js';
 import {
-  packBlockFileFromSidecar,
-  parseBlockFileBase64,
-  removeBlockAssetsSidecar,
+  packTiptapFileFromSidecar,
+  parseTiptapFileBase64,
+  removeTiptapAssetsSidecar,
   syncEmbeddedAssetsToSidecar,
-} from '../../lib/blocknote/package.js';
+} from '../../lib/tiptap/package.js';
 
-const BlockEditorView = lazy(() => import('./BlockEditorView.jsx'));
+const TipTapEditorView = lazy(() => import('./TipTapEditorView.jsx'));
 
 /**
  * @param {{
@@ -32,7 +32,7 @@ const BlockEditorView = lazy(() => import('./BlockEditorView.jsx'));
  *   readOnly?: boolean,
  * }} props
  */
-export default function BlockEditorShell({
+export default function TipTapEditorShell({
   relativePath,
   fileName,
   syncInfo,
@@ -49,14 +49,16 @@ export default function BlockEditorShell({
 
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState(null);
-  const [initialBlocks, setInitialBlocks] = useState(/** @type {import('@blocknote/core').PartialBlock[] | null} */ (null));
+  const [initialContent, setInitialContent] = useState(
+    /** @type {import('@tiptap/core').JSONContent | null} */ (null),
+  );
   const [contentReady, setContentReady] = useState(false);
   const [roomReady, setRoomReady] = useState(false);
   const [collabUser, setCollabUser] = useState({ name: '사용자', color: '#2563eb' });
   const [showHistory, setShowHistory] = useState(false);
   const [exportingHtml, setExportingHtml] = useState(false);
 
-  const editorRef = useRef(/** @type {import('@blocknote/core').BlockNoteEditor | null} */ (null));
+  const editorRef = useRef(/** @type {import('@tiptap/core').Editor | null} */ (null));
   const diskRevisionRef = useRef('');
   const closingRef = useRef(false);
 
@@ -81,18 +83,18 @@ export default function BlockEditorShell({
 
         if (cancelled) return;
 
-        const parsed = await parseBlockFileBase64(base64);
+        const parsed = await parseTiptapFileBase64(base64);
         if (parsed.embeddedAssets.length > 0) {
-          await removeBlockAssetsSidecar(relativePath);
+          await removeTiptapAssetsSidecar(relativePath);
           await syncEmbeddedAssetsToSidecar(relativePath, parsed.embeddedAssets);
         }
 
         diskRevisionRef.current = nextDiskRevision;
-        setInitialBlocks(normalizeBlockAssetUrls(parsed.content, relativePath));
+        setInitialContent(normalizeTiptapAssetUrls(parsed.content, relativePath));
         setContentReady(true);
       } catch (err) {
         if (!cancelled) {
-          setLoadError(err instanceof Error ? err.message : 'Failed to load block document');
+          setLoadError(err instanceof Error ? err.message : 'Failed to load TipTap document');
         }
       }
     }
@@ -120,20 +122,20 @@ export default function BlockEditorShell({
   }, []);
 
   useEffect(() => {
-    if (!doc || !contentReady || !initialBlocks) return;
+    if (!doc || !contentReady || !initialContent) return;
     if (collaborationEnabled && !synced) {
       setRoomReady(false);
       return;
     }
 
     if (collaborationEnabled) {
-      seedBlocknoteRoomFromDisk(doc, initialBlocks, {
+      seedTiptapRoomFromDisk(doc, initialContent, {
         diskRevision: diskRevisionRef.current,
       });
     }
 
     setRoomReady(true);
-  }, [collaborationEnabled, contentReady, doc, initialBlocks, synced]);
+  }, [collaborationEnabled, contentReady, doc, initialContent, synced]);
 
   const handleEditorReady = useCallback((editor) => {
     editorRef.current = editor;
@@ -144,21 +146,21 @@ export default function BlockEditorShell({
     if (!workspace.ready || !editorRef.current) return;
     setSaving(true);
     try {
-      const title = getBlockFileStem(fileName);
-      const documentBlocks = editorRef.current.document;
-      await cleanupUnreferencedBlockAssets(relativePath, documentBlocks);
-      const base64 = await packBlockFileFromSidecar({
+      const title = getTiptapFileStem(fileName);
+      const documentJson = editorRef.current.getJSON();
+      await cleanupUnreferencedTiptapAssets(relativePath, documentJson);
+      const base64 = await packTiptapFileFromSidecar({
         title,
         exportedAt: new Date().toISOString(),
-        content: documentBlocks,
-        blockRelativePath: relativePath,
+        content: documentJson,
+        tiptapRelativePath: relativePath,
       });
       await workspace.writeBinary(base64);
       await workspace.commit();
       try {
         const statInfo = await window.nas4usb.fs.stat(relativePath);
         if (doc) {
-          setBlocknoteDiskRevision(doc, statInfo?.modifiedAt ?? '');
+          setTiptapDiskRevision(doc, statInfo?.modifiedAt ?? '');
         }
       } catch {
         // optional
@@ -170,39 +172,30 @@ export default function BlockEditorShell({
     }
   }, [doc, fileName, relativePath, shareReadOnly, workspace]);
 
-  // Restore already overwrote the file on disk (and archived the pre-restore state) and
-  // purged the live Y.js room (see fileHistoryService.restoreFileHistoryEntry). That purge
-  // forcibly closes our WebSocket, which makes the `roomReady` effect above briefly unmount
-  // <BlockEditorView> while it reconnects — so editorRef.current can be stale/torn-down by
-  // the time this resolves. Writing straight into the shared Yjs XmlFragment (rather than
-  // calling replaceBlocks on a possibly-dead editor instance) is safe regardless of mount
-  // state: any editor that is or later becomes bound to this doc reflects it automatically.
-  // Offline (no collaboration) sessions have no Yjs binding to piggyback on, so those still
-  // go through the live editor instance directly.
   const handleRestoreHistory = useCallback(
     async (base64) => {
-      const parsed = await parseBlockFileBase64(base64);
-      await removeBlockAssetsSidecar(relativePath);
+      const parsed = await parseTiptapFileBase64(base64);
+      await removeTiptapAssetsSidecar(relativePath);
       if (parsed.embeddedAssets.length > 0) {
         await syncEmbeddedAssetsToSidecar(relativePath, parsed.embeddedAssets);
       }
-      const normalizedBlocks = normalizeBlockAssetUrls(parsed.content, relativePath);
+      const normalized = normalizeTiptapAssetUrls(parsed.content, relativePath);
 
       let nextDiskRevision = '';
       try {
         const statInfo = await window.nas4usb.fs.stat(relativePath);
         nextDiskRevision = statInfo?.modifiedAt ?? '';
       } catch {
-        // diskRevision is optional
+        // optional
       }
 
       if (collaborationEnabled && doc) {
-        seedBlocknoteRoomFromDisk(doc, normalizedBlocks, {
+        seedTiptapRoomFromDisk(doc, normalized, {
           diskRevision: nextDiskRevision,
           force: true,
         });
       } else if (editorRef.current) {
-        editorRef.current.replaceBlocks(editorRef.current.document, normalizedBlocks);
+        editorRef.current.commands.setContent(normalized);
       }
 
       diskRevisionRef.current = nextDiskRevision;
@@ -215,8 +208,8 @@ export default function BlockEditorShell({
     if (exportingHtml || !editorRef.current) return;
     setExportingHtml(true);
     try {
-      const { exportLiveBlockContentAsHtml } = await import('../../lib/blocknote/exportHtml.jsx');
-      await exportLiveBlockContentAsHtml(relativePath, fileName, editorRef.current.document);
+      const { exportLiveTiptapContentAsHtml } = await import('../../lib/tiptap/exportHtml.jsx');
+      await exportLiveTiptapContentAsHtml(relativePath, fileName, editorRef.current.getJSON());
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'HTML로 내보내기에 실패했습니다.');
     } finally {
@@ -239,7 +232,7 @@ export default function BlockEditorShell({
 
   const peerCount = useAwarenessPeerCount(provider);
   const lanEndpoints = getLanWsEndpoints(syncInfo, roomId).join(' · ');
-  const isLoading = workspace.loading || !doc || !contentReady || initialBlocks == null;
+  const isLoading = workspace.loading || !doc || !contentReady || initialContent == null;
   const waitingSync = collaborationEnabled && contentReady && !roomReady;
   const syncReadOnly = collaborationEnabled && (!synced || waitingSync);
   const readOnly = shareReadOnly || syncReadOnly;
@@ -250,7 +243,7 @@ export default function BlockEditorShell({
     <>
       <EditorModal
         title={fileName}
-        subtitle={`BlockNote · ${relativePath} · room ${roomId} · ${lanEndpoints}`}
+        subtitle={`TipTap · ${relativePath} · room ${roomId} · ${lanEndpoints}`}
         status={displayStatus}
         synced={displaySynced}
         peerCount={peerCount}
@@ -274,14 +267,14 @@ export default function BlockEditorShell({
 
         <div className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs text-nas-muted">
           {shareReadOnly
-            ? 'BlockNote · 공유(보기 전용) · 편집·저장 불가'
+            ? 'TipTap · 공유(보기 전용) · 편집·저장 불가'
             : waitingSync
               ? status === 'connecting'
-                ? 'BlockNote · 재연결 중… Y.js 동기화 후 편집 가능'
-                : 'BlockNote · Y.js 동기화 후 편집 가능 · LAN 실시간 협업'
+                ? 'TipTap · 재연결 중… Y.js 동기화 후 편집 가능'
+                : 'TipTap · Y.js 동기화 후 편집 가능 · LAN 실시간 협업'
               : collaborationEnabled
-                ? 'BlockNote · 블록 편집 · 미디어·첨부 업로드 · 원격 커서 · Ctrl+S 저장'
-                : 'BlockNote · 오프라인 편집 · 미디어·첨부 업로드 · Ctrl+S 저장'}
+                ? "TipTap · 전체 서식 툴바 · '/' 블록 · 표/이미지 · 원격 커서 · Ctrl+S 저장"
+                : "TipTap · 전체 서식 툴바 · '/' 블록 · 표/이미지 · Ctrl+S 저장"}
         </div>
 
         <div className="relative flex min-h-0 flex-1 flex-col">
@@ -291,17 +284,17 @@ export default function BlockEditorShell({
             </div>
           )}
 
-          {contentReady && initialBlocks && roomReady && (
+          {contentReady && initialContent && roomReady && (
             <Suspense
               fallback={
                 <div className="flex flex-1 items-center justify-center text-sm text-nas-muted">
-                  BlockNote 모듈 로드 중…
+                  TipTap 모듈 로드 중…
                 </div>
               }
             >
-              <BlockEditorView
+              <TipTapEditorView
                 relativePath={relativePath}
-                initialBlocks={initialBlocks}
+                initialContent={initialContent}
                 collaboration={
                   collaborationEnabled && doc && provider
                     ? { doc, provider, user: collabUser }
@@ -321,7 +314,7 @@ export default function BlockEditorShell({
         onClose={() => setShowHistory(false)}
         relativePath={relativePath}
         fileName={fileName}
-        extension="block"
+        extension="tiptap"
         onRestored={handleRestoreHistory}
       />
     </>

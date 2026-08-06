@@ -8,14 +8,15 @@ import { getShareTokenFromUrl } from '../../lib/shareAccess.js';
 import { base64ToBytes } from '../../lib/bytes.js';
 import { parseSpreadsheetBase64 } from '../../lib/xlsx/xlsxIO.js';
 import { decodeTextBase64 } from '../../lib/text/textIO.js';
-import { parseBlockFileBase64 } from '../../lib/blocknote/package.js';
-import { packageAssetUrlToFileName, normalizeBlockAssetUrls } from '../../lib/blocknote/assetUrls.js';
+import { parseTiptapFileBase64 } from '../../lib/tiptap/package.js';
+import {
+  packageAssetUrlToFileName as tiptapPackageAssetUrlToFileName,
+  normalizeTiptapAssetUrls,
+} from '../../lib/tiptap/assetUrls.js';
 import { loadRhwpModule } from '../../lib/rhwp/loadRhwp.js';
 import { guessMimeFromFileName } from '../../../shared/mediaTypes.js';
 
-// Matches the lazy-loading already used by BlockEditorShell.jsx — keeps BlockNote out of
-// the main bundle for the (common) case where a user never opens a .block history preview.
-const BlockEditorView = lazy(() => import('./BlockEditorView.jsx'));
+const TipTapEditorView = lazy(() => import('./TipTapEditorView.jsx'));
 
 /**
  * Read-only preview of a single revision-history entry. Never writes to disk,
@@ -48,8 +49,8 @@ export default function HistoryPreviewModal({
   const [renderError, setRenderError] = useState(null);
   const [sheets, setSheets] = useState(null);
   const [text, setText] = useState('');
-  const [blockContent, setBlockContent] = useState(null);
-  const [blockResolveFileUrl, setBlockResolveFileUrl] = useState(null);
+  const [tiptapContent, setTiptapContent] = useState(null);
+  const [tiptapResolveFileUrl, setTiptapResolveFileUrl] = useState(null);
   const mountRef = useRef(null);
   const rhwpHandleRef = useRef(null);
   const blobUrlsRef = useRef([]);
@@ -83,8 +84,8 @@ export default function HistoryPreviewModal({
     setRenderError(null);
     setSheets(null);
     setText('');
-    setBlockContent(null);
-    setBlockResolveFileUrl(null);
+    setTiptapContent(null);
+    setTiptapResolveFileUrl(null);
 
     async function run() {
       try {
@@ -148,27 +149,27 @@ export default function HistoryPreviewModal({
           rhwpHandleRef.current = editor;
         } else if (normalizedExtension === 'txt' || normalizedExtension === 'md') {
           setText(decodeTextBase64(base64));
-        } else if (normalizedExtension === 'block') {
-          const parsed = await parseBlockFileBase64(base64);
+        } else if (normalizedExtension === 'tiptap') {
+          const parsed = await parseTiptapFileBase64(base64);
           if (cancelled) return;
 
           const blobUrlByFileName = new Map();
           for (const asset of parsed.embeddedAssets) {
-            const name = packageAssetUrlToFileName(asset.path) ?? asset.path;
+            const name = tiptapPackageAssetUrlToFileName(asset.path) ?? asset.path;
             const blob = new Blob([base64ToBytes(asset.base64)], { type: guessMimeFromFileName(name) });
             const blobUrl = URL.createObjectURL(blob);
             blobUrlsRef.current.push(blobUrl);
             blobUrlByFileName.set(name, blobUrl);
           }
 
-          setBlockResolveFileUrl(() => async (url) => {
-            const fileNameForUrl = packageAssetUrlToFileName(url);
+          setTiptapResolveFileUrl(() => async (url) => {
+            const fileNameForUrl = tiptapPackageAssetUrlToFileName(url);
             if (fileNameForUrl && blobUrlByFileName.has(fileNameForUrl)) {
               return blobUrlByFileName.get(fileNameForUrl);
             }
             return url;
           });
-          setBlockContent(normalizeBlockAssetUrls(parsed.content, relativePath));
+          setTiptapContent(normalizeTiptapAssetUrls(parsed.content, relativePath));
         } else {
           throw new Error('미리보기를 지원하지 않는 파일 형식입니다.');
         }
@@ -235,7 +236,7 @@ export default function HistoryPreviewModal({
         <div className="flex flex-1 items-center justify-center text-sm text-nas-muted">불러오는 중…</div>
       )}
 
-      {/* Third-party editor libraries (FortuneSheet/BlockNote/rhwp) can throw while rendering
+      {/* Third-party editor libraries (FortuneSheet/TipTap/rhwp) can throw while rendering
           historic content that differs slightly from what they normally see live (e.g. legacy
           shapes). Without this boundary such a crash unmounts the whole app (no top-level
           boundary exists) instead of just failing this read-only preview. */}
@@ -256,20 +257,20 @@ export default function HistoryPreviewModal({
           </div>
         )}
 
-        {!error && !renderError && normalizedExtension === 'block' && blockContent && blockResolveFileUrl && (
+        {!error && !renderError && normalizedExtension === 'tiptap' && tiptapContent && tiptapResolveFileUrl && (
           <Suspense
             fallback={
               <div className="flex flex-1 items-center justify-center text-sm text-nas-muted">
-                BlockNote 모듈 로드 중…
+                TipTap 모듈 로드 중…
               </div>
             }
           >
-            <BlockEditorView
+            <TipTapEditorView
               relativePath={relativePath}
-              initialBlocks={blockContent}
+              initialContent={tiptapContent}
               collaboration={null}
               readOnly
-              resolveFileUrl={blockResolveFileUrl}
+              resolveFileUrl={tiptapResolveFileUrl}
               onReady={() => {}}
             />
           </Suspense>

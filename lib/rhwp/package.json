@@ -1,6 +1,6 @@
 {
   "name": "@nas4usb/rhwp",
-  "version": "0.7.19",
+  "version": "0.8.2",
   "private": true,
   "type": "module",
   "description": "Adapter for @rhwp/editor (https://github.com/edwardkim/rhwp)",
@@ -9,6 +9,6 @@
     "url": "https://github.com/edwardkim/rhwp.git"
   },
   "dependencies": {
-    "@rhwp/editor": "^0.7.19"
+    "@rhwp/editor": "^0.8.2"
   }
 }

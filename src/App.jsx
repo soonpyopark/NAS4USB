@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import DesktopShell from './components/layout/DesktopShell.jsx';
 import BrowserOnlyNotice from './components/layout/BrowserOnlyNotice.jsx';
 import FileExplorer from './components/explorer/FileExplorer.jsx';
@@ -7,9 +7,10 @@ import HwpxEditorShell from './components/editors/HwpxEditorShell.jsx';
 import Wb4sEditorShell from './components/editors/Wb4sEditorShell.jsx';
 import XlsxEditorShell from './components/editors/XlsxEditorShell.jsx';
 import TextEditorShell from './components/editors/TextEditorShell.jsx';
-import BlockEditorShell from './components/editors/BlockEditorShell.jsx';
 import AudioPlayerShell from './components/editors/AudioPlayerShell.jsx';
 import VideoPlayerShell from './components/editors/VideoPlayerShell.jsx';
+
+const TipTapEditorShell = lazy(() => import('./components/editors/TipTapEditorShell.jsx'));
 import { ShareLinkError, ShareLinkLoading } from './components/share/ShareLinkScreen.jsx';
 import { AdminAuthProvider, useAdminAuthContext } from './context/AdminAuthContext.jsx';
 import { FsSyncProvider, useFsSync } from './context/FsSyncContext.jsx';
@@ -31,7 +32,7 @@ const OPENABLE_EXTENSIONS = {
   xls: 'xlsx',
   txt: 'text',
   md: 'text',
-  block: 'block',
+  tiptap: 'tiptap',
   ...Object.fromEntries(AUDIO_EXTENSIONS.map((ext) => [ext, 'audio'])),
   ...Object.fromEntries(VIDEO_EXTENSIONS.map((ext) => [ext, 'video'])),
 };
@@ -113,18 +114,20 @@ function OpenEditorLayer({ openEditor, syncInfo, allowClose, fullscreen = false,
     );
   }
 
-  if (openEditor.type === 'block') {
+  if (openEditor.type === 'tiptap') {
     return (
-      <BlockEditorShell
-        relativePath={openEditor.relativePath}
-        fileName={openEditor.name}
-        syncInfo={syncInfo}
-        onClose={onClose}
-        allowClose={allowClose}
-        fullscreen={fullscreen}
-        shareMode={shareMode}
-        readOnly={shareViewOnly}
-      />
+      <Suspense fallback={<div className="flex flex-1 items-center justify-center text-sm text-nas-muted">TipTap 로딩 중…</div>}>
+        <TipTapEditorShell
+          relativePath={openEditor.relativePath}
+          fileName={openEditor.name}
+          syncInfo={syncInfo}
+          onClose={onClose}
+          allowClose={allowClose}
+          fullscreen={fullscreen}
+          shareMode={shareMode}
+          readOnly={shareViewOnly}
+        />
+      </Suspense>
     );
   }
 

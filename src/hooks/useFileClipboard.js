@@ -26,7 +26,7 @@ export function useFileClipboard() {
       if (!clipboard?.entries.length) return false;
 
       if (isTrashPath(destinationPath)) {
-        throw new Error('휴지통에는 붙여넣기할 수 없습니다. 삭제 메뉴를 사용해 주세요.');
+        throw new Error('휴지통에는 붙여넣기할 수 없습니다. 삭제(휴지통) 메뉴를 사용해 주세요.');
       }
 
       const names = new Set(existingNames);

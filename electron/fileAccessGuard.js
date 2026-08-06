@@ -13,7 +13,7 @@ import {
   getSpreadsheetPathForFortuneSidecar,
   isFortuneSidecarRelativePath,
 } from '../shared/fortuneSheetSidecar.js';
-import { getBlockAssetSidecarPath } from '../shared/blockAssetPaths.js';
+import { getTiptapAssetSidecarPath } from '../shared/tiptapAssetPaths.js';
 
 const ACCESS_DENIED_MESSAGE = '이 파일에 접근할 권한이 없습니다.';
 export const EDIT_DENIED_MESSAGE = '공개된 문서만 편집할 수 있습니다.';
@@ -50,9 +50,9 @@ function isPathCoveredByShareLink(relativePath, sharedRelativePath) {
   if (isFortuneSidecarRelativePath(normalizedPath)) {
     return getSpreadsheetPathForFortuneSidecar(normalizedPath) === sharedPath;
   }
-  // Block editor asset sidecar dir/files (e.g. Note.block.assets/image.png) for the shared block doc
-  const assetsDir = getBlockAssetSidecarPath(sharedPath);
-  if (normalizedPath === assetsDir || normalizedPath.startsWith(`${assetsDir}/`)) {
+  // TipTap asset sidecar dir/files (e.g. Note.tiptap.assets/image.png) for the shared TipTap doc
+  const tiptapAssetsDir = getTiptapAssetSidecarPath(sharedPath);
+  if (normalizedPath === tiptapAssetsDir || normalizedPath.startsWith(`${tiptapAssetsDir}/`)) {
     return true;
   }
   return false;

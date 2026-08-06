@@ -24,11 +24,30 @@ export default defineConfig(({ mode }) => {
         '@wb4s-engine': wb4sEngineRoot,
         stream: path.resolve(__dirname, 'src/lib/shims/stream.js'),
         fs: path.resolve(__dirname, 'src/lib/shims/fs.js'),
+        // Force a single ProseMirror/TipTap instance (instanceof checks break otherwise).
+        '@tiptap/core': path.resolve(__dirname, 'node_modules/@tiptap/core'),
+        '@tiptap/pm': path.resolve(__dirname, 'node_modules/@tiptap/pm'),
+        'prosemirror-model': path.resolve(__dirname, 'node_modules/prosemirror-model'),
+        'prosemirror-state': path.resolve(__dirname, 'node_modules/prosemirror-state'),
+        'prosemirror-view': path.resolve(__dirname, 'node_modules/prosemirror-view'),
+        'prosemirror-transform': path.resolve(__dirname, 'node_modules/prosemirror-transform'),
+        'prosemirror-tables': path.resolve(__dirname, 'node_modules/prosemirror-tables'),
+        'y-prosemirror': path.resolve(__dirname, 'node_modules/y-prosemirror'),
       },
-      // Keep a single copy of BlockNote/ProseMirror — mismatched @blocknote/*
-      // versions otherwise load two cores and throw "Duplicate use of selection
-      // JSON ID multiple-node" (blank white editor).
-      dedupe: ['yjs', 'react', 'react-dom', '@blocknote/core', '@blocknote/react', 'prosemirror-state', 'prosemirror-model', 'prosemirror-view'],
+      // Keep a single ProseMirror/TipTap instance (instanceof checks break otherwise).
+      dedupe: [
+        'yjs',
+        'react',
+        'react-dom',
+        '@tiptap/core',
+        '@tiptap/react',
+        'y-prosemirror',
+        'prosemirror-state',
+        'prosemirror-model',
+        'prosemirror-view',
+        'prosemirror-transform',
+        'prosemirror-tables',
+      ],
     },
     optimizeDeps: {
       include: [
@@ -39,14 +58,23 @@ export default defineConfig(({ mode }) => {
         '@fortune-sheet/react',
         'xlsx',
         'xlsx-js-style',
-        '@blocknote/core',
-        '@blocknote/core/yjs',
-        '@blocknote/react',
-        '@blocknote/mantine',
-        '@mantine/core',
-        '@mantine/hooks',
         'y-prosemirror',
+        'prosemirror-model',
+        'prosemirror-state',
+        'prosemirror-view',
+        'prosemirror-transform',
+        'prosemirror-tables',
+        '@tiptap/core',
+        '@tiptap/react',
+        '@tiptap/starter-kit',
+        '@tiptap/extension-collaboration',
+        '@tiptap/extension-table',
+        '@tiptap/y-tiptap',
+        'tippy.js',
       ],
+      // @tiptap/pm has only subpath exports (./state, ./model, …) — no "." entry.
+      // Including the bare package in optimizeDeps makes Vite fail on startup.
+      exclude: ['@tiptap/pm'],
     },
     build: {
       outDir: path.resolve(__dirname, 'dist'),

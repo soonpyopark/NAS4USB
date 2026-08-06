@@ -1,0 +1,1045 @@
+.tiptap-editor-shell {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fff;
+}
+
+.tiptap-editor-shell__body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.tiptap-editor-shell__scroll {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+}
+
+.tiptap-editor-shell .tiptap {
+  /* A4 page width — aligns editing surface with print / PDF export */
+  box-sizing: border-box;
+  max-width: 210mm;
+  width: 100%;
+  margin: 0 auto;
+  padding: 18mm 16mm 40mm;
+  outline: none;
+  font-size: 1rem;
+  line-height: 1.7;
+  color: #1a1a1a;
+}
+
+.tiptap-editor-shell .tiptap:focus {
+  outline: none;
+}
+
+.tiptap-editor-shell .tiptap p.is-empty::before,
+.tiptap-editor-shell .tiptap h1.is-empty::before,
+.tiptap-editor-shell .tiptap h2.is-empty::before,
+.tiptap-editor-shell .tiptap h3.is-empty::before,
+.tiptap-editor-shell .tiptap h4.is-empty::before,
+.tiptap-editor-shell .tiptap h5.is-empty::before,
+.tiptap-editor-shell .tiptap h6.is-empty::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: #9ca3af;
+  pointer-events: none;
+  height: 0;
+}
+
+.tiptap-editor-shell .tiptap h1 {
+  font-size: 1.875rem;
+  font-weight: 700;
+  line-height: 1.3;
+  margin: 1.5rem 0 0.75rem;
+}
+
+.tiptap-editor-shell .tiptap h2 {
+  font-size: 1.5rem;
+  font-weight: 650;
+  line-height: 1.35;
+  margin: 1.25rem 0 0.6rem;
+}
+
+.tiptap-editor-shell .tiptap h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 1rem 0 0.5rem;
+}
+
+.tiptap-editor-shell .tiptap h4 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0.9rem 0 0.45rem;
+}
+
+.tiptap-editor-shell .tiptap h5 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0.8rem 0 0.4rem;
+}
+
+.tiptap-editor-shell .tiptap h6 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #374151;
+  margin: 0.75rem 0 0.35rem;
+}
+
+.tiptap-editor-shell .tiptap p {
+  margin: 0.35rem 0;
+}
+
+.tiptap-editor-shell .tiptap p[style*='text-align: center'],
+.tiptap-editor-shell .tiptap h1[style*='text-align: center'],
+.tiptap-editor-shell .tiptap h2[style*='text-align: center'],
+.tiptap-editor-shell .tiptap h3[style*='text-align: center'] {
+  text-align: center;
+}
+
+.tiptap-editor-shell .tiptap ul,
+.tiptap-editor-shell .tiptap ol {
+  padding-left: 1.5rem;
+  margin: 0.5rem 0;
+}
+
+.tiptap-editor-shell .tiptap ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: 0;
+}
+
+.tiptap-editor-shell .tiptap ul[data-type='taskList'] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.tiptap-editor-shell .tiptap ul[data-type='taskList'] li > label {
+  margin-top: 0.35rem;
+}
+
+.tiptap-editor-shell .tiptap blockquote {
+  border-left: 3px solid #d1d5db;
+  margin: 0.75rem 0;
+  padding-left: 1rem;
+  color: #4b5563;
+}
+
+.tiptap-editor-shell .tiptap pre,
+.tiptap-editor-shell .tiptap-code-block {
+  background: #f3f4f6;
+  border-radius: 6px;
+  padding: 0.85rem 1rem;
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.875rem;
+}
+
+.tiptap-editor-shell .tiptap code {
+  background: #f3f4f6;
+  border-radius: 3px;
+  padding: 0.1em 0.35em;
+  font-size: 0.9em;
+}
+
+.tiptap-editor-shell .tiptap pre code {
+  background: transparent;
+  padding: 0;
+  font-size: inherit;
+}
+
+.tiptap-editor-shell .tiptap hr {
+  border: none;
+  border-top: 1px solid #e5e7eb;
+  margin: 1.5rem 0;
+}
+
+.tiptap-editor-shell .tiptap-link {
+  color: #2563eb;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.tiptap-editor-shell .tiptap mark {
+  border-radius: 2px;
+  padding: 0.05em 0.15em;
+}
+
+.tiptap-editor-shell .tableWrapper {
+  overflow-x: auto;
+  margin: 0.75rem 0;
+}
+
+.tiptap-editor-shell .tiptap table,
+.tiptap-editor-shell .tiptap-table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.75rem 0;
+  table-layout: fixed;
+  overflow: hidden;
+}
+
+.tiptap-editor-shell .tiptap table td,
+.tiptap-editor-shell .tiptap table th,
+.tiptap-editor-shell .tiptap-table td,
+.tiptap-editor-shell .tiptap-table th {
+  border: 1px solid #d1d5db;
+  padding: 0.4rem 0.6rem;
+  vertical-align: top;
+  min-width: 80px;
+  position: relative;
+  box-sizing: border-box;
+}
+
+.tiptap-editor-shell .tiptap table th,
+.tiptap-editor-shell .tiptap-table th {
+  background: #f9fafb;
+  font-weight: 600;
+}
+
+.tiptap-editor-shell .tiptap table .selectedCell,
+.tiptap-editor-shell .tiptap-table .selectedCell {
+  background: rgba(37, 99, 235, 0.12);
+}
+
+.tiptap-editor-shell .tiptap table td[align='center'],
+.tiptap-editor-shell .tiptap table th[align='center'],
+.tiptap-editor-shell .tiptap table td[style*='text-align: center'],
+.tiptap-editor-shell .tiptap table th[style*='text-align: center'] {
+  text-align: center;
+}
+
+.tiptap-editor-shell .tiptap table td[align='right'],
+.tiptap-editor-shell .tiptap table th[align='right'],
+.tiptap-editor-shell .tiptap table td[style*='text-align: right'],
+.tiptap-editor-shell .tiptap table th[style*='text-align: right'] {
+  text-align: right;
+}
+
+/* Column resize handles — visible only while editable */
+.tiptap-editor-shell .tiptap[contenteditable='true'] .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: #93c5fd;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.tiptap-editor-shell .tiptap[contenteditable='true'].resize-cursor {
+  cursor: col-resize;
+}
+
+.tiptap-editor-shell .tiptap[contenteditable='false'] .column-resize-handle {
+  display: none;
+}
+
+.tiptap-editor-shell .tiptap[contenteditable='false'].resize-cursor {
+  pointer-events: none;
+}
+
+/* Insert table size picker */
+.tiptap-table-picker {
+  position: relative;
+  display: inline-flex;
+}
+
+.tiptap-table-picker__panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 40;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
+  padding: 8px;
+  min-width: 180px;
+}
+
+.tiptap-table-picker__label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  margin-bottom: 6px;
+}
+
+.tiptap-table-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(8, 16px);
+  gap: 3px;
+}
+
+.tiptap-table-picker__cell {
+  width: 16px;
+  height: 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 2px;
+  background: #fff;
+  padding: 0;
+  cursor: pointer;
+}
+
+.tiptap-table-picker__cell.is-active {
+  background: #bfdbfe;
+  border-color: #60a5fa;
+}
+
+.tiptap-table-picker__quick {
+  margin-top: 8px;
+  width: 100%;
+  border: 0;
+  background: #f1f5f9;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 5px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.tiptap-table-picker__quick:hover {
+  background: #e2e8f0;
+}
+
+.tiptap-editor-shell .tiptap-image-wrap {
+  margin: 0.75rem 0;
+}
+
+.tiptap-editor-shell .tiptap-image {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  display: block;
+}
+
+.tiptap-editor-shell .tiptap-image-wrap.is-selected .tiptap-image {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.tiptap-editor-shell .tiptap-video-wrap {
+  margin: 0.75rem 0;
+}
+
+.tiptap-editor-shell .tiptap-video {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  max-height: 480px;
+  background: #0f172a;
+  border-radius: 8px;
+}
+
+.tiptap-editor-shell .tiptap-video-wrap.is-selected .tiptap-video {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.tiptap-editor-shell .tiptap-video-caption {
+  margin-top: 0.35rem;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.tiptap-editor-shell .tiptap-audio-wrap {
+  margin: 0.75rem 0;
+  max-width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.tiptap-editor-shell .tiptap-audio-wrap.is-selected {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.tiptap-editor-shell .tiptap-audio-title {
+  margin-bottom: 0.4rem;
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tiptap-editor-shell .tiptap-audio {
+  display: block;
+  width: 100%;
+}
+
+.tiptap-editor-shell .tiptap-file-wrap {
+  margin: 0.6rem 0;
+}
+
+.tiptap-editor-shell .tiptap-file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: inherit;
+  text-decoration: none;
+}
+
+.tiptap-editor-shell .tiptap-file:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.tiptap-editor-shell .tiptap-file-wrap.is-selected .tiptap-file {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.tiptap-editor-shell .tiptap-file__icon {
+  flex: 0 0 auto;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.tiptap-editor-shell .tiptap-file__meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tiptap-editor-shell .tiptap-file__name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tiptap-editor-shell .tiptap-file__sub {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+/* Toolbar */
+.tiptap-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f8fafc;
+  padding: 6px 10px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tiptap-toolbar__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.tiptap-toolbar__row--table {
+  padding-top: 2px;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.tiptap-toolbar__group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding-right: 6px;
+  border-right: 1px solid #e2e8f0;
+}
+
+.tiptap-toolbar__group:last-child {
+  border-right: 0;
+}
+
+.tiptap-toolbar__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: #1f2937;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 5px 7px;
+  border-radius: 5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tiptap-toolbar__btn:hover:not(:disabled) {
+  background: #e2e8f0;
+}
+
+.tiptap-toolbar__btn.is-active {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.tiptap-toolbar__btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.tiptap-toolbar__select {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #111827;
+  font-size: 12px;
+  border-radius: 5px;
+  min-height: 28px;
+  padding: 2px 6px;
+  max-width: 120px;
+}
+
+.tiptap-toolbar__select--narrow {
+  max-width: 96px;
+}
+
+.tiptap-toolbar__select:disabled {
+  opacity: 0.5;
+}
+
+.tiptap-toolbar__label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+  padding: 0 4px;
+}
+
+/* Color palette / swatch picker */
+.tiptap-swatch {
+  position: relative;
+  display: inline-flex;
+}
+
+.tiptap-swatch__trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #1f2937;
+  cursor: pointer;
+  padding: 0;
+}
+
+.tiptap-swatch__trigger:hover,
+.tiptap-swatch__trigger.is-open {
+  background: #e2e8f0;
+}
+
+.tiptap-swatch__trigger:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.tiptap-swatch__glyph {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  width: 16px;
+  height: 16px;
+}
+
+.tiptap-swatch__marker {
+  display: inline-block;
+  line-height: 1;
+  border-radius: 2px;
+  padding: 0 1px;
+  background: rgba(254, 240, 138, 0.55);
+}
+
+.tiptap-swatch__bar {
+  display: block;
+  width: 14px;
+  height: 3px;
+  margin-top: 2px;
+  border-radius: 999px;
+}
+
+.tiptap-swatch__fill {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.tiptap-swatch__fill.is-empty {
+  background:
+    linear-gradient(
+      135deg,
+      transparent 46%,
+      #ef4444 46%,
+      #ef4444 54%,
+      transparent 54%
+    ),
+    #fff;
+}
+
+.tiptap-swatch__panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 80;
+  min-width: 220px;
+  max-width: 260px;
+  padding: 8px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
+}
+
+.tiptap-swatch__grid {
+  display: grid;
+  grid-template-columns: repeat(8, 22px);
+  gap: 6px;
+}
+
+.tiptap-swatch__chip--custom {
+  border: 1px solid rgba(15, 23, 42, 0.2);
+}
+
+.tiptap-swatch__native {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tiptap-swatch__chip {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  padding: 0;
+  cursor: pointer;
+  position: relative;
+  background: #fff;
+}
+
+.tiptap-swatch__chip:hover {
+  transform: scale(1.06);
+}
+
+.tiptap-swatch__chip.is-selected {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+
+.tiptap-swatch__chip.is-none {
+  background: #fff;
+}
+
+.tiptap-swatch__none-slash {
+  position: absolute;
+  inset: 4px;
+  background: linear-gradient(
+    135deg,
+    transparent 46%,
+    #ef4444 46%,
+    #ef4444 54%,
+    transparent 54%
+  );
+  border-radius: 2px;
+}
+
+.tiptap-swatch__caption {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #64748b;
+  text-align: center;
+}
+
+.tiptap-toolbar__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+  color: #64748b;
+  padding: 2px 2px 0;
+}
+
+.tiptap-toolbar__hint {
+  opacity: 0.9;
+}
+
+/* Selection bubble menu — light, icon-only (hidden in tables) */
+.tiptap-bubble-menu {
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 50;
+}
+
+.tiptap-bubble-menu button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: #1f2937;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 4px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.tiptap-bubble-menu button:hover,
+.tiptap-bubble-menu button.is-active {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+/* Slash menu */
+.tiptap-slash-menu {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12);
+  min-width: 300px;
+  max-width: 360px;
+  max-height: 380px;
+  overflow-y: auto;
+  padding: 6px;
+  z-index: 11000;
+}
+
+.tiptap-slash-menu__group {
+  padding-bottom: 4px;
+}
+
+.tiptap-slash-menu__group + .tiptap-slash-menu__group {
+  border-top: 1px solid #f3f4f6;
+  padding-top: 4px;
+}
+
+.tiptap-slash-menu__group-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #9ca3af;
+  padding: 6px 10px 2px;
+}
+
+.tiptap-slash-menu__item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  padding: 7px 8px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.tiptap-slash-menu__item.is-selected,
+.tiptap-slash-menu__item:hover {
+  background: #f3f4f6;
+}
+
+.tiptap-slash-menu__icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #e5e7eb;
+  border-radius: 7px;
+  background: #fff;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.tiptap-slash-menu__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tiptap-slash-menu__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.tiptap-slash-menu__desc {
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 1px;
+}
+
+.tiptap-slash-menu__empty {
+  padding: 10px 12px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.tiptap-editor-shell .tiptap-mention {
+  border-radius: 4px;
+  background: rgba(37, 99, 235, 0.1);
+  color: #2563eb;
+  padding: 0 3px;
+  font-weight: 600;
+}
+
+.tiptap-editor-shell .tiptap-emoji {
+  display: inline;
+}
+
+.tiptap-editor-shell .tiptap-details {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 0.35rem 0.75rem;
+  margin: 0.75rem 0;
+}
+
+.tiptap-editor-shell .tiptap-details-summary {
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tiptap-editor-shell .tiptap-details-content {
+  margin-top: 0.35rem;
+}
+
+.tiptap-editor-shell .tiptap-youtube {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  height: auto;
+  margin: 1rem 0;
+  border: 0;
+  border-radius: 8px;
+  background: #111827;
+}
+
+.tiptap-editor-shell .Tiptap-mathematics-editor,
+.tiptap-editor-shell .tiptap-mathematics-render,
+.tiptap-editor-shell span[data-type='inline-math'],
+.tiptap-editor-shell div[data-type='block-math'] {
+  cursor: default;
+}
+
+.tiptap-editor-shell div[data-type='block-math'] {
+  margin: 1rem 0;
+  overflow-x: auto;
+  text-align: center;
+}
+
+.tiptap-editor-shell .tiptap-code-block .hljs-comment,
+.tiptap-editor-shell .tiptap-code-block .hljs-quote {
+  color: #6a737d;
+}
+
+.tiptap-toolbar__math-block {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.tiptap-emoji-picker {
+  position: relative;
+}
+
+.tiptap-emoji-picker__panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 40;
+  width: 280px;
+  max-height: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.12);
+}
+
+.tiptap-emoji-picker__search {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.tiptap-emoji-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 2px;
+  overflow: auto;
+  max-height: 220px;
+}
+
+.tiptap-emoji-picker__btn {
+  width: 100%;
+  aspect-ratio: 1;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tiptap-emoji-picker__btn:hover {
+  background: #f3f4f6;
+}
+
+.tiptap-emoji-picker__empty,
+.tiptap-emoji-picker__hint {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.tiptap-toc-panel {
+  width: 220px;
+  flex-shrink: 0;
+  border-left: 1px solid #e5e7eb;
+  background: #fafafa;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.tiptap-toc-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #111827;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.tiptap-toc-panel__close {
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+}
+
+.tiptap-toc-panel__empty {
+  padding: 12px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.tiptap-toc-panel__list {
+  overflow: auto;
+  padding: 6px 0;
+}
+
+.tiptap-toc-panel__item {
+  display: block;
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: #374151;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tiptap-toc-panel__item:hover,
+.tiptap-toc-panel__item.is-active {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.tiptap-toc-panel__item.is-scrolled {
+  font-weight: 600;
+}
+
+.tippy-box[data-theme~='tiptap-slash'] {
+  background: transparent;
+  box-shadow: none;
+}
+
+.tippy-box[data-theme~='tiptap-slash'] .tippy-content {
+  padding: 0;
+}
+
+/* Collaboration carets */
+.tiptap-editor-shell .collaboration-carets__caret {
+  border-left: 1px solid;
+  border-right: 1px solid;
+  margin-left: -1px;
+  margin-right: -1px;
+  position: relative;
+  word-break: normal;
+  pointer-events: none;
+}
+
+.tiptap-editor-shell .collaboration-carets__label {
+  border-radius: 3px 3px 3px 0;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  left: -1px;
+  line-height: normal;
+  padding: 1px 4px;
+  position: absolute;
+  top: -1.4em;
+  user-select: none;
+  white-space: nowrap;
+}

@@ -83,7 +83,7 @@ export function isImageExtension(extension) {
 }
 
 /**
- * Best-effort MIME type guess for a block-asset file name (images/video/audio); falls
+ * Best-effort MIME type guess for an editor asset file name (images/video/audio); falls
  * back to a generic binary type for anything else (pdf, docx, etc.).
  * @param {string} fileName
  */

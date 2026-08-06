@@ -1,4 +1,4 @@
-/** @typedef {'rhwp' | 'wb4s' | 'fortune-sheet' | 'blocknote'} EditorCoreId */
+/** @typedef {'rhwp' | 'wb4s' | 'fortune-sheet' | 'tiptap'} EditorCoreId */
 
 /** @typedef {Object} EditorCoreDefinition
  * @property {EditorCoreId} id
@@ -45,14 +45,22 @@ export const EDITOR_CORES = [
     npmPackages: ['@fortune-sheet/react'],
   },
   {
-    id: 'blocknote',
-    label: 'BlockNote (.block)',
-    libDir: 'node_modules/@blocknote',
-    submodulePath: 'node_modules/@blocknote',
-    updatePackageDir: 'lib/updates/blocknote',
-    repositoryUrl: 'https://github.com/TypeCellOS/BlockNote',
-    npmPackage: '@blocknote/react',
-    npmPackages: ['@blocknote/core', '@blocknote/react'],
+    id: 'tiptap',
+    label: 'TipTap (.tiptap)',
+    libDir: 'node_modules/@tiptap',
+    submodulePath: 'node_modules/@tiptap',
+    updatePackageDir: 'lib/updates/tiptap',
+    repositoryUrl: 'https://github.com/ueberdosis/tiptap',
+    npmPackage: '@tiptap/react',
+    npmPackages: [
+      '@tiptap/core',
+      '@tiptap/pm',
+      '@tiptap/react',
+      '@tiptap/starter-kit',
+      '@tiptap/extension-collaboration',
+      '@tiptap/extension-collaboration-caret',
+      '@tiptap/extension-bubble-menu',
+    ],
   },
 ];
 

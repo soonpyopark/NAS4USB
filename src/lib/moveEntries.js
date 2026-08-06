@@ -42,7 +42,7 @@ export function validateMoveDestination(entries, destinationPath) {
   }
 
   if (isTrashPath(destinationPath)) {
-    return { ok: false, error: '휴지통으로는 이동할 수 없습니다. 삭제 메뉴를 사용해 주세요.' };
+    return { ok: false, error: '휴지통으로는 이동할 수 없습니다. 삭제(휴지통) 메뉴를 사용해 주세요.' };
   }
 
   for (const entry of entries) {

@@ -70,7 +70,7 @@ export function buildEntryContextMenuItems({
       },
       {
         id: 'permanent-delete',
-        label: '영구 삭제',
+        label: '삭제(영구)',
         danger: true,
         disabled: targetCount === 0,
         onClick: () => onPermanentDelete?.(),
@@ -167,7 +167,7 @@ export function buildEntryContextMenuItems({
     },
     {
       id: 'delete',
-      label: '휴지통으로',
+      label: '삭제(휴지통)',
       danger: true,
       disabled: targetCount === 0,
       onClick: onDelete,

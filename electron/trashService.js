@@ -7,10 +7,10 @@ import {
   isFortuneSidecarRelativePath,
 } from './fortuneSidecarService.js';
 import {
-  getBlockAssetSidecarPath,
-  isBlockAssetSidecarRelativePath,
-  isBlockDocumentRelativePath,
-} from '../shared/blockAssetPaths.js';
+  getTiptapAssetSidecarPath,
+  isTiptapAssetSidecarRelativePath,
+  isTiptapDocumentRelativePath,
+} from '../shared/tiptapAssetPaths.js';
 import { LEGACY_TRASH_INDEX_FILE } from '../shared/legacyConfig.js';
 import { purgeYjsRoomsForPathTree } from './yjsRoomTree.js';
 import { getDataRoot, getPortableRoot } from './appContext.js';
@@ -182,12 +182,12 @@ export async function getTrashMap(portableRoot = getPortableRoot()) {
 export async function trashPath(relativePath, portableRoot = getPortableRoot()) {
   const normalized = normalizePath(relativePath);
   if (!normalized || normalized === '.' || isTrashPath(normalized)) {
-    throw new Error('휴지통으로 이동할 수 없는 항목입니다.');
+    throw new Error('삭제(휴지통)할 수 없는 항목입니다.');
   }
 
-  if (isBlockAssetSidecarRelativePath(normalized)) {
+  if (isTiptapAssetSidecarRelativePath(normalized)) {
     throw new Error(
-      'BlockNote 편집용 임시 폴더입니다. 연결된 .block 파일을 삭제해 주세요.',
+      'TipTap 편집용 임시 폴더입니다. 연결된 .tiptap 파일을 삭제해 주세요.',
     );
   }
 
@@ -197,14 +197,14 @@ export async function trashPath(relativePath, portableRoot = getPortableRoot()) 
     );
   }
 
-  if (isBlockDocumentRelativePath(normalized)) {
-    const sidecar = getBlockAssetSidecarPath(normalized);
+  if (isTiptapDocumentRelativePath(normalized)) {
+    const sidecar = getTiptapAssetSidecarPath(normalized);
     if (await fsService.pathExists(sidecar)) {
       try {
         await fsService.deletePath(sidecar);
       } catch {
         throw new Error(
-          'BlockNote 편집 중이거나 미디어 파일이 사용 중입니다. .block 편집 창을 닫은 뒤 다시 시도해 주세요.',
+          'TipTap 편집 중이거나 미디어 파일이 사용 중입니다. .tiptap 편집 창을 닫은 뒤 다시 시도해 주세요.',
         );
       }
     }
@@ -271,7 +271,7 @@ export async function restorePath(trashRelativePath, portableRoot = getPortableR
 export async function deletePermanent(trashRelativePath, portableRoot = getPortableRoot()) {
   const normalized = normalizePath(trashRelativePath);
   if (!isTrashPath(normalized) || normalized === TRASH_FOLDER) {
-    throw new Error('영구 삭제할 수 없는 항목입니다.');
+    throw new Error('삭제(영구)할 수 없는 항목입니다.');
   }
 
   await purgeYjsRoomsForPathTree(normalized);
