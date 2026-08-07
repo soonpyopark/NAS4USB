@@ -47,6 +47,7 @@ export default function LoginDialog({
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
+  const [showDefaultAdminHint, setShowDefaultAdminHint] = useState(false);
   const idInputRef = useRef(null);
 
   useEffect(() => {
@@ -55,8 +56,18 @@ export default function LoginDialog({
     setPassword('');
     setShowPassword(false);
     setRememberMe(true);
+    setShowDefaultAdminHint(false);
 
     let cancelled = false;
+    void (async () => {
+      try {
+        const show = await window.nas4usb?.auth?.showDefaultAdminHint?.();
+        if (!cancelled) setShowDefaultAdminHint(Boolean(show));
+      } catch {
+        if (!cancelled) setShowDefaultAdminHint(false);
+      }
+    })();
+
     let attempts = 0;
     const tryFocus = () => {
       if (cancelled) return;
@@ -109,7 +120,7 @@ export default function LoginDialog({
           <button
             type="button"
             className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-full border-0 bg-transparent text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-            aria-label="닫기"
+            aria-label="로그인 창 닫기"
             onClick={onClose}
             disabled={loggingIn}
           >
@@ -125,6 +136,11 @@ export default function LoginDialog({
           로그인
         </h2>
         <p className="mt-1 text-sm text-slate-500">회원 계정으로 로그인한 뒤 NAS4USB를 이용합니다.</p>
+        {showDefaultAdminHint ? (
+          <p className="mt-2 text-xs leading-snug text-sky-800">
+            최초 로그인 ID / PWD : admin / admin1234 (변경 후 사용)
+          </p>
+        ) : null}
 
         <div className="mt-4 space-y-3">
           <label className="block text-sm text-slate-600">

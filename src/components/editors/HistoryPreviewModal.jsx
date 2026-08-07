@@ -253,7 +253,12 @@ export default function HistoryPreviewModal({
 
         {!error && !renderError && isText && !loading && (
           <div className="pointer-events-none min-h-0 flex-1 select-none">
-            <TextEditor initialText={text} isMarkdown={normalizedExtension === 'md'} onReady={() => {}} />
+            <TextEditor
+              initialText={text}
+              fileName={fileName}
+              isMarkdown={normalizedExtension === 'md'}
+              onReady={() => {}}
+            />
           </div>
         )}
 

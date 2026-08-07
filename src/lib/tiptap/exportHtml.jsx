@@ -8,8 +8,31 @@ import {
 } from './assetUrls.js';
 import { getTiptapFileStem } from './document.js';
 import { guessMimeFromFileName } from '../../../shared/mediaTypes.js';
-import { downloadTextFile } from '../downloadTextFile.js';
+import { encodeTextBase64 } from '../text/textIO.js';
+import { getParentPath, joinRelativePath, resolveUniqueName } from '../fsPaths.js';
 import tiptapEditorCss from '../../styles/tiptap-editor.css?raw';
+
+/**
+ * Write HTML next to the source `.tiptap` file (same folder, unique name).
+ * @param {string} sourceRelativePath
+ * @param {string} title
+ * @param {string} html
+ * @returns {Promise<{ relativePath: string, name: string }>}
+ */
+async function writeHtmlBesideSource(sourceRelativePath, title, html) {
+  if (!window.nas4usb?.fs?.writeFile || !window.nas4usb?.fs?.readDir) {
+    throw new Error('파일 저장 API를 사용할 수 없습니다.');
+  }
+
+  const parentPath = getParentPath(sourceRelativePath);
+  const desiredName = `${String(title || 'NoName').replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_')}.html`;
+  const entries = await window.nas4usb.fs.readDir(parentPath);
+  const existingNames = (Array.isArray(entries) ? entries : []).map((entry) => entry.name);
+  const uniqueName = resolveUniqueName(existingNames, desiredName);
+  const relativePath = joinRelativePath(parentPath, uniqueName);
+  await window.nas4usb.fs.writeFile(relativePath, encodeTextBase64(html));
+  return { relativePath, name: uniqueName };
+}
 
 async function loadTipTapEditorView() {
   const mod = await import('../../components/editors/TipTapEditorView.jsx');
@@ -103,17 +126,25 @@ export async function exportTiptapFileAsHtml(relativePath, fileName) {
 }
 
 /**
+ * @param {string} relativePath
+ * @param {import('@tiptap/core').JSONContent} content
+ */
+async function loadLiveEmbeddedAssets(relativePath) {
+  const sidecarAssets = await readSidecarAssets(relativePath);
+  return sidecarAssets.map((asset) => ({
+    path: toPackageAssetUrl(asset.fileName),
+    base64: asset.base64,
+  }));
+}
+
+/**
  * Exports the currently open TipTap document (including unsaved sidecar images).
  * @param {string} relativePath
  * @param {string} fileName
  * @param {import('@tiptap/core').JSONContent} content
  */
 export async function exportLiveTiptapContentAsHtml(relativePath, fileName, content) {
-  const sidecarAssets = await readSidecarAssets(relativePath);
-  const embeddedAssets = sidecarAssets.map((asset) => ({
-    path: toPackageAssetUrl(asset.fileName),
-    base64: asset.base64,
-  }));
+  const embeddedAssets = await loadLiveEmbeddedAssets(relativePath);
   return exportTiptapContentAsHtml({ relativePath, fileName, content, embeddedAssets });
 }
 
@@ -125,8 +156,9 @@ export async function exportLiveTiptapContentAsHtml(relativePath, fileName, cont
  *   embeddedAssets: { path: string, base64: string }[],
  *   title?: string,
  * }} input
+ * @returns {Promise<{ title: string, html: string }>}
  */
-async function exportTiptapContentAsHtml({ relativePath, fileName, content, embeddedAssets, title: titleInput }) {
+async function buildTiptapExportHtml({ relativePath, fileName, content, embeddedAssets, title: titleInput }) {
   const title = (titleInput && titleInput !== 'NoName' ? titleInput : getTiptapFileStem(fileName)) || 'NoName';
 
   const dataUrlByFileName = new Map();
@@ -188,9 +220,24 @@ ${css}
 </html>
 `;
 
-    downloadTextFile(`${title}.html`, html, 'text/html');
+    return { title, html };
   } finally {
     root.unmount();
     container.remove();
   }
+}
+
+/**
+ * @param {{
+ *   relativePath: string,
+ *   fileName: string,
+ *   content: import('@tiptap/core').JSONContent,
+ *   embeddedAssets: { path: string, base64: string }[],
+ *   title?: string,
+ * }} input
+ */
+async function exportTiptapContentAsHtml(input) {
+  const { relativePath } = input;
+  const { title, html } = await buildTiptapExportHtml(input);
+  return writeHtmlBesideSource(relativePath, title, html);
 }

@@ -25,6 +25,7 @@ import {
   revokeAdminSession,
   getAdminSession,
   isSuperAdminSession,
+  isDefaultAdminPasswordActive,
 } from './authService.js';
 import {
   assertAdminAuthenticated,
@@ -77,7 +78,7 @@ import {
   isFortuneSidecarRelativePath,
 } from './fortuneSidecarService.js';
 import { streamFile } from './mediaStream.js';
-import { getAudioMimeType, getVideoMimeType, isAudioExtension, isVideoExtension } from '../shared/mediaTypes.js';
+import { getStreamContentType } from '../shared/mediaTypes.js';
 import { handleFsEventsRequest, notifyFsChanged, getFsRevisionPayload } from './fsNotifyService.js';
 import {
   deleteFileHistoryEntry,
@@ -174,6 +175,12 @@ export async function handleHttpApiRequest(req, res) {
   try {
     if (method === 'GET' && url.pathname === '/api/app/paths') {
       sendJson(res, 200, getAppPaths());
+      return true;
+    }
+
+    if (method === 'GET' && url.pathname === '/api/app/checkForUpdates') {
+      const { fetchLatestRelease } = await import('./updateCheck.js');
+      sendJson(res, 200, await fetchLatestRelease());
       return true;
     }
 
@@ -327,12 +334,7 @@ export async function handleHttpApiRequest(req, res) {
       const relativePath = url.searchParams.get('path') ?? '';
       await assertCanAccessFile(relativePath, getAccessAuth(req), getShareTokenFromQuery(url));
       const extension = path.extname(relativePath).slice(1).toLowerCase();
-      const contentType = isVideoExtension(extension)
-        ? getVideoMimeType(extension)
-        : isAudioExtension(extension)
-          ? getAudioMimeType(extension)
-          : 'application/octet-stream';
-      await streamFile(req, res, relativePath, contentType);
+      await streamFile(req, res, relativePath, getStreamContentType(extension));
       return true;
     }
 
@@ -472,6 +474,13 @@ export async function handleHttpApiRequest(req, res) {
     if (method === 'POST' && url.pathname === '/api/auth/login') {
       const body = await readJsonBody(req);
       sendJson(res, 200, await loginAdmin(body.id, body.password, getPortableRoot()));
+      return true;
+    }
+
+    if (method === 'GET' && url.pathname === '/api/auth/showDefaultAdminHint') {
+      sendJson(res, 200, {
+        show: await isDefaultAdminPasswordActive(getPortableRoot()),
+      });
       return true;
     }
 

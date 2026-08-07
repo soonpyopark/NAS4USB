@@ -4,9 +4,9 @@
 
 /** @type {AccessPermissionFlags} */
 export const DEFAULT_GUEST_PERMISSIONS = {
-  view: true,
-  read: true,
-  write: true,
+  view: false,
+  read: false,
+  write: false,
 };
 
 /** @type {AccessPermissionFlags} */

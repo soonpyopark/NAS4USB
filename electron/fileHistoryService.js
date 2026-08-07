@@ -10,7 +10,7 @@ const HISTORY_ROOT = '.nas4usb/file-history';
 const MAX_HISTORY_ENTRIES = 10;
 const SNAPSHOT_ID_PATTERN = /^[0-9a-f-]{36}$/i;
 
-/** Extensions covered by the "이력보기" feature (the modal editors that have a Save button). */
+/** Extensions covered by the "백업보기" feature (the modal editors that have a Save button). */
 const SUPPORTED_EXTENSIONS = new Set(['xlsx', 'xls', 'hwpx', 'txt', 'md', 'tiptap']);
 
 /**

@@ -53,6 +53,7 @@ export function validateEntryName(name) {
 }
 
 export { splitEntryExtension, validateRenameEntryName } from '../../shared/entryNames.js';
+export { resolveUniqueName } from '../../shared/uniqueName.js';
 
 /**
  * @param {string} relativePath
@@ -69,24 +70,6 @@ export function getParentPath(relativePath) {
  */
 export function getBaseName(relativePath) {
   return relativePath.split('/').pop() ?? relativePath;
-}
-
-/**
- * @param {Set<string>|string[]} existingNames
- * @param {string} desiredName
- */
-export function resolveUniqueName(existingNames, desiredName) {
-  const names = existingNames instanceof Set ? existingNames : new Set(existingNames);
-  if (!names.has(desiredName)) return desiredName;
-
-  const extIndex = desiredName.lastIndexOf('.');
-  const hasExt = extIndex > 0;
-  const stem = hasExt ? desiredName.slice(0, extIndex) : desiredName;
-  const ext = hasExt ? desiredName.slice(extIndex) : '';
-
-  let counter = 1;
-  while (names.has(`${stem} (${counter})${ext}`)) counter += 1;
-  return `${stem} (${counter})${ext}`;
 }
 
 /**

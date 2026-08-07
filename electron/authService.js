@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { DEFAULT_ADMIN_ID, DEFAULT_ADMIN_PW } from '../shared/constants.js';
 import { resolveAdminCredentials } from './envConfig.js';
 import {
   findActiveMemberByCredentials,
@@ -106,4 +107,23 @@ export async function loginAdmin(id, password, portableRoot) {
   }
 
   return { success: false };
+}
+
+/**
+ * True while default admin / admin1234 credentials still authenticate
+ * (first-run hint on the login dialog).
+ * @param {string} portableRoot
+ */
+export async function isDefaultAdminPasswordActive(portableRoot) {
+  const member = await findActiveMemberByCredentials(
+    DEFAULT_ADMIN_ID,
+    DEFAULT_ADMIN_PW,
+    portableRoot,
+  );
+  if (member) return true;
+
+  const { adminId } = resolveAdminCredentials(portableRoot);
+  if (await hasMemberLoginId(adminId, portableRoot)) return false;
+
+  return verifyAdminLogin(DEFAULT_ADMIN_ID, DEFAULT_ADMIN_PW, portableRoot);
 }

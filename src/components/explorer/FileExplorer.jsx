@@ -252,13 +252,36 @@ export default function FileExplorer({
     if (!entry || entry.isDirectory) return;
     try {
       const fileName = entry.name || entry.relativePath.split('/').pop();
-      if (!isTiptapDocumentRelativePath(entry.relativePath)) {
+      let saved;
+      if (isTiptapDocumentRelativePath(entry.relativePath)) {
+        const { exportTiptapFileAsHtml } = await import('../../lib/tiptap/exportHtml.jsx');
+        saved = await exportTiptapFileAsHtml(entry.relativePath, fileName);
+      } else if (/\.md$/i.test(entry.relativePath)) {
+        const { exportMarkdownFileAsHtml } = await import('../../lib/text/exportMarkdown.js');
+        saved = await exportMarkdownFileAsHtml(entry.relativePath, fileName);
+      } else {
         throw new Error('HTML 내보내기를 지원하지 않는 파일입니다.');
       }
-      const { exportTiptapFileAsHtml } = await import('../../lib/tiptap/exportHtml.jsx');
-      await exportTiptapFileAsHtml(entry.relativePath, fileName);
+      await refreshAll();
+      nativeAlert(`HTML로 내보냈습니다.\n${saved?.relativePath ?? saved?.name ?? ''}`);
     } catch (err) {
       nativeAlert(err instanceof Error ? err.message : 'HTML로 내보내기에 실패했습니다.');
+    }
+  };
+
+  const handleExportHwpx = async (entry) => {
+    if (!entry || entry.isDirectory) return;
+    try {
+      const fileName = entry.name || entry.relativePath.split('/').pop();
+      if (!isTiptapDocumentRelativePath(entry.relativePath)) {
+        throw new Error('HWPX 내보내기를 지원하지 않는 파일입니다.');
+      }
+      const { exportTiptapFileAsHwpx } = await import('../../lib/tiptap/exportHwpx.js');
+      const saved = await exportTiptapFileAsHwpx(entry.relativePath, fileName);
+      await refreshAll();
+      nativeAlert(`HWPX로 내보냈습니다.\n${saved?.relativePath ?? saved?.name ?? ''}`);
+    } catch (err) {
+      nativeAlert(err instanceof Error ? err.message : 'HWPX 내보내기에 실패했습니다.');
     }
   };
 
@@ -322,41 +345,55 @@ export default function FileExplorer({
     if (!targets.length) return;
 
     if (isInTrashView) {
-      const label =
-        targets.length === 1
-          ? `"${targets[0].name}"을(를) 삭제(영구)할까요?\n\n이 작업은 되돌릴 수 없습니다.`
-          : `${targets.length}개 항목을 삭제(영구)할까요?\n\n이 작업은 되돌릴 수 없습니다.`;
-      const confirmed = await appConfirm({
-        title: '삭제(영구)',
-        body: label,
-        confirmLabel: '삭제(영구)',
-        confirmVariant: 'danger',
-      });
-      if (!confirmed) return;
+      await handlePermanentDelete(entry);
+      return;
+    }
 
-      for (const target of targets) {
-        await deletePermanent(target.relativePath);
-      }
-    } else {
-      const label =
-        targets.length === 1
-          ? `"${targets[0].name}"을(를) 삭제(휴지통)할까요?`
-          : `${targets.length}개 항목을 삭제(휴지통)할까요?`;
-      const confirmed = await appConfirm({
-        title: '삭제(휴지통)',
-        body: label,
-        confirmLabel: '삭제(휴지통)',
-        confirmVariant: 'danger',
-      });
-      if (!confirmed) return;
+    const label =
+      targets.length === 1
+        ? `"${targets[0].name}"을(를) 삭제(휴지통)할까요?`
+        : `${targets.length}개 항목을 삭제(휴지통)할까요?`;
+    const confirmed = await appConfirm({
+      title: '삭제(휴지통)',
+      body: label,
+      confirmLabel: '삭제(휴지통)',
+      confirmVariant: 'danger',
+    });
+    if (!confirmed) return;
 
-      for (const target of targets) {
-        await moveToTrash(target.relativePath);
-      }
+    for (const target of targets) {
+      await moveToTrash(target.relativePath);
     }
 
     clearSelection();
     await refreshAll();
+  };
+
+  const handlePermanentDelete = async (entry) => {
+    const targets = getTargetEntries(entry);
+    if (!targets.length) return;
+
+    const label =
+      targets.length === 1
+        ? `"${targets[0].name}"을(를) 삭제(영구)할까요?\n\n이 작업은 되돌릴 수 없습니다.`
+        : `${targets.length}개 항목을 삭제(영구)할까요?\n\n이 작업은 되돌릴 수 없습니다.`;
+    const confirmed = await appConfirm({
+      title: '삭제(영구)',
+      body: label,
+      confirmLabel: '삭제(영구)',
+      confirmVariant: 'danger',
+    });
+    if (!confirmed) return;
+
+    try {
+      for (const target of targets) {
+        await deletePermanent(target.relativePath);
+      }
+      clearSelection();
+      await refreshAll();
+    } catch (err) {
+      nativeAlert(err instanceof Error ? err.message : '삭제(영구)에 실패했습니다.');
+    }
   };
 
   const handleRestore = async (entry) => {
@@ -665,12 +702,18 @@ export default function FileExplorer({
         onDuplicate: () => handleDuplicate(contextTarget),
         onDelete: () => handleDelete(contextTarget),
         onRestore: () => handleRestore(contextTarget),
-        onPermanentDelete: () => handleDelete(contextTarget),
+        onPermanentDelete: () => handlePermanentDelete(contextTarget),
         onProperties: () => handleShowProperties(contextTarget),
         onDownload: () => handleDownload(contextTarget),
         canDownload: contextTargets.some((target) => !target.isDirectory),
         onExportHtml: () => handleExportHtml(contextTarget),
         canExportHtml:
+          contextTargets.length === 1 &&
+          !contextTargets[0].isDirectory &&
+          (isTiptapDocumentRelativePath(contextTargets[0].relativePath) ||
+            /\.md$/i.test(contextTargets[0].relativePath)),
+        onExportHwpx: () => handleExportHwpx(contextTarget),
+        canExportHwpx:
           contextTargets.length === 1 &&
           !contextTargets[0].isDirectory &&
           isTiptapDocumentRelativePath(contextTargets[0].relativePath),
@@ -698,6 +741,7 @@ export default function FileExplorer({
   keyHandlersRef.current = {
     refreshAll,
     handleDelete,
+    handlePermanentDelete,
     handleRename,
     selectAll,
     handleCopy,
@@ -801,6 +845,7 @@ export default function FileExplorer({
         onMove={() => handleMove()}
         onPaste={() => handlePaste(currentPath)}
         onDelete={() => handleDelete()}
+        onPermanentDelete={() => handlePermanentDelete()}
         onRestore={() => handleRestore()}
         onEmptyTrash={handleEmptyTrash}
         onRename={() => handleRename()}

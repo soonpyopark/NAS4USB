@@ -57,6 +57,7 @@ export default function TipTapEditorShell({
   const [collabUser, setCollabUser] = useState({ name: '사용자', color: '#2563eb' });
   const [showHistory, setShowHistory] = useState(false);
   const [exportingHtml, setExportingHtml] = useState(false);
+  const [exportingHwpx, setExportingHwpx] = useState(false);
 
   const editorRef = useRef(/** @type {import('@tiptap/core').Editor | null} */ (null));
   const diskRevisionRef = useRef('');
@@ -205,17 +206,50 @@ export default function TipTapEditorShell({
   );
 
   const handleExportHtml = useCallback(async () => {
-    if (exportingHtml || !editorRef.current) return;
+    if (exportingHtml || exportingHwpx || !editorRef.current) return;
     setExportingHtml(true);
+    setLoadError(null);
     try {
       const { exportLiveTiptapContentAsHtml } = await import('../../lib/tiptap/exportHtml.jsx');
-      await exportLiveTiptapContentAsHtml(relativePath, fileName, editorRef.current.getJSON());
+      const saved = await exportLiveTiptapContentAsHtml(
+        relativePath,
+        fileName,
+        editorRef.current.getJSON(),
+      );
+      const { showAppAlert } = await import('../../lib/nativeDialog.js');
+      await showAppAlert({
+        title: 'HTML로 내보내기',
+        body: `같은 폴더에 저장했습니다.\n${saved?.relativePath ?? saved?.name ?? ''}`,
+      });
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'HTML로 내보내기에 실패했습니다.');
     } finally {
       setExportingHtml(false);
     }
-  }, [exportingHtml, fileName, relativePath]);
+  }, [exportingHtml, exportingHwpx, fileName, relativePath]);
+
+  const handleExportHwpx = useCallback(async () => {
+    if (exportingHtml || exportingHwpx || !editorRef.current) return;
+    setExportingHwpx(true);
+    setLoadError(null);
+    try {
+      const { exportLiveTiptapContentAsHwpx } = await import('../../lib/tiptap/exportHwpx.js');
+      const saved = await exportLiveTiptapContentAsHwpx(
+        relativePath,
+        fileName,
+        editorRef.current.getJSON(),
+      );
+      const { showAppAlert } = await import('../../lib/nativeDialog.js');
+      await showAppAlert({
+        title: 'HWPX 내보내기',
+        body: `같은 폴더에 저장했습니다.\n${saved?.relativePath ?? saved?.name ?? ''}`,
+      });
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'HWPX 내보내기에 실패했습니다.');
+    } finally {
+      setExportingHwpx(false);
+    }
+  }, [exportingHtml, exportingHwpx, fileName, relativePath]);
 
   const handleClose = useCallback(async () => {
     if (closingRef.current) return;
@@ -252,8 +286,10 @@ export default function TipTapEditorShell({
         hideSave={shareReadOnly}
         hideHistory={shareReadOnly}
         onShowHistory={() => setShowHistory(true)}
-        onExportHtml={isLoading ? undefined : handleExportHtml}
+        onExportHtml={isLoading || shareReadOnly ? undefined : handleExportHtml}
         exportingHtml={exportingHtml}
+        onExportHwpx={isLoading || shareReadOnly ? undefined : handleExportHwpx}
+        exportingHwpx={exportingHwpx}
         onSave={handleSave}
         onClose={handleClose}
         allowClose={allowClose}

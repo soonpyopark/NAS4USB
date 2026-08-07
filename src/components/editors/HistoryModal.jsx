@@ -100,7 +100,7 @@ export default function HistoryModal({ open, onClose, relativePath, fileName, ex
       <AppModal
         open
         onClose={onClose}
-        title={`${fileName} — 수정 이력`}
+        title={`${fileName} — 백업 내역`}
         wide
         showCloseButton
         className="modal-dialog--history"
@@ -110,7 +110,7 @@ export default function HistoryModal({ open, onClose, relativePath, fileName, ex
         {loading ? (
           <p className="modal-body text-sm text-nas-muted">불러오는 중…</p>
         ) : entries.length === 0 ? (
-          <p className="modal-body text-sm text-nas-muted">저장된 수정 이력이 없습니다.</p>
+          <p className="modal-body text-sm text-nas-muted">저장된 백업 내역이 없습니다.</p>
         ) : (
           <div className="modal-body flex flex-col gap-2">
             {entries.map((entry, index) => (

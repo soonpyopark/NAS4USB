@@ -29,6 +29,7 @@ import { createTiptapFileExtension } from './fileExtension.js';
 import { createTiptapTableExtensions } from './tableExtension.js';
 import { createTiptapEmojiExtension } from './emojiExtension.js';
 import { createTiptapMentionExtension } from './mentionExtension.js';
+import { createPasteMarkdownExtension } from './pasteMarkdown.js';
 
 const lowlight = createLowlight(common);
 
@@ -160,6 +161,7 @@ export function createTiptapExtensions(options = {}) {
       visible: false,
     }),
     Markdown,
+    createPasteMarkdownExtension(),
     createTiptapEmojiExtension({ enableSuggestionUi }),
     createTiptapMentionExtension({ enableSuggestionUi, mentions }),
     ...createTiptapTableExtensions(),

@@ -1,6 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Compartment, EditorState } from '@codemirror/state';
+import {
+  EditorView,
+  highlightTrailingWhitespace,
+  highlightWhitespace,
+} from '@codemirror/view';
+import { indentUnit } from '@codemirror/language';
+import { oneDark } from '@codemirror/theme-one-dark';
 import { getLineColumn } from '../../lib/text/textIO.js';
 import { renderMarkdown } from '../../lib/text/markdown.js';
+import {
+  createFullCodeMirrorExtensions,
+  getLanguageLabel,
+  loadLanguageExtensionsForFile,
+  openFindPanel,
+  openGotoLineOnce,
+} from '../../lib/text/codeMirrorSetup.js';
 
 /**
  * @typedef {'edit' | 'split' | 'preview'} TextEditorViewMode
@@ -9,31 +24,50 @@ import { renderMarkdown } from '../../lib/text/markdown.js';
 /**
  * @param {object} props
  * @param {string} props.initialText
+ * @param {string} [props.fileName]
  * @param {boolean} [props.isMarkdown]
  * @param {(editor: import('../../lib/rhwp/types.js').RhwpEditorHandle) => void} props.onReady
  * @param {() => void} [props.onSave]
  */
-export default function TextEditor({ initialText, isMarkdown = false, onReady, onSave }) {
-  const textareaRef = useRef(null);
-  const gutterRef = useRef(null);
+export default function TextEditor({
+  initialText,
+  fileName = '',
+  isMarkdown = false,
+  onReady,
+  onSave,
+}) {
+  const parentRef = useRef(/** @type {HTMLDivElement | null} */ (null));
+  const viewRef = useRef(/** @type {EditorView | null} */ (null));
   const listenersRef = useRef(new Set());
   const textRef = useRef(initialText);
   const editableRef = useRef(false);
-  const [isEditable, setIsEditable] = useState(false);
+  const suppressNotifyRef = useRef(false);
+  const onSaveRef = useRef(onSave);
+  const onReadyRef = useRef(onReady);
+
+  const readOnlyCompartment = useRef(new Compartment());
+  const wrapCompartment = useRef(new Compartment());
+  const tabCompartment = useRef(new Compartment());
+  const langCompartment = useRef(new Compartment());
+  const whitespaceCompartment = useRef(new Compartment());
+  const themeCompartment = useRef(new Compartment());
 
   const [text, setText] = useState(initialText);
   const [wordWrap, setWordWrap] = useState(true);
   const [tabSize, setTabSize] = useState(2);
-  const [viewMode, setViewMode] = useState(/** @type {TextEditorViewMode} */ ('edit'));
-  const [findOpen, setFindOpen] = useState(false);
-  const [findQuery, setFindQuery] = useState('');
-  const [replaceQuery, setReplaceQuery] = useState('');
+  const [showWhitespace, setShowWhitespace] = useState(false);
+  const [darkTheme, setDarkTheme] = useState(false);
+  const [viewMode, setViewMode] = useState(
+    /** @type {TextEditorViewMode} */ (isMarkdown ? 'split' : 'edit'),
+  );
   const [cursorOffset, setCursorOffset] = useState(0);
+  const [isEditable, setIsEditable] = useState(false);
+  const [languageLabel, setLanguageLabel] = useState(() =>
+    getLanguageLabel({ fileName, isMarkdown }),
+  );
 
-  const lineNumbers = useMemo(() => {
-    const count = Math.max(1, text.split('\n').length);
-    return Array.from({ length: count }, (_, index) => index + 1);
-  }, [text]);
+  onSaveRef.current = onSave;
+  onReadyRef.current = onReady;
 
   const previewHtml = useMemo(
     () => (isMarkdown ? renderMarkdown(text) : ''),
@@ -44,142 +78,189 @@ export default function TextEditor({ initialText, isMarkdown = false, onReady, o
     listenersRef.current.forEach((listener) => listener(textRef.current, origin));
   }, []);
 
-  const updateText = useCallback(
-    (nextText, origin = 'local') => {
-      textRef.current = nextText;
-      setText(nextText);
-      if (textareaRef.current && textareaRef.current.value !== nextText) {
-        textareaRef.current.value = nextText;
-      }
-      if (origin !== 'yjs') {
-        notify(origin);
-      }
-    },
-    [notify],
-  );
-
   useEffect(() => {
+    if (!parentRef.current || viewRef.current) return undefined;
+
+    const view = new EditorView({
+      parent: parentRef.current,
+      state: EditorState.create({
+        doc: initialText,
+        extensions: [
+          ...createFullCodeMirrorExtensions({
+            isMarkdown,
+            onSave: () => onSaveRef.current?.(),
+          }),
+          langCompartment.current.of([]),
+          wrapCompartment.current.of(EditorView.lineWrapping),
+          tabCompartment.current.of([EditorState.tabSize.of(2), indentUnit.of('  ')]),
+          whitespaceCompartment.current.of(highlightTrailingWhitespace()),
+          themeCompartment.current.of([]),
+          readOnlyCompartment.current.of([
+            EditorState.readOnly.of(true),
+            EditorView.editable.of(false),
+          ]),
+          EditorView.updateListener.of((update) => {
+            if (update.docChanged) {
+              const nextText = update.state.doc.toString();
+              textRef.current = nextText;
+              setText(nextText);
+              if (!suppressNotifyRef.current && editableRef.current) {
+                notify('local');
+              }
+            }
+            if (update.selectionSet) {
+              setCursorOffset(update.state.selection.main.head);
+            }
+          }),
+        ],
+      }),
+    });
+
+    viewRef.current = view;
     textRef.current = initialText;
     setText(initialText);
-    if (textareaRef.current) {
-      textareaRef.current.value = initialText;
-    }
-  }, [initialText]);
 
-  useEffect(() => {
+    /** @type {import('../../lib/rhwp/types.js').RhwpEditorHandle} */
     const editor = {
       getText: () => textRef.current,
       setText: (nextText, origin) => {
-        textRef.current = nextText;
-        setText(nextText);
-        if (textareaRef.current && textareaRef.current.value !== nextText) {
-          textareaRef.current.value = nextText;
+        const next = String(nextText ?? '');
+        textRef.current = next;
+        setText(next);
+
+        const currentView = viewRef.current;
+        if (!currentView) {
+          if (origin !== 'yjs') notify(origin ?? 'local');
+          return;
         }
+
+        const current = currentView.state.doc.toString();
+        if (current === next) {
+          if (origin !== 'yjs') notify(origin ?? 'local');
+          return;
+        }
+
+        suppressNotifyRef.current = true;
+        currentView.dispatch({
+          changes: { from: 0, to: currentView.state.doc.length, insert: next },
+        });
+        suppressNotifyRef.current = false;
+
         if (origin !== 'yjs') {
-          listenersRef.current.forEach((listener) => listener(nextText, origin ?? 'local'));
+          notify(origin ?? 'local');
         }
       },
       onChange: (callback) => {
         listenersRef.current.add(callback);
         return () => listenersRef.current.delete(callback);
       },
-      getEditableElement: () => textareaRef.current,
+      getEditableElement: () => viewRef.current?.contentDOM ?? null,
       setEditable: (enabled) => {
         editableRef.current = enabled;
         setIsEditable(enabled);
-        if (textareaRef.current) {
-          textareaRef.current.readOnly = !enabled;
-          textareaRef.current.classList.toggle('opacity-60', !enabled);
-          if (enabled) textareaRef.current.focus();
-        }
+        const currentView = viewRef.current;
+        if (!currentView) return;
+        currentView.dispatch({
+          effects: readOnlyCompartment.current.reconfigure([
+            EditorState.readOnly.of(!enabled),
+            EditorView.editable.of(enabled),
+          ]),
+        });
+        if (enabled) currentView.focus();
       },
     };
 
-    onReady(editor);
-  }, [onReady]);
+    onReadyRef.current(editor);
 
-  const syncScroll = () => {
-    if (gutterRef.current && textareaRef.current) {
-      gutterRef.current.scrollTop = textareaRef.current.scrollTop;
-    }
-  };
+    return () => {
+      view.destroy();
+      viewRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional one-time CodeMirror mount
+  }, []);
 
-  const updateCursor = () => {
-    if (!textareaRef.current) return;
-    setCursorOffset(textareaRef.current.selectionStart);
-  };
-
-  const findNext = () => {
-    if (!textareaRef.current || !findQuery) return;
-    const haystack = textRef.current;
-    const start = textareaRef.current.selectionEnd;
-    let index = haystack.indexOf(findQuery, start);
-    if (index === -1) index = haystack.indexOf(findQuery);
-    if (index === -1) return;
-
-    textareaRef.current.focus();
-    textareaRef.current.setSelectionRange(index, index + findQuery.length);
-    setCursorOffset(index);
-  };
-
-  const replaceOne = () => {
-    if (!textareaRef.current || !findQuery) return;
-    const start = textareaRef.current.selectionStart;
-    const end = textareaRef.current.selectionEnd;
-    const selected = textRef.current.slice(start, end);
-    if (selected !== findQuery) {
-      findNext();
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    const current = view.state.doc.toString();
+    if (current === initialText) {
+      textRef.current = initialText;
+      setText(initialText);
       return;
     }
-    const nextText =
-      textRef.current.slice(0, start) + replaceQuery + textRef.current.slice(end);
-    updateText(nextText, 'local');
-    const nextPos = start + replaceQuery.length;
-    textareaRef.current.setSelectionRange(nextPos, nextPos);
+    suppressNotifyRef.current = true;
+    view.dispatch({
+      changes: { from: 0, to: view.state.doc.length, insert: initialText },
+    });
+    suppressNotifyRef.current = false;
+    textRef.current = initialText;
+    setText(initialText);
+  }, [initialText]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLanguageLabel(getLanguageLabel({ fileName, isMarkdown }));
+
+    void loadLanguageExtensionsForFile({ fileName, isMarkdown }).then((extensions) => {
+      if (cancelled) return;
+      const view = viewRef.current;
+      if (!view) return;
+      view.dispatch({
+        effects: langCompartment.current.reconfigure(extensions),
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fileName, isMarkdown]);
+
+  useEffect(() => {
+    viewRef.current?.dispatch({
+      effects: wrapCompartment.current.reconfigure(wordWrap ? EditorView.lineWrapping : []),
+    });
+  }, [wordWrap]);
+
+  useEffect(() => {
+    viewRef.current?.dispatch({
+      effects: tabCompartment.current.reconfigure([
+        EditorState.tabSize.of(tabSize),
+        indentUnit.of(' '.repeat(tabSize)),
+      ]),
+    });
+  }, [tabSize]);
+
+  useEffect(() => {
+    viewRef.current?.dispatch({
+      effects: whitespaceCompartment.current.reconfigure(
+        showWhitespace
+          ? [highlightWhitespace(), highlightTrailingWhitespace()]
+          : highlightTrailingWhitespace(),
+      ),
+    });
+  }, [showWhitespace]);
+
+  useEffect(() => {
+    viewRef.current?.dispatch({
+      effects: themeCompartment.current.reconfigure(darkTheme ? oneDark : []),
+    });
+  }, [darkTheme]);
+
+  useEffect(() => {
+    if (viewMode === 'preview') return;
+    viewRef.current?.requestMeasure();
+  }, [viewMode]);
+
+  const openFind = () => {
+    const view = viewRef.current;
+    if (!view) return;
+    openFindPanel(view);
   };
 
-  const replaceAll = () => {
-    if (!findQuery) return;
-    const nextText = textRef.current.split(findQuery).join(replaceQuery);
-    updateText(nextText, 'local');
-  };
-
-  const handleKeyDown = (event) => {
-    if (!editableRef.current) return;
-
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
-      event.preventDefault();
-      onSave?.();
-      return;
-    }
-
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') {
-      event.preventDefault();
-      setFindOpen(true);
-      return;
-    }
-
-    if (event.key === 'Tab' && textareaRef.current) {
-      event.preventDefault();
-      const { selectionStart, selectionEnd, value } = textareaRef.current;
-      const spaces = ' '.repeat(tabSize);
-
-      if (event.shiftKey) {
-        const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1;
-        const prefix = value.slice(lineStart, lineStart + tabSize);
-        if (prefix === spaces) {
-          const nextText = value.slice(0, lineStart) + value.slice(lineStart + tabSize);
-          updateText(nextText, 'local');
-          textareaRef.current.setSelectionRange(selectionStart - tabSize, selectionEnd - tabSize);
-        }
-        return;
-      }
-
-      const nextText = value.slice(0, selectionStart) + spaces + value.slice(selectionEnd);
-      updateText(nextText, 'local');
-      const nextPos = selectionStart + spaces.length;
-      textareaRef.current.setSelectionRange(nextPos, nextPos);
-    }
+  const openGoto = () => {
+    const view = viewRef.current;
+    if (!view) return;
+    openGotoLineOnce(view);
   };
 
   const { line, column } = getLineColumn(text, cursorOffset);
@@ -187,37 +268,92 @@ export default function TextEditor({ initialText, isMarkdown = false, onReady, o
   const showPreview = isMarkdown && viewMode !== 'edit';
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-slate-100">
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-3 py-2">
+    <div className={`flex min-h-0 flex-1 flex-col ${darkTheme ? 'bg-slate-900' : 'bg-slate-100'}`}>
+      <div
+        className={`flex flex-wrap items-center gap-2 border-b px-3 py-2 ${
+          darkTheme ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'
+        }`}
+      >
         <button
           type="button"
-          className={`nas-btn-ghost text-xs ${wordWrap ? 'bg-slate-100' : ''}`}
+          className={`nas-btn-ghost text-xs ${wordWrap ? 'bg-slate-100' : ''} ${
+            darkTheme ? 'text-slate-200 hover:bg-slate-800' : ''
+          }`}
           onClick={() => setWordWrap((value) => !value)}
         >
           줄바꿈
         </button>
-        <label className="flex items-center gap-1 text-xs text-slate-600">
+        <label
+          className={`flex items-center gap-1 text-xs ${darkTheme ? 'text-slate-300' : 'text-slate-600'}`}
+        >
           Tab
           <select
-            className="rounded border border-slate-200 px-1.5 py-0.5"
+            className={`rounded border px-1.5 py-0.5 ${
+              darkTheme ? 'border-slate-600 bg-slate-800 text-slate-100' : 'border-slate-200'
+            }`}
             value={tabSize}
             onChange={(event) => setTabSize(Number(event.target.value))}
           >
             <option value={2}>2</option>
             <option value={4}>4</option>
+            <option value={8}>8</option>
           </select>
         </label>
-        <button type="button" className="nas-btn-ghost text-xs" onClick={() => setFindOpen((value) => !value)}>
+        <button
+          type="button"
+          className={`nas-btn-ghost text-xs ${showWhitespace ? 'bg-slate-100' : ''} ${
+            darkTheme ? 'text-slate-200 hover:bg-slate-800' : ''
+          }`}
+          onClick={() => setShowWhitespace((value) => !value)}
+          title="공백·탭 표시"
+        >
+          공백표시
+        </button>
+        <button
+          type="button"
+          className={`nas-btn-ghost text-xs ${darkTheme ? 'bg-slate-700 text-slate-100' : ''}`}
+          onClick={() => setDarkTheme((value) => !value)}
+        >
+          {darkTheme ? '라이트' : '다크'}
+        </button>
+        <button
+          type="button"
+          className={`nas-btn-ghost text-xs ${darkTheme ? 'text-slate-200 hover:bg-slate-800' : ''}`}
+          onClick={openFind}
+          disabled={!showEditor}
+        >
           찾기 (Ctrl+F)
         </button>
+        <button
+          type="button"
+          className={`nas-btn-ghost text-xs ${darkTheme ? 'text-slate-200 hover:bg-slate-800' : ''}`}
+          onClick={openGoto}
+          disabled={!showEditor}
+          title="Ctrl+Shift+O"
+        >
+          줄이동
+        </button>
+        <span className={`text-[11px] ${darkTheme ? 'text-slate-500' : 'text-slate-400'}`}>
+          CodeMirror 전체 기능
+        </span>
         {isMarkdown && (
-          <div className="ml-auto flex items-center gap-1 rounded-md border border-slate-200 p-0.5">
+          <div
+            className={`ml-auto flex items-center gap-1 rounded-md border p-0.5 ${
+              darkTheme ? 'border-slate-600' : 'border-slate-200'
+            }`}
+          >
             {(['edit', 'split', 'preview']).map((mode) => (
               <button
                 key={mode}
                 type="button"
                 className={`rounded px-2 py-1 text-xs ${
-                  viewMode === mode ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-100'
+                  viewMode === mode
+                    ? darkTheme
+                      ? 'bg-slate-100 text-slate-900'
+                      : 'bg-slate-800 text-white'
+                    : darkTheme
+                      ? 'text-slate-300 hover:bg-slate-800'
+                      : 'text-slate-600 hover:bg-slate-100'
                 }`}
                 onClick={() => setViewMode(/** @type {TextEditorViewMode} */ (mode))}
               >
@@ -228,85 +364,38 @@ export default function TextEditor({ initialText, isMarkdown = false, onReady, o
         )}
       </div>
 
-      {findOpen && (
-        <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs">
-          <input
-            className="rounded border border-slate-200 px-2 py-1"
-            placeholder="찾기"
-            value={findQuery}
-            onChange={(event) => setFindQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') findNext();
-            }}
-          />
-          <input
-            className="rounded border border-slate-200 px-2 py-1"
-            placeholder="바꾸기"
-            value={replaceQuery}
-            onChange={(event) => setReplaceQuery(event.target.value)}
-          />
-          <button type="button" className="nas-btn-ghost text-xs" onClick={findNext}>
-            다음
-          </button>
-          <button type="button" className="nas-btn-ghost text-xs" onClick={replaceOne}>
-            바꾸기
-          </button>
-          <button type="button" className="nas-btn-ghost text-xs" onClick={replaceAll}>
-            모두 바꾸기
-          </button>
-        </div>
-      )}
-
       <div className={`flex min-h-0 flex-1 ${showEditor && showPreview ? 'divide-x divide-slate-200' : ''}`}>
-        {showEditor && (
-          <div className={`relative flex min-h-0 ${showPreview ? 'w-1/2' : 'w-full'}`}>
-            <div
-              ref={gutterRef}
-              className="w-12 shrink-0 overflow-hidden border-r border-slate-200 bg-slate-50 py-3 text-right font-mono text-xs leading-6 text-slate-400"
-              aria-hidden="true"
-            >
-              {lineNumbers.map((number) => (
-                <div key={number} className="pr-2">
-                  {number}
-                </div>
-              ))}
-            </div>
-            <textarea
-              ref={textareaRef}
-              value={text}
-              spellCheck
-              readOnly={!isEditable}
-              className={`min-h-0 flex-1 resize-none border-0 bg-white py-3 pl-3 pr-4 font-mono text-sm leading-6 text-slate-800 outline-none ${
-                isEditable ? '' : 'opacity-60'
-              } ${wordWrap ? 'whitespace-pre-wrap break-words' : 'whitespace-pre overflow-x-auto'}`}
-              onChange={(event) => {
-                if (!editableRef.current) return;
-                updateText(event.target.value, 'local');
-              }}
-              onScroll={syncScroll}
-              onClick={updateCursor}
-              onKeyUp={updateCursor}
-              onKeyDown={handleKeyDown}
-              onSelect={updateCursor}
-            />
-          </div>
-        )}
+        <div
+          className={`relative min-h-0 overflow-hidden ${darkTheme ? 'bg-slate-900' : 'bg-white'} ${
+            showEditor ? (showPreview ? 'w-1/2' : 'w-full') : 'hidden'
+          } ${isEditable ? '' : 'opacity-60'}`}
+        >
+          <div ref={parentRef} className="h-full min-h-0 w-full [&_.cm-editor]:h-full" />
+        </div>
 
         {showPreview && (
           <div
-            className={`markdown-preview overflow-auto bg-white p-6 ${showEditor ? 'w-1/2' : 'w-full'}`}
+            className={`markdown-preview overflow-auto p-6 ${
+              darkTheme ? 'bg-slate-900 text-slate-100' : 'bg-white'
+            } ${showEditor ? 'w-1/2' : 'w-full'}`}
             dangerouslySetInnerHTML={{ __html: previewHtml }}
           />
         )}
       </div>
 
-      <div className="flex items-center justify-between border-t border-slate-200 bg-white px-3 py-1.5 text-[11px] text-slate-500">
+      <div
+        className={`flex items-center justify-between border-t px-3 py-1.5 text-[11px] ${
+          darkTheme
+            ? 'border-slate-700 bg-slate-900 text-slate-400'
+            : 'border-slate-200 bg-white text-slate-500'
+        }`}
+      >
         <span>
           Ln {line}, Col {column}
         </span>
         <span>
           {text.length} chars · {text.split(/\s+/).filter(Boolean).length} words · UTF-8
-          {isMarkdown ? ' · Markdown' : ' · Plain Text'}
+          {` · ${languageLabel}`} · lint · fold · search · autocomplete
         </span>
       </div>
     </div>

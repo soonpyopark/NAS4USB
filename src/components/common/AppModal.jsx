@@ -12,6 +12,7 @@
  *   wide?: boolean,
  *   editor?: boolean,
  *   embedded?: boolean,
+ *   raised?: boolean,
  *   showCloseButton?: boolean,
  *   className?: string,
  *   children: import('react').ReactNode,
@@ -25,13 +26,20 @@ export function AppModal({
   wide = false,
   editor = false,
   embedded = false,
+  raised = false,
   showCloseButton = false,
   className = '',
   children,
 }) {
   if (!open) return null;
 
-  const overlayClass = ['modal-overlay', embedded ? 'modal-overlay--embedded' : ''].filter(Boolean).join(' ');
+  const overlayClass = [
+    'modal-overlay',
+    embedded ? 'modal-overlay--embedded' : '',
+    raised ? 'modal-overlay--raised' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
   const dialogClass = [
     'modal-dialog',
     wide ? 'modal-dialog--wide' : '',
@@ -131,7 +139,7 @@ export function AppAlertDialog({
   onClose,
 }) {
   return (
-    <AppModal open={open} onClose={onClose} title={title}>
+    <AppModal open={open} onClose={onClose} title={title} raised>
       {body &&
         (typeof body === 'string' ? (
           <p className="modal-body whitespace-pre-line">{body}</p>
@@ -170,7 +178,7 @@ export function AppConfirmDialog({
   onCancel,
 }) {
   return (
-    <AppModal open={open} onClose={onCancel} title={title}>
+    <AppModal open={open} onClose={onCancel} title={title} raised>
       {body &&
         (typeof body === 'string' ? (
           <p className="modal-body whitespace-pre-line">{body}</p>
@@ -181,6 +189,49 @@ export function AppConfirmDialog({
         <AppModalButton variant={confirmVariant} onClick={onConfirm}>
           {confirmLabel}
         </AppModalButton>
+        <AppModalButton onClick={onCancel}>{cancelLabel}</AppModalButton>
+      </AppModalActions>
+    </AppModal>
+  );
+}
+
+/**
+ * @param {{
+ *   open: boolean,
+ *   title?: string,
+ *   body?: string | import('react').ReactNode,
+ *   primaryLabel?: string,
+ *   secondaryLabel?: string,
+ *   cancelLabel?: string,
+ *   onPrimary: () => void,
+ *   onSecondary: () => void,
+ *   onCancel: () => void,
+ * }} props
+ */
+export function AppChoiceDialog({
+  open,
+  title = '선택',
+  body = '',
+  primaryLabel = '확인',
+  secondaryLabel = '다른 방법',
+  cancelLabel = '취소',
+  onPrimary,
+  onSecondary,
+  onCancel,
+}) {
+  return (
+    <AppModal open={open} onClose={onCancel} title={title} raised>
+      {body &&
+        (typeof body === 'string' ? (
+          <p className="modal-body whitespace-pre-line">{body}</p>
+        ) : (
+          body
+        ))}
+      <AppModalActions className="flex-wrap">
+        <AppModalButton variant="primary" onClick={onPrimary}>
+          {primaryLabel}
+        </AppModalButton>
+        <AppModalButton onClick={onSecondary}>{secondaryLabel}</AppModalButton>
         <AppModalButton onClick={onCancel}>{cancelLabel}</AppModalButton>
       </AppModalActions>
     </AppModal>

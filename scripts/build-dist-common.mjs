@@ -2,7 +2,10 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DEFAULT_DEPARTMENT_CODE } from '../shared/constants.js';
+import {
+  DEFAULT_GUEST_PERMISSIONS,
+  DEFAULT_LOGGED_IN_PERMISSIONS,
+} from '../shared/guestPermissions.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -70,8 +73,31 @@ export async function findUnpackedDir(outputDir, pattern) {
   return path.join(outputDir, matches[0].name);
 }
 
+/**
+ * Seed portable/install `data/` from tracked samples in `seed/data/`,
+ * and write pristine settings (guest view/read/write off).
+ * @param {string} portableDir
+ */
 export async function seedPortableData(portableDir) {
-  await fs.mkdir(path.join(portableDir, 'data', DEFAULT_DEPARTMENT_CODE), { recursive: true });
+  const dataDir = path.join(portableDir, 'data');
+  const seedDir = path.join(projectRoot, 'seed', 'data');
+  await fs.mkdir(dataDir, { recursive: true });
+
+  if (await pathExists(seedDir)) {
+    await fs.cp(seedDir, dataDir, { recursive: true });
+  }
+
+  const settings = {
+    allowedIpCidrs: [],
+    guestPermissions: { ...DEFAULT_GUEST_PERMISSIONS },
+    loggedInPermissions: { ...DEFAULT_LOGGED_IN_PERMISSIONS },
+  };
+  await fs.writeFile(
+    path.join(portableDir, '.nas4usb-settings.json'),
+    `${JSON.stringify(settings, null, 2)}\n`,
+    'utf8',
+  );
+
   await copyFileIfMissing(path.join(projectRoot, '.env.example'), path.join(portableDir, '.env.example'));
 }
 

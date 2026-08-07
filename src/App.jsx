@@ -9,6 +9,9 @@ import XlsxEditorShell from './components/editors/XlsxEditorShell.jsx';
 import TextEditorShell from './components/editors/TextEditorShell.jsx';
 import AudioPlayerShell from './components/editors/AudioPlayerShell.jsx';
 import VideoPlayerShell from './components/editors/VideoPlayerShell.jsx';
+import ImageViewerShell from './components/editors/ImageViewerShell.jsx';
+import PdfViewerShell from './components/editors/PdfViewerShell.jsx';
+import HtmlViewerShell from './components/editors/HtmlViewerShell.jsx';
 
 const TipTapEditorShell = lazy(() => import('./components/editors/TipTapEditorShell.jsx'));
 import { ShareLinkError, ShareLinkLoading } from './components/share/ShareLinkScreen.jsx';
@@ -19,11 +22,63 @@ import { useAppInfo } from './hooks/useAppInfo.js';
 import { useFsChangeSync } from './hooks/useFsChangeSync.js';
 import { hasNas4usbApi } from './lib/runtime.js';
 import { guardOpenFileEntry } from './lib/openFileGuard.js';
-import { nativeAlert } from './lib/nativeDialog.js';
 import { useTrashGuardedNavigate } from './hooks/useTrashGuardedNavigate.js';
 import { getShareTokenFromUrl } from './lib/shareAccess.js';
 import { isShareViewOnly, resolveOpenShareMode } from './lib/shareLinkAccess.js';
-import { AUDIO_EXTENSIONS, VIDEO_EXTENSIONS } from './lib/media/mediaTypes.js';
+import { resolveUnknownFileOpenAction } from './lib/unknownFileOpen.js';
+import {
+  AUDIO_EXTENSIONS,
+  HTML_EXTENSIONS,
+  IMAGE_EXTENSIONS,
+  PDF_EXTENSIONS,
+  VIDEO_EXTENSIONS,
+} from './lib/media/mediaTypes.js';
+
+/** Code / config files opened in the CodeMirror text editor (syntax highlight by ext). */
+const CODE_TEXT_EXTENSIONS = [
+  'js',
+  'mjs',
+  'cjs',
+  'jsx',
+  'ts',
+  'tsx',
+  'json',
+  'jsonc',
+  'css',
+  'scss',
+  'less',
+  'xml',
+  'py',
+  'rb',
+  'go',
+  'rs',
+  'java',
+  'kt',
+  'kts',
+  'c',
+  'h',
+  'cpp',
+  'cc',
+  'cxx',
+  'hpp',
+  'hh',
+  'cs',
+  'php',
+  'swift',
+  'sh',
+  'bash',
+  'zsh',
+  'ps1',
+  'yml',
+  'yaml',
+  'toml',
+  'ini',
+  'sql',
+  'graphql',
+  'vue',
+  'svelte',
+  'mdx',
+];
 
 const OPENABLE_EXTENSIONS = {
   hwpx: 'hwpx',
@@ -33,8 +88,12 @@ const OPENABLE_EXTENSIONS = {
   txt: 'text',
   md: 'text',
   tiptap: 'tiptap',
+  ...Object.fromEntries(CODE_TEXT_EXTENSIONS.map((ext) => [ext, 'text'])),
   ...Object.fromEntries(AUDIO_EXTENSIONS.map((ext) => [ext, 'audio'])),
   ...Object.fromEntries(VIDEO_EXTENSIONS.map((ext) => [ext, 'video'])),
+  ...Object.fromEntries(IMAGE_EXTENSIONS.map((ext) => [ext, 'image'])),
+  ...Object.fromEntries(PDF_EXTENSIONS.map((ext) => [ext, 'pdf'])),
+  ...Object.fromEntries(HTML_EXTENSIONS.map((ext) => [ext, 'html'])),
 };
 
 /**
@@ -150,6 +209,45 @@ function OpenEditorLayer({ openEditor, syncInfo, allowClose, fullscreen = false,
         relativePath={openEditor.relativePath}
         fileName={openEditor.name}
         extension={openEditor.extension ?? 'mp4'}
+        onClose={onClose}
+        allowClose={allowClose}
+        fullscreen={fullscreen}
+      />
+    );
+  }
+
+  if (openEditor.type === 'image') {
+    return (
+      <ImageViewerShell
+        relativePath={openEditor.relativePath}
+        fileName={openEditor.name}
+        extension={openEditor.extension ?? 'png'}
+        onClose={onClose}
+        allowClose={allowClose}
+        fullscreen={fullscreen}
+      />
+    );
+  }
+
+  if (openEditor.type === 'pdf') {
+    return (
+      <PdfViewerShell
+        relativePath={openEditor.relativePath}
+        fileName={openEditor.name}
+        extension={openEditor.extension ?? 'pdf'}
+        onClose={onClose}
+        allowClose={allowClose}
+        fullscreen={fullscreen}
+      />
+    );
+  }
+
+  if (openEditor.type === 'html') {
+    return (
+      <HtmlViewerShell
+        relativePath={openEditor.relativePath}
+        fileName={openEditor.name}
+        extension={openEditor.extension ?? 'html'}
         onClose={onClose}
         allowClose={allowClose}
         fullscreen={fullscreen}
@@ -275,13 +373,20 @@ function Nas4usbAppMain() {
       return true;
     }
 
-    if (isShareMode) {
-      throw new Error('이 파일 형식은 공유 링크로 미리볼 수 없습니다.');
+    const unknownAction = await resolveUnknownFileOpenAction(entry);
+    if (unknownAction === 'text') {
+      setOpenEditor({
+        type: 'text',
+        relativePath: entry.relativePath,
+        name: entry.name,
+        extension: entry.extension || 'txt',
+        shareMode: resolveOpenShareMode(entry.mode),
+      });
+      return true;
     }
 
-    nativeAlert('이 파일 형식은 앱에서 편집할 수 없습니다.');
     return false;
-  }, [isShareMode, notifyRemoteChange]);
+  }, [notifyRemoteChange]);
 
   const handleCloseEditor = useCallback(() => {
     if (isShareMode) return;

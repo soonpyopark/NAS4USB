@@ -207,13 +207,36 @@ export default function Sidebar({
     if (!entry || entry.isDirectory) return;
     try {
       const fileName = entry.name || entry.relativePath.split('/').pop();
-      if (!isTiptapDocumentRelativePath(entry.relativePath)) {
+      let saved;
+      if (isTiptapDocumentRelativePath(entry.relativePath)) {
+        const { exportTiptapFileAsHtml } = await import('../../lib/tiptap/exportHtml.jsx');
+        saved = await exportTiptapFileAsHtml(entry.relativePath, fileName);
+      } else if (/\.md$/i.test(entry.relativePath)) {
+        const { exportMarkdownFileAsHtml } = await import('../../lib/text/exportMarkdown.js');
+        saved = await exportMarkdownFileAsHtml(entry.relativePath, fileName);
+      } else {
         throw new Error('HTML 내보내기를 지원하지 않는 파일입니다.');
       }
-      const { exportTiptapFileAsHtml } = await import('../../lib/tiptap/exportHtml.jsx');
-      await exportTiptapFileAsHtml(entry.relativePath, fileName);
+      await notifyChange(saved?.relativePath ? [saved.relativePath] : undefined);
+      nativeAlert(`HTML로 내보냈습니다.\n${saved?.relativePath ?? saved?.name ?? ''}`);
     } catch (err) {
       nativeAlert(err instanceof Error ? err.message : 'HTML로 내보내기에 실패했습니다.');
+    }
+  };
+
+  const handleExportHwpx = async (entry) => {
+    if (!entry || entry.isDirectory) return;
+    try {
+      const fileName = entry.name || entry.relativePath.split('/').pop();
+      if (!isTiptapDocumentRelativePath(entry.relativePath)) {
+        throw new Error('HWPX 내보내기를 지원하지 않는 파일입니다.');
+      }
+      const { exportTiptapFileAsHwpx } = await import('../../lib/tiptap/exportHwpx.js');
+      const saved = await exportTiptapFileAsHwpx(entry.relativePath, fileName);
+      await notifyChange(saved?.relativePath ? [saved.relativePath] : undefined);
+      nativeAlert(`HWPX로 내보냈습니다.\n${saved?.relativePath ?? saved?.name ?? ''}`);
+    } catch (err) {
+      nativeAlert(err instanceof Error ? err.message : 'HWPX 내보내기에 실패했습니다.');
     }
   };
 
@@ -312,11 +335,16 @@ export default function Sidebar({
       confirmVariant: 'danger',
     });
     if (!confirmed) return;
-    await fs.deletePermanent(entry.relativePath);
-    if (currentPath === entry.relativePath || currentPath.startsWith(`${entry.relativePath}/`)) {
-      onNavigate(TRASH_FOLDER);
+    try {
+      const wasInTrash = isTrashPath(entry.relativePath);
+      await fs.deletePermanent(entry.relativePath);
+      if (currentPath === entry.relativePath || currentPath.startsWith(`${entry.relativePath}/`)) {
+        onNavigate(wasInTrash ? TRASH_FOLDER : getParentPath(entry.relativePath));
+      }
+      await notifyChange();
+    } catch (err) {
+      nativeAlert(err instanceof Error ? err.message : '삭제(영구)에 실패했습니다.');
     }
-    await notifyChange();
   };
 
   const handleEmptyTrash = async () => {
@@ -556,6 +584,13 @@ export default function Sidebar({
         canDownload: Boolean(contextTarget && !contextTarget.isDirectory),
         onExportHtml: () => handleExportHtml(contextTarget),
         canExportHtml: Boolean(
+          contextTarget &&
+            !contextTarget.isDirectory &&
+            (isTiptapDocumentRelativePath(contextTarget.relativePath) ||
+              /\.md$/i.test(contextTarget.relativePath)),
+        ),
+        onExportHwpx: () => handleExportHwpx(contextTarget),
+        canExportHwpx: Boolean(
           contextTarget &&
             !contextTarget.isDirectory &&
             isTiptapDocumentRelativePath(contextTarget.relativePath),

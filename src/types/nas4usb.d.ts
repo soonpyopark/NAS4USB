@@ -44,6 +44,7 @@ window.nas4usb = {
   __source: 'electron',
   getPaths: () => {},
   getSyncInfo: () => {},
+  checkForUpdates: () => {},
   openExternal: (url) => {},
   dialog: {
     pickDirectory: (options) => {},

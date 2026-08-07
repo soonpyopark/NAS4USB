@@ -1,5 +1,9 @@
 import { useCallback, useState } from 'react';
-import { AppAlertDialog, AppConfirmDialog } from '../components/common/AppModal.jsx';
+import {
+  AppAlertDialog,
+  AppChoiceDialog,
+  AppConfirmDialog,
+} from '../components/common/AppModal.jsx';
 
 /**
  * @param {{
@@ -16,6 +20,8 @@ export function useAppConfirm() {
   const [confirmConfig, setConfirmConfig] = useState(null);
   /** @type {[{ title?: string, body?: string | import('react').ReactNode, confirmLabel?: string, resolve: () => void } | null, Function]} */
   const [alertConfig, setAlertConfig] = useState(null);
+  /** @type {[{ title?: string, body?: string | import('react').ReactNode, primaryLabel?: string, secondaryLabel?: string, cancelLabel?: string, resolve: (value: 'primary' | 'secondary' | null) => void } | null, Function]} */
+  const [choiceConfig, setChoiceConfig] = useState(null);
 
   const confirm = useCallback((options) => {
     return new Promise((resolve) => {
@@ -42,6 +48,29 @@ export function useAppConfirm() {
     });
   }, []);
 
+  /**
+   * @param {{
+   *   title?: string,
+   *   body?: string | import('react').ReactNode,
+   *   primaryLabel?: string,
+   *   secondaryLabel?: string,
+   *   cancelLabel?: string,
+   * }} options
+   * @returns {Promise<'primary' | 'secondary' | null>}
+   */
+  const choose = useCallback((options) => {
+    return new Promise((resolve) => {
+      setChoiceConfig({
+        title: options.title ?? '선택',
+        body: options.body ?? '',
+        primaryLabel: options.primaryLabel ?? '확인',
+        secondaryLabel: options.secondaryLabel ?? '다른 방법',
+        cancelLabel: options.cancelLabel ?? '취소',
+        resolve,
+      });
+    });
+  }, []);
+
   const closeConfirm = useCallback((result) => {
     setConfirmConfig((current) => {
       current?.resolve(result);
@@ -52,6 +81,13 @@ export function useAppConfirm() {
   const closeAlert = useCallback(() => {
     setAlertConfig((current) => {
       current?.resolve();
+      return null;
+    });
+  }, []);
+
+  const closeChoice = useCallback((result) => {
+    setChoiceConfig((current) => {
+      current?.resolve(result);
       return null;
     });
   }, []);
@@ -75,8 +111,19 @@ export function useAppConfirm() {
         confirmLabel={alertConfig?.confirmLabel}
         onClose={closeAlert}
       />
+      <AppChoiceDialog
+        open={Boolean(choiceConfig)}
+        title={choiceConfig?.title}
+        body={choiceConfig?.body}
+        primaryLabel={choiceConfig?.primaryLabel}
+        secondaryLabel={choiceConfig?.secondaryLabel}
+        cancelLabel={choiceConfig?.cancelLabel}
+        onPrimary={() => closeChoice('primary')}
+        onSecondary={() => closeChoice('secondary')}
+        onCancel={() => closeChoice(null)}
+      />
     </>
   );
 
-  return { confirm, alert, dialog };
+  return { confirm, alert, choose, dialog };
 }

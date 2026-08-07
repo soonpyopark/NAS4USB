@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { TRASH_FOLDER } from '../shared/constants.js';
+import { resolveUniqueName } from '../shared/uniqueName.js';
 import {
   syncFortuneSidecarDelete,
   syncFortuneSidecarMoveTree,
@@ -40,24 +41,6 @@ function normalizePath(relativePath) {
 export function isTrashPath(relativePath) {
   const normalized = normalizePath(relativePath);
   return normalized === TRASH_FOLDER || normalized.startsWith(`${TRASH_FOLDER}/`);
-}
-
-/**
- * @param {Set<string>|string[]} existingNames
- * @param {string} desiredName
- */
-function resolveUniqueName(existingNames, desiredName) {
-  const names = existingNames instanceof Set ? existingNames : new Set(existingNames);
-  if (!names.has(desiredName)) return desiredName;
-
-  const extIndex = desiredName.lastIndexOf('.');
-  const hasExt = extIndex > 0;
-  const stem = hasExt ? desiredName.slice(0, extIndex) : desiredName;
-  const ext = hasExt ? desiredName.slice(extIndex) : '';
-
-  let counter = 1;
-  while (names.has(`${stem} (${counter})${ext}`)) counter += 1;
-  return `${stem} (${counter})${ext}`;
 }
 
 /**
@@ -265,13 +248,41 @@ export async function restorePath(trashRelativePath, portableRoot = getPortableR
 }
 
 /**
- * @param {string} trashRelativePath
+ * Permanently delete a path. Works for trash items and for live files/folders.
+ * @param {string} relativePath
  * @param {string} [portableRoot]
  */
-export async function deletePermanent(trashRelativePath, portableRoot = getPortableRoot()) {
-  const normalized = normalizePath(trashRelativePath);
-  if (!isTrashPath(normalized) || normalized === TRASH_FOLDER) {
+export async function deletePermanent(relativePath, portableRoot = getPortableRoot()) {
+  const normalized = normalizePath(relativePath);
+  if (!normalized || normalized === '.' || normalized === TRASH_FOLDER) {
     throw new Error('삭제(영구)할 수 없는 항목입니다.');
+  }
+
+  const inTrash = isTrashPath(normalized);
+
+  if (!inTrash) {
+    if (isTiptapAssetSidecarRelativePath(normalized)) {
+      throw new Error(
+        'TipTap 편집용 임시 폴더입니다. 연결된 .tiptap 파일을 삭제해 주세요.',
+      );
+    }
+    if (isFortuneSidecarRelativePath(normalized)) {
+      throw new Error(
+        'FortuneSheet 편집용 보조 파일입니다. 연결된 스프레드시트를 삭제해 주세요.',
+      );
+    }
+    if (isTiptapDocumentRelativePath(normalized)) {
+      const sidecar = getTiptapAssetSidecarPath(normalized);
+      if (await fsService.pathExists(sidecar)) {
+        try {
+          await fsService.deletePath(sidecar);
+        } catch {
+          throw new Error(
+            'TipTap 편집 중이거나 미디어 파일이 사용 중입니다. .tiptap 편집 창을 닫은 뒤 다시 시도해 주세요.',
+          );
+        }
+      }
+    }
   }
 
   await purgeYjsRoomsForPathTree(normalized);
@@ -282,14 +293,16 @@ export async function deletePermanent(trashRelativePath, portableRoot = getPorta
   await syncFileHistoryDelete(normalized, portableRoot);
   await fsService.deletePath(normalized);
 
-  const store = await loadIndex(portableRoot);
-  delete store.items[normalized];
-  for (const key of Object.keys(store.items)) {
-    if (key.startsWith(`${normalized}/`)) {
-      delete store.items[key];
+  if (inTrash) {
+    const store = await loadIndex(portableRoot);
+    delete store.items[normalized];
+    for (const key of Object.keys(store.items)) {
+      if (key.startsWith(`${normalized}/`)) {
+        delete store.items[key];
+      }
     }
+    await saveIndex(portableRoot, store);
   }
-  await saveIndex(portableRoot, store);
 
   return true;
 }

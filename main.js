@@ -3,7 +3,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { APP_BLOG_URL, APP_NAME, APP_VERSION } from './shared/constants.js';
+import { resolveUniqueName } from './shared/uniqueName.js';
+import {
+  RELEASES_PAGE_URL,
+  isUpdateAvailable,
+  versionLabel,
+} from './shared/updateCheck.js';
 import { resolveAppIconPath, resolveAppIconImagePath } from './electron/appIcon.js';
+import { fetchLatestRelease } from './electron/updateCheck.js';
 import {
   ensureDataRoot,
   getAppPaths,
@@ -43,6 +50,7 @@ import {
   revokeAdminSession,
   getAdminSession,
   isSuperAdminSession,
+  isDefaultAdminPasswordActive,
 } from './electron/authService.js';
 import {
   assertAdminAuthenticated,
@@ -233,6 +241,8 @@ function createMainWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      // PDF viewer uses <webview> so findInPage/findNext works inside the PDF guest.
+      webviewTag: true,
     },
   });
 
@@ -304,6 +314,73 @@ function resolveTrayIcon() {
   return nativeImage.createEmpty();
 }
 
+let trayUpdateCheckBusy = false;
+
+async function checkForUpdatesFromTray() {
+  if (trayUpdateCheckBusy) return;
+  trayUpdateCheckBusy = true;
+  try {
+    const result = await fetchLatestRelease();
+    const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
+    const current = versionLabel(result.current);
+
+    if (!result.ok) {
+      const box = {
+        type: 'warning',
+        title: '업데이트 확인',
+        message: '업데이트 정보를 확인할 수 없습니다.',
+        detail: `${result.error || '알 수 없는 오류'}\n\n현재 버전: ${current}`,
+        buttons: ['릴리스 페이지 열기', '닫기'],
+        defaultId: 0,
+        cancelId: 1,
+        noLink: true,
+      };
+      const response = win
+        ? await dialog.showMessageBox(win, box)
+        : await dialog.showMessageBox(box);
+      if (response.response === 0) {
+        void shell.openExternal(RELEASES_PAGE_URL);
+      }
+      return;
+    }
+
+    if (isUpdateAvailable(result)) {
+      const box = {
+        type: 'info',
+        title: '업데이트 확인',
+        message: `새 버전이 있습니다: ${versionLabel(result.latest || '')}`,
+        detail: `현재 버전: ${current}`,
+        buttons: ['다운로드', '나중에'],
+        defaultId: 0,
+        cancelId: 1,
+        noLink: true,
+      };
+      const response = win
+        ? await dialog.showMessageBox(win, box)
+        : await dialog.showMessageBox(box);
+      if (response.response === 0) {
+        void shell.openExternal(result.releaseUrl || RELEASES_PAGE_URL);
+      }
+      return;
+    }
+
+    const box = {
+      type: 'info',
+      title: '업데이트 확인',
+      message: '최신 버전입니다.',
+      detail: `현재 버전: ${current}`,
+      buttons: ['확인'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    };
+    if (win) await dialog.showMessageBox(win, box);
+    else await dialog.showMessageBox(box);
+  } finally {
+    trayUpdateCheckBusy = false;
+  }
+}
+
 function buildTrayMenu() {
   const serverRunning = activeServerInfo != null;
 
@@ -323,6 +400,12 @@ function buildTrayMenu() {
       },
     },
     { type: 'separator' },
+    {
+      label: 'Update',
+      click: () => {
+        void checkForUpdatesFromTray();
+      },
+    },
     {
       label: 'About',
       click: () => {
@@ -396,11 +479,53 @@ function createTray() {
 
 ipcMain.handle('app:getPaths', () => getAppPaths());
 
+ipcMain.handle('app:checkForUpdates', async () => fetchLatestRelease());
+
 ipcMain.handle('app:openExternal', async (_event, url) => {
   if (typeof url !== 'string' || !/^https?:\/\//i.test(url)) {
     throw new Error('Invalid external URL');
   }
   await shell.openExternal(url);
+  return true;
+});
+
+/** @type {WeakSet<import('electron').WebContents>} */
+const findInPageListeners = new WeakSet();
+
+/**
+ * @param {import('electron').WebContents} webContents
+ */
+function ensureFindInPageListener(webContents) {
+  if (findInPageListeners.has(webContents)) return;
+  findInPageListeners.add(webContents);
+  webContents.on('found-in-page', (_event, result) => {
+    if (!webContents.isDestroyed()) {
+      webContents.send('find:result', result);
+    }
+  });
+}
+
+ipcMain.handle('find:start', (event, text, options = {}) => {
+  const webContents = event.sender;
+  ensureFindInPageListener(webContents);
+  const query = typeof text === 'string' ? text : '';
+  if (!query) {
+    webContents.stopFindInPage('clearSelection');
+    return { requestId: 0 };
+  }
+  const requestId = webContents.findInPage(query, {
+    forward: options?.forward !== false,
+    findNext: Boolean(options?.findNext),
+    matchCase: Boolean(options?.matchCase),
+  });
+  return { requestId };
+});
+
+ipcMain.handle('find:stop', (event, action = 'clearSelection') => {
+  const webContents = event.sender;
+  const mode =
+    action === 'keepSelection' || action === 'activateSelection' ? action : 'clearSelection';
+  webContents.stopFindInPage(mode);
   return true;
 });
 
@@ -415,24 +540,6 @@ ipcMain.handle('fs:openPath', async (_event, relativePath) => {
   }
   return true;
 });
-
-/**
- * @param {string[]} existingNames
- * @param {string} desiredName
- */
-function resolveUniqueFileName(existingNames, desiredName) {
-  const names = new Set(existingNames);
-  if (!names.has(desiredName)) return desiredName;
-
-  const extIndex = desiredName.lastIndexOf('.');
-  const hasExt = extIndex > 0;
-  const stem = hasExt ? desiredName.slice(0, extIndex) : desiredName;
-  const ext = hasExt ? desiredName.slice(extIndex) : '';
-
-  let counter = 1;
-  while (names.has(`${stem} (${counter})${ext}`)) counter += 1;
-  return `${stem} (${counter})${ext}`;
-}
 
 ipcMain.handle('dialog:pickDirectory', async (event, options = {}) => {
   const parentWindow = BrowserWindow.fromWebContents(event.sender);
@@ -454,7 +561,7 @@ ipcMain.handle('fs:writeFileAbsolute', async (_event, params = {}) => {
   let targetName = fileName;
   if (unique) {
     const existing = await fs.readdir(dir).catch(() => []);
-    targetName = resolveUniqueFileName(existing, fileName);
+    targetName = resolveUniqueName(existing, fileName);
   }
 
   const absolutePath = path.join(dir, targetName);
@@ -719,6 +826,10 @@ ipcMain.handle('editors:update', async (event) => {
 
 ipcMain.handle('auth:login', async (_event, { id, password } = {}) =>
   loginAdmin(id, password, getPortableRoot()),
+);
+
+ipcMain.handle('auth:showDefaultAdminHint', async () =>
+  isDefaultAdminPasswordActive(getPortableRoot()),
 );
 
 ipcMain.handle('share:getMap', async (event) => {

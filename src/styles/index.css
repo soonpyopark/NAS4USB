@@ -143,6 +143,12 @@
   padding: 1rem;
 }
 
+/* Alerts/confirms must sit above EditorModal/ViewerModal (same base z-index,
+   but editors mount later in the tree). Also above TipTap floating menus. */
+.modal-overlay--raised {
+  z-index: 12000;
+}
+
 .modal-dialog {
   position: relative;
   width: 100%;

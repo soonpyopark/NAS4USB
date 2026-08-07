@@ -1,8 +1,23 @@
+import { isHtmlExtension, isImageExtension, isPdfExtension } from './media/mediaTypes.js';
 import { isTrashPath } from './trashPaths.js';
 
 /**
+ * @param {{ relativePath?: string, isDirectory?: boolean, extension?: string } | null | undefined} entry
+ */
+function openFileMenuLabel(entry) {
+  if (
+    isImageExtension(entry?.extension) ||
+    isPdfExtension(entry?.extension) ||
+    isHtmlExtension(entry?.extension)
+  ) {
+    return '바로 보기';
+  }
+  return '편집 열기';
+}
+
+/**
  * @param {{
- *   entry: { relativePath: string, isDirectory: boolean } | null,
+ *   entry: { relativePath: string, isDirectory: boolean, extension?: string } | null,
  *   targetCount?: number,
  *   hasClipboard: boolean,
  *   isInTrashView?: boolean,
@@ -23,6 +38,8 @@ import { isTrashPath } from './trashPaths.js';
  *   canDownload?: boolean,
  *   onExportHtml?: () => void,
  *   canExportHtml?: boolean,
+ *   onExportHwpx?: () => void,
+ *   canExportHwpx?: boolean,
  *   canEditOpen?: boolean,
  *   isAdminLoggedIn?: boolean,
  *   canWrite?: boolean,
@@ -50,6 +67,8 @@ export function buildEntryContextMenuItems({
   canDownload = false,
   onExportHtml,
   canExportHtml = false,
+  onExportHwpx,
+  canExportHwpx = false,
   canEditOpen = true,
   isAdminLoggedIn = true,
   canWrite = true,
@@ -111,7 +130,7 @@ export function buildEntryContextMenuItems({
     return [
       {
         id: 'open',
-        label: '편집 열기',
+        label: openFileMenuLabel(entry),
         disabled: !entry || !canEditOpen,
         onClick: () => entry && onOpen(entry),
       },
@@ -132,6 +151,12 @@ export function buildEntryContextMenuItems({
         label: 'HTML로 내보내기',
         disabled: !onExportHtml || !canExportHtml,
         onClick: () => onExportHtml?.(),
+      },
+      {
+        id: 'export-hwpx',
+        label: 'HWPX 내보내기',
+        disabled: !onExportHwpx || !canExportHwpx,
+        onClick: () => onExportHwpx?.(),
       },
       {
         id: 'properties',
@@ -171,6 +196,13 @@ export function buildEntryContextMenuItems({
       danger: true,
       disabled: targetCount === 0,
       onClick: onDelete,
+    },
+    {
+      id: 'permanent-delete',
+      label: '삭제(영구)',
+      danger: true,
+      disabled: targetCount === 0,
+      onClick: () => onPermanentDelete?.(),
     },
     {
       id: 'properties',
@@ -213,7 +245,7 @@ export function buildEntryContextMenuItems({
   return [
     {
       id: 'open',
-      label: '편집 열기',
+      label: openFileMenuLabel(entry),
       disabled: !entry || !canEditOpen,
       onClick: () => entry && onOpen(entry),
     },
@@ -234,6 +266,12 @@ export function buildEntryContextMenuItems({
       label: 'HTML로 내보내기',
       disabled: !onExportHtml || !canExportHtml,
       onClick: () => onExportHtml?.(),
+    },
+    {
+      id: 'export-hwpx',
+      label: 'HWPX 내보내기',
+      disabled: !onExportHwpx || !canExportHwpx,
+      onClick: () => onExportHwpx?.(),
     },
     ...sharedItems,
   ];

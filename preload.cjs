@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('nas4usb', {
   __source: 'electron',
   getPaths: () => ipcRenderer.invoke('app:getPaths'),
   getSyncInfo: () => ipcRenderer.invoke('sync:getInfo'),
+  checkForUpdates: () => ipcRenderer.invoke('app:checkForUpdates'),
   openExternal: (url) => ipcRenderer.invoke('app:openExternal', url),
 
   dialog: {
@@ -56,6 +57,7 @@ contextBridge.exposeInMainWorld('nas4usb', {
 
   auth: {
     login: ({ id, password }) => ipcRenderer.invoke('auth:login', { id, password }),
+    showDefaultAdminHint: () => ipcRenderer.invoke('auth:showDefaultAdminHint'),
     bindToken: (token) => ipcRenderer.invoke('auth:bindToken', token ?? ''),
     bindShareToken: (token) => ipcRenderer.invoke('auth:bindShareToken', token ?? ''),
     logout: () => ipcRenderer.invoke('auth:logout'),
@@ -113,5 +115,19 @@ contextBridge.exposeInMainWorld('nas4usb', {
     list: () => ipcRenderer.invoke('members:list'),
     export: () => ipcRenderer.invoke('members:export'),
     save: (payload) => ipcRenderer.invoke('members:save', payload ?? {}),
+  },
+
+  find: {
+    start: (text, options) => ipcRenderer.invoke('find:start', text, options),
+    stop: (action) => ipcRenderer.invoke('find:stop', action),
+    subscribe: (callback) => {
+      const handler = (_event, result) => {
+        callback(result);
+      };
+      ipcRenderer.on('find:result', handler);
+      return () => {
+        ipcRenderer.removeListener('find:result', handler);
+      };
+    },
   },
 });

@@ -16,7 +16,14 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { APP_NAME, APP_VERSION, APP_BLOG_URL } from '../shared/constants.js';
-import { buildRenderer, findUnpackedDir, packagePlatform, pathExists, projectRoot } from './build-dist-common.mjs';
+import {
+  buildRenderer,
+  findUnpackedDir,
+  packagePlatform,
+  pathExists,
+  projectRoot,
+  seedPortableData,
+} from './build-dist-common.mjs';
 
 const STAGING_DIR = path.join(projectRoot, '.dist-build', 'win-msi');
 const MSI_DIR = path.join(projectRoot, 'msi');
@@ -128,12 +135,12 @@ async function stageForMsi(winUnpackedDir) {
     }
   }
 
-  // Ship a pristine install: data/, .env, and any *.json app state (settings/members/trash)
-  // are created by the app on first launch (see ensureDataRoot in electron/appContext.js).
-  // Windows Installer can lock harvested files it doesn't own, so never stage mutable state.
+  // Drop mutable runtime state; then seed sample documents into data/.
+  // Windows Installer can lock harvested files it doesn't own, so never stage .env / cache / history.
   for (const name of ['data', '.cache', '.nas4usb', '.env']) {
     await fsp.rm(path.join(STAGE_DIR, name), { recursive: true, force: true });
   }
+  await seedPortableData(STAGE_DIR);
 
   log(`staged: ${STAGE_DIR}`);
   return mainExe;

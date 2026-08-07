@@ -1,4 +1,10 @@
-import { isAudioExtension, isVideoExtension } from '../../lib/media/mediaTypes.js';
+import {
+  isAudioExtension,
+  isHtmlExtension,
+  isImageExtension,
+  isPdfExtension,
+  isVideoExtension,
+} from '../../lib/media/mediaTypes.js';
 
 const ICON_COLORS = {
   folder: 'text-amber-500',
@@ -10,6 +16,9 @@ const ICON_COLORS = {
   txt: 'text-slate-600',
   audio: 'text-pink-500',
   video: 'text-red-500',
+  image: 'text-cyan-600',
+  pdf: 'text-rose-600',
+  html: 'text-orange-600',
   default: 'text-slate-400',
 };
 
@@ -49,6 +58,22 @@ function VideoSvg({ className }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z" />
+    </svg>
+  );
+}
+
+function ImageSvg({ className }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
+    </svg>
+  );
+}
+
+function PdfSvg({ className }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm-1 7V3.5L18.5 9H13zM8.5 17.5H7v-4h1.5c.8 0 1.5.7 1.5 1.5v1c0 .8-.7 1.5-1.5 1.5zm4.5 0h-1.5v-4H14c.6 0 1 .4 1 1v2c0 .6-.4 1-1 1zm4.5-2.5H16v1h1.5v1H16v1.5h-1.5v-4H17.5v1.5zM9 14.5H8.5v1H9v-1zm4 .5h-.5v1.5h.5v-1.5z" />
     </svg>
   );
 }
@@ -96,6 +121,18 @@ export default function FileIcon({ entry, className = 'h-5 w-5' }) {
 
   if (isVideoExtension(entry.extension)) {
     return <VideoSvg className={`${className} ${ICON_COLORS.video}`} />;
+  }
+
+  if (isImageExtension(entry.extension)) {
+    return <ImageSvg className={`${className} ${ICON_COLORS.image}`} />;
+  }
+
+  if (isPdfExtension(entry.extension)) {
+    return <PdfSvg className={`${className} ${ICON_COLORS.pdf}`} />;
+  }
+
+  if (isHtmlExtension(entry.extension)) {
+    return <DocumentSvg className={`${className} ${ICON_COLORS.html}`} />;
   }
 
   return <DocumentSvg className={`${className} ${ICON_COLORS.default}`} />;

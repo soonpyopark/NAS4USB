@@ -8,6 +8,17 @@
 let alertHandler = null;
 
 /**
+ * @type {null | ((options: {
+ *   title?: string,
+ *   body?: string,
+ *   primaryLabel?: string,
+ *   secondaryLabel?: string,
+ *   cancelLabel?: string,
+ * }) => Promise<'primary' | 'secondary' | null>)}
+ */
+let choiceHandler = null;
+
+/**
  * @param {(options: { title?: string, body?: string }) => Promise<void>} handler
  * @returns {() => void}
  */
@@ -16,6 +27,46 @@ export function registerAppAlertHandler(handler) {
   return () => {
     if (alertHandler === handler) alertHandler = null;
   };
+}
+
+/**
+ * @param {(options: {
+ *   title?: string,
+ *   body?: string,
+ *   primaryLabel?: string,
+ *   secondaryLabel?: string,
+ *   cancelLabel?: string,
+ * }) => Promise<'primary' | 'secondary' | null>} handler
+ * @returns {() => void}
+ */
+export function registerAppChoiceHandler(handler) {
+  choiceHandler = handler;
+  return () => {
+    if (choiceHandler === handler) choiceHandler = null;
+  };
+}
+
+/**
+ * @param {{
+ *   title?: string,
+ *   body?: string,
+ *   primaryLabel?: string,
+ *   secondaryLabel?: string,
+ *   cancelLabel?: string,
+ * }} options
+ * @returns {Promise<'primary' | 'secondary' | null>}
+ */
+export async function showAppChoice(options) {
+  if (choiceHandler) {
+    const result = await choiceHandler(options);
+    window.dispatchEvent(new CustomEvent('nas4usb:restore-inputs'));
+    return result;
+  }
+
+  // Fallback when host is not mounted yet (should be rare).
+  const accepted = window.confirm(String(options.body ?? options.title ?? ''));
+  scheduleRestoreAfterNativeDialog();
+  return accepted ? 'primary' : null;
 }
 
 /**

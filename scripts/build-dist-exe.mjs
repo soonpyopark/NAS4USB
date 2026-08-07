@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {
@@ -13,6 +14,56 @@ import {
 
 const stagingDir = path.join(projectRoot, '.dist-build', 'win');
 const portableDir = await createVersionedPortableDir('exe');
+
+/**
+ * Prefer installed 7-Zip on this PC, then PATH.
+ * @returns {Promise<string>}
+ */
+async function resolve7zPath() {
+  const candidates = [
+    path.join(process.env.ProgramFiles || 'C:\\Program Files', '7-Zip', '7z.exe'),
+    path.join(process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', '7-Zip', '7z.exe'),
+  ];
+  for (const candidate of candidates) {
+    if (await pathExists(candidate)) return candidate;
+  }
+
+  const where = spawnSync('where.exe', ['7z'], { encoding: 'utf8', shell: false });
+  const fromPath = String(where.stdout || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => line.toLowerCase().endsWith('7z.exe'));
+  if (fromPath && (await pathExists(fromPath))) return fromPath;
+
+  throw new Error(
+    '7-Zip(7z.exe)을 찾을 수 없습니다. https://www.7-zip.org/ 설치 후 다시 실행해 주세요.',
+  );
+}
+
+/**
+ * Zip portable folder as sibling `{folderName}.zip` via 7-Zip.
+ * @param {string} portableDirPath
+ */
+async function zipPortableFolder(portableDirPath) {
+  const sevenZip = await resolve7zPath();
+  const parentDir = path.dirname(portableDirPath);
+  const folderName = path.basename(portableDirPath);
+  const zipPath = path.join(parentDir, `${folderName}.zip`);
+
+  await fs.rm(zipPath, { force: true });
+
+  const result = spawnSync(sevenZip, ['a', '-tzip', '-mx=5', zipPath, folderName], {
+    cwd: parentDir,
+    stdio: 'inherit',
+    shell: false,
+  });
+  if (result.status !== 0) {
+    throw new Error(`7-Zip 압축 실패 (exit ${result.status ?? 1})`);
+  }
+
+  console.log(`[build:dist:exe] Zip ready → ${zipPath}`);
+  return zipPath;
+}
 
 async function applyPortableExeIcon(portableDirPath) {
   const icoPath = path.join(projectRoot, 'build', 'icon.ico');
@@ -73,6 +124,8 @@ exe 와 같은 폴더를 유지해 주세요.
 
   await fs.writeFile(path.join(portableDir, 'README-USB.txt'), readme, 'utf8');
   console.log(`\n[build:dist:exe] Windows portable folder ready → ${portableDir}`);
+
+  await zipPortableFolder(portableDir);
 }
 
 if (process.platform !== 'win32') {

@@ -45,6 +45,7 @@ export default function TextEditorShell({
   const [editorHandle, setEditorHandle] = useState(null);
   const [bound, setBound] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [exportingHtml, setExportingHtml] = useState(false);
   const unbindRef = useRef(null);
   const initialTextRef = useRef('');
   const diskRevisionRef = useRef('');
@@ -141,6 +142,30 @@ export default function TextEditorShell({
     }
   }, [doc, relativePath, shareReadOnly, workspace]);
 
+  const handleExportHtml = useCallback(async () => {
+    if (!isMarkdown || exportingHtml || shareReadOnly) return;
+    if (!editorHandleRef.current) return;
+    setExportingHtml(true);
+    setLoadError(null);
+    try {
+      const { exportMarkdownTextAsHtml } = await import('../../lib/text/exportMarkdown.js');
+      const saved = await exportMarkdownTextAsHtml(
+        relativePath,
+        fileName,
+        editorHandleRef.current.getText(),
+      );
+      const { showAppAlert } = await import('../../lib/nativeDialog.js');
+      await showAppAlert({
+        title: 'HTML로 내보내기',
+        body: `같은 폴더에 저장했습니다.\n${saved?.relativePath ?? saved?.name ?? ''}`,
+      });
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'HTML로 내보내기에 실패했습니다.');
+    } finally {
+      setExportingHtml(false);
+    }
+  }, [exportingHtml, fileName, isMarkdown, relativePath, shareReadOnly]);
+
   const handleClose = async () => {
     unbindRef.current?.();
     await workspace.close();
@@ -185,6 +210,10 @@ export default function TextEditorShell({
         hideSave={shareReadOnly}
         hideHistory={shareReadOnly}
         onShowHistory={() => setShowHistory(true)}
+        onExportHtml={
+          isMarkdown && !isLoading && !shareReadOnly ? handleExportHtml : undefined
+        }
+        exportingHtml={exportingHtml}
         onSave={handleSave}
         onClose={handleClose}
         allowClose={allowClose}
@@ -198,11 +227,15 @@ export default function TextEditorShell({
 
         <div className="border-b border-slate-200 bg-slate-50 px-4 py-2 text-xs text-nas-muted">
           {shareReadOnly
-            ? `${fileLabel} 에디터 · 공유(보기 전용) · 편집·저장 불가`
+            ? `${fileLabel} · CodeMirror(전체기능) · 공유(보기 전용) · 편집·저장 불가`
             : waitingSync
-              ? `${fileLabel} 에디터 · Y.js 동기화 후 편집 가능`
-              : `${fileLabel} 에디터 · 줄번호 · 찾기/바꾸기 · Ctrl+S 저장 · LAN 실시간 동시 편집`}
-          {!shareReadOnly && isMarkdown ? ' · Markdown 미리보기(편집/분할/미리보기)' : ''}
+              ? `${fileLabel} · CodeMirror(전체기능) · Y.js 동기화 후 편집 가능`
+              : `${fileLabel} · CodeMirror · 접기·검색·자동완성·린트·다중선택 · Ctrl+S 저장 · LAN 동시편집`}
+          {!shareReadOnly && isMarkdown
+            ? ' · MD 코드블록 하이라이트 · 미리보기(편집/분할/미리보기)'
+            : !shareReadOnly
+              ? ' · 확장자별 코드 하이라이트'
+              : ''}
         </div>
 
         {isLoading ? (
@@ -212,6 +245,7 @@ export default function TextEditorShell({
         ) : (
           <TextEditor
             initialText={initialText}
+            fileName={fileName}
             isMarkdown={isMarkdown}
             onReady={handleEditorReady}
             onSave={handleSave}

@@ -1,3 +1,6 @@
+import { getShareTokenFromUrl } from './shareAccess.js';
+import { getStoredAdminToken } from './nas4usbClient.js';
+
 /**
  * @param {string} fileName
  * @param {Blob} blob
@@ -23,7 +26,13 @@ export async function downloadFileEntry(entry) {
   }
 
   const fileName = entry.name || entry.relativePath.split('/').pop() || 'download';
-  const response = await fetch(`/api/fs/download?path=${encodeURIComponent(entry.relativePath)}`);
+  const params = new URLSearchParams({ path: entry.relativePath });
+  const shareToken = getShareTokenFromUrl();
+  if (shareToken) params.set('share', shareToken);
+  const adminToken = getStoredAdminToken();
+  if (adminToken) params.set('token', adminToken);
+
+  const response = await fetch(`/api/fs/download?${params.toString()}`);
 
   if (!response.ok) {
     let message = '다운로드에 실패했습니다.';
@@ -41,7 +50,7 @@ export async function downloadFileEntry(entry) {
 }
 
 /**
- * @param {Array<{ relativePath: string, name?: string, isDirectory?: boolean }>} entries
+ * @param {Array<{ relativePath: string, name?: string, isDirectory?: boolean }}>} entries
  */
 export async function downloadFileEntries(entries) {
   const files = entries.filter((entry) => !entry.isDirectory);

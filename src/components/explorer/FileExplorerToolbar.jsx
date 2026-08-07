@@ -20,6 +20,7 @@ export default function FileExplorerToolbar({
   onMove,
   onPaste,
   onDelete,
+  onPermanentDelete,
   onRename,
   onDuplicate,
   onSelectAll,
@@ -98,9 +99,19 @@ export default function FileExplorerToolbar({
             </button>
           </>
         )}
-        {showDeleteAction && (
+        {showDeleteAction && !isInTrashView && (
           <button type="button" className="nas-btn-ghost text-red-600" disabled={!hasSelection} onClick={onDelete}>
-            {isInTrashView ? '삭제(영구)' : '삭제(휴지통)'}
+            삭제(휴지통)
+          </button>
+        )}
+        {showDeleteAction && (
+          <button
+            type="button"
+            className="nas-btn-ghost text-red-600"
+            disabled={!hasSelection}
+            onClick={onPermanentDelete ?? onDelete}
+          >
+            삭제(영구)
           </button>
         )}
         <button type="button" className="nas-btn-ghost" onClick={onSelectAll}>

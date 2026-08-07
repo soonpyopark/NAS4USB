@@ -107,6 +107,7 @@ export function createHttpNas4usbClient() {
 
     getPaths: () => apiFetch('/app/paths'),
     getSyncInfo: () => apiFetch('/sync/info'),
+    checkForUpdates: () => apiFetch('/app/checkForUpdates'),
     openExternal: (url) => {
       window.open(url, '_blank', 'noopener,noreferrer');
       return Promise.resolve(true);
@@ -207,6 +208,10 @@ export function createHttpNas4usbClient() {
           method: 'POST',
           body: JSON.stringify({ id, password }),
         }),
+      showDefaultAdminHint: async () => {
+        const result = await apiFetch('/auth/showDefaultAdminHint');
+        return Boolean(result?.show);
+      },
       bindToken: (token) => Promise.resolve(true),
       bindShareToken: (token) => Promise.resolve(true),
       logout: () =>

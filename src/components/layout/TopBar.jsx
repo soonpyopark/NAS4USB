@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { useUserProfile } from '../../hooks/useUserProfile.js';
 import { useAdminAuthContext } from '../../context/AdminAuthContext.jsx';
+import { useAppConfirm } from '../../hooks/useAppConfirm.jsx';
 import { formatUserDisplayNameInput, USER_NAME_PREFIX } from '../../lib/userProfile.js';
 import { loadSyncHost, saveSyncHost } from '../../lib/syncHost.js';
 import { copyTextToClipboard } from '../../lib/shareLink.js';
 import { buildLanAccessClipboardText } from '../../sync/buildWsUrl.js';
+import { runUpdateCheck } from '../../lib/updateCheckUi.js';
 import { APP_VERSION, APP_NAME_LONG } from '../../../shared/constants.js';
 import AppLogo from '../common/AppLogo.jsx';
 import SplashOverlay from '../common/SplashOverlay.jsx';
@@ -13,6 +15,17 @@ import { nativeAlert, nativePrompt } from '../../lib/nativeDialog.js';
 
 const settingsIconBtnClass =
   'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-transparent text-slate-500 transition-colors hover:border-slate-200 hover:bg-slate-100 hover:text-slate-800';
+
+function HelpQuestionIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"
+      />
+    </svg>
+  );
+}
 
 function SyncBadge({ syncInfo, loading }) {
   const [copied, setCopied] = useState(false);
@@ -133,7 +146,15 @@ export default function TopBar({
 }) {
   const userProfile = useUserProfile();
   const { isSuperAdmin } = useAdminAuthContext();
+  const { alert, confirm, dialog: updateDialog } = useAppConfirm();
   const [splashOpen, setSplashOpen] = useState(false);
+  const [updateChecking, setUpdateChecking] = useState(false);
+
+  const handleUpdateCheck = () => {
+    if (updateChecking) return;
+    setUpdateChecking(true);
+    void runUpdateCheck({ alert, confirm }).finally(() => setUpdateChecking(false));
+  };
 
   const userNameField = (
     <UserNameField
@@ -150,6 +171,7 @@ export default function TopBar({
   return (
     <header className="shrink-0 border-b border-nas-border bg-white px-4 py-2 min-h-12">
       <SplashOverlay open={splashOpen} onClose={() => setSplashOpen(false)} />
+      {updateDialog}
       <div className="nas-topbar flex min-w-0 items-center gap-3">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <BrandMark />
@@ -185,6 +207,16 @@ export default function TopBar({
               </svg>
             </button>
           ) : null}
+          <button
+            type="button"
+            className={settingsIconBtnClass}
+            aria-label="업데이트 확인"
+            title="업데이트 확인"
+            disabled={updateChecking}
+            onClick={handleUpdateCheck}
+          >
+            <HelpQuestionIcon />
+          </button>
           <AdminLoginForm />
         </div>
       </div>
