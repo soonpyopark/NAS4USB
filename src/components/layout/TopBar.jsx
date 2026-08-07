@@ -5,7 +5,8 @@ import { useAppConfirm } from '../../hooks/useAppConfirm.jsx';
 import { formatUserDisplayNameInput, USER_NAME_PREFIX } from '../../lib/userProfile.js';
 import { loadSyncHost, saveSyncHost } from '../../lib/syncHost.js';
 import { copyTextToClipboard } from '../../lib/shareLink.js';
-import { buildLanAccessClipboardText } from '../../sync/buildWsUrl.js';
+import { buildLanAccessClipboardText, getSyncServerUrl } from '../../sync/buildWsUrl.js';
+import { openExternalUrl } from '../../lib/openExternal.js';
 import { runUpdateCheck } from '../../lib/updateCheckUi.js';
 import { APP_VERSION, APP_NAME_LONG } from '../../../shared/constants.js';
 import AppLogo from '../common/AppLogo.jsx';
@@ -22,6 +23,17 @@ function HelpQuestionIcon() {
       <path
         fill="currentColor"
         d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"
+      />
+    </svg>
+  );
+}
+
+function InternetGlobeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"
       />
     </svg>
   );
@@ -156,6 +168,13 @@ export default function TopBar({
     void runUpdateCheck({ alert, confirm }).finally(() => setUpdateChecking(false));
   };
 
+  const handleOpenLocalInBrowser = () => {
+    const url = getSyncServerUrl(syncInfo);
+    void openExternalUrl(url).catch(() => {
+      nativeAlert('브라우저에서 열기에 실패했습니다.');
+    });
+  };
+
   const userNameField = (
     <UserNameField
       loading={userProfile.loading}
@@ -190,6 +209,16 @@ export default function TopBar({
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
           <SyncBadge syncInfo={syncInfo} loading={infoLoading} />
           {userNameField}
+          <button
+            type="button"
+            className={settingsIconBtnClass}
+            aria-label="브라우저에서 열기"
+            title={`브라우저에서 로컬 접속 (${getSyncServerUrl(syncInfo)})`}
+            disabled={infoLoading}
+            onClick={handleOpenLocalInBrowser}
+          >
+            <InternetGlobeIcon />
+          </button>
           {isSuperAdmin ? (
             <button
               type="button"

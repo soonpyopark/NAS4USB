@@ -50,6 +50,7 @@ import { useFileDropZone } from '../../hooks/useFileDropZone.js';
 import { useAdminAuthContext } from '../../context/AdminAuthContext.jsx';
 import { useFsSync } from '../../context/FsSyncContext.jsx';
 import { useFsRemoteRefresh } from '../../hooks/useFsRemoteRefresh.js';
+import { useFolderContentSearch } from '../../hooks/useFolderContentSearch.js';
 import FileDropOverlay from '../common/FileDropOverlay.jsx';
 import { canOpenFileForEdit, VIEW_OPEN_DENIED_MESSAGE, GUEST_READ_DENIED_MESSAGE } from '../../lib/fileEditAccess.js';
 import { useGuestPermissions } from '../../hooks/useGuestPermissions.js';
@@ -107,6 +108,7 @@ export default function FileExplorer({
 
   const [viewMode, setViewMode] = useState('list');
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchContents, setSearchContents] = useState(false);
   const [sortField, setSortField] = useState('name');
   const [sortDirection, setSortDirection] = useState('asc');
   const [contextMenu, setContextMenu] = useState(null);
@@ -125,10 +127,31 @@ export default function FileExplorer({
   const containerRef = useRef(null);
   const keyHandlersRef = useRef({});
 
+  const contentSearch = useFolderContentSearch(entries, searchQuery, searchContents);
+
   const visibleEntries = useMemo(() => {
-    const filtered = filterEntries(entries, searchQuery);
-    return sortEntries(filtered, sortField, sortDirection);
-  }, [entries, searchQuery, sortField, sortDirection]);
+    const byName = filterEntries(entries, searchQuery);
+    if (!searchContents || contentSearch.matchedPaths.size === 0) {
+      return sortEntries(byName, sortField, sortDirection);
+    }
+
+    const seen = new Set(byName.map((entry) => entry.relativePath));
+    const merged = [
+      ...byName,
+      ...entries.filter(
+        (entry) =>
+          !seen.has(entry.relativePath) && contentSearch.matchedPaths.has(entry.relativePath),
+      ),
+    ];
+    return sortEntries(merged, sortField, sortDirection);
+  }, [
+    entries,
+    searchQuery,
+    searchContents,
+    contentSearch.matchedPaths,
+    sortField,
+    sortDirection,
+  ]);
 
   const propertiesEntryStatus = useMemo(() => {
     if (!propertiesEntry || propertiesEntry.isDirectory) return null;
@@ -816,10 +839,31 @@ export default function FileExplorer({
           type="search"
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
-          placeholder="현재 폴더 검색…"
+          placeholder={searchContents ? '이름·본문 검색…' : '현재 폴더 검색…'}
           className="h-8 w-full max-w-[220px] shrink-0 rounded-md border border-nas-border bg-[#efefef] px-3 text-[10pt] outline-none focus:border-nas-accent focus:ring-1 focus:ring-nas-accent"
         />
+        <label
+          className="flex shrink-0 cursor-pointer items-center gap-1.5 text-[10pt] text-nas-muted"
+          title="현재 폴더의 문서 내용까지 검색합니다 (txt·md·hwpx·docx·xlsx·pdf 등)"
+        >
+          <input
+            type="checkbox"
+            checked={searchContents}
+            onChange={(event) => setSearchContents(event.target.checked)}
+            className="h-3.5 w-3.5 cursor-pointer accent-nas-accent"
+          />
+          본문 포함
+        </label>
       </div>
+
+      {searchContents && searchQuery.trim() && (
+        <div className="border-b border-sky-200 bg-sky-50 px-4 py-1.5 text-xs text-sky-800">
+          {contentSearch.searching
+            ? `본문 검색 중… ${contentSearch.scanned}/${contentSearch.total}`
+            : `본문 일치 ${contentSearch.matchedPaths.size}건 · ${contentSearch.total}개 파일 검사`}
+          {contentSearch.skipped > 0 && ` · 지원하지 않거나 큰 파일 ${contentSearch.skipped}개 제외`}
+        </div>
+      )}
 
       <FileExplorerToolbar
         sortField={sortField}

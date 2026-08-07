@@ -82,6 +82,7 @@ export default function PdfViewerShell({
   const [customScale, setCustomScale] = useState(1);
   const [displayScale, setDisplayScale] = useState(1);
   const [rotation, setRotation] = useState(0);
+  const [twoPageView, setTwoPageView] = useState(false);
   const [docReady, setDocReady] = useState(false);
   const [showThumbnails, setShowThumbnails] = useState(true);
 
@@ -223,19 +224,23 @@ export default function PdfViewerShell({
     clearHighlights();
   }, [clearHighlights]);
 
-  const resolveRenderScale = useCallback(async (pdf, mode, custom, rot) => {
+  const resolveRenderScale = useCallback(async (pdf, mode, custom, rot, twoUp) => {
     const page = await pdf.getPage(1);
     const scroller = scrollRef.current;
+    const gap = twoUp ? 12 : 0;
     const width = Math.max(240, (scroller?.clientWidth ?? 800) - 24);
     const height = Math.max(240, (scroller?.clientHeight ?? 600) - 24);
+    const pageWidthBudget = twoUp ? Math.max(120, (width - gap) / 2) : width;
 
-    if (mode === 'fitWidth') return computeFitWidthScale(page, width, rot);
-    if (mode === 'fitPage') return computeFitPageScale(page, { width, height }, rot);
+    if (mode === 'fitWidth') return computeFitWidthScale(page, pageWidthBudget, rot);
+    if (mode === 'fitPage') {
+      return computeFitPageScale(page, { width: pageWidthBudget, height }, rot);
+    }
     return Math.min(PDF_MAX_SCALE, Math.max(PDF_MIN_SCALE, custom));
   }, []);
 
   const renderAllPages = useCallback(
-    async (pdf, { mode, custom, rot }) => {
+    async (pdf, { mode, custom, rot, twoUp = false }) => {
       const container = scrollRef.current;
       if (!container || !pdf) return;
 
@@ -243,7 +248,7 @@ export default function PdfViewerShell({
       setRendering(true);
 
       try {
-        const nextScale = await resolveRenderScale(pdf, mode, custom, rot);
+        const nextScale = await resolveRenderScale(pdf, mode, custom, rot, twoUp);
         if (token !== renderTokenRef.current) return;
 
         setDisplayScale(nextScale);
@@ -254,9 +259,13 @@ export default function PdfViewerShell({
         const keepPage = currentPageRef.current;
 
         container.replaceChildren();
+        container.classList.toggle('pdf-scroll--two-up', Boolean(twoUp));
         pageCanvasRefs.current.clear();
         highlightLayerRefs.current.clear();
         pageViewportRefs.current.clear();
+
+        /** @type {HTMLDivElement | null} */
+        let spreadRow = null;
 
         for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
           if (token !== renderTokenRef.current) return;
@@ -284,7 +293,17 @@ export default function PdfViewerShell({
           highlightLayerRefs.current.set(pageNumber, highlightLayer);
 
           pageWrap.append(canvas, highlightLayer);
-          container.appendChild(pageWrap);
+
+          if (twoUp) {
+            if (!spreadRow || spreadRow.childElementCount >= 2) {
+              spreadRow = document.createElement('div');
+              spreadRow.className = 'pdf-spread-row';
+              container.appendChild(spreadRow);
+            }
+            spreadRow.appendChild(pageWrap);
+          } else {
+            container.appendChild(pageWrap);
+          }
 
           const context = canvas.getContext('2d', { alpha: false });
           if (!context) continue;
@@ -548,12 +567,17 @@ export default function PdfViewerShell({
     };
   }, [clearSearch, streamUrl, teardownThumbnails]);
 
-  // Re-render when zoom mode / custom scale / rotation changes (and on first ready).
+  // Re-render when zoom mode / custom scale / rotation / two-up changes (and on first ready).
   useEffect(() => {
     const pdf = pdfRef.current;
     if (!docReady || !pdf || loading) return;
-    void renderAllPages(pdf, { mode: zoomMode, custom: customScale, rot: rotation });
-  }, [customScale, docReady, loading, renderAllPages, rotation, zoomMode]);
+    void renderAllPages(pdf, {
+      mode: zoomMode,
+      custom: customScale,
+      rot: rotation,
+      twoUp: twoPageView,
+    });
+  }, [customScale, docReady, loading, renderAllPages, rotation, twoPageView, zoomMode]);
 
   // Thumbnails: placeholders + lazy paint (visible only). Rebuild on rotation / toggle.
   useEffect(() => {
@@ -601,12 +625,21 @@ export default function PdfViewerShell({
       if (ignoreScrollPageSyncRef.current) return;
       const pages = scroller.querySelectorAll('[data-pdf-page]');
       if (!pages.length) return;
-      const mid = scroller.scrollTop + scroller.clientHeight * 0.35;
+      const scrollerRect = scroller.getBoundingClientRect();
+      const midY = scroller.scrollTop + scroller.clientHeight * 0.35;
+      const midX = scroller.scrollLeft + scroller.clientWidth * 0.5;
       let best = 1;
       let bestDist = Infinity;
       pages.forEach((node) => {
         if (!(node instanceof HTMLElement)) return;
-        const dist = Math.abs(node.offsetTop - mid);
+        const rect = node.getBoundingClientRect();
+        const pageTop = rect.top - scrollerRect.top + scroller.scrollTop;
+        const pageLeft = rect.left - scrollerRect.left + scroller.scrollLeft;
+        const pageCenterY = pageTop + rect.height * 0.5;
+        const pageCenterX = pageLeft + rect.width * 0.5;
+        const dy = pageCenterY - midY;
+        const dx = pageCenterX - midX;
+        const dist = dy * dy + dx * dx * 0.25;
         const pageNumber = Number(node.dataset.pdfPage || '1');
         if (dist < bestDist) {
           bestDist = dist;
@@ -622,7 +655,7 @@ export default function PdfViewerShell({
 
     scroller.addEventListener('scroll', onScroll, { passive: true });
     return () => scroller.removeEventListener('scroll', onScroll);
-  }, [pageCount, rendering]);
+  }, [pageCount, rendering, twoPageView]);
 
   // Resize refreshes fit modes only.
   useEffect(() => {
@@ -636,7 +669,12 @@ export default function PdfViewerShell({
       timer = window.setTimeout(() => {
         const pdf = pdfRef.current;
         if (!pdf) return;
-        void renderAllPages(pdf, { mode: zoomMode, custom: customScale, rot: rotation });
+        void renderAllPages(pdf, {
+          mode: zoomMode,
+          custom: customScale,
+          rot: rotation,
+          twoUp: twoPageView,
+        });
       }, 120);
     });
     observer.observe(scroller);
@@ -644,7 +682,7 @@ export default function PdfViewerShell({
       window.clearTimeout(timer);
       observer.disconnect();
     };
-  }, [customScale, docReady, renderAllPages, rotation, zoomMode]);
+  }, [customScale, docReady, renderAllPages, rotation, twoPageView, zoomMode]);
 
   const goToPage = useCallback(
     (pageNumber) => {
@@ -672,6 +710,9 @@ export default function PdfViewerShell({
 
   const setFitWidth = useCallback(() => setZoomMode('fitWidth'), []);
   const setFitPage = useCallback(() => setZoomMode('fitPage'), []);
+  const toggleTwoPageView = useCallback(() => {
+    setTwoPageView((prev) => !prev);
+  }, []);
   const resetZoom = useCallback(() => {
     setZoomMode('custom');
     setCustomScale(1);
@@ -981,6 +1022,16 @@ export default function PdfViewerShell({
         >
           페이지 맞춤
         </button>
+        <button
+          type="button"
+          className={`nas-btn-ghost text-xs ${twoPageView ? 'bg-slate-200' : ''}`}
+          disabled={busy || pageCount < 2}
+          onClick={toggleTwoPageView}
+          title="두 페이지를 나란히 보기"
+          aria-pressed={twoPageView}
+        >
+          2쪽씩 보기
+        </button>
 
         <span className="mx-1 h-4 w-px bg-slate-300" />
 
@@ -1097,6 +1148,15 @@ export default function PdfViewerShell({
 
       <style>{`
         .pdf-scroll { scrollbar-gutter: stable; }
+        .pdf-spread-row {
+          display: flex;
+          justify-content: center;
+          align-items: flex-start;
+          gap: 12px;
+          width: fit-content;
+          max-width: 100%;
+          margin: 0 auto 12px;
+        }
         .pdf-page-wrap {
           position: relative;
           width: fit-content;
@@ -1104,6 +1164,9 @@ export default function PdfViewerShell({
           margin: 0 auto 12px;
           box-shadow: 0 1px 4px rgba(15, 23, 42, 0.18);
           background: #fff;
+        }
+        .pdf-scroll--two-up .pdf-page-wrap {
+          margin: 0;
         }
         .pdf-page-canvas { display: block; max-width: 100%; height: auto; }
         .pdf-highlight-layer {
