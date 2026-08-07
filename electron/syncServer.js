@@ -17,6 +17,8 @@ let syncHostname = '0.0.0.0';
 
 let syncServer = null;
 let syncWss = null;
+/** Tracked so a restart can free the port instead of waiting on keep-alive peers. */
+const openSockets = new Set();
 
 export function getLocalIPv4Addresses() {
   const interfaces = os.networkInterfaces();
@@ -70,6 +72,11 @@ export function startSyncServer(distRoot) {
     res.end(`${APP_NAME} sync server`);
   });
 
+  syncServer.on('connection', (socket) => {
+    openSockets.add(socket);
+    socket.on('close', () => openSockets.delete(socket));
+  });
+
   syncWss = new WebSocketServer({ noServer: true });
 
   syncServer.on('upgrade', async (req, socket, head) => {
@@ -100,6 +107,10 @@ export function startSyncServer(distRoot) {
 export function stopSyncServer() {
   syncWss?.close();
   syncServer?.close();
+  for (const socket of openSockets) {
+    socket.destroy();
+  }
+  openSockets.clear();
   syncWss = null;
   syncServer = null;
 }

@@ -9,14 +9,20 @@ import {
   normalizeAccessPermissionsFromUi,
 } from '../shared/guestPermissions.js';
 import { getMemberAccessPermissionsByLoginId } from './membersService.js';
+import { normalizeWebServerMode, normalizeWebServerPort } from '../shared/webServerConfig.js';
 
 const SETTINGS_FILE = '.nas4usb-settings.json';
 
 /**
+ * `webServerPort` / `webServerMode` are null until an admin saves them in
+ * 설정 → 서버 관리; null means "fall back to .env, then the built-in default".
+ *
  * @typedef {{
  *   allowedIpCidrs: Array<{ cidr: string, description?: string }>,
  *   guestPermissions: import('../shared/guestPermissions.js').AccessPermissionFlags,
  *   loggedInPermissions: import('../shared/guestPermissions.js').AccessPermissionFlags,
+ *   webServerPort: number | null,
+ *   webServerMode: import('../shared/webServerConfig.js').WebServerMode | null,
  * }} AppSettings
  *
  * @typedef {{ isLoggedIn?: boolean, loginId?: string | null } | boolean} AccessAuth
@@ -30,6 +36,8 @@ function emptySettings() {
     allowedIpCidrs: [],
     guestPermissions: { ...DEFAULT_GUEST_PERMISSIONS },
     loggedInPermissions: { ...DEFAULT_LOGGED_IN_PERMISSIONS },
+    webServerPort: null,
+    webServerMode: null,
   };
 }
 
@@ -63,6 +71,8 @@ async function loadStore(portableRoot) {
         'loggedInPermissions',
         DEFAULT_LOGGED_IN_PERMISSIONS,
       ),
+      webServerPort: normalizeWebServerPort(parsed?.webServerPort),
+      webServerMode: normalizeWebServerMode(parsed?.webServerMode),
     };
   } catch {
     return emptySettings();
@@ -174,6 +184,12 @@ export async function updateAppSettings(patch, portableRoot = getPortableRoot())
   }
   if (patch && 'loggedInPermissions' in patch) {
     settings.loggedInPermissions = normalizeAccessPermissionsFromUi(patch.loggedInPermissions);
+  }
+  if (patch && 'webServerPort' in patch) {
+    settings.webServerPort = normalizeWebServerPort(patch.webServerPort);
+  }
+  if (patch && 'webServerMode' in patch) {
+    settings.webServerMode = normalizeWebServerMode(patch.webServerMode);
   }
   await saveStore(portableRoot, settings);
   return settings;

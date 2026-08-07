@@ -1,6 +1,6 @@
 {
   "name": "nas4usb",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Offline LAN NAS & real-time collaborative HWPX editor",
   "main": "main.js",
   "type": "module",
@@ -22,7 +22,7 @@
     "update:all": "node scripts/update-all.mjs",
     "build:update_all": "update_all.bat _inner build",
     "start": "npm run build && electron .",
-    "preview": "vite preview --port 3008 --strictPort"
+    "preview": "vite preview --port 3009 --strictPort"
   },
   "keywords": [
     "electron",

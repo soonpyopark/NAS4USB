@@ -111,6 +111,13 @@ contextBridge.exposeInMainWorld('nas4usb', {
     update: (patch) => ipcRenderer.invoke('settings:update', patch),
   },
 
+  server: {
+    getInfo: () => ipcRenderer.invoke('server:getInfo'),
+    applyConfig: (patch) => ipcRenderer.invoke('server:applyConfig', patch),
+    allowFirewall: (port) => ipcRenderer.invoke('server:allowFirewall', port),
+    removeFirewall: (port) => ipcRenderer.invoke('server:removeFirewall', port),
+  },
+
   members: {
     list: () => ipcRenderer.invoke('members:list'),
     export: () => ipcRenderer.invoke('members:export'),

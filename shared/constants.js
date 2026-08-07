@@ -1,8 +1,8 @@
 /** Default Y.js WebSocket broker port (LAN sync). */
-export const DEFAULT_SYNC_PORT = 3008;
+export const DEFAULT_SYNC_PORT = 3009;
 
 /** Application display version. */
-export const APP_VERSION = '1.0.3';
+export const APP_VERSION = '1.0.4';
 
 /** Application display name. */
 export const APP_NAME = 'NAS4USB';

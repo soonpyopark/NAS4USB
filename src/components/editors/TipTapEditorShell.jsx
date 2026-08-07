@@ -216,10 +216,11 @@ export default function TipTapEditorShell({
         fileName,
         editorRef.current.getJSON(),
       );
+      if (!saved) return;
       const { showAppAlert } = await import('../../lib/nativeDialog.js');
       await showAppAlert({
         title: 'HTML로 내보내기',
-        body: `같은 폴더에 저장했습니다.\n${saved?.relativePath ?? saved?.name ?? ''}`,
+        body: `내보냈습니다.\n${saved.absolutePath ?? saved.fileName}`,
       });
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'HTML로 내보내기에 실패했습니다.');
@@ -239,10 +240,11 @@ export default function TipTapEditorShell({
         fileName,
         editorRef.current.getJSON(),
       );
+      if (!saved) return;
       const { showAppAlert } = await import('../../lib/nativeDialog.js');
       await showAppAlert({
         title: 'HWPX 내보내기',
-        body: `같은 폴더에 저장했습니다.\n${saved?.relativePath ?? saved?.name ?? ''}`,
+        body: `내보냈습니다.\n${saved.absolutePath ?? saved.fileName}`,
       });
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'HWPX 내보내기에 실패했습니다.');

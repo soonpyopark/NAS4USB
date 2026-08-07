@@ -12,16 +12,18 @@ import {
 import { downloadTextFile, readFileAsText } from '../../lib/downloadTextFile.js';
 import { useAppConfirm } from '../../hooks/useAppConfirm.jsx';
 import MembersSettingsPanel from './MembersSettingsPanel.jsx';
+import ServerSettingsPanel from './ServerSettingsPanel.jsx';
 
 /**
  * @typedef {{ cidr: string, description?: string }} AllowedIpEntry
- * @typedef {'ip' | 'members'} SettingsTabId
+ * @typedef {'ip' | 'members' | 'server'} SettingsTabId
  */
 
 /** @type {{ id: SettingsTabId, label: string }[]} */
 const SETTINGS_TABS = [
-  { id: 'members', label: '회원 관리' },
+  { id: 'server', label: '서버 관리' },
   { id: 'ip', label: '접근 가능 IP 대역' },
+  { id: 'members', label: '회원 관리' },
 ];
 
 export default function SettingsView() {
@@ -29,7 +31,7 @@ export default function SettingsView() {
   /** @type {[AllowedIpEntry[], Function]} */
   const [allowedIpCidrs, setAllowedIpCidrs] = useState([]);
   /** @type {[SettingsTabId, Function]} */
-  const [activeTab, setActiveTab] = useState('members');
+  const [activeTab, setActiveTab] = useState('server');
   const [ipCidrDraft, setIpCidrDraft] = useState('');
   const [ipDescriptionDraft, setIpDescriptionDraft] = useState('');
   const [loading, setLoading] = useState(true);
@@ -238,9 +240,9 @@ export default function SettingsView() {
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto p-6">
-        {activeTab === 'members' ? (
-          <div className="max-w-3xl">
-            <MembersSettingsPanel />
+        {activeTab === 'server' ? (
+          <div className="max-w-3xl" role="tabpanel">
+            <ServerSettingsPanel />
           </div>
         ) : null}
 
@@ -387,6 +389,12 @@ export default function SettingsView() {
               </section>
             </div>
           )
+        ) : null}
+
+        {activeTab === 'members' ? (
+          <div className="max-w-3xl">
+            <MembersSettingsPanel />
+          </div>
         ) : null}
       </div>
     </div>

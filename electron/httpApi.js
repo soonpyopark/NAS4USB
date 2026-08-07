@@ -77,6 +77,7 @@ import {
   syncFortuneSidecarRename,
   isFortuneSidecarRelativePath,
 } from './fortuneSidecarService.js';
+import { syncTiptapAssetRename } from './tiptapAssetService.js';
 import { streamFile } from './mediaStream.js';
 import { getStreamContentType } from '../shared/mediaTypes.js';
 import { handleFsEventsRequest, notifyFsChanged, getFsRevisionPayload } from './fsNotifyService.js';
@@ -244,6 +245,7 @@ export async function handleHttpApiRequest(req, res) {
       await syncFileAccessRename(body.from, body.to, getPortableRoot());
       await syncFavoritesRename(body.from, body.to, getPortableRoot());
       await syncFortuneSidecarRename(body.from, body.to);
+      await syncTiptapAssetRename(body.from, body.to);
       await syncFileHistoryRename(body.from, body.to, getPortableRoot());
       const result = await fsService.renamePath(body.from, body.to);
       notifyFsChanged([body.from, body.to]);
@@ -299,6 +301,7 @@ export async function handleHttpApiRequest(req, res) {
       await syncFileAccessRename(body.from, body.to, getPortableRoot());
       await syncFavoritesRename(body.from, body.to, getPortableRoot());
       await syncFortuneSidecarRename(body.from, body.to);
+      await syncTiptapAssetRename(body.from, body.to);
       await syncFileHistoryRename(body.from, body.to, getPortableRoot());
       const result = await fsService.movePath(body.from, body.to);
       notifyFsChanged([body.from, body.to]);
@@ -401,6 +404,7 @@ export async function handleHttpApiRequest(req, res) {
       await syncFileAccessRename(fromPath, result.relativePath, getPortableRoot());
       await syncFavoritesRename(fromPath, result.relativePath, getPortableRoot());
       await syncFortuneSidecarRename(fromPath, result.relativePath);
+      await syncTiptapAssetRename(fromPath, result.relativePath);
       await syncFileHistoryRename(fromPath, result.relativePath, getPortableRoot());
       notifyFsChanged([fromPath, result.relativePath]);
       sendJson(res, 200, result);

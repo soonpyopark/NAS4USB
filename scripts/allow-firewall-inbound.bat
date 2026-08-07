@@ -2,7 +2,7 @@
 setlocal EnableExtensions
 
 set "ROOT=%~dp0"
-set "PORT=3008"
+set "PORT=3009"
 
 if exist "%ROOT%.env" (
   for /f "usebackq eol=# tokens=1,* delims==" %%A in ("%ROOT%.env") do (

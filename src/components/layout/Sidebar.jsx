@@ -217,8 +217,8 @@ export default function Sidebar({
       } else {
         throw new Error('HTML 내보내기를 지원하지 않는 파일입니다.');
       }
-      await notifyChange(saved?.relativePath ? [saved.relativePath] : undefined);
-      nativeAlert(`HTML로 내보냈습니다.\n${saved?.relativePath ?? saved?.name ?? ''}`);
+      if (!saved) return;
+      nativeAlert(`HTML로 내보냈습니다.\n${saved.absolutePath ?? saved.fileName}`);
     } catch (err) {
       nativeAlert(err instanceof Error ? err.message : 'HTML로 내보내기에 실패했습니다.');
     }
@@ -233,8 +233,8 @@ export default function Sidebar({
       }
       const { exportTiptapFileAsHwpx } = await import('../../lib/tiptap/exportHwpx.js');
       const saved = await exportTiptapFileAsHwpx(entry.relativePath, fileName);
-      await notifyChange(saved?.relativePath ? [saved.relativePath] : undefined);
-      nativeAlert(`HWPX로 내보냈습니다.\n${saved?.relativePath ?? saved?.name ?? ''}`);
+      if (!saved) return;
+      nativeAlert(`HWPX로 내보냈습니다.\n${saved.absolutePath ?? saved.fileName}`);
     } catch (err) {
       nativeAlert(err instanceof Error ? err.message : 'HWPX 내보내기에 실패했습니다.');
     }

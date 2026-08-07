@@ -3,13 +3,14 @@ import react from '@vitejs/plugin-react';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseAllowedHosts } from './shared/viteHosts.js';
+import { DEFAULT_SYNC_PORT } from './shared/constants.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const wb4sEngineRoot = path.resolve(__dirname, '.cache/wb4s-src/src');
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, __dirname, '');
-  const port = Number(env.PORT) || 3008;
+  const port = Number(env.PORT) || DEFAULT_SYNC_PORT;
   const allowedHosts = parseAllowedHosts(env.ALLOWED_HOSTS);
 
   return {

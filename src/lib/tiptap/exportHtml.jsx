@@ -8,31 +8,10 @@ import {
 } from './assetUrls.js';
 import { getTiptapFileStem } from './document.js';
 import { guessMimeFromFileName } from '../../../shared/mediaTypes.js';
+import { exportFileName } from '../browserDownload.js';
 import { encodeTextBase64 } from '../text/textIO.js';
-import { getParentPath, joinRelativePath, resolveUniqueName } from '../fsPaths.js';
+import { saveFileToPickedFolder } from '../saveToFolder.js';
 import tiptapEditorCss from '../../styles/tiptap-editor.css?raw';
-
-/**
- * Write HTML next to the source `.tiptap` file (same folder, unique name).
- * @param {string} sourceRelativePath
- * @param {string} title
- * @param {string} html
- * @returns {Promise<{ relativePath: string, name: string }>}
- */
-async function writeHtmlBesideSource(sourceRelativePath, title, html) {
-  if (!window.nas4usb?.fs?.writeFile || !window.nas4usb?.fs?.readDir) {
-    throw new Error('파일 저장 API를 사용할 수 없습니다.');
-  }
-
-  const parentPath = getParentPath(sourceRelativePath);
-  const desiredName = `${String(title || 'NoName').replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_')}.html`;
-  const entries = await window.nas4usb.fs.readDir(parentPath);
-  const existingNames = (Array.isArray(entries) ? entries : []).map((entry) => entry.name);
-  const uniqueName = resolveUniqueName(existingNames, desiredName);
-  const relativePath = joinRelativePath(parentPath, uniqueName);
-  await window.nas4usb.fs.writeFile(relativePath, encodeTextBase64(html));
-  return { relativePath, name: uniqueName };
-}
 
 async function loadTipTapEditorView() {
   const mod = await import('../../components/editors/TipTapEditorView.jsx');
@@ -237,7 +216,11 @@ ${css}
  * }} input
  */
 async function exportTiptapContentAsHtml(input) {
-  const { relativePath } = input;
   const { title, html } = await buildTiptapExportHtml(input);
-  return writeHtmlBesideSource(relativePath, title, html);
+  return saveFileToPickedFolder({
+    fileName: exportFileName(title, 'html'),
+    base64: encodeTextBase64(html),
+    mimeType: 'text/html;charset=utf-8',
+    title: 'HTML을 저장할 폴더 선택',
+  });
 }

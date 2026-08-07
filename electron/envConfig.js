@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { DEFAULT_DATA_DIR, DEFAULT_SYNC_PORT, DEFAULT_ADMIN_ID, DEFAULT_ADMIN_PW } from '../shared/constants.js';
+import { DEFAULT_DATA_DIR, DEFAULT_ADMIN_ID, DEFAULT_ADMIN_PW } from '../shared/constants.js';
 
 /**
  * @param {string} envDir
@@ -38,20 +38,18 @@ export function readEnvFile(envDir) {
 }
 
 /**
+ * Raw `.env` server values, before the stored 서버 관리 settings are layered on top.
+ *
  * @param {string} portableRoot
  * @param {boolean} isDev
  */
-export function resolveServerEnv(portableRoot, isDev) {
+export function readServerEnvRaw(portableRoot, isDev) {
   const fileEnv = readEnvFile(portableRoot);
-  const portRaw = fileEnv.PORT ?? process.env.PORT;
-  const parsedPort = Number(portRaw ?? DEFAULT_SYNC_PORT);
   const hostname =
-    fileEnv.HOSTNAME ??
-    process.env.HOSTNAME ??
-    (isDev ? '0.0.0.0' : '127.0.0.1');
+    fileEnv.HOSTNAME ?? process.env.HOSTNAME ?? (isDev ? '0.0.0.0' : '127.0.0.1');
 
   return {
-    port: Number.isFinite(parsedPort) && parsedPort > 0 ? parsedPort : DEFAULT_SYNC_PORT,
+    portRaw: fileEnv.PORT ?? process.env.PORT ?? null,
     hostname: hostname || '127.0.0.1',
   };
 }

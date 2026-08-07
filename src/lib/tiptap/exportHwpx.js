@@ -7,30 +7,10 @@ import {
 } from './assetUrls.js';
 import { getTiptapFileStem } from './document.js';
 import { guessMimeFromFileName } from '../../../shared/mediaTypes.js';
-import { getParentPath, joinRelativePath, resolveUniqueName } from '../fsPaths.js';
+import { exportFileName } from '../browserDownload.js';
+import { saveFileToPickedFolder } from '../saveToFolder.js';
 import { createTiptapExtensions } from './extensions.js';
 import { convertHtmlToHwpxBase64 } from '../rhwp/htmlToHwpx.js';
-
-/**
- * @param {string} sourceRelativePath
- * @param {string} title
- * @param {string} hwpxBase64
- * @returns {Promise<{ relativePath: string, name: string }>}
- */
-async function writeHwpxBesideSource(sourceRelativePath, title, hwpxBase64) {
-  if (!window.nas4usb?.fs?.writeFile || !window.nas4usb?.fs?.readDir) {
-    throw new Error('파일 저장 API를 사용할 수 없습니다.');
-  }
-
-  const parentPath = getParentPath(sourceRelativePath);
-  const desiredName = `${String(title || 'NoName').replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_')}.hwpx`;
-  const entries = await window.nas4usb.fs.readDir(parentPath);
-  const existingNames = (Array.isArray(entries) ? entries : []).map((entry) => entry.name);
-  const uniqueName = resolveUniqueName(existingNames, desiredName);
-  const relativePath = joinRelativePath(parentPath, uniqueName);
-  await window.nas4usb.fs.writeFile(relativePath, hwpxBase64);
-  return { relativePath, name: uniqueName };
-}
 
 /**
  * TipTap JSON → HTML fragment suitable for rhwp pasteHtml.
@@ -136,11 +116,16 @@ async function exportTiptapContentAsHwpx(input) {
     }));
 
   const hwpxBase64 = await convertHtmlToHwpxBase64(html);
-  return writeHwpxBesideSource(input.relativePath, title, hwpxBase64);
+  return saveFileToPickedFolder({
+    fileName: exportFileName(title, 'hwpx'),
+    base64: hwpxBase64,
+    mimeType: 'application/hwp+zip',
+    title: 'HWPX를 저장할 폴더 선택',
+  });
 }
 
 /**
- * Export open TipTap editor content as `.hwpx` beside the source file.
+ * Export open TipTap editor content as `.hwpx` to the user's PC.
  * Builds HTML from JSON + sidecar assets (data URLs) so images survive pasteHtml.
  *
  * @param {string} relativePath

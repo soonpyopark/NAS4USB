@@ -1,21 +1,6 @@
 import { getShareTokenFromUrl } from './shareAccess.js';
 import { getStoredAdminToken } from './nas4usbClient.js';
-
-/**
- * @param {string} fileName
- * @param {Blob} blob
- */
-function triggerBrowserDownload(fileName, blob) {
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = fileName;
-  anchor.style.display = 'none';
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
-}
+import { triggerBrowserDownload } from './browserDownload.js';
 
 /**
  * @param {{ relativePath: string, name?: string, isDirectory?: boolean }} entry

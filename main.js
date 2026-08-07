@@ -28,9 +28,18 @@ import {
   startSyncServer,
   stopSyncServer,
   getSyncPort,
+  getSyncHostname,
   getLocalIPv4Addresses,
 } from './electron/syncServer.js';
-import { resolveServerEnv, resolveDataRoot } from './electron/envConfig.js';
+import { readServerEnvRaw, resolveDataRoot } from './electron/envConfig.js';
+import {
+  hostnameForWebServerMode,
+  normalizeWebServerMode,
+  normalizeWebServerPort,
+  resolveWebServerPort,
+  webServerModeForHostname,
+} from './shared/webServerConfig.js';
+import { allowFirewallInbound, removeFirewallInbound } from './electron/firewallService.js';
 import { resolvePortableRoot } from './electron/portablePaths.js';
 import {
   closeWorkspace,
@@ -107,6 +116,7 @@ import {
   syncFortuneSidecarRename,
   isFortuneSidecarRelativePath,
 } from './electron/fortuneSidecarService.js';
+import { syncTiptapAssetRename } from './electron/tiptapAssetService.js';
 import { notifyFsChanged } from './electron/fsNotifyService.js';
 import {
   deleteFileHistoryEntry,
@@ -254,10 +264,7 @@ function createMainWindow() {
     mainWindow?.show();
   });
 
-  const appUrl =
-    activeServerInfo?.appUrl ?? `http://127.0.0.1:${activeServerInfo?.port ?? getSyncPort()}`;
-
-  mainWindow.loadURL(appUrl);
+  mainWindow.loadURL(currentAppUrl());
 
   if (isDev) {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
@@ -276,6 +283,27 @@ function createMainWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+}
+
+/**
+ * Stored 서버 관리 settings win over `.env`. An unset mode keeps the raw
+ * `.env` HOSTNAME so custom bind addresses keep working.
+ *
+ * @param {string} portableRoot
+ */
+async function configureServerFromSettings(portableRoot) {
+  const envRaw = readServerEnvRaw(portableRoot, isDev);
+  const settings = await getAppSettings(portableRoot);
+  const storedMode = normalizeWebServerMode(settings.webServerMode);
+
+  configureSyncServer({
+    port: resolveWebServerPort(settings.webServerPort, envRaw.portRaw),
+    hostname: storedMode ? hostnameForWebServerMode(storedMode) : envRaw.hostname,
+  });
+}
+
+function currentAppUrl() {
+  return activeServerInfo?.appUrl ?? `http://127.0.0.1:${activeServerInfo?.port ?? getSyncPort()}`;
 }
 
 async function ensureServer() {
@@ -300,6 +328,44 @@ async function shutdownServer() {
   }
   activeServerInfo = null;
   updateTrayMenu();
+}
+
+function getServerManagementInfo() {
+  const running = activeServerInfo != null;
+  return {
+    running,
+    port: running ? (activeServerInfo?.port ?? getSyncPort()) : null,
+    configuredPort: getSyncPort(),
+    mode: webServerModeForHostname(getSyncHostname()),
+    hostname: getSyncHostname(),
+    addresses: running ? (activeServerInfo?.addresses ?? []) : getLocalIPv4Addresses(),
+    appUrl: running ? currentAppUrl() : null,
+  };
+}
+
+/**
+ * Rebind the server to a new port/mode. The renderer is served by this very
+ * server, so the caller must navigate the window to the returned `appUrl`.
+ *
+ * @param {{ port: number, mode: import('./shared/webServerConfig.js').WebServerMode }} config
+ */
+async function restartServerWithConfig({ port, mode }) {
+  const previous = { port: getSyncPort(), hostname: getSyncHostname() };
+  await shutdownServer();
+  configureSyncServer({ port, hostname: hostnameForWebServerMode(mode) });
+
+  try {
+    await ensureServer();
+  } catch (err) {
+    configureSyncServer(previous);
+    await ensureServer().catch(() => {});
+    updateTrayMenu();
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(`서버를 ${port} 포트로 다시 시작하지 못했습니다.\n${detail}`);
+  }
+
+  updateTrayMenu();
+  return getServerManagementInfo();
 }
 
 function resolveTrayIcon() {
@@ -445,9 +511,7 @@ async function startServerFromTray() {
     updateTrayMenu();
 
     if (mainWindow && !mainWindow.isDestroyed()) {
-      const appUrl =
-        activeServerInfo?.appUrl ?? `http://127.0.0.1:${activeServerInfo?.port ?? getSyncPort()}`;
-      await mainWindow.loadURL(appUrl);
+      await mainWindow.loadURL(currentAppUrl());
     }
 
     console.log('[tray] Server started.');
@@ -560,19 +624,68 @@ ipcMain.handle('fs:writeFileAbsolute', async (_event, params = {}) => {
   const dir = path.resolve(directory);
   let targetName = fileName;
   if (unique) {
-    const existing = await fs.readdir(dir).catch(() => []);
+    const existing = await fs.promises.readdir(dir).catch(() => []);
     targetName = resolveUniqueName(existing, fileName);
   }
 
   const absolutePath = path.join(dir, targetName);
-  await fs.mkdir(dir, { recursive: true });
-  await fs.writeFile(absolutePath, Buffer.from(base64 ?? '', 'base64'));
+  await fs.promises.mkdir(dir, { recursive: true });
+  await fs.promises.writeFile(absolutePath, Buffer.from(base64 ?? '', 'base64'));
   return { fileName: targetName, absolutePath };
 });
 
 ipcMain.handle('sync:getInfo', async () => {
   await ensureServer();
   return getSyncInfo();
+});
+
+ipcMain.handle('server:getInfo', async (event) => {
+  assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
+  return getServerManagementInfo();
+});
+
+ipcMain.handle('server:applyConfig', async (event, patch = {}) => {
+  assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
+
+  const port = patch?.port == null ? null : normalizeWebServerPort(patch.port);
+  if (patch?.port != null && port == null) {
+    throw new Error('포트는 1~65535 사이 숫자여야 합니다.');
+  }
+  const mode = patch?.mode == null ? null : normalizeWebServerMode(patch.mode);
+  if (patch?.mode != null && mode == null) {
+    throw new Error('서버 모드가 올바르지 않습니다.');
+  }
+
+  /** @type {Record<string, unknown>} */
+  const settingsPatch = {};
+  if (port != null) settingsPatch.webServerPort = port;
+  if (mode != null) settingsPatch.webServerMode = mode;
+  if (Object.keys(settingsPatch).length > 0) {
+    await updateAppSettings(settingsPatch, getPortableRoot());
+  }
+
+  const nextPort = port ?? getSyncPort();
+  const nextMode = mode ?? webServerModeForHostname(getSyncHostname());
+  const needsRestart =
+    nextPort !== getSyncPort() ||
+    hostnameForWebServerMode(nextMode) !== getSyncHostname() ||
+    activeServerInfo == null;
+
+  if (!needsRestart) {
+    return { restarted: false, info: getServerManagementInfo() };
+  }
+
+  return { restarted: true, info: await restartServerWithConfig({ port: nextPort, mode: nextMode }) };
+});
+
+ipcMain.handle('server:allowFirewall', async (event, port) => {
+  assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
+  return allowFirewallInbound(port);
+});
+
+ipcMain.handle('server:removeFirewall', async (event, port) => {
+  assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
+  return removeFirewallInbound(port);
 });
 
 /** @type {Map<number, string>} */
@@ -658,6 +771,7 @@ ipcMain.handle('fs:rename', async (event, fromRelative, toRelative) => {
   await syncFileAccessRename(fromRelative, toRelative, getPortableRoot());
   await syncFavoritesRename(fromRelative, toRelative, getPortableRoot());
   await syncFortuneSidecarRename(fromRelative, toRelative);
+  await syncTiptapAssetRename(fromRelative, toRelative);
   await syncFileHistoryRename(fromRelative, toRelative, getPortableRoot());
   const result = await fsService.renamePath(fromRelative, toRelative);
   notifyFsChanged([fromRelative, toRelative]);
@@ -708,6 +822,7 @@ ipcMain.handle('fs:move', async (event, fromRelative, toRelative) => {
   await syncFileAccessRename(fromRelative, toRelative, getPortableRoot());
   await syncFavoritesRename(fromRelative, toRelative, getPortableRoot());
   await syncFortuneSidecarRename(fromRelative, toRelative);
+  await syncTiptapAssetRename(fromRelative, toRelative);
   await syncFileHistoryRename(fromRelative, toRelative, getPortableRoot());
   const result = await fsService.movePath(fromRelative, toRelative);
   notifyFsChanged([fromRelative, toRelative]);
@@ -773,6 +888,7 @@ ipcMain.handle('workspace:rename', async (event, sessionId, newRelativePath) => 
   await syncFileAccessRename(fromPath, result.relativePath, getPortableRoot());
   await syncFavoritesRename(fromPath, result.relativePath, getPortableRoot());
   await syncFortuneSidecarRename(fromPath, result.relativePath);
+  await syncTiptapAssetRename(fromPath, result.relativePath);
   await syncFileHistoryRename(fromPath, result.relativePath, getPortableRoot());
   notifyFsChanged([fromPath, result.relativePath]);
   return result;
@@ -1016,9 +1132,8 @@ if (gotSingleInstanceLock) {
     createSplashWindow();
 
     const portableRoot = resolvePortableRoot(isDev);
-    const serverEnv = resolveServerEnv(portableRoot, isDev);
     const dataRoot = resolveDataRoot(portableRoot);
-    configureSyncServer(serverEnv);
+    await configureServerFromSettings(portableRoot);
 
     initAppContext({
       portableRoot,

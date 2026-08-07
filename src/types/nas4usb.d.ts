@@ -109,6 +109,12 @@ window.nas4usb = {
     getGuestPermissions: () => {},
     update: (patch) => {},
   },
+  server: {
+    getInfo: () => {},
+    applyConfig: (patch) => {},
+    allowFirewall: (port) => {},
+    removeFirewall: (port) => {},
+  },
   members: {
     list: () => {},
     export: () => {},

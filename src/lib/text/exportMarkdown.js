@@ -1,6 +1,7 @@
 import { renderMarkdown } from './markdown.js';
 import { decodeTextBase64, encodeTextBase64 } from './textIO.js';
-import { getParentPath, joinRelativePath, resolveUniqueName } from '../fsPaths.js';
+import { exportFileName } from '../browserDownload.js';
+import { saveFileToPickedFolder } from '../saveToFolder.js';
 
 /**
  * @param {string} fileName
@@ -111,35 +112,20 @@ ${MARKDOWN_EXPORT_CSS}
 }
 
 /**
- * @param {string} sourceRelativePath
- * @param {string} title
- * @param {string} extension
- * @param {string} contentBase64
- */
-async function writeBesideSource(sourceRelativePath, title, extension, contentBase64) {
-  if (!window.nas4usb?.fs?.writeFile || !window.nas4usb?.fs?.readDir) {
-    throw new Error('파일 저장 API를 사용할 수 없습니다.');
-  }
-
-  const parentPath = getParentPath(sourceRelativePath);
-  const desiredName = `${String(title || 'NoName').replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_')}.${extension}`;
-  const entries = await window.nas4usb.fs.readDir(parentPath);
-  const existingNames = (Array.isArray(entries) ? entries : []).map((entry) => entry.name);
-  const uniqueName = resolveUniqueName(existingNames, desiredName);
-  const relativePath = joinRelativePath(parentPath, uniqueName);
-  await window.nas4usb.fs.writeFile(relativePath, contentBase64);
-  return { relativePath, name: uniqueName };
-}
-
-/**
- * @param {string} relativePath
+ * Saves the HTML to a folder the user picks, not into the NAS folder.
+ *
  * @param {string} fileName
  * @param {string} markdown
+ * @returns {Promise<import('../saveToFolder.js').SaveResult | null>} null when cancelled
  */
-export async function exportMarkdownTextAsHtml(relativePath, fileName, markdown) {
+export function exportMarkdownTextAsHtml(fileName, markdown) {
   const title = getMarkdownFileStem(fileName);
-  const html = markdownToStandaloneHtml(markdown, title);
-  return writeBesideSource(relativePath, title, 'html', encodeTextBase64(html));
+  return saveFileToPickedFolder({
+    fileName: exportFileName(title, 'html'),
+    base64: encodeTextBase64(markdownToStandaloneHtml(markdown, title)),
+    mimeType: 'text/html;charset=utf-8',
+    title: 'HTML을 저장할 폴더 선택',
+  });
 }
 
 /**
@@ -148,5 +134,5 @@ export async function exportMarkdownTextAsHtml(relativePath, fileName, markdown)
  */
 export async function exportMarkdownFileAsHtml(relativePath, fileName) {
   const base64 = await window.nas4usb.fs.readFile(relativePath);
-  return exportMarkdownTextAsHtml(relativePath, fileName, decodeTextBase64(base64));
+  return exportMarkdownTextAsHtml(fileName, decodeTextBase64(base64));
 }

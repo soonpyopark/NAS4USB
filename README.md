@@ -7,7 +7,7 @@
 USB(또는 단일 폴더)만으로 **오프라인 LAN NAS**와 **실시간 공동 편집**을 제공하는 Windows/macOS Electron 앱입니다.
 
 - **Electron + Vite + React** — 로컬 파일 탐색기 UI
-- **Y.js** — HWPX·XLSX·화이트보드 실시간 동기화 (기본 포트 `3008`)
+- **Y.js** — HWPX·XLSX·화이트보드 실시간 동기화 (기본 포트 `3009`)
 - **에디터 코어** — rhwp(HWPX), FortuneSheet(XLSX), WhiteBoard4Share(.wb4s), TipTap(.tiptap)
 
 > **용도:** USB 이동·교실/회의실 LAN 협업. 인터넷 없이 동작하도록 설계되었습니다.
@@ -50,7 +50,7 @@ notepad .env
 
 | 변수 | 기본값 | 설명 |
 |------|--------|------|
-| `PORT` | `3008` | HTTP + Y.js WebSocket 포트 |
+| `PORT` | `3009` | HTTP + Y.js WebSocket 포트 |
 | `HOSTNAME` | `0.0.0.0` | LAN 접속 허용 (`127.0.0.1` = 로컬만) |
 | `DATA_ROOT` | `data` | 문서 저장 루트 (상대·절대 경로) |
 | `ADMIN_ID` / `ADMIN_PW` | `admin` / `admin1234` | 총괄관리자 (변경 권장) |
@@ -61,7 +61,7 @@ notepad .env
 npm run dev
 ```
 
-- **로컬:** http://127.0.0.1:3008  
+- **로컬:** http://127.0.0.1:3009  
 - Electron 창이 자동으로 열립니다.
 
 재시작: `npm run dev:restart` · 중지: `npm run dev:stop`

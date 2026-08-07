@@ -1,3 +1,4 @@
+import { DEFAULT_SYNC_PORT } from '../../shared/constants.js';
 import { loadSyncHost } from './syncHost.js';
 
 /**
@@ -6,7 +7,7 @@ import { loadSyncHost } from './syncHost.js';
  */
 export function buildShareLinkUrl(token, syncInfo) {
   const host = loadSyncHost() || syncInfo?.addresses?.[0] || window.location.hostname || '127.0.0.1';
-  const port = syncInfo?.port ?? Number(window.location.port || 3008);
+  const port = syncInfo?.port ?? Number(window.location.port || DEFAULT_SYNC_PORT);
   return `http://${host}:${port}/?share=${encodeURIComponent(token)}`;
 }
 
