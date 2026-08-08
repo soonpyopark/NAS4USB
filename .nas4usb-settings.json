@@ -3,6 +3,10 @@
     {
       "cidr": "192.168.0.1/24",
       "description": "내 공유기 IP 대역"
+    },
+    {
+      "cidr": "118.235.83.137",
+      "description": "임시"
     }
   ],
   "guestPermissions": {
@@ -16,5 +20,6 @@
     "write": true
   },
   "webServerPort": 3009,
-  "webServerMode": "local"
+  "webServerMode": "lan",
+  "themeAccentColor": "#ca8a04"
 }

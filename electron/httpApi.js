@@ -69,7 +69,7 @@ import {
   restorePath,
   trashPath,
 } from './trashService.js';
-import { getAppSettings, getAccessPermissionsBundle, getEffectiveAccessPermissions, updateAppSettings } from './settingsService.js';
+import { getAppSettings, getAccessPermissionsBundle, getEffectiveAccessPermissions, getThemeAccentColor, updateAppSettings } from './settingsService.js';
 import { listMembers, saveMembersPayload, getMembersExportRecords } from './membersService.js';
 import {
   syncFortuneSidecarCopy,
@@ -477,7 +477,19 @@ export async function handleHttpApiRequest(req, res) {
 
     if (method === 'POST' && url.pathname === '/api/auth/login') {
       const body = await readJsonBody(req);
-      sendJson(res, 200, await loginAdmin(body.id, body.password, getPortableRoot()));
+      sendJson(
+        res,
+        200,
+        await loginAdmin(body.id, body.password, getPortableRoot(), {
+          remember: Boolean(body.rememberMe),
+        }),
+      );
+      return true;
+    }
+
+    if (method === 'GET' && url.pathname === '/api/auth/session') {
+      const session = getAdminSession(getAdminToken(req));
+      sendJson(res, 200, session ? { adminId: session.adminId, role: session.role ?? 'member' } : null);
       return true;
     }
 
@@ -662,6 +674,11 @@ export async function handleHttpApiRequest(req, res) {
 
     if (method === 'GET' && url.pathname === '/api/settings/guest-permissions') {
       sendJson(res, 200, await getAccessPermissionsBundle(getPortableRoot(), getAccessAuth(req)));
+      return true;
+    }
+
+    if (method === 'GET' && url.pathname === '/api/settings/theme') {
+      sendJson(res, 200, { accentColor: await getThemeAccentColor(getPortableRoot()) });
       return true;
     }
 

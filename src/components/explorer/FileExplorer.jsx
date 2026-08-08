@@ -292,22 +292,6 @@ export default function FileExplorer({
     }
   };
 
-  const handleExportHwpx = async (entry) => {
-    if (!entry || entry.isDirectory) return;
-    try {
-      const fileName = entry.name || entry.relativePath.split('/').pop();
-      if (!isTiptapDocumentRelativePath(entry.relativePath)) {
-        throw new Error('HWPX 내보내기를 지원하지 않는 파일입니다.');
-      }
-      const { exportTiptapFileAsHwpx } = await import('../../lib/tiptap/exportHwpx.js');
-      const saved = await exportTiptapFileAsHwpx(entry.relativePath, fileName);
-      if (!saved) return;
-      nativeAlert(`HWPX로 내보냈습니다.\n${saved.absolutePath ?? saved.fileName}`);
-    } catch (err) {
-      nativeAlert(err instanceof Error ? err.message : 'HWPX 내보내기에 실패했습니다.');
-    }
-  };
-
   const handleShareLinkBadgeClick = async (entry) => {
     try {
       const result = await openShareLinkForEntry({
@@ -735,11 +719,6 @@ export default function FileExplorer({
           !contextTargets[0].isDirectory &&
           (isTiptapDocumentRelativePath(contextTargets[0].relativePath) ||
             /\.md$/i.test(contextTargets[0].relativePath)),
-        onExportHwpx: () => handleExportHwpx(contextTarget),
-        canExportHwpx:
-          contextTargets.length === 1 &&
-          !contextTargets[0].isDirectory &&
-          isTiptapDocumentRelativePath(contextTargets[0].relativePath),
         canEditOpen: contextTarget
           ? canOpenFileForEdit(contextTarget.relativePath, accessMap, isAdminLoggedIn, effectivePermissions)
           : false,
@@ -857,7 +836,7 @@ export default function FileExplorer({
       </div>
 
       {searchContents && searchQuery.trim() && (
-        <div className="border-b border-sky-200 bg-sky-50 px-4 py-1.5 text-xs text-sky-800">
+        <div className="border-b border-nas-accentBorder bg-nas-accentSoft px-4 py-1.5 text-xs text-nas-accentText">
           {contentSearch.searching
             ? `본문 검색 중… ${contentSearch.scanned}/${contentSearch.total}`
             : `본문 일치 ${contentSearch.matchedPaths.size}건 · ${contentSearch.total}개 파일 검사`}

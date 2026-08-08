@@ -125,7 +125,7 @@ function UserNameField({ loading, saving, displayName, readOnly, onChange, onCom
       <label htmlFor="user-name" className="sr-only">
         사용자명
       </label>
-      <div className="inline-flex items-center gap-1.5 rounded-full bg-sky-50 px-2.5 py-1 text-[10pt] font-medium text-emerald-700">
+      <div className="inline-flex items-center gap-1.5 rounded-full bg-nas-accentSoft px-2.5 py-1 text-[10pt] font-medium text-emerald-700">
         <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" aria-hidden="true" />
         <input
           id="user-name"

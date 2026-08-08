@@ -224,22 +224,6 @@ export default function Sidebar({
     }
   };
 
-  const handleExportHwpx = async (entry) => {
-    if (!entry || entry.isDirectory) return;
-    try {
-      const fileName = entry.name || entry.relativePath.split('/').pop();
-      if (!isTiptapDocumentRelativePath(entry.relativePath)) {
-        throw new Error('HWPX 내보내기를 지원하지 않는 파일입니다.');
-      }
-      const { exportTiptapFileAsHwpx } = await import('../../lib/tiptap/exportHwpx.js');
-      const saved = await exportTiptapFileAsHwpx(entry.relativePath, fileName);
-      if (!saved) return;
-      nativeAlert(`HWPX로 내보냈습니다.\n${saved.absolutePath ?? saved.fileName}`);
-    } catch (err) {
-      nativeAlert(err instanceof Error ? err.message : 'HWPX 내보내기에 실패했습니다.');
-    }
-  };
-
   const getSiblingNames = async (targetPath) => {
     if (targetPath === currentPath) {
       return (tree.childrenMap[targetPath] ?? tree.rootEntries).map((entry) => entry.name);
@@ -588,12 +572,6 @@ export default function Sidebar({
             !contextTarget.isDirectory &&
             (isTiptapDocumentRelativePath(contextTarget.relativePath) ||
               /\.md$/i.test(contextTarget.relativePath)),
-        ),
-        onExportHwpx: () => handleExportHwpx(contextTarget),
-        canExportHwpx: Boolean(
-          contextTarget &&
-            !contextTarget.isDirectory &&
-            isTiptapDocumentRelativePath(contextTarget.relativePath),
         ),
         canEditOpen: contextTarget
           ? canOpenFileForEdit(contextTarget.relativePath, accessMap, isAdminLoggedIn, effectivePermissions)

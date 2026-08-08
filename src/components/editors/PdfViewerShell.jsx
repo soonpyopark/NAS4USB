@@ -947,7 +947,7 @@ export default function PdfViewerShell({
         <input
           type="text"
           inputMode="numeric"
-          className="w-12 rounded border border-slate-300 px-1 py-0.5 text-center text-xs outline-none focus:border-sky-500"
+          className="w-12 rounded border border-slate-300 px-1 py-0.5 text-center text-xs outline-none focus:border-nas-accent"
           value={pageInput}
           disabled={busy || !pageCount}
           onChange={(event) => setPageInput(event.target.value.replace(/[^\d]/g, ''))}
@@ -1072,7 +1072,7 @@ export default function PdfViewerShell({
           id="pdf-search-input"
           ref={searchInputRef}
           type="search"
-          className="min-w-[180px] flex-1 rounded border border-slate-300 px-2 py-1 text-sm outline-none focus:border-sky-500"
+          className="min-w-[180px] flex-1 rounded border border-slate-300 px-2 py-1 text-sm outline-none focus:border-nas-accent"
           placeholder="검색어 입력 후 Enter · 결과는 Enter로 다음"
           value={searchQuery}
           disabled={busy}

@@ -40,6 +40,11 @@ import {
   webServerModeForHostname,
 } from './shared/webServerConfig.js';
 import { allowFirewallInbound, removeFirewallInbound } from './electron/firewallService.js';
+import {
+  START_HIDDEN_ARG,
+  getAutoLaunchState,
+  setAutoLaunch,
+} from './electron/autoLaunchService.js';
 import { resolvePortableRoot } from './electron/portablePaths.js';
 import {
   closeWorkspace,
@@ -55,7 +60,7 @@ import {
 import { getEditorCoresStatus, updateEditorCores } from './electron/editorUpdater.js';
 import {
   loginAdmin,
-  isValidAdminSession,
+  pruneRememberedSessions,
   revokeAdminSession,
   getAdminSession,
   isSuperAdminSession,
@@ -103,7 +108,7 @@ import {
   restorePath,
   trashPath,
 } from './electron/trashService.js';
-import { getAppSettings, getAccessPermissionsBundle, getEffectiveAccessPermissions, updateAppSettings } from './electron/settingsService.js';
+import { getAppSettings, getAccessPermissionsBundle, getEffectiveAccessPermissions, getThemeAccentColor, updateAppSettings } from './electron/settingsService.js';
 import {
   listMembers,
   saveMembersPayload,
@@ -154,6 +159,9 @@ let splashWindow = null;
 /** @type {import('electron').Tray | null} */
 let tray = null;
 let isQuitting = false;
+
+/** Auto-launch entries can request a tray-only start; only the very first window honours it. */
+const launchedHidden = process.argv.includes(START_HIDDEN_ARG);
 
 function resolveElectronDir() {
   return path.join(__dirname, 'electron');
@@ -261,7 +269,7 @@ function createMainWindow() {
 
   mainWindow.once('ready-to-show', () => {
     closeSplashWindow();
-    mainWindow?.show();
+    if (!launchedHidden) mainWindow?.show();
   });
 
   mainWindow.loadURL(currentAppUrl());
@@ -340,6 +348,7 @@ function getServerManagementInfo() {
     hostname: getSyncHostname(),
     addresses: running ? (activeServerInfo?.addresses ?? []) : getLocalIPv4Addresses(),
     appUrl: running ? currentAppUrl() : null,
+    autoLaunch: getAutoLaunchState(),
   };
 }
 
@@ -678,6 +687,11 @@ ipcMain.handle('server:applyConfig', async (event, patch = {}) => {
   return { restarted: true, info: await restartServerWithConfig({ port: nextPort, mode: nextMode }) };
 });
 
+ipcMain.handle('server:setAutoLaunch', async (event, { enabled, startHidden } = {}) => {
+  assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
+  return setAutoLaunch(Boolean(enabled), Boolean(startHidden));
+});
+
 ipcMain.handle('server:allowFirewall', async (event, port) => {
   assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
   return allowFirewallInbound(port);
@@ -738,13 +752,15 @@ ipcMain.handle('auth:bindShareToken', (event, token) => {
   return true;
 });
 
+/** Returns the session so the renderer can drop stale storage instead of looking logged in. */
 ipcMain.handle('auth:bindToken', (event, token) => {
-  if (token && isValidAdminSession(token)) {
-    adminTokenBySender.set(event.sender.id, token);
-    return true;
+  const session = getAdminSession(token);
+  if (!session) {
+    adminTokenBySender.delete(event.sender.id);
+    return null;
   }
-  adminTokenBySender.delete(event.sender.id);
-  return false;
+  adminTokenBySender.set(event.sender.id, token);
+  return { adminId: session.adminId, role: session.role ?? 'member' };
 });
 
 ipcMain.handle('auth:logout', (event) => {
@@ -940,8 +956,8 @@ ipcMain.handle('editors:update', async (event) => {
   return updateEditorCores(getInstallRoot());
 });
 
-ipcMain.handle('auth:login', async (_event, { id, password } = {}) =>
-  loginAdmin(id, password, getPortableRoot()),
+ipcMain.handle('auth:login', async (_event, { id, password, rememberMe } = {}) =>
+  loginAdmin(id, password, getPortableRoot(), { remember: Boolean(rememberMe) }),
 );
 
 ipcMain.handle('auth:showDefaultAdminHint', async () =>
@@ -1077,6 +1093,10 @@ ipcMain.handle('settings:get', async (event) => {
 
 ipcMain.handle('settings:getGuestPermissions', async (event) => getAccessPermissionsBundle(getPortableRoot(), getAccessAuthFromEvent(event)));
 
+ipcMain.handle('settings:getTheme', async () => ({
+  accentColor: await getThemeAccentColor(getPortableRoot()),
+}));
+
 ipcMain.handle('settings:update', async (event, patch = {}) => {
   assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
   const result = await updateAppSettings(patch, getPortableRoot());
@@ -1129,7 +1149,7 @@ if (gotSingleInstanceLock) {
     if (process.platform === 'win32') {
       app.setAppUserModelId('com.nas4usb.app');
     }
-    createSplashWindow();
+    if (!launchedHidden) createSplashWindow();
 
     const portableRoot = resolvePortableRoot(isDev);
     const dataRoot = resolveDataRoot(portableRoot);
@@ -1152,6 +1172,12 @@ if (gotSingleInstanceLock) {
       await ensureBootstrapAdmin(portableRoot);
     } catch (err) {
       console.warn('[auth] bootstrap admin seed failed:', err);
+    }
+
+    try {
+      await pruneRememberedSessions(portableRoot);
+    } catch (err) {
+      console.warn('[auth] session prune failed:', err);
     }
 
     try {

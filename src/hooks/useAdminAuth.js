@@ -86,10 +86,62 @@ function readStoredAdminRole() {
   return readAuthValue(ADMIN_ROLE_STORAGE_KEY) || '';
 }
 
-async function bindAdminToken(token) {
-  if (window.nas4usb?.auth?.bindToken) {
-    await window.nas4usb.auth.bindToken(token);
+function clearStoredAuth() {
+  clearAuthValue(ADMIN_ID_STORAGE_KEY);
+  clearAuthValue(ADMIN_TOKEN_STORAGE_KEY);
+  clearAuthValue(ADMIN_ROLE_STORAGE_KEY);
+  try {
+    localStorage.removeItem(ADMIN_REMEMBER_KEY);
+  } catch {
+    // ignore
   }
+}
+
+/**
+ * Binds the token to this connection and reports the session it resolves to,
+ * or null when the server no longer knows the token.
+ * @param {string} token
+ * @returns {Promise<{ adminId: string, role?: string } | null>}
+ */
+async function bindAdminToken(token) {
+  if (!window.nas4usb?.auth?.bindToken) return null;
+  const session = await window.nas4usb.auth.bindToken(token);
+  return session && typeof session === 'object' && session.adminId ? session : null;
+}
+
+function storageHoldingToken() {
+  try {
+    if (localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY)) return localStorage;
+  } catch {
+    // ignore
+  }
+  return sessionStorage;
+}
+
+/**
+ * Reconciles stored credentials with the server before anything reads them: a token the
+ * server no longer knows is wiped so the UI offers 로그인 instead of a dead 로그아웃.
+ * Call this once at bootstrap so the bound token is in place before the first data fetch.
+ * @returns {Promise<{ adminId: string, role: string } | null>}
+ */
+export async function restoreAdminSession() {
+  const token = readStoredAdminToken();
+  const session = token ? await bindAdminToken(token).catch(() => null) : null;
+
+  if (!session) {
+    if (token || readStoredAdminId()) clearStoredAuth();
+    return null;
+  }
+
+  const role = session.role === 'super_admin' ? 'super_admin' : 'member';
+  try {
+    const store = storageHoldingToken();
+    store.setItem(ADMIN_ID_STORAGE_KEY, session.adminId);
+    store.setItem(ADMIN_ROLE_STORAGE_KEY, role);
+  } catch {
+    // ignore
+  }
+  return { adminId: session.adminId, role };
 }
 
 async function logoutAdminSession(token) {
@@ -119,10 +171,39 @@ export function useAdminAuth({ onAuthChange } = {}) {
   const [role, setRole] = useState(readStoredAdminRole);
   const [loggingIn, setLoggingIn] = useState(false);
   const [error, setError] = useState('');
+  const [sessionChecked, setSessionChecked] = useState(false);
 
+  // Stored credentials only mean "logged in" while the server still honours the token;
+  // otherwise the UI would offer 로그아웃 for a session every request rejects.
   useEffect(() => {
+    let cancelled = false;
     setLoggingIn(false);
-    void bindAdminToken(readStoredAdminToken());
+
+    void (async () => {
+      const hadStoredSession = Boolean(readStoredAdminId());
+      const session = await restoreAdminSession();
+      if (cancelled) return;
+
+      if (!session) {
+        setAdminId('');
+        setAdminToken('');
+        setRole('');
+        setSessionChecked(true);
+        if (hadStoredSession) onAuthChange?.();
+        return;
+      }
+
+      setAdminId(session.adminId);
+      setAdminToken(readStoredAdminToken());
+      setRole(session.role);
+      setSessionChecked(true);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // Runs once on mount; onAuthChange is only used to notify consumers of a cleared session.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const login = useCallback(
@@ -135,7 +216,11 @@ export function useAdminAuth({ onAuthChange } = {}) {
           throw new Error('로그인 API를 사용할 수 없습니다. 앱을 다시 실행해 주세요.');
         }
 
-        const result = await window.nas4usb.auth.login({ id, password });
+        const result = await window.nas4usb.auth.login({
+          id,
+          password,
+          rememberMe: Boolean(rememberMe),
+        });
         if (!result?.success) {
           setError('아이디 또는 비밀번호가 올바르지 않습니다.');
           return false;
@@ -164,14 +249,7 @@ export function useAdminAuth({ onAuthChange } = {}) {
   const logout = useCallback(async () => {
     const token = readStoredAdminToken();
     await logoutAdminSession(token);
-    clearAuthValue(ADMIN_ID_STORAGE_KEY);
-    clearAuthValue(ADMIN_TOKEN_STORAGE_KEY);
-    clearAuthValue(ADMIN_ROLE_STORAGE_KEY);
-    try {
-      localStorage.removeItem(ADMIN_REMEMBER_KEY);
-    } catch {
-      // ignore
-    }
+    clearStoredAuth();
     await bindAdminToken('');
     setAdminId('');
     setAdminToken('');
@@ -187,6 +265,7 @@ export function useAdminAuth({ onAuthChange } = {}) {
     adminId,
     adminToken,
     role,
+    sessionChecked,
     isLoggedIn,
     isAdminLoggedIn: isLoggedIn,
     isSuperAdmin,

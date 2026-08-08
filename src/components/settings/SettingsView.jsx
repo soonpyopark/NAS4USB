@@ -11,16 +11,18 @@ import {
 } from '../../../shared/ipAllowlistIo.js';
 import { downloadTextFile, readFileAsText } from '../../lib/downloadTextFile.js';
 import { useAppConfirm } from '../../hooks/useAppConfirm.jsx';
+import GeneralSettingsPanel from './GeneralSettingsPanel.jsx';
 import MembersSettingsPanel from './MembersSettingsPanel.jsx';
 import ServerSettingsPanel from './ServerSettingsPanel.jsx';
 
 /**
  * @typedef {{ cidr: string, description?: string }} AllowedIpEntry
- * @typedef {'ip' | 'members' | 'server'} SettingsTabId
+ * @typedef {'general' | 'ip' | 'members' | 'server'} SettingsTabId
  */
 
 /** @type {{ id: SettingsTabId, label: string }[]} */
 const SETTINGS_TABS = [
+  { id: 'general', label: '일반' },
   { id: 'server', label: '서버 관리' },
   { id: 'ip', label: '접근 가능 IP 대역' },
   { id: 'members', label: '회원 관리' },
@@ -31,7 +33,7 @@ export default function SettingsView() {
   /** @type {[AllowedIpEntry[], Function]} */
   const [allowedIpCidrs, setAllowedIpCidrs] = useState([]);
   /** @type {[SettingsTabId, Function]} */
-  const [activeTab, setActiveTab] = useState('server');
+  const [activeTab, setActiveTab] = useState('general');
   const [ipCidrDraft, setIpCidrDraft] = useState('');
   const [ipDescriptionDraft, setIpDescriptionDraft] = useState('');
   const [loading, setLoading] = useState(true);
@@ -240,8 +242,14 @@ export default function SettingsView() {
       </div>
 
       <div className="min-h-0 flex-1 overflow-auto p-6">
+        {activeTab === 'general' ? (
+          <div role="tabpanel">
+            <GeneralSettingsPanel />
+          </div>
+        ) : null}
+
         {activeTab === 'server' ? (
-          <div className="max-w-3xl" role="tabpanel">
+          <div role="tabpanel">
             <ServerSettingsPanel />
           </div>
         ) : null}
@@ -261,7 +269,7 @@ export default function SettingsView() {
               </button>
             </div>
           ) : (
-            <div className="max-w-3xl space-y-6">
+            <div className="space-y-6">
               <section className="space-y-4" role="tabpanel">
                 <div className="space-y-3">
                   <p className="text-sm leading-relaxed text-slate-600">
@@ -331,7 +339,7 @@ export default function SettingsView() {
                           <span className="shrink-0 text-xs font-medium text-slate-500">설명</span>
                           <input
                             type="text"
-                            className="min-w-0 flex-1 border-0 border-b border-slate-300 bg-transparent px-0 py-1 text-sm text-slate-800 outline-none focus:border-sky-500"
+                            className="min-w-0 flex-1 border-0 border-b border-slate-300 bg-transparent px-0 py-1 text-sm text-slate-800 outline-none focus:border-nas-accent"
                             placeholder="예: 본사 사내망, VPN 대역"
                             value={entry.description ?? ''}
                             onChange={(event) =>
@@ -349,7 +357,7 @@ export default function SettingsView() {
                     <span className="text-xs font-medium text-slate-600">허용 IP 주소</span>
                     <input
                       type="text"
-                      className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none focus:border-sky-500"
+                      className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none focus:border-nas-accent"
                       placeholder="예: 192.168.0.0/24, 10.0.0.30, 221.168.1.0-221.168.12.255"
                       value={ipCidrDraft}
                       onChange={(event) => setIpCidrDraft(event.target.value)}
@@ -365,7 +373,7 @@ export default function SettingsView() {
                     <span className="text-xs font-medium text-slate-600">설명 (선택)</span>
                     <input
                       type="text"
-                      className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none focus:border-sky-500"
+                      className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-800 outline-none focus:border-nas-accent"
                       placeholder="예: 본사 사내망, VPN 대역"
                       value={ipDescriptionDraft}
                       onChange={(event) => setIpDescriptionDraft(event.target.value)}
@@ -392,7 +400,7 @@ export default function SettingsView() {
         ) : null}
 
         {activeTab === 'members' ? (
-          <div className="max-w-3xl">
+          <div>
             <MembersSettingsPanel />
           </div>
         ) : null}

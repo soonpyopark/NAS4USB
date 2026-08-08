@@ -62,7 +62,7 @@ export default function FileSearchResults({
             <FileIcon entry={entry} className={`mt-0.5 h-4 w-4 shrink-0 ${isActive ? 'text-white' : ''}`} />
             <span className="min-w-0 flex-1">
               <span className="block truncate font-medium">{entry.name}</span>
-              <span className={`block truncate text-[10pt] ${isActive ? 'text-blue-100' : 'text-slate-500'}`}>
+              <span className={`block truncate text-[10pt] ${isActive ? 'text-white/75' : 'text-slate-500'}`}>
                 {parentLabel}
               </span>
             </span>

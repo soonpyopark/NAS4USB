@@ -1,28 +1,138 @@
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import { DEFAULT_ADMIN_ID, DEFAULT_ADMIN_PW } from '../shared/constants.js';
+import { getPortableRoot } from './appContext.js';
 import { resolveAdminCredentials } from './envConfig.js';
 import {
   findActiveMemberByCredentials,
   hasMemberLoginId,
 } from './membersService.js';
 
-/** @type {Map<string, { adminId: string, role?: string, createdAt: number }>} */
-const adminSessions = new Map();
+const SESSIONS_FILE = '.nas4usb-sessions.json';
+const REMEMBER_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 /**
- * @param {string | null | undefined} token
+ * @typedef {{ adminId: string, role?: string, createdAt: number, expiresAt: number | null }} AdminSession
  */
-export function isValidAdminSession(token) {
-  if (!token || typeof token !== 'string') return false;
-  return adminSessions.has(token);
+
+/** Sessions bound to this process run; cleared on restart. @type {Map<string, AdminSession>} */
+const adminSessions = new Map();
+
+/** "로그인 유지" sessions, keyed by sha256(token) so the file never holds usable tokens. @type {Map<string, AdminSession> | null} */
+let rememberedSessions = null;
+
+function hashToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+/** Null before the app context exists, which disables persistence instead of throwing. */
+function sessionsFilePath() {
+  try {
+    return path.join(getPortableRoot(), SESSIONS_FILE);
+  } catch {
+    return null;
+  }
+}
+
+function loadRememberedSessions() {
+  if (rememberedSessions) return rememberedSessions;
+
+  const file = sessionsFilePath();
+  if (!file) return new Map();
+
+  const loaded = new Map();
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const now = Date.now();
+    for (const [hash, value] of Object.entries(parsed?.sessions ?? {})) {
+      if (!value?.adminId || typeof value.expiresAt !== 'number') continue;
+      if (value.expiresAt <= now) continue;
+      loaded.set(hash, {
+        adminId: String(value.adminId),
+        role: value.role === 'super_admin' ? 'super_admin' : 'member',
+        createdAt: Number(value.createdAt) || now,
+        expiresAt: value.expiresAt,
+      });
+    }
+  } catch {
+    // missing or corrupt store: start from scratch
+  }
+
+  rememberedSessions = loaded;
+  return rememberedSessions;
+}
+
+function saveRememberedSessions() {
+  const file = sessionsFilePath();
+  if (!file || !rememberedSessions) return;
+  try {
+    const payload = { version: 1, sessions: Object.fromEntries(rememberedSessions) };
+    fs.writeFileSync(file, JSON.stringify(payload, null, 2), 'utf8');
+  } catch (err) {
+    console.warn('[auth] failed to persist sessions:', err);
+  }
+}
+
+/**
+ * Drops remembered sessions whose member row is gone, so deleting an account
+ * also kills the sessions it left behind on disk.
+ * @param {string} [portableRoot]
+ */
+export async function pruneRememberedSessions(portableRoot) {
+  const store = loadRememberedSessions();
+  if (!store.size) return;
+
+  let changed = false;
+  for (const [hash, session] of [...store]) {
+    if (await hasMemberLoginId(session.adminId, portableRoot)) continue;
+    store.delete(hash);
+    changed = true;
+  }
+  if (changed) saveRememberedSessions();
+}
+
+/**
+ * @param {AdminSession} session
+ */
+function isExpired(session) {
+  return typeof session.expiresAt === 'number' && session.expiresAt <= Date.now();
 }
 
 /**
  * @param {string | null | undefined} token
  */
+export function isValidAdminSession(token) {
+  return Boolean(getAdminSession(token));
+}
+
+/**
+ * @param {string | null | undefined} token
+ * @returns {AdminSession | null}
+ */
 export function getAdminSession(token) {
   if (!token || typeof token !== 'string') return null;
-  return adminSessions.get(token) ?? null;
+
+  const live = adminSessions.get(token);
+  if (live) {
+    if (!isExpired(live)) return live;
+    revokeAdminSession(token);
+    return null;
+  }
+
+  const store = loadRememberedSessions();
+  const hash = hashToken(token);
+  const remembered = store.get(hash);
+  if (!remembered) return null;
+
+  if (isExpired(remembered)) {
+    store.delete(hash);
+    saveRememberedSessions();
+    return null;
+  }
+
+  adminSessions.set(token, remembered);
+  return remembered;
 }
 
 /**
@@ -36,10 +146,25 @@ export function isSuperAdminSession(token) {
 /**
  * @param {string} adminId
  * @param {string} [role]
+ * @param {boolean} [remember] survive an app restart ("로그인 유지")
  */
-function createAdminSession(adminId, role = 'super_admin') {
+function createAdminSession(adminId, role = 'super_admin', remember = false) {
   const token = crypto.randomBytes(24).toString('hex');
-  adminSessions.set(token, { adminId, role, createdAt: Date.now() });
+  const now = Date.now();
+  /** @type {AdminSession} */
+  const session = {
+    adminId,
+    role,
+    createdAt: now,
+    expiresAt: remember ? now + REMEMBER_SESSION_TTL_MS : null,
+  };
+  adminSessions.set(token, session);
+
+  if (remember) {
+    loadRememberedSessions().set(hashToken(token), session);
+    saveRememberedSessions();
+  }
+
   return token;
 }
 
@@ -49,6 +174,9 @@ function createAdminSession(adminId, role = 'super_admin') {
 export function revokeAdminSession(token) {
   if (!token || typeof token !== 'string') return;
   adminSessions.delete(token);
+  if (loadRememberedSessions().delete(hashToken(token))) {
+    saveRememberedSessions();
+  }
 }
 
 /**
@@ -78,8 +206,9 @@ export function verifyAdminLogin(id, password, portableRoot) {
  * @param {string} id
  * @param {string} password
  * @param {string} portableRoot
+ * @param {{ remember?: boolean }} [options]
  */
-export async function loginAdmin(id, password, portableRoot) {
+export async function loginAdmin(id, password, portableRoot, { remember = false } = {}) {
   const providedId = String(id ?? '').trim();
   const { adminId } = resolveAdminCredentials(portableRoot);
   const isAdminLogin = providedId.toLowerCase() === String(adminId).trim().toLowerCase();
@@ -87,7 +216,7 @@ export async function loginAdmin(id, password, portableRoot) {
   const member = await findActiveMemberByCredentials(id, password, portableRoot);
   if (member) {
     let role = member.role === 'super_admin' || isAdminLogin ? 'super_admin' : member.role;
-    const token = createAdminSession(member.loginId, role);
+    const token = createAdminSession(member.loginId, role, remember);
     return {
       success: true,
       adminId: member.loginId,
@@ -102,7 +231,7 @@ export async function loginAdmin(id, password, portableRoot) {
     !(await hasMemberLoginId(adminId, portableRoot)) &&
     verifyAdminLogin(id, password, portableRoot)
   ) {
-    const token = createAdminSession(adminId, 'super_admin');
+    const token = createAdminSession(adminId, 'super_admin', remember);
     return { success: true, adminId, role: 'super_admin', token };
   }
 

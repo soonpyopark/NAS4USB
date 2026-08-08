@@ -56,7 +56,8 @@ contextBridge.exposeInMainWorld('nas4usb', {
   },
 
   auth: {
-    login: ({ id, password }) => ipcRenderer.invoke('auth:login', { id, password }),
+    login: ({ id, password, rememberMe }) =>
+      ipcRenderer.invoke('auth:login', { id, password, rememberMe }),
     showDefaultAdminHint: () => ipcRenderer.invoke('auth:showDefaultAdminHint'),
     bindToken: (token) => ipcRenderer.invoke('auth:bindToken', token ?? ''),
     bindShareToken: (token) => ipcRenderer.invoke('auth:bindShareToken', token ?? ''),
@@ -108,12 +109,14 @@ contextBridge.exposeInMainWorld('nas4usb', {
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),
     getGuestPermissions: () => ipcRenderer.invoke('settings:getGuestPermissions'),
+    getTheme: () => ipcRenderer.invoke('settings:getTheme'),
     update: (patch) => ipcRenderer.invoke('settings:update', patch),
   },
 
   server: {
     getInfo: () => ipcRenderer.invoke('server:getInfo'),
     applyConfig: (patch) => ipcRenderer.invoke('server:applyConfig', patch),
+    setAutoLaunch: (options) => ipcRenderer.invoke('server:setAutoLaunch', options),
     allowFirewall: (port) => ipcRenderer.invoke('server:allowFirewall', port),
     removeFirewall: (port) => ipcRenderer.invoke('server:removeFirewall', port),
   },

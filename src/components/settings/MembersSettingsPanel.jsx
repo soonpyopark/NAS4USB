@@ -157,7 +157,7 @@ function PermissionChecks({ value, disabled = false, onToggle }) {
       <label className="inline-flex items-center gap-1.5">
         <input
           type="checkbox"
-          className="h-3.5 w-3.5 rounded border-slate-300 accent-sky-600"
+          className="h-3.5 w-3.5 rounded border-slate-300 accent-nas-accent"
           checked={value.view}
           disabled={disabled}
           onChange={() => onToggle('view')}
@@ -167,7 +167,7 @@ function PermissionChecks({ value, disabled = false, onToggle }) {
       <label className="inline-flex items-center gap-1.5">
         <input
           type="checkbox"
-          className="h-3.5 w-3.5 rounded border-slate-300 accent-sky-600"
+          className="h-3.5 w-3.5 rounded border-slate-300 accent-nas-accent"
           checked={value.read}
           disabled={disabled || !value.view}
           onChange={() => onToggle('read')}
@@ -177,7 +177,7 @@ function PermissionChecks({ value, disabled = false, onToggle }) {
       <label className="inline-flex items-center gap-1.5">
         <input
           type="checkbox"
-          className="h-3.5 w-3.5 rounded border-slate-300 accent-sky-600"
+          className="h-3.5 w-3.5 rounded border-slate-300 accent-nas-accent"
           checked={value.write}
           disabled={disabled || !value.view}
           onChange={() => onToggle('write')}
@@ -711,7 +711,7 @@ export default function MembersSettingsPanel() {
             <div className="flex items-center gap-2">
               <input
                 type="search"
-                className="h-8 w-52 rounded-md border border-slate-300 px-2 text-sm outline-none focus:border-sky-500"
+                className="h-8 w-52 rounded-md border border-slate-300 px-2 text-sm outline-none focus:border-nas-accent"
                 value={memberSearchQuery}
                 onChange={(event) => setMemberSearchQuery(event.target.value)}
                 placeholder="회원 이름·아이디 검색"
@@ -748,7 +748,7 @@ export default function MembersSettingsPanel() {
                     key={member.id}
                     className={`grid grid-cols-[minmax(0,1fr)_7.5rem_11.5rem] items-center gap-x-3 px-3 py-2.5 ${
                       editingMemberId === member.id
-                        ? 'bg-sky-50'
+                        ? 'bg-nas-accentSoft'
                         : guestRow
                           ? 'bg-slate-50'
                           : 'bg-white'
@@ -836,7 +836,7 @@ export default function MembersSettingsPanel() {
               <span className="text-xs font-medium text-slate-600">로그인 아이디</span>
               <input
                 type="text"
-                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-500 disabled:bg-slate-100 disabled:text-slate-500"
+                className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-nas-accent disabled:bg-slate-100 disabled:text-slate-500"
                 value={memberLoginId}
                 onChange={(event) => setMemberLoginId(event.target.value)}
                 placeholder="로그인 아이디"
@@ -849,7 +849,7 @@ export default function MembersSettingsPanel() {
                 <label className="block space-y-1">
                   <span className="text-xs font-medium text-slate-600">역할</span>
                   <select
-                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-500"
+                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-nas-accent"
                     value={memberRole}
                     onChange={(event) =>
                       setMemberRole(event.target.value === 'super_admin' ? 'super_admin' : 'member')
@@ -875,7 +875,7 @@ export default function MembersSettingsPanel() {
                 <span className="text-xs font-medium text-slate-600">비밀번호</span>
                 <input
                   type="text"
-                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-sky-500"
+                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-nas-accent"
                   value={memberPassword}
                   onChange={(event) => setMemberPassword(event.target.value)}
                   placeholder={
@@ -908,7 +908,7 @@ export default function MembersSettingsPanel() {
               ) : null}
               <button
                 type="button"
-                className="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+                className="rounded-md bg-nas-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-nas-accentHover disabled:opacity-50"
                 disabled={saving}
                 onClick={() => void handleMemberSubmit()}
               >

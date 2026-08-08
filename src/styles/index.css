@@ -3,6 +3,22 @@
 @tailwind utilities;
 
 @layer base {
+  /*
+   * Accent theme defaults (설정 → 일반 → 테마 색상 overwrites these at runtime).
+   * Values are `r g b` channels so Tailwind's `/opacity` modifiers keep working.
+   * Derived from #3b82f6 by shared/theme.js — regenerate there, not by hand.
+   */
+  :root {
+    --nas-accent: 59 130 246;
+    --nas-accent-hover: 48 107 202;
+    --nas-accent-soft: 235 243 254;
+    --nas-accent-soft-hover: 220 233 253;
+    --nas-accent-border: 186 211 252;
+    --nas-accent-text: 32 72 135;
+    --nas-sidebar: 21 38 71;
+    --nas-sidebar-hover: 52 75 111;
+  }
+
   html,
   body,
   #root {
@@ -69,7 +85,7 @@
 
   .sidebar-resize-handle:hover,
   .sidebar-resize-handle--active {
-    background: rgb(59 130 246 / 0.28);
+    background: rgb(var(--nas-accent) / 0.28);
   }
 
   body.sidebar-resize-active {
@@ -123,7 +139,7 @@
   }
 
   .markdown-preview a {
-    @apply text-blue-600 underline hover:text-blue-800;
+    @apply text-nas-accent underline hover:text-nas-accentText;
   }
 
   .markdown-preview hr {

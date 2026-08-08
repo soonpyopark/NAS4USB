@@ -7,6 +7,13 @@ import { isElectronRenderer } from '../../lib/runtime.js';
 /**
  * @typedef {import('../../../shared/webServerConfig.js').WebServerMode} WebServerMode
  * @typedef {{
+ *   supported: boolean,
+ *   enabled: boolean,
+ *   startHidden: boolean,
+ *   execPath: string,
+ *   reason: string,
+ * }} AutoLaunchState
+ * @typedef {{
  *   running: boolean,
  *   port: number | null,
  *   configuredPort: number,
@@ -14,6 +21,7 @@ import { isElectronRenderer } from '../../lib/runtime.js';
  *   hostname: string,
  *   addresses: string[],
  *   appUrl: string | null,
+ *   autoLaunch: AutoLaunchState,
  * }} ServerInfo
  */
 
@@ -22,7 +30,7 @@ const BUTTON_CLASS =
 const DANGER_BUTTON_CLASS =
   'rounded-md border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50';
 const PRIMARY_BUTTON_CLASS =
-  'rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50';
+  'rounded-md bg-nas-accent px-3 py-1.5 text-sm font-medium text-white hover:bg-nas-accentHover disabled:opacity-50';
 
 /**
  * @param {ServerInfo | null} info
@@ -240,7 +248,7 @@ export default function ServerSettingsPanel() {
             max={65535}
             inputMode="numeric"
             aria-label="서버 포트"
-            className="w-32 rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-800 outline-none focus:border-sky-500"
+            className="w-32 rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-800 outline-none focus:border-nas-accent"
             value={portDraft}
             disabled={busy}
             onChange={(event) => setPortDraft(event.target.value)}

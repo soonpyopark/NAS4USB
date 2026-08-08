@@ -57,7 +57,6 @@ export default function TipTapEditorShell({
   const [collabUser, setCollabUser] = useState({ name: '사용자', color: '#2563eb' });
   const [showHistory, setShowHistory] = useState(false);
   const [exportingHtml, setExportingHtml] = useState(false);
-  const [exportingHwpx, setExportingHwpx] = useState(false);
 
   const editorRef = useRef(/** @type {import('@tiptap/core').Editor | null} */ (null));
   const diskRevisionRef = useRef('');
@@ -206,7 +205,7 @@ export default function TipTapEditorShell({
   );
 
   const handleExportHtml = useCallback(async () => {
-    if (exportingHtml || exportingHwpx || !editorRef.current) return;
+    if (exportingHtml || !editorRef.current) return;
     setExportingHtml(true);
     setLoadError(null);
     try {
@@ -227,31 +226,7 @@ export default function TipTapEditorShell({
     } finally {
       setExportingHtml(false);
     }
-  }, [exportingHtml, exportingHwpx, fileName, relativePath]);
-
-  const handleExportHwpx = useCallback(async () => {
-    if (exportingHtml || exportingHwpx || !editorRef.current) return;
-    setExportingHwpx(true);
-    setLoadError(null);
-    try {
-      const { exportLiveTiptapContentAsHwpx } = await import('../../lib/tiptap/exportHwpx.js');
-      const saved = await exportLiveTiptapContentAsHwpx(
-        relativePath,
-        fileName,
-        editorRef.current.getJSON(),
-      );
-      if (!saved) return;
-      const { showAppAlert } = await import('../../lib/nativeDialog.js');
-      await showAppAlert({
-        title: 'HWPX 내보내기',
-        body: `내보냈습니다.\n${saved.absolutePath ?? saved.fileName}`,
-      });
-    } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'HWPX 내보내기에 실패했습니다.');
-    } finally {
-      setExportingHwpx(false);
-    }
-  }, [exportingHtml, exportingHwpx, fileName, relativePath]);
+  }, [exportingHtml, fileName, relativePath]);
 
   const handleClose = useCallback(async () => {
     if (closingRef.current) return;
@@ -290,8 +265,6 @@ export default function TipTapEditorShell({
         onShowHistory={() => setShowHistory(true)}
         onExportHtml={isLoading || shareReadOnly ? undefined : handleExportHtml}
         exportingHtml={exportingHtml}
-        onExportHwpx={isLoading || shareReadOnly ? undefined : handleExportHwpx}
-        exportingHwpx={exportingHwpx}
         onSave={handleSave}
         onClose={handleClose}
         allowClose={allowClose}

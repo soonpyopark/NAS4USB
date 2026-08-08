@@ -76,7 +76,11 @@ window.nas4usb = {
     update: () => {},
   },
   auth: {
-    login: ({ id, password }) => {},
+    login: ({ id, password, rememberMe }) => {},
+    showDefaultAdminHint: () => {},
+    bindToken: (token) => {},
+    bindShareToken: (token) => {},
+    logout: () => {},
   },
   share: {
     getMap: () => {},
@@ -107,11 +111,13 @@ window.nas4usb = {
   settings: {
     get: () => {},
     getGuestPermissions: () => {},
+    getTheme: () => {},
     update: (patch) => {},
   },
   server: {
     getInfo: () => {},
     applyConfig: (patch) => {},
+    setAutoLaunch: (options) => {},
     allowFirewall: (port) => {},
     removeFirewall: (port) => {},
   },

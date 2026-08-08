@@ -2,6 +2,8 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.jsx';
 import { initNas4usb } from './lib/initNas4usb.js';
+import { restoreAdminSession } from './hooks/useAdminAuth.js';
+import { loadAndApplyAccentColor } from './lib/theme.js';
 import { APP_ICON_URL, APP_NAME } from '../shared/constants.js';
 import './styles/index.css';
 
@@ -25,6 +27,10 @@ root.render(
 );
 
 initNas4usb()
+  // Bind (or discard) the stored session before App mounts, so the very first
+  // data fetch already carries the right identity.
+  .then(() => restoreAdminSession().catch(() => null))
+  .then(() => loadAndApplyAccentColor())
   .then(() => {
     root.render(
       <React.StrictMode>

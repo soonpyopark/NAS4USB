@@ -86,7 +86,7 @@ export default function FileList({
               type="button"
               className={`group relative flex min-w-0 flex-col items-center gap-2 overflow-hidden rounded-lg border p-3 text-center transition-colors ${
                 selected
-                  ? 'border-nas-accent bg-blue-50'
+                  ? 'border-nas-accent bg-nas-accentSoft'
                   : 'border-transparent hover:border-nas-border hover:bg-slate-50'
               }`}
               onClick={(event) => onSelect(entry, event)}
@@ -171,7 +171,7 @@ export default function FileList({
               <tr
                 key={entry.relativePath}
                 className={`cursor-pointer border-t border-nas-border ${
-                  selected ? 'bg-blue-50' : 'hover:bg-slate-50'
+                  selected ? 'bg-nas-accentSoft' : 'hover:bg-slate-50'
                 }`}
                 onClick={(event) => onSelect(entry, event)}
                 onDoubleClick={() => onOpen(entry)}

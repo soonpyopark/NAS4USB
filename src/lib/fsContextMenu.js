@@ -38,8 +38,6 @@ function openFileMenuLabel(entry) {
  *   canDownload?: boolean,
  *   onExportHtml?: () => void,
  *   canExportHtml?: boolean,
- *   onExportHwpx?: () => void,
- *   canExportHwpx?: boolean,
  *   canEditOpen?: boolean,
  *   isAdminLoggedIn?: boolean,
  *   canWrite?: boolean,
@@ -67,8 +65,6 @@ export function buildEntryContextMenuItems({
   canDownload = false,
   onExportHtml,
   canExportHtml = false,
-  onExportHwpx,
-  canExportHwpx = false,
   canEditOpen = true,
   isAdminLoggedIn = true,
   canWrite = true,
@@ -151,12 +147,6 @@ export function buildEntryContextMenuItems({
         label: 'HTML로 내보내기',
         disabled: !onExportHtml || !canExportHtml,
         onClick: () => onExportHtml?.(),
-      },
-      {
-        id: 'export-hwpx',
-        label: 'HWPX 내보내기',
-        disabled: !onExportHwpx || !canExportHwpx,
-        onClick: () => onExportHwpx?.(),
       },
       {
         id: 'properties',
@@ -266,12 +256,6 @@ export function buildEntryContextMenuItems({
       label: 'HTML로 내보내기',
       disabled: !onExportHtml || !canExportHtml,
       onClick: () => onExportHtml?.(),
-    },
-    {
-      id: 'export-hwpx',
-      label: 'HWPX 내보내기',
-      disabled: !onExportHwpx || !canExportHwpx,
-      onClick: () => onExportHwpx?.(),
     },
     ...sharedItems,
   ];

@@ -16,6 +16,7 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+.nas4usb-sessions.json
 .nas4usb-shares.json
 .nas4usb-file-access.json
 .nas4usb-favorites.json

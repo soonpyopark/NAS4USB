@@ -13,7 +13,7 @@ export default function Breadcrumb({ currentPath, onNavigate }) {
       <button
         type="button"
         onClick={() => onNavigate('.')}
-        className="rounded px-1.5 py-0.5 text-nas-accent hover:bg-blue-50"
+        className="rounded px-1.5 py-0.5 text-nas-accent hover:bg-nas-accentSoft"
       >
         홈
       </button>
@@ -33,7 +33,7 @@ export default function Breadcrumb({ currentPath, onNavigate }) {
               <button
                 type="button"
                 onClick={() => onNavigate(path)}
-                className="truncate rounded px-1.5 py-0.5 text-nas-accent hover:bg-blue-50"
+                className="truncate rounded px-1.5 py-0.5 text-nas-accent hover:bg-nas-accentSoft"
               >
                 {formatBreadcrumbSegment(segment)}
               </button>

@@ -6,6 +6,7 @@ import {
   DEFAULT_GUEST_PERMISSIONS,
   DEFAULT_LOGGED_IN_PERMISSIONS,
 } from '../shared/guestPermissions.js';
+import { DEFAULT_ACCENT_COLOR } from '../shared/theme.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -91,12 +92,16 @@ export async function seedPortableData(portableDir) {
     allowedIpCidrs: [],
     guestPermissions: { ...DEFAULT_GUEST_PERMISSIONS },
     loggedInPermissions: { ...DEFAULT_LOGGED_IN_PERMISSIONS },
+    themeAccentColor: DEFAULT_ACCENT_COLOR,
   };
   await fs.writeFile(
     path.join(portableDir, '.nas4usb-settings.json'),
     `${JSON.stringify(settings, null, 2)}\n`,
     'utf8',
   );
+
+  // A dev machine's "로그인 유지" tokens must never ship inside a build.
+  await fs.rm(path.join(portableDir, '.nas4usb-sessions.json'), { force: true });
 
   await copyFileIfMissing(path.join(projectRoot, '.env.example'), path.join(portableDir, '.env.example'));
 }

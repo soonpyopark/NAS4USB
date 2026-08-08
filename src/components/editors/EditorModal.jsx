@@ -45,12 +45,8 @@ export default function EditorModal({
   onShowHistory,
   onExportHtml,
   exportingHtml = false,
-  onExportHwpx,
-  exportingHwpx = false,
   children,
 }) {
-  const exportBusy = exportingHtml || exportingHwpx;
-
   return (
     <AppModal open editor embedded={fullscreen} onClose={allowClose ? onClose : undefined}>
       <header className="modal-editor-header">
@@ -68,13 +64,8 @@ export default function EditorModal({
 
         <AppModalActions className="modal-editor-header__actions !mb-0 shrink-0">
           {onExportHtml && (
-            <AppModalButton onClick={onExportHtml} disabled={exportBusy}>
+            <AppModalButton onClick={onExportHtml} disabled={exportingHtml}>
               {exportingHtml ? '내보내는 중…' : 'HTML로 내보내기'}
-            </AppModalButton>
-          )}
-          {onExportHwpx && (
-            <AppModalButton onClick={onExportHwpx} disabled={exportBusy}>
-              {exportingHwpx ? '내보내는 중…' : 'HWPX 내보내기'}
             </AppModalButton>
           )}
           {!hideHistory && (

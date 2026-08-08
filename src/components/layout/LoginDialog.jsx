@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 const fieldClass =
-  'w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/15';
+  'w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-nas-accent focus:ring-2 focus:ring-nas-accent/15';
 
 function PasswordVisibilityIcon({ visible }) {
   if (visible) {
@@ -137,7 +137,7 @@ export default function LoginDialog({
         </h2>
         <p className="mt-1 text-sm text-slate-500">회원 계정으로 로그인한 뒤 NAS4USB를 이용합니다.</p>
         {showDefaultAdminHint ? (
-          <p className="mt-2 text-xs leading-snug text-sky-800">
+          <p className="mt-2 text-xs leading-snug text-nas-accentText">
             최초 로그인 ID / PWD : admin / admin1234 (변경 후 사용)
           </p>
         ) : null}
@@ -187,7 +187,7 @@ export default function LoginDialog({
           <label className="inline-flex cursor-pointer select-none items-center gap-2 text-sm text-slate-700">
             <input
               type="checkbox"
-              className="h-4 w-4 rounded border-slate-300 accent-sky-600"
+              className="h-4 w-4 rounded border-slate-300 accent-nas-accent"
               checked={rememberMe}
               disabled={loggingIn}
               onChange={(event) => setRememberMe(event.target.checked)}
@@ -207,7 +207,7 @@ export default function LoginDialog({
             ) : null}
             <button
               type="submit"
-              className="rounded-full bg-sky-600 px-5 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-60"
+              className="rounded-full bg-nas-accent px-5 py-2 text-sm font-medium text-white hover:bg-nas-accentHover disabled:opacity-60"
               disabled={loggingIn || !id.trim() || !password}
             >
               {loggingIn ? '로그인 중…' : '로그인'}

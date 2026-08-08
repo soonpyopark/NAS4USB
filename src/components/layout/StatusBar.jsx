@@ -27,7 +27,7 @@ export default function StatusBar({ paths, syncInfo, currentPath }) {
         <button
           type="button"
           onClick={() => openExternalUrl(APP_BLOG_URL)}
-          className="shrink-0 text-sky-600 transition-colors hover:text-sky-800 hover:underline"
+          className="shrink-0 text-nas-accent transition-colors hover:text-nas-accentText hover:underline"
           title={`브라우저에서 ${APP_BLOG_URL} 열기`}
         >
           {APP_BLOG_URL}

@@ -203,16 +203,24 @@ export function createHttpNas4usbClient() {
     },
 
     auth: {
-      login: ({ id, password }) =>
+      login: ({ id, password, rememberMe }) =>
         apiFetch('/auth/login', {
           method: 'POST',
-          body: JSON.stringify({ id, password }),
+          body: JSON.stringify({ id, password, rememberMe }),
         }),
       showDefaultAdminHint: async () => {
         const result = await apiFetch('/auth/showDefaultAdminHint');
         return Boolean(result?.show);
       },
-      bindToken: (token) => Promise.resolve(true),
+      // No per-connection binding over HTTP; this only reports whether the token still resolves.
+      bindToken: async (token) => {
+        if (!token) return null;
+        try {
+          return await apiFetch('/auth/session', { headers: { 'X-Admin-Token': token } });
+        } catch {
+          return null;
+        }
+      },
       bindShareToken: (token) => Promise.resolve(true),
       logout: () =>
         apiFetch('/auth/logout', {
@@ -312,6 +320,7 @@ export function createHttpNas4usbClient() {
     settings: {
       get: () => apiFetch('/settings'),
       getGuestPermissions: () => apiFetch('/settings/guest-permissions'),
+      getTheme: () => apiFetch('/settings/theme'),
       update: (patch) =>
         apiFetch('/settings', {
           method: 'PUT',

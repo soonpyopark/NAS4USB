@@ -10,6 +10,7 @@ import {
 } from '../shared/guestPermissions.js';
 import { getMemberAccessPermissionsByLoginId } from './membersService.js';
 import { normalizeWebServerMode, normalizeWebServerPort } from '../shared/webServerConfig.js';
+import { DEFAULT_ACCENT_COLOR, normalizeAccentColor } from '../shared/theme.js';
 
 const SETTINGS_FILE = '.nas4usb-settings.json';
 
@@ -23,6 +24,7 @@ const SETTINGS_FILE = '.nas4usb-settings.json';
  *   loggedInPermissions: import('../shared/guestPermissions.js').AccessPermissionFlags,
  *   webServerPort: number | null,
  *   webServerMode: import('../shared/webServerConfig.js').WebServerMode | null,
+ *   themeAccentColor: string,
  * }} AppSettings
  *
  * @typedef {{ isLoggedIn?: boolean, loginId?: string | null } | boolean} AccessAuth
@@ -38,6 +40,7 @@ function emptySettings() {
     loggedInPermissions: { ...DEFAULT_LOGGED_IN_PERMISSIONS },
     webServerPort: null,
     webServerMode: null,
+    themeAccentColor: DEFAULT_ACCENT_COLOR,
   };
 }
 
@@ -73,6 +76,7 @@ async function loadStore(portableRoot) {
       ),
       webServerPort: normalizeWebServerPort(parsed?.webServerPort),
       webServerMode: normalizeWebServerMode(parsed?.webServerMode),
+      themeAccentColor: normalizeAccentColor(parsed?.themeAccentColor),
     };
   } catch {
     return emptySettings();
@@ -123,6 +127,17 @@ export async function getAllowedIpCidrs(portableRoot = getPortableRoot()) {
 export async function getGuestPermissions(portableRoot = getPortableRoot()) {
   const settings = await loadStore(portableRoot);
   return settings.guestPermissions;
+}
+
+/**
+ * Readable without authentication: every client needs the accent colour to paint
+ * its first frame, including guests and share-link visitors.
+ *
+ * @param {string} [portableRoot]
+ */
+export async function getThemeAccentColor(portableRoot = getPortableRoot()) {
+  const settings = await loadStore(portableRoot);
+  return settings.themeAccentColor;
 }
 
 /**
@@ -190,6 +205,9 @@ export async function updateAppSettings(patch, portableRoot = getPortableRoot())
   }
   if (patch && 'webServerMode' in patch) {
     settings.webServerMode = normalizeWebServerMode(patch.webServerMode);
+  }
+  if (patch && 'themeAccentColor' in patch) {
+    settings.themeAccentColor = normalizeAccentColor(patch.themeAccentColor);
   }
   await saveStore(portableRoot, settings);
   return settings;
