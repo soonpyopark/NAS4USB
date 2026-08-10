@@ -1,6 +1,7 @@
 import {
   RELEASES_PAGE_URL,
   isUpdateAvailable,
+  resolveUpdateKind,
   versionLabel,
 } from '../../shared/updateCheck.js';
 import { openExternalUrl } from './openExternal.js';
@@ -37,9 +38,21 @@ export async function presentUpdateCheckResult(result, dialog) {
   }
 
   if (isUpdateAvailable(result)) {
+    const kind = resolveUpdateKind(result);
+    const latest = versionLabel(result.latest || '');
+    const stampHint =
+      kind === 'build' && result.latestBuildStamp
+        ? `\n최신 빌드: ${result.latestBuildStamp}`
+        : '';
+    const currentHint = result.currentBuildStamp
+      ? `${current} (${result.currentBuildStamp})`
+      : current;
     const open = await dialog.confirm({
       title,
-      body: `새 버전이 있습니다: ${versionLabel(result.latest || '')}\n\n현재 버전: ${current}`,
+      body:
+        kind === 'build'
+          ? `같은 버전의 새 빌드가 있습니다: ${latest}\n\n현재 버전: ${currentHint}${stampHint}`
+          : `새 버전이 있습니다: ${latest}\n\n현재 버전: ${currentHint}${stampHint}`,
       confirmLabel: '다운로드',
       cancelLabel: '나중에',
     });
@@ -47,9 +60,12 @@ export async function presentUpdateCheckResult(result, dialog) {
     return;
   }
 
+  const currentHint = result.currentBuildStamp
+    ? `${current} (${result.currentBuildStamp})`
+    : current;
   await dialog.alert({
     title,
-    body: `최신 버전입니다.\n\n현재 버전: ${current}`,
+    body: `최신 버전입니다.\n\n현재 버전: ${currentHint}`,
   });
 }
 

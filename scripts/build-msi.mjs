@@ -1,13 +1,18 @@
 #!/usr/bin/env node
 /**
  * Build a per-user Windows MSI for NAS4USB (Electron), modeled after the
- * "My Desktop Calendar" project's WiX-based build:msi flow.
+ * Neo Desktop Calendar WiX-based build:msi flow.
  * Requires WiX CLI 7+ (winget install WiXToolset.WiXCLI) and: wix eula accept wix7
  *
  * Flow:
- * 1) build renderer + package Electron as an unpacked Windows "dir" build
- * 2) stage the unpacked build → msi/NAS4USB/ (app data/settings excluded — see stageForMsi)
- * 3) wix build Product.wxs → msi/NAS4USB v{version}_YYMMDD_HHMMSS.msi
+ * 1) stamp APP_BUILD_STAMP (same YYMMDD_HHMMSS as MSI filename) unless NAS4USB_SKIP_STAMP
+ * 2) build renderer + package Electron as unpacked dir (unless NAS4USB_SKIP_PUBLISH)
+ * 3) stage → msi/NAS4USB/ then wix build → msi/NAS4USB v{version}_{stamp}.msi
+ *
+ * Env (used by build:release):
+ *   NAS4USB_BUILD_STAMP=YYMMDD_HHMMSS
+ *   NAS4USB_SKIP_STAMP=1
+ *   NAS4USB_SKIP_PUBLISH=1  — reuse .dist-build/release unpack
  */
 
 import { execSync } from 'node:child_process';
@@ -17,12 +22,17 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { APP_NAME, APP_VERSION, APP_BLOG_URL } from '../shared/constants.js';
 import {
+  RELEASE_STAGING_DIR,
   buildRenderer,
   findUnpackedDir,
   packagePlatform,
   pathExists,
   projectRoot,
+  resolveSharedBuildStamp,
   seedPortableData,
+  shouldSkipPublish,
+  shouldSkipStamp,
+  syncBuildStamp,
 } from './build-dist-common.mjs';
 
 const STAGING_DIR = path.join(projectRoot, '.dist-build', 'win-msi');
@@ -30,6 +40,8 @@ const MSI_DIR = path.join(projectRoot, 'msi');
 const STAGE_DIR = path.join(MSI_DIR, APP_NAME);
 const PRODUCT_WXS = path.join(MSI_DIR, 'Product.wxs');
 let wixCmd = 'wix';
+/** @type {string} */
+let buildStamp = '';
 
 function log(msg) {
   console.log(`[msi] ${msg}`);
@@ -46,21 +58,15 @@ function readVersion() {
   return match?.[1] ?? APP_VERSION;
 }
 
-function toMsiVersion(version, buildStamp = new Date()) {
+function toMsiVersion(version, stampDate = new Date()) {
   const parts = String(version).split('.').map((p) => Number.parseInt(p, 10) || 0);
   while (parts.length < 3) {
     parts.push(0);
   }
   // 4th part must change every MSI build so Windows Installer treats it as an upgrade
   // even when APP_VERSION (x.y.z) is unchanged. Each MSI version field max is 65535.
-  const revision = Math.floor(buildStamp.getTime() / 60_000) % 65535;
+  const revision = Math.floor(stampDate.getTime() / 60_000) % 65535;
   return `${parts[0]}.${parts[1]}.${parts[2]}.${revision || 1}`;
-}
-
-function formatTimestamp(date = new Date()) {
-  const pad = (n) => String(n).padStart(2, '0');
-  const yy = String(date.getFullYear()).slice(2);
-  return `${yy}${pad(date.getMonth() + 1)}${pad(date.getDate())}_${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
 }
 
 function resolveWixCmd() {
@@ -107,6 +113,11 @@ async function findMainExe(dir) {
 }
 
 async function packageUnpackedBuild() {
+  if (shouldSkipPublish()) {
+    log(`reusing publish output → ${RELEASE_STAGING_DIR}`);
+    return findUnpackedDir(RELEASE_STAGING_DIR, /^win-/);
+  }
+
   await fsp.rm(STAGING_DIR, { recursive: true, force: true });
   buildRenderer();
   packagePlatform('--win', STAGING_DIR);
@@ -128,7 +139,13 @@ async function stageForMsi(winUnpackedDir) {
     throw new Error('build/icon.ico not found — run npm run prepare:icons first');
   }
 
-  for (const name of ['allow-firewall-inbound.bat', 'stop_server.bat', '.env.example', 'LICENSE']) {
+  for (const name of [
+    'allow-firewall-inbound.bat',
+    'stop_server.bat',
+    '.env.example',
+    'LICENSE',
+    'THIRD_PARTY_NOTICES.md',
+  ]) {
     const src = path.join(projectRoot, name);
     if (await pathExists(src)) {
       await fsp.copyFile(src, path.join(STAGE_DIR, name));
@@ -151,8 +168,7 @@ function buildMsi() {
   const productVersion = toMsiVersion(version);
   // New ProductCode every build + MajorUpgrade AllowSameVersionUpgrades removes prior ARP entries.
   const productCode = randomUUID().toUpperCase();
-  const timestamp = formatTimestamp();
-  const outputName = `${APP_NAME} v${version}_${timestamp}.msi`;
+  const outputName = `${APP_NAME} v${version}_${buildStamp}.msi`;
   const outputPath = path.join(MSI_DIR, outputName);
 
   fs.mkdirSync(MSI_DIR, { recursive: true });
@@ -165,18 +181,30 @@ function buildMsi() {
   const sizeMb = (fs.statSync(outputPath).size / (1024 * 1024)).toFixed(1);
   log(`output: ${outputPath} (${sizeMb} MB)`);
   log(`ProductVersion=${productVersion} ProductCode={${productCode}}`);
+  log(`build stamp: ${buildStamp}`);
   log(`site: ${APP_BLOG_URL}`);
+  return outputPath;
 }
 
 function cleanupStage() {
   fs.rmSync(STAGE_DIR, { recursive: true, force: true });
-  fs.rmSync(STAGING_DIR, { recursive: true, force: true });
+  if (!shouldSkipPublish()) {
+    fs.rmSync(STAGING_DIR, { recursive: true, force: true });
+  }
   log('removed staging folders');
 }
 
 async function main() {
   if (process.platform !== 'win32') {
     throw new Error('MSI build must run on Windows.');
+  }
+
+  buildStamp = resolveSharedBuildStamp();
+  if (!shouldSkipStamp()) {
+    log(`stamping APP_BUILD_STAMP=${buildStamp}`);
+    syncBuildStamp(buildStamp);
+  } else {
+    log(`reusing APP_BUILD_STAMP=${buildStamp} (NAS4USB_SKIP_STAMP)`);
   }
 
   ensureWix();

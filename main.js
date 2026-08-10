@@ -7,6 +7,7 @@ import { resolveUniqueName } from './shared/uniqueName.js';
 import {
   RELEASES_PAGE_URL,
   isUpdateAvailable,
+  resolveUpdateKind,
   versionLabel,
 } from './shared/updateCheck.js';
 import { resolveAppIconPath, resolveAppIconImagePath } from './electron/appIcon.js';
@@ -420,11 +421,23 @@ async function checkForUpdatesFromTray() {
     }
 
     if (isUpdateAvailable(result)) {
+      const kind = resolveUpdateKind(result);
+      const latest = versionLabel(result.latest || '');
+      const stampHint =
+        kind === 'build' && result.latestBuildStamp
+          ? `\n최신 빌드: ${result.latestBuildStamp}`
+          : '';
+      const currentHint = result.currentBuildStamp
+        ? `${current} (${result.currentBuildStamp})`
+        : current;
       const box = {
         type: 'info',
         title: '업데이트 확인',
-        message: `새 버전이 있습니다: ${versionLabel(result.latest || '')}`,
-        detail: `현재 버전: ${current}`,
+        message:
+          kind === 'build'
+            ? `같은 버전의 새 빌드가 있습니다: ${latest}`
+            : `새 버전이 있습니다: ${latest}`,
+        detail: `현재 버전: ${currentHint}${stampHint}`,
         buttons: ['다운로드', '나중에'],
         defaultId: 0,
         cancelId: 1,
@@ -439,11 +452,14 @@ async function checkForUpdatesFromTray() {
       return;
     }
 
+    const currentHint = result.currentBuildStamp
+      ? `${current} (${result.currentBuildStamp})`
+      : current;
     const box = {
       type: 'info',
       title: '업데이트 확인',
       message: '최신 버전입니다.',
-      detail: `현재 버전: ${current}`,
+      detail: `현재 버전: ${currentHint}`,
       buttons: ['확인'],
       defaultId: 0,
       cancelId: 0,

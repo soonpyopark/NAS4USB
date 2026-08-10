@@ -74,7 +74,7 @@ npm run dev
 npm run build:dist:exe
 ```
 
-출력: `exe/NAS4USB_<버전>_<타임스탬프>/`
+출력: `exe/NAS4USB_<버전>_<타임스탬프>/` (+ 동일 이름 `.zip`)
 
 1. 폴더 전체를 USB에 복사  
 2. `NAS4USB.exe` 실행  
@@ -84,11 +84,49 @@ npm run build:dist:exe
 
 자세한 안내는 빌드 폴더의 `README-USB.txt`를 참고하세요.
 
+### MSI 설치 패키지
+
+```bat
+npm run build:msi
+```
+
+출력: `msi/NAS4USB v<버전>_<타임스탬프>.msi` (WiX CLI 7+ 필요)
+
+### 릴리스 빌드 (MSI + portable, 동일 빌드 시각)
+
+```bat
+npm run build:release
+```
+
+Electron을 **한 번만** 패키징한 뒤, 같은 `YYMMDD_HHMMSS` 스탬프로 MSI와 portable zip을 만듭니다.
+
+| 산출물 | 경로 |
+|--------|------|
+| MSI | `msi/NAS4USB v{version}_{stamp}.msi` |
+| Portable zip (GitHub용) | `msi/NAS4USB v{version}_{stamp}_portable.zip` |
+| Portable 폴더 | `exe/NAS4USB_{version}_{stamp}/` |
+
+앱 안의 `APP_BUILD_STAMP`도 같은 값으로 심어져, GitHub Releases **업데이트 확인**이 버전뿐 아니라 빌드 시각을 비교합니다.  
+(같은 태그로 MSI만 다시 올려도 스탬프가 더 새로우면 “새 빌드”로 안내됩니다.)
+
+GitHub Release에 올릴 때 에셋 이름에 `_YYMMDD_HHMMSS`를 유지하세요.
+
 ### macOS 빌드 (macOS에서만)
 
 ```bat
 npm run build:dist:mac
 ```
+
+---
+
+## 앱 업데이트 확인
+
+트레이·상단바의 **업데이트 확인**은 GitHub `releases/latest`를 조회합니다.
+
+1. 원격 버전(semver)이 더 높으면 → 새 버전  
+2. 버전이 같고, 릴리스 에셋 이름의 빌드 스탬프가 로컬 `APP_BUILD_STAMP`보다 새면 → 같은 버전의 새 빌드  
+
+스탬프는 `build:release` / `build:msi` / `build:dist:exe` 시 `shared/constants.js`의 `APP_BUILD_STAMP`에 기록됩니다.
 
 ---
 
@@ -127,6 +165,9 @@ npm run build:dist:exe
 | `npm run build` | rhwp-studio · wb4s · Vite 프로덕션 빌드 |
 | `npm run build:dist:exe` | Windows portable 폴더 생성 |
 | `npm run build:dist:mac` | macOS `.app` portable 폴더 생성 |
+| `npm run build:msi` | Windows MSI 설치 패키지 생성 (WiX CLI 필요) |
+| `npm run build:release` | MSI + portable을 동일 빌드 스탬프로 생성 |
+| `npm run sync-version` | `APP_VERSION` → package.json / MSI License 동기화 |
 | `npm run update:all` | 에디터 코어 + npm 의존성 업데이트 |
 | `npm run build:update_all` | 업데이트 + Windows exe 빌드 |
 
@@ -146,8 +187,10 @@ NAS4USB/
 ├── public/wb4s-editor/     화이트보드 embed 번들
 ├── scripts/                빌드·배포·update_all 스크립트
 ├── update_all.bat          코어 일괄 업데이트 (Windows)
-├── data/                   기본 문서 저장소 (0000001/ …)
+├── data/                   기본 문서 저장소
 ├── build/                  앱 아이콘 (prepare:icons)
+├── LICENSE                 AGPL-3.0
+├── THIRD_PARTY_NOTICES.md  사용 오픈소스 고지
 └── exe/                    build:dist:exe 출력
 ```
 
@@ -155,12 +198,14 @@ NAS4USB/
 
 ## 에디터 코어 (현재 기준)
 
-| 코어 | 패키지 / 경로 |
-|------|----------------|
-| HWPX (rhwp) | `@rhwp/core`, `@rhwp/editor` |
-| Spreadsheet | `@fortune-sheet/react` |
-| Whiteboard | `lib/updates/wb4s` / upstream WhiteBoard4Share |
-| TipTap | `@tiptap/react`, `@tiptap/starter-kit` ([ueberdosis/tiptap](https://github.com/ueberdosis/tiptap)) |
+| 코어 | 패키지 / 경로 | 라이선스 (업스트림) |
+|------|----------------|---------------------|
+| HWPX (rhwp) | `@rhwp/core`, `@rhwp/editor` | MIT |
+| Spreadsheet | `@fortune-sheet/react` | MIT |
+| Whiteboard | `lib/updates/wb4s` / WhiteBoard4Share | MIT |
+| TipTap | `@tiptap/react`, `@tiptap/starter-kit` | MIT |
+| PDF | `pdfjs-dist` (PDF.js) | Apache-2.0 |
+| 실시간 동기화 | `yjs`, `y-websocket` | MIT |
 
 버전 기록: `lib/cores-manifest.json`
 
@@ -168,10 +213,25 @@ NAS4USB/
 
 ## 라이선스
 
-이 프로젝트는 [MIT License](LICENSE)입니다.
+이 프로젝트(NAS4USB)는 **[GNU Affero General Public License v3.0](LICENSE)** (AGPL-3.0)입니다.
 
-번들된 rhwp, Electron, Chromium, npm 패키지 등 서드파티는 각 라이선스를 따릅니다.  
-`LICENSE` 하단 **Third-Party Components** 표를 참고하세요.
+- 전체 전문: [`LICENSE`](LICENSE)
+- 사용·번들하는 오픈소스 고지: [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)
+
+NAS4USB를 네트워크 서버로 제공·수정해 배포하는 경우 AGPL의 소스 제공 의무(§13 등)가 적용될 수 있습니다.  
+Electron/Chromium 및 npm 패키지 등 서드파티는 각 라이선스를 따르며, AGPL이 해당 컴포넌트를 재라이선스하지 않습니다.
+
+주요 서드파티(요약):
+
+| 구분 | 대표 컴포넌트 | 라이선스 |
+|------|---------------|----------|
+| 데스크톱 런타임 | Electron, Chromium | MIT / Chromium licenses |
+| UI | React, Vite, Tailwind CSS | MIT |
+| 협업 | Yjs, y-websocket | MIT |
+| 문서 편집 | TipTap, rhwp, FortuneSheet, WhiteBoard4Share | MIT |
+| 문서/미디어 | PDF.js, SheetJS (`xlsx`), JSZip, KaTeX | Apache-2.0 / MIT 등 |
+
+자세한 표와 직접 의존성 목록은 `THIRD_PARTY_NOTICES.md`와 `LICENSE` 하단 **Third-Party Components**를 참고하세요.
 
 ---
 

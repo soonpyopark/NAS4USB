@@ -1,7 +1,19 @@
+#!/usr/bin/env node
+/**
+ * Build Windows portable folder + zip for NAS4USB.
+ *
+ * Env (used by build:release):
+ *   NAS4USB_BUILD_STAMP=YYMMDD_HHMMSS
+ *   NAS4USB_SKIP_STAMP=1
+ *   NAS4USB_SKIP_PUBLISH=1  — reuse .dist-build/release unpack
+ *   NAS4USB_RELEASE_PORTABLE=1 — also write msi/NAS4USB v{ver}_{stamp}_portable.zip
+ */
+
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import {
+  RELEASE_STAGING_DIR,
   buildRenderer,
   createVersionedPortableDir,
   findUnpackedDir,
@@ -9,11 +21,14 @@ import {
   packagePlatform,
   pathExists,
   projectRoot,
+  resolveSharedBuildStamp,
   seedPortableData,
+  shouldSkipPublish,
+  shouldSkipStamp,
+  syncBuildStamp,
 } from './build-dist-common.mjs';
 
 const stagingDir = path.join(projectRoot, '.dist-build', 'win');
-const portableDir = await createVersionedPortableDir('exe');
 
 /**
  * Prefer installed 7-Zip on this PC, then PATH.
@@ -43,16 +58,18 @@ async function resolve7zPath() {
 /**
  * Zip portable folder as sibling `{folderName}.zip` via 7-Zip.
  * @param {string} portableDirPath
+ * @param {string} [zipPath]
  */
-async function zipPortableFolder(portableDirPath) {
+async function zipPortableFolder(portableDirPath, zipPath) {
   const sevenZip = await resolve7zPath();
   const parentDir = path.dirname(portableDirPath);
   const folderName = path.basename(portableDirPath);
-  const zipPath = path.join(parentDir, `${folderName}.zip`);
+  const outZip = zipPath ?? path.join(parentDir, `${folderName}.zip`);
 
-  await fs.rm(zipPath, { force: true });
+  await fs.mkdir(path.dirname(outZip), { recursive: true });
+  await fs.rm(outZip, { force: true });
 
-  const result = spawnSync(sevenZip, ['a', '-tzip', '-mx=5', zipPath, folderName], {
+  const result = spawnSync(sevenZip, ['a', '-tzip', '-mx=5', outZip, folderName], {
     cwd: parentDir,
     stdio: 'inherit',
     shell: false,
@@ -61,8 +78,8 @@ async function zipPortableFolder(portableDirPath) {
     throw new Error(`7-Zip 압축 실패 (exit ${result.status ?? 1})`);
   }
 
-  console.log(`[build:dist:exe] Zip ready → ${zipPath}`);
-  return zipPath;
+  console.log(`[build:dist:exe] Zip ready → ${outZip}`);
+  return outZip;
 }
 
 async function applyPortableExeIcon(portableDirPath) {
@@ -87,9 +104,11 @@ async function applyPortableExeIcon(portableDirPath) {
   console.log(`[build:dist:exe] Applied NAS4USB icon → ${exeName}`);
 }
 
-async function finalizePortableFolder() {
-  const winUnpacked = await findUnpackedDir(stagingDir, /^win-/);
-  await moveFolder(winUnpacked, portableDir);
+/**
+ * @param {string} portableDir
+ * @param {{ stamp: string, version: string, productName: string }} meta
+ */
+async function finalizePortableFolder(portableDir, meta) {
   await seedPortableData(portableDir);
 
   await fs.copyFile(
@@ -119,6 +138,9 @@ async function finalizePortableFolder() {
 data/ 폴더에 문서가 저장됩니다 (기본값). 다른 경로를 쓰려면 .env 에 DATA_ROOT 를 지정하세요.
 예) DATA_ROOT=data  또는  DATA_ROOT=D:/USB/nas4usb-data
 
+라이선스: LICENSE (AGPL-3.0), 오픈소스 고지: THIRD_PARTY_NOTICES.md
+빌드: v${meta.version} / ${meta.stamp}
+
 exe 와 같은 폴더를 유지해 주세요.
 `;
 
@@ -126,12 +148,52 @@ exe 와 같은 폴더를 유지해 주세요.
   console.log(`\n[build:dist:exe] Windows portable folder ready → ${portableDir}`);
 
   await zipPortableFolder(portableDir);
+
+  // Release uploads use Neo-style asset names under msi/ (stamp parseable by update check).
+  if (process.env.NAS4USB_RELEASE_PORTABLE === '1') {
+    const releaseZip = path.join(
+      projectRoot,
+      'msi',
+      `${meta.productName} v${meta.version}_${meta.stamp}_portable.zip`,
+    );
+    await zipPortableFolder(portableDir, releaseZip);
+  }
 }
 
-if (process.platform !== 'win32') {
-  console.warn('[build:dist:exe] Windows 빌드는 Windows에서 실행하는 것을 권장합니다.');
+async function main() {
+  if (process.platform !== 'win32') {
+    console.warn('[build:dist:exe] Windows 빌드는 Windows에서 실행하는 것을 권장합니다.');
+  }
+
+  const stamp = resolveSharedBuildStamp();
+  if (!shouldSkipStamp()) {
+    console.log(`[build:dist:exe] stamping APP_BUILD_STAMP=${stamp}`);
+    syncBuildStamp(stamp);
+  } else {
+    console.log(`[build:dist:exe] reusing APP_BUILD_STAMP=${stamp} (NAS4USB_SKIP_STAMP)`);
+  }
+
+  const { portableDir, version, productName } = await createVersionedPortableDir('exe', { stamp });
+
+  let winUnpacked;
+  if (shouldSkipPublish()) {
+    console.log(`[build:dist:exe] reusing publish output → ${RELEASE_STAGING_DIR}`);
+    winUnpacked = await findUnpackedDir(RELEASE_STAGING_DIR, /^win-/);
+    await fs.rm(portableDir, { recursive: true, force: true });
+    await fs.cp(winUnpacked, portableDir, { recursive: true });
+  } else {
+    buildRenderer();
+    packagePlatform('--win', stagingDir);
+    winUnpacked = await findUnpackedDir(stagingDir, /^win-/);
+    await moveFolder(winUnpacked, portableDir);
+  }
+
+  await finalizePortableFolder(portableDir, { stamp, version, productName });
 }
 
-buildRenderer();
-packagePlatform('--win', stagingDir);
-await finalizePortableFolder();
+try {
+  await main();
+} catch (error) {
+  console.error('[build:dist:exe] failed:', error instanceof Error ? error.message : error);
+  process.exit(1);
+}

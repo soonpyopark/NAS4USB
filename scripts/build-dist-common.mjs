@@ -12,6 +12,36 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export const projectRoot = path.resolve(__dirname, '..');
 
+/** Shared Electron unpack output used by `build:release` (MSI + portable). */
+export const RELEASE_STAGING_DIR = path.join(projectRoot, '.dist-build', 'release');
+
+/**
+ * Env: NAS4USB_BUILD_STAMP=YYMMDD_HHMMSS — reuse one stamp across MSI/portable.
+ * @returns {string}
+ */
+export function resolveSharedBuildStamp() {
+  const fromEnv = String(process.env.NAS4USB_BUILD_STAMP || '').trim();
+  if (/^\d{6}_\d{6}$/.test(fromEnv)) return fromEnv;
+  return formatBuildTimestamp();
+}
+
+export function shouldSkipStamp() {
+  return process.env.NAS4USB_SKIP_STAMP === '1';
+}
+
+export function shouldSkipPublish() {
+  return process.env.NAS4USB_SKIP_PUBLISH === '1';
+}
+
+/**
+ * Write APP_BUILD_STAMP into shared/constants.js (and sync package meta).
+ * @param {string} stamp
+ */
+export function syncBuildStamp(stamp) {
+  process.env.NAS4USB_BUILD_STAMP = stamp;
+  run('node', ['scripts/sync-version.mjs', `--stamp=${stamp}`]);
+}
+
 export function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
     cwd: projectRoot,
@@ -103,6 +133,12 @@ export async function seedPortableData(portableDir) {
   // A dev machine's "로그인 유지" tokens must never ship inside a build.
   await fs.rm(path.join(portableDir, '.nas4usb-sessions.json'), { force: true });
 
+  await fs.copyFile(path.join(projectRoot, 'LICENSE'), path.join(portableDir, 'LICENSE'));
+  await fs.copyFile(
+    path.join(projectRoot, 'THIRD_PARTY_NOTICES.md'),
+    path.join(portableDir, 'THIRD_PARTY_NOTICES.md'),
+  );
+
   await copyFileIfMissing(path.join(projectRoot, '.env.example'), path.join(portableDir, '.env.example'));
 }
 
@@ -139,15 +175,18 @@ export function sanitizeDirName(name) {
 
 /**
  * @param {string} [baseDirName]
+ * @param {{ stamp?: string, version?: string }} [options]
  */
-export async function createVersionedPortableDir(baseDirName = 'exe') {
-  const { productName, version } = await readPackageMeta();
-  const folderName = `${sanitizeDirName(productName)}_${version}_${formatBuildTimestamp()}`;
+export async function createVersionedPortableDir(baseDirName = 'exe', options = {}) {
+  const { productName, version: pkgVersion } = await readPackageMeta();
+  const version = options.version ?? pkgVersion;
+  const stamp = options.stamp ?? formatBuildTimestamp();
+  const folderName = `${sanitizeDirName(productName)}_${version}_${stamp}`;
   const baseDir = path.join(projectRoot, baseDirName);
   const portableDir = path.join(baseDir, folderName);
   await fs.mkdir(baseDir, { recursive: true });
   console.log(`[build:dist] Output folder: ${baseDirName}/${folderName}`);
-  return portableDir;
+  return { portableDir, stamp, version, productName };
 }
 
 export function buildRenderer() {
