@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-NAS4USB itself is licensed under the **GNU Affero General Public License v3.0**
+NAS4USB itself is licensed under the **MIT License**
 (see [`LICENSE`](LICENSE)). This document lists open-source components that
 NAS4USB uses or ships with. Each component remains under its own license.
 
@@ -93,9 +93,7 @@ but used by the app):
 
 ## Notices
 
-- AGPL-3.0 applies to **NAS4USB first-party source** (application code in this
+- MIT applies to **NAS4USB first-party source** (application code in this
   repository). It does **not** relicense third-party components.
 - When you distribute binaries, keep `LICENSE`, this file, and (for Electron
   builds) `LICENSE.electron.txt` / `LICENSES.chromium.html` available to users.
-- Network use of a modified NAS4USB server triggers AGPL §13 source-offer
-  obligations; see the AGPL text in `LICENSE`.

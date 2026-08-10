@@ -189,7 +189,7 @@ NAS4USB/
 ├── update_all.bat          코어 일괄 업데이트 (Windows)
 ├── data/                   기본 문서 저장소
 ├── build/                  앱 아이콘 (prepare:icons)
-├── LICENSE                 AGPL-3.0
+├── LICENSE                 MIT
 ├── THIRD_PARTY_NOTICES.md  사용 오픈소스 고지
 └── exe/                    build:dist:exe 출력
 ```
@@ -213,13 +213,12 @@ NAS4USB/
 
 ## 라이선스
 
-이 프로젝트(NAS4USB)는 **[GNU Affero General Public License v3.0](LICENSE)** (AGPL-3.0)입니다.
+이 프로젝트(NAS4USB)는 **[MIT License](LICENSE)**입니다.
 
 - 전체 전문: [`LICENSE`](LICENSE)
 - 사용·번들하는 오픈소스 고지: [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)
 
-NAS4USB를 네트워크 서버로 제공·수정해 배포하는 경우 AGPL의 소스 제공 의무(§13 등)가 적용될 수 있습니다.  
-Electron/Chromium 및 npm 패키지 등 서드파티는 각 라이선스를 따르며, AGPL이 해당 컴포넌트를 재라이선스하지 않습니다.
+Electron/Chromium 및 npm 패키지 등 서드파티는 각 라이선스를 따르며, MIT이 해당 컴포넌트를 재라이선스하지 않습니다.
 
 주요 서드파티(요약):
 

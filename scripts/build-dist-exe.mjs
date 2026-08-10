@@ -138,7 +138,7 @@ async function finalizePortableFolder(portableDir, meta) {
 data/ 폴더에 문서가 저장됩니다 (기본값). 다른 경로를 쓰려면 .env 에 DATA_ROOT 를 지정하세요.
 예) DATA_ROOT=data  또는  DATA_ROOT=D:/USB/nas4usb-data
 
-라이선스: LICENSE (AGPL-3.0), 오픈소스 고지: THIRD_PARTY_NOTICES.md
+라이선스: LICENSE (MIT), 오픈소스 고지: THIRD_PARTY_NOTICES.md
 빌드: v${meta.version} / ${meta.stamp}
 
 exe 와 같은 폴더를 유지해 주세요.
