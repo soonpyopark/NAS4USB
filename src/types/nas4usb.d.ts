@@ -1,7 +1,9 @@
 /**
  * @typedef {Object} Nas4usbPaths
  * @property {string} appPath
+ * @property {string} [installRoot]
  * @property {string} dataRoot
+ * @property {string} [defaultDataRoot]
  * @property {string} tempPath
  * @property {boolean} isDev
  */
@@ -113,6 +115,7 @@ window.nas4usb = {
     getGuestPermissions: () => {},
     getTheme: () => {},
     update: (patch) => {},
+    applyDataRoot: (path) => {},
   },
   server: {
     getInfo: () => {},

@@ -21,5 +21,6 @@
   },
   "webServerPort": 3009,
   "webServerMode": "lan",
-  "themeAccentColor": "#ca8a04"
+  "themeAccentColor": "#ca8a04",
+  "dataRoot": "D:\\NAS4USB_Data"
 }

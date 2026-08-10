@@ -1,6 +1,6 @@
 import path from 'node:path';
 import fs from 'node:fs/promises';
-import { TRASH_FOLDER } from '../shared/constants.js';
+import { DEFAULT_DATA_DIR, TRASH_FOLDER } from '../shared/constants.js';
 
 /** @type {{ portableRoot: string, installRoot?: string, dataRoot: string, tempPath: string, isDev: boolean, getServerInfo: () => { port: number, addresses: string[] } } | null} */
 let appContext = null;
@@ -59,10 +59,12 @@ export async function ensureDataRoot() {
 
 export function getAppPaths() {
   const ctx = getAppContext();
+  const portableRoot = ctx.portableRoot;
   return {
-    appPath: ctx.portableRoot,
-    installRoot: ctx.installRoot ?? ctx.portableRoot,
+    appPath: portableRoot,
+    installRoot: ctx.installRoot ?? portableRoot,
     dataRoot: ctx.dataRoot,
+    defaultDataRoot: path.join(portableRoot, DEFAULT_DATA_DIR),
     tempPath: ctx.tempPath,
     isDev: ctx.isDev,
   };

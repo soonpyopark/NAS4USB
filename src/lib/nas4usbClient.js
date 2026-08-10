@@ -326,6 +326,9 @@ export function createHttpNas4usbClient() {
           method: 'PUT',
           body: JSON.stringify(patch ?? {}),
         }),
+      applyDataRoot: async () => {
+        throw new Error('data 루트 변경은 서버 PC의 NAS4USB 앱에서만 할 수 있습니다.');
+      },
     },
 
     members: {

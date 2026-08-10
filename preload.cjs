@@ -111,6 +111,7 @@ contextBridge.exposeInMainWorld('nas4usb', {
     getGuestPermissions: () => ipcRenderer.invoke('settings:getGuestPermissions'),
     getTheme: () => ipcRenderer.invoke('settings:getTheme'),
     update: (patch) => ipcRenderer.invoke('settings:update', patch),
+    applyDataRoot: (path) => ipcRenderer.invoke('settings:applyDataRoot', path),
   },
 
   server: {

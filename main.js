@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell, Tray } f
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { APP_BLOG_URL, APP_NAME, APP_VERSION } from './shared/constants.js';
+import { APP_BLOG_URL, APP_NAME, APP_VERSION, DEFAULT_DATA_DIR } from './shared/constants.js';
 import { resolveUniqueName } from './shared/uniqueName.js';
 import {
   RELEASES_PAGE_URL,
@@ -109,7 +109,7 @@ import {
   restorePath,
   trashPath,
 } from './electron/trashService.js';
-import { getAppSettings, getAccessPermissionsBundle, getEffectiveAccessPermissions, getThemeAccentColor, updateAppSettings } from './electron/settingsService.js';
+import { getAppSettings, getAccessPermissionsBundle, getEffectiveAccessPermissions, getThemeAccentColor, updateAppSettings, normalizeConfiguredDataRoot } from './electron/settingsService.js';
 import {
   listMembers,
   saveMembersPayload,
@@ -1120,6 +1120,41 @@ ipcMain.handle('settings:update', async (event, patch = {}) => {
   return result;
 });
 
+/**
+ * Persist data root under 설정 → 일반, then relaunch so open files / Yjs rooms
+ * bind to the new tree. Pass null/empty to fall back to `{portableRoot}/data`
+ * (and `.env` DATA_ROOT if set).
+ */
+ipcMain.handle('settings:applyDataRoot', async (event, rawPath = null) => {
+  assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
+  const portableRoot = getPortableRoot();
+  let configured = normalizeConfiguredDataRoot(rawPath);
+
+  if (configured) {
+    configured = path.isAbsolute(configured)
+      ? path.normalize(configured)
+      : path.resolve(portableRoot, configured);
+    await fs.promises.mkdir(configured, { recursive: true });
+  }
+
+  const settings = await updateAppSettings({ dataRoot: configured }, portableRoot);
+  const effective = resolveDataRoot(portableRoot, settings.dataRoot);
+
+  setImmediate(() => {
+    isQuitting = true;
+    app.relaunch();
+    app.exit(0);
+  });
+
+  return {
+    ok: true,
+    willRelaunch: true,
+    configured: settings.dataRoot,
+    effective,
+    defaultDataRoot: path.join(portableRoot, DEFAULT_DATA_DIR),
+  };
+});
+
 ipcMain.handle('members:list', async (event) => {
   assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
   return listMembers(getPortableRoot());
@@ -1168,7 +1203,8 @@ if (gotSingleInstanceLock) {
     if (!launchedHidden) createSplashWindow();
 
     const portableRoot = resolvePortableRoot(isDev);
-    const dataRoot = resolveDataRoot(portableRoot);
+    const settings = await getAppSettings(portableRoot);
+    const dataRoot = resolveDataRoot(portableRoot, settings.dataRoot);
     await configureServerFromSettings(portableRoot);
 
     initAppContext({

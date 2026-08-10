@@ -12,18 +12,26 @@ import { applyAccentColor, currentAccentColor } from '../../lib/theme.js';
  *   execPath: string,
  *   reason: string,
  * }} AutoLaunchState
+ *
+ * @typedef {{
+ *   configured: string | null,
+ *   effective: string,
+ *   defaultDataRoot: string,
+ * }} DataRootState
  */
 
 const BUTTON_CLASS =
   'rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50';
 
-/** 설정 → 일반: 시작 프로그램 등록과 앱 강조 색상. */
+/** 설정 → 일반: data 루트, 시작 프로그램 등록, 앱 강조 색상. */
 export default function GeneralSettingsPanel() {
-  const { alert: appAlert, dialog: generalDialog } = useAppConfirm();
+  const { alert: appAlert, confirm: appConfirm, dialog: generalDialog } = useAppConfirm();
   const electron = isElectronRenderer();
 
   /** @type {[AutoLaunchState | null, Function]} */
   const [autoLaunch, setAutoLaunch] = useState(null);
+  /** @type {[DataRootState | null, Function]} */
+  const [dataRoot, setDataRoot] = useState(null);
   const [accent, setAccent] = useState(currentAccentColor);
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState('');
@@ -43,6 +51,28 @@ export default function GeneralSettingsPanel() {
       setLoadError('');
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : '테마 설정을 불러오지 못했습니다.');
+    }
+
+    try {
+      const [settings, paths] = await Promise.all([
+        window.nas4usb.settings.get(),
+        window.nas4usb.getPaths(),
+      ]);
+      const defaultDataRoot =
+        typeof paths?.defaultDataRoot === 'string' && paths.defaultDataRoot
+          ? paths.defaultDataRoot
+          : paths?.dataRoot ?? '';
+      const configured =
+        typeof settings?.dataRoot === 'string' && settings.dataRoot.trim()
+          ? settings.dataRoot.trim()
+          : null;
+      setDataRoot({
+        configured,
+        effective: paths?.dataRoot ?? defaultDataRoot,
+        defaultDataRoot,
+      });
+    } catch {
+      setDataRoot(null);
     }
 
     if (!electron) return;
@@ -69,6 +99,63 @@ export default function GeneralSettingsPanel() {
     } finally {
       setBusy(false);
     }
+  };
+
+  /**
+   * @param {string | null} nextPath
+   * @param {string} confirmBody
+   */
+  const applyDataRootCore = async (nextPath, confirmBody) => {
+    if (!electron) return;
+    const ok = await appConfirm({
+      title: '데이터 폴더',
+      body: confirmBody,
+      confirmLabel: '저장 후 다시 시작',
+    });
+    if (!ok) return;
+    try {
+      await window.nas4usb.settings.applyDataRoot(nextPath);
+    } catch (error) {
+      await appAlert({
+        title: '데이터 폴더',
+        body: error instanceof Error ? error.message : '데이터 폴더를 바꾸지 못했습니다.',
+      });
+      await refresh();
+    }
+  };
+
+  /**
+   * @param {string | null} nextPath
+   * @param {string} confirmBody
+   */
+  const applyDataRoot = (nextPath, confirmBody) =>
+    run(async () => {
+      await applyDataRootCore(nextPath, confirmBody);
+    });
+
+  const chooseDataRoot = () =>
+    run(async () => {
+      if (!electron) return;
+      const picked = await window.nas4usb.dialog.pickDirectory({
+        title: '데이터 저장 폴더 선택',
+      });
+      if (!picked) return;
+      if (dataRoot?.effective && picked === dataRoot.effective && dataRoot.configured) {
+        await appAlert({ title: '데이터 폴더', body: '이미 사용 중인 폴더입니다.' });
+        return;
+      }
+      await applyDataRootCore(
+        picked,
+        `선택한 폴더를 문서 저장 루트로 쓰고 앱을 다시 시작합니다.\n\n${picked}\n\n기존 파일은 자동으로 옮기지 않습니다. 필요하면 직접 복사해 주세요.`,
+      );
+    });
+
+  const resetDataRoot = () => {
+    if (!dataRoot?.configured) return;
+    void applyDataRoot(
+      null,
+      `프로그램 폴더 아래의 기본 data 폴더로 되돌리고 앱을 다시 시작합니다.\n\n${dataRoot.defaultDataRoot}\n\n(.env 에 DATA_ROOT 가 있으면 그 값이 우선합니다.)`,
+    );
   };
 
   /**
@@ -121,6 +208,8 @@ export default function GeneralSettingsPanel() {
     }, 300);
   };
 
+  const usingCustomDataRoot = Boolean(dataRoot?.configured);
+
   return (
     <div className="space-y-8">
       {generalDialog}
@@ -133,6 +222,56 @@ export default function GeneralSettingsPanel() {
           </button>
         </div>
       ) : null}
+
+      <section className="space-y-3">
+        <h3 className="text-sm font-semibold text-slate-800">데이터 폴더</h3>
+        <p className="text-sm leading-relaxed text-slate-600">
+          문서·파일이 저장되는 루트 폴더입니다. 별도로 지정하지 않으면 프로그램 폴더 아래의{' '}
+          <code className="rounded bg-slate-100 px-1 text-[12px]">data</code> 폴더를 사용합니다.
+          변경 후 앱을 다시 시작해야 적용됩니다.
+        </p>
+
+        {dataRoot ? (
+          <div className="space-y-2">
+            <p className="break-all rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-xs text-slate-700">
+              {dataRoot.effective}
+            </p>
+            <p className="text-xs text-slate-500">
+              {usingCustomDataRoot
+                ? '직접 지정한 폴더를 사용 중입니다.'
+                : '기본 경로(프로그램 폴더/data)를 사용 중입니다.'}
+            </p>
+            {!electron ? (
+              <p className="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-500">
+                데이터 폴더는 서버가 실행 중인 PC의 NAS4USB 앱에서만 변경할 수 있습니다.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className={BUTTON_CLASS}
+                  disabled={busy}
+                  onClick={() => void chooseDataRoot()}
+                >
+                  폴더 선택…
+                </button>
+                <button
+                  type="button"
+                  className={BUTTON_CLASS}
+                  disabled={busy || !usingCustomDataRoot}
+                  onClick={() => resetDataRoot()}
+                >
+                  기본값으로
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-500">
+            데이터 폴더 정보를 불러오는 중입니다…
+          </p>
+        )}
+      </section>
 
       <section className="space-y-3">
         <h3 className="text-sm font-semibold text-slate-800">프로그램 실행</h3>

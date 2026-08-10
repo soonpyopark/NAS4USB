@@ -25,10 +25,23 @@ const SETTINGS_FILE = '.nas4usb-settings.json';
  *   webServerPort: number | null,
  *   webServerMode: import('../shared/webServerConfig.js').WebServerMode | null,
  *   themeAccentColor: string,
+ *   dataRoot: string | null,
  * }} AppSettings
  *
  * @typedef {{ isLoggedIn?: boolean, loginId?: string | null } | boolean} AccessAuth
  */
+
+/**
+ * Empty / whitespace → null (use `{portableRoot}/data`, then `.env`).
+ *
+ * @param {unknown} value
+ * @returns {string | null}
+ */
+export function normalizeConfiguredDataRoot(value) {
+  if (value == null) return null;
+  const trimmed = String(value).trim();
+  return trimmed || null;
+}
 
 /**
  * @returns {AppSettings}
@@ -41,6 +54,7 @@ function emptySettings() {
     webServerPort: null,
     webServerMode: null,
     themeAccentColor: DEFAULT_ACCENT_COLOR,
+    dataRoot: null,
   };
 }
 
@@ -77,6 +91,7 @@ async function loadStore(portableRoot) {
       webServerPort: normalizeWebServerPort(parsed?.webServerPort),
       webServerMode: normalizeWebServerMode(parsed?.webServerMode),
       themeAccentColor: normalizeAccentColor(parsed?.themeAccentColor),
+      dataRoot: normalizeConfiguredDataRoot(parsed?.dataRoot),
     };
   } catch {
     return emptySettings();
@@ -208,6 +223,9 @@ export async function updateAppSettings(patch, portableRoot = getPortableRoot())
   }
   if (patch && 'themeAccentColor' in patch) {
     settings.themeAccentColor = normalizeAccentColor(patch.themeAccentColor);
+  }
+  if (patch && 'dataRoot' in patch) {
+    settings.dataRoot = normalizeConfiguredDataRoot(patch.dataRoot);
   }
   await saveStore(portableRoot, settings);
   return settings;

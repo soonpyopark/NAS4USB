@@ -56,14 +56,21 @@ export function readServerEnvRaw(portableRoot, isDev) {
 
 /**
  * 데이터 루트 경로를 해석합니다.
+ * - 설정 UI (`settings.dataRoot`)가 있으면 최우선
+ * - 그다음 `.env` / 환경변수 `DATA_ROOT`·`DATA_PATH`
  * - 기본값: `{portableRoot}/data`
- * - `.env` `DATA_ROOT`: exe/프로젝트 기준 상대 경로 또는 절대 경로
  *
  * @param {string} portableRoot
+ * @param {string | null | undefined} [settingsDataRoot]
  */
-export function resolveDataRoot(portableRoot) {
+export function resolveDataRoot(portableRoot, settingsDataRoot = null) {
+  const fromSettings =
+    settingsDataRoot != null && String(settingsDataRoot).trim()
+      ? String(settingsDataRoot).trim()
+      : null;
   const fileEnv = readEnvFile(portableRoot);
   const configured =
+    fromSettings ??
     fileEnv.DATA_ROOT ??
     fileEnv.DATA_PATH ??
     process.env.DATA_ROOT ??
