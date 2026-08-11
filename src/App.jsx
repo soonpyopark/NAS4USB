@@ -16,6 +16,7 @@ import HtmlViewerShell from './components/editors/HtmlViewerShell.jsx';
 const TipTapEditorShell = lazy(() => import('./components/editors/TipTapEditorShell.jsx'));
 import { ShareLinkError, ShareLinkLoading } from './components/share/ShareLinkScreen.jsx';
 import { AdminAuthProvider, useAdminAuthContext } from './context/AdminAuthContext.jsx';
+import { LoginDialogProvider } from './context/LoginDialogContext.jsx';
 import { FsSyncProvider, useFsSync } from './context/FsSyncContext.jsx';
 import AppDialogHost from './components/common/AppDialogHost.jsx';
 import { useAppInfo } from './hooks/useAppInfo.js';
@@ -23,6 +24,7 @@ import { useFsChangeSync } from './hooks/useFsChangeSync.js';
 import { hasNas4usbApi } from './lib/runtime.js';
 import { guardOpenFileEntry } from './lib/openFileGuard.js';
 import { useTrashGuardedNavigate } from './hooks/useTrashGuardedNavigate.js';
+import { SHARED_FOLDER } from '../shared/constants.js';
 import { getShareTokenFromUrl } from './lib/shareAccess.js';
 import { isShareViewOnly, resolveOpenShareMode } from './lib/shareLinkAccess.js';
 import { resolveUnknownFileOpenAction } from './lib/unknownFileOpen.js';
@@ -268,18 +270,17 @@ function Nas4usbDesktop({
   onEditorRenamed,
 }) {
   const { isSuperAdmin } = useAdminAuthContext();
-  const { currentPath, navigate } = useTrashGuardedNavigate('.');
-  const [mainView, setMainView] = useState('explorer');
+  const { currentPath, navigate } = useTrashGuardedNavigate(SHARED_FOLDER);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
-    if (mainView === 'settings' && !isSuperAdmin) {
-      setMainView('explorer');
+    if (settingsOpen && !isSuperAdmin) {
+      setSettingsOpen(false);
     }
-  }, [isSuperAdmin, mainView]);
+  }, [isSuperAdmin, settingsOpen]);
 
   const handleNavigate = useCallback(
     (nextPath) => {
-      setMainView('explorer');
       navigate(nextPath);
     },
     [navigate],
@@ -290,8 +291,12 @@ function Nas4usbDesktop({
       void nativeAlert('환경설정은 총괄관리자만 이용할 수 있습니다.');
       return;
     }
-    setMainView('settings');
+    setSettingsOpen((prev) => !prev);
   }, [isSuperAdmin]);
+
+  const handleCloseSettings = useCallback(() => {
+    setSettingsOpen(false);
+  }, []);
 
   return (
     <>
@@ -300,23 +305,21 @@ function Nas4usbDesktop({
         syncInfo={syncInfo}
         infoLoading={infoLoading}
         currentPath={currentPath}
-        mainView={mainView}
+        settingsOpen={settingsOpen}
         onNavigate={handleNavigate}
         onOpenSettings={handleOpenSettings}
         onOpenFile={onOpenFile}
       >
-        {mainView === 'settings' && isSuperAdmin ? (
-          <SettingsView />
-        ) : (
-          <FileExplorer
-            currentPath={currentPath}
-            onNavigate={handleNavigate}
-            onOpenFile={onOpenFile}
-            syncInfo={syncInfo}
-            isEditorOpen={Boolean(openEditor)}
-          />
-        )}
+        <FileExplorer
+          currentPath={currentPath}
+          onNavigate={handleNavigate}
+          onOpenFile={onOpenFile}
+          syncInfo={syncInfo}
+          isEditorOpen={Boolean(openEditor)}
+        />
       </DesktopShell>
+
+      {settingsOpen && isSuperAdmin ? <SettingsView onClose={handleCloseSettings} /> : null}
 
       <OpenEditorLayer
         openEditor={openEditor}
@@ -485,15 +488,17 @@ function Nas4usbAppMain() {
 
   return (
     <AdminAuthProvider onAuthChange={() => notifyRemoteChange({})}>
-      <Nas4usbDesktop
-        paths={paths}
-        syncInfo={syncInfo}
-        infoLoading={infoLoading}
-        openEditor={openEditor}
-        onOpenFile={handleOpenFile}
-        onCloseEditor={handleCloseEditor}
-        onEditorRenamed={handleEditorRenamed}
-      />
+      <LoginDialogProvider>
+        <Nas4usbDesktop
+          paths={paths}
+          syncInfo={syncInfo}
+          infoLoading={infoLoading}
+          openEditor={openEditor}
+          onOpenFile={handleOpenFile}
+          onCloseEditor={handleCloseEditor}
+          onEditorRenamed={handleEditorRenamed}
+        />
+      </LoginDialogProvider>
     </AdminAuthProvider>
   );
 }

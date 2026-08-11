@@ -33,8 +33,8 @@ function TreeNode({
   const isLoading = loadingPaths.has(entry.relativePath);
   const isActive = currentPath === entry.relativePath;
   const isInActiveBranch =
-    currentPath !== '.' &&
-    (currentPath === entry.relativePath || currentPath.startsWith(`${entry.relativePath}/`));
+    currentPath === entry.relativePath || currentPath.startsWith(`${entry.relativePath}/`);
+  const isTopLevel = depth === 0;
 
   const children = childrenMap[entry.relativePath] ?? [];
 
@@ -57,8 +57,10 @@ function TreeNode({
     <div>
       <button
         type="button"
-        className={`flex w-full items-center gap-1 rounded-md py-1.5 pr-2 text-left text-[10pt] transition-colors ${rowClass}`}
-        style={{ paddingLeft: `${depth * 12 + 8}px` }}
+        className={`flex w-full items-center gap-1 rounded-md text-left text-[10pt] transition-colors ${rowClass} ${
+          isTopLevel ? 'px-3 py-2' : 'py-1.5 pr-2'
+        }`}
+        style={isTopLevel ? undefined : { paddingLeft: `${depth * 12 + 8}px` }}
         onClick={handleClick}
         onContextMenu={(event) => onContextMenu(event, entry)}
       >
@@ -75,8 +77,11 @@ function TreeNode({
         ) : (
           <span className="inline-block h-4 w-4 shrink-0" />
         )}
-        <FileIcon entry={entry} className={`h-4 w-4 shrink-0 ${isActive ? 'text-white' : ''}`} />
-        <span className="truncate">{entry.name}</span>
+        <FileIcon
+          entry={entry}
+          className={`h-4 w-4 shrink-0 ${isActive ? 'text-white' : isTopLevel ? 'text-amber-400' : ''}`}
+        />
+        <span className={`truncate ${isTopLevel ? 'font-medium' : ''}`}>{entry.name}</span>
       </button>
 
       {isFolder && isExpanded && (
@@ -121,33 +126,30 @@ export default function DirectoryTree({
   onOpenFile,
   onContextMenu,
   onBackgroundContextMenu,
+  viewAccessDenied = false,
+  onRequestLogin,
 }) {
   return (
     <div
       className="min-h-0 flex-1 overflow-y-auto px-1 py-2"
       onContextMenu={(event) => onBackgroundContextMenu(event)}
     >
-      <button
-        type="button"
-        className={`mb-1 flex w-full items-center gap-2 rounded-md px-3 py-2 text-[10pt] transition-colors ${
-          currentPath === '.'
-            ? 'bg-nas-accent text-white'
-            : 'text-slate-300 hover:bg-nas-sidebarHover hover:text-white'
-        }`}
-        onClick={() => onNavigate('.')}
-        onContextMenu={(event) => {
-          event.stopPropagation();
-          onBackgroundContextMenu(event, '.');
-        }}
-      >
-        <FileIcon
-          entry={{ isDirectory: true, name: 'data', extension: null }}
-          className={`h-4 w-4 shrink-0 ${currentPath === '.' ? 'text-white' : 'text-amber-400'}`}
-        />
-        <span className="truncate font-medium">data</span>
-      </button>
-
-      {rootEntries.length === 0 ? (
+      {viewAccessDenied ? (
+        <div className="space-y-3 px-3 py-3">
+          <p className="text-[10pt] leading-relaxed text-slate-400">
+            보기 권한이 없어 목록이 표시되지 않습니다.
+          </p>
+          {onRequestLogin ? (
+            <button
+              type="button"
+              onClick={onRequestLogin}
+              className="rounded-md bg-nas-accent px-2.5 py-1.5 text-[10pt] font-medium text-white hover:bg-nas-accentHover"
+            >
+              로그인
+            </button>
+          ) : null}
+        </div>
+      ) : rootEntries.length === 0 ? (
         <p className="px-3 py-2 text-[10pt] text-slate-500">폴더가 없습니다</p>
       ) : (
         rootEntries.map((entry) => (

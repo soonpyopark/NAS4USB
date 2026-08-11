@@ -16,6 +16,7 @@ async function finalizePortableFolder() {
   const macUnpacked = await findUnpackedDir(stagingDir, /^mac/);
   await moveFolder(macUnpacked, portableDir);
   await seedPortableData(portableDir);
+  await fs.writeFile(path.join(portableDir, '.nas4usb-portable'), '1\n', 'utf8');
 
   const readme = `NAS4USB USB Portable (macOS)
 ==============================

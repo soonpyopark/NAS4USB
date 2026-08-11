@@ -480,7 +480,9 @@ export default function MembersSettingsPanel() {
 
     const ok = await appConfirm({
       title: '회원 삭제',
-      body: `「${member.loginId}」 회원이 삭제됩니다.`,
+      body:
+        `「${member.loginId}」 회원이 삭제됩니다.\n\n` +
+        `이 회원의 개인폴더와 그 안의 파일·하위 폴더도 모두 영구 삭제되며, 복구할 수 없습니다.`,
       confirmLabel: '삭제',
       confirmVariant: 'danger',
     });
@@ -532,7 +534,12 @@ export default function MembersSettingsPanel() {
       const parsed = parseMembersExportPayload(text);
       const ok = await appConfirm({
         title: '가져오기',
-        body: `「${file.name}」에서 회원 ${parsed.members.length}명을 가져옵니다.\n현재 회원 목록을 이 내용으로 바꾸고, 손님 권한도 함께 적용할까요?\n(파일에 없는 일반 회원은 삭제됩니다. 기본 관리자는 유지됩니다.)`,
+        body:
+          `「${file.name}」에서 회원 ${parsed.members.length}명을 가져옵니다.\n` +
+          `현재 회원 목록을 이 내용으로 바꾸고, 손님 권한도 함께 적용할까요?\n` +
+          `(파일에 없는 일반 회원은 삭제됩니다. 기본 관리자는 유지됩니다.)\n\n` +
+          `삭제되는 회원의 개인폴더와 그 안의 파일·하위 폴더도 모두 영구 삭제되며, 복구할 수 없습니다.\n` +
+          `회원 목록에 없는 개인폴더(고아 폴더)도 함께 삭제됩니다.`,
         confirmLabel: '가져오기',
       });
       if (!ok) return;

@@ -1,24 +1,24 @@
 {
-  "updatedAt": "2026-07-28T10:10:54.736Z",
+  "updatedAt": "2026-08-11T06:54:25.015Z",
   "cores": {
     "rhwp": {
       "version": "@rhwp/core@0.8.2, @rhwp/editor@0.8.2",
-      "updatedAt": "2026-07-28T10:10:54.736Z",
+      "updatedAt": "2026-08-11T06:54:25.015Z",
       "method": "npm"
     },
     "wb4s": {
       "version": "1.0.5",
-      "updatedAt": "2026-07-28T10:10:54.736Z",
+      "updatedAt": "2026-08-11T06:54:25.015Z",
       "method": "git-clone+build"
     },
     "fortune-sheet": {
       "version": "@fortune-sheet/react@1.0.4",
-      "updatedAt": "2026-07-28T10:10:54.736Z",
+      "updatedAt": "2026-08-11T06:54:25.015Z",
       "method": "npm"
     },
     "tiptap": {
-      "version": "@tiptap/react@3.29.2, @tiptap/starter-kit@3.29.2",
-      "updatedAt": "2026-08-07T00:00:00.000Z",
+      "version": "@tiptap/core@3.29.2, @tiptap/pm@3.29.2, @tiptap/react@3.29.2, @tiptap/starter-kit@3.29.2, @tiptap/extension-collaboration@3.29.2, @tiptap/extension-collaboration-caret@3.29.2, @tiptap/extension-bubble-menu@3.29.2",
+      "updatedAt": "2026-08-11T06:54:25.015Z",
       "method": "npm"
     }
   }

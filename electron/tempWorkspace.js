@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { assertRenamePreservesExtension } from '../shared/entryNames.js';
+import { resolvePortablePath } from './appContext.js';
 import { archiveCurrentVersion } from './fileHistoryService.js';
 
 /**
@@ -23,17 +24,18 @@ function getSessionsRoot(tempRoot) {
 
 /**
  * @param {string} relativePath
- * @param {string} dataRoot
+ * @param {string} dataRoot unused — kept for call-site compatibility; paths resolve via workspace model
  * @param {string} tempRoot
  * @param {{ shareToken?: string | null }} [options]
  */
 export async function openWorkspace(relativePath, dataRoot, tempRoot, options = {}) {
+  void dataRoot;
   const sessionId = crypto.randomUUID();
   const sessionDir = path.join(getSessionsRoot(tempRoot), sessionId);
   await fs.mkdir(sessionDir, { recursive: true });
 
   const fileName = path.basename(relativePath);
-  const sourcePath = path.join(dataRoot, relativePath);
+  const sourcePath = resolvePortablePath(relativePath);
   const workingPath = path.join(sessionDir, fileName);
   const shareToken = String(options.shareToken ?? '').trim() || undefined;
 
@@ -78,11 +80,12 @@ export async function writeWorkspaceFile(sessionId, base64) {
 }
 
 export async function commitWorkspace(sessionId, dataRoot) {
+  void dataRoot;
   const session = getSession(sessionId);
-  const destination = path.join(dataRoot, session.relativePath);
+  const destination = resolvePortablePath(session.relativePath);
   // Archive whatever is currently on disk before it gets overwritten, so it becomes
   // a restorable "이력" entry (no-op for unsupported extensions or first-time saves).
-  await archiveCurrentVersion(session.relativePath, dataRoot).catch(() => {});
+  await archiveCurrentVersion(session.relativePath).catch(() => {});
   await fs.mkdir(path.dirname(destination), { recursive: true });
   await fs.copyFile(session.workingPath, destination);
   session.dirty = false;
@@ -95,6 +98,7 @@ export async function saveWorkspace(sessionId, base64, dataRoot) {
 }
 
 export async function renameWorkspace(sessionId, newRelativePath, dataRoot) {
+  void dataRoot;
   const session = getSession(sessionId);
   const normalized = newRelativePath.replace(/\\/g, '/');
 
@@ -105,8 +109,8 @@ export async function renameWorkspace(sessionId, newRelativePath, dataRoot) {
     };
   }
 
-  const oldDestination = path.join(dataRoot, session.relativePath);
-  const newDestination = path.join(dataRoot, normalized);
+  const oldDestination = resolvePortablePath(session.relativePath);
+  const newDestination = resolvePortablePath(normalized);
   await fs.mkdir(path.dirname(newDestination), { recursive: true });
   await fs.copyFile(session.workingPath, newDestination);
 

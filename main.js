@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell, Tray } f
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { APP_BLOG_URL, APP_NAME, APP_VERSION, DEFAULT_DATA_DIR } from './shared/constants.js';
+import { APP_BLOG_URL, APP_NAME, APP_VERSION } from './shared/constants.js';
 import { resolveUniqueName } from './shared/uniqueName.js';
 import {
   RELEASES_PAGE_URL,
@@ -17,6 +17,7 @@ import {
   getAppPaths,
   getDataRoot,
   getPortableRoot,
+  getExeRoot,
   getInstallRoot,
   getSyncInfo,
   getTempPath,
@@ -32,7 +33,7 @@ import {
   getSyncHostname,
   getLocalIPv4Addresses,
 } from './electron/syncServer.js';
-import { readServerEnvRaw, resolveDataRoot } from './electron/envConfig.js';
+import { readServerEnvRaw, resolveDataRoot, resolveWorkspaceRoot } from './electron/envConfig.js';
 import {
   hostnameForWebServerMode,
   normalizeWebServerMode,
@@ -46,7 +47,11 @@ import {
   getAutoLaunchState,
   setAutoLaunch,
 } from './electron/autoLaunchService.js';
-import { resolvePortableRoot } from './electron/portablePaths.js';
+import { ensureSampleDataSeeded } from './electron/seedDataService.js';
+import {
+  migrateUserDataStateToInstall,
+  resolveExeRoot,
+} from './electron/portablePaths.js';
 import {
   closeWorkspace,
   commitWorkspace,
@@ -74,6 +79,8 @@ import {
   assertCanAccessFile,
   assertCanEditFile,
   assertGuestCanWrite,
+  assertHomeSystemPathMutable,
+  filterTrashMapByHomeAccess,
   pathExistsWithAccessFilter,
   readDirWithAccessFilter,
   readFileBase64WithAccessFilter,
@@ -298,11 +305,11 @@ function createMainWindow() {
  * Stored 서버 관리 settings win over `.env`. An unset mode keeps the raw
  * `.env` HOSTNAME so custom bind addresses keep working.
  *
- * @param {string} portableRoot
+ * @param {string} root  exe/state folder (settings + .env)
  */
-async function configureServerFromSettings(portableRoot) {
-  const envRaw = readServerEnvRaw(portableRoot, isDev);
-  const settings = await getAppSettings(portableRoot);
+async function configureServerFromSettings(root) {
+  const envRaw = readServerEnvRaw(root, isDev);
+  const settings = await getAppSettings(root);
   const storedMode = normalizeWebServerMode(settings.webServerMode);
 
   configureSyncServer({
@@ -723,7 +730,7 @@ const adminTokenBySender = new Map();
 
 /**
  * @param {import('electron').IpcMainInvokeEvent} event
- * @returns {{ isLoggedIn: boolean, loginId: string | null }}
+ * @returns {{ isLoggedIn: boolean, loginId: string | null, role: string | null }}
  */
 function getAccessAuthFromEvent(event) {
   const token = adminTokenBySender.get(event.sender.id);
@@ -731,6 +738,7 @@ function getAccessAuthFromEvent(event) {
   return {
     isLoggedIn: Boolean(session),
     loginId: session?.adminId ?? null,
+    role: session?.role === 'super_admin' ? 'super_admin' : session ? 'member' : null,
   };
 }
 
@@ -798,7 +806,12 @@ ipcMain.handle('fs:mkdir', async (event, relativePath) => {
 });
 
 ipcMain.handle('fs:rename', async (event, fromRelative, toRelative) => {
-  await assertGuestCanWrite(getAccessAuthFromEvent(event));
+  const auth = getAccessAuthFromEvent(event);
+  const shareToken = getShareTokenFromEvent(event);
+  assertHomeSystemPathMutable(fromRelative, 'rename-source');
+  assertHomeSystemPathMutable(toRelative, 'mutate');
+  await assertCanEditFile(fromRelative, auth, shareToken);
+  await assertCanEditFile(toRelative, auth, shareToken);
   await syncSharePathRename(fromRelative, toRelative, getPortableRoot());
   await syncFileAccessRename(fromRelative, toRelative, getPortableRoot());
   await syncFavoritesRename(fromRelative, toRelative, getPortableRoot());
@@ -811,7 +824,10 @@ ipcMain.handle('fs:rename', async (event, fromRelative, toRelative) => {
 });
 
 ipcMain.handle('fs:delete', async (event, relativePath) => {
-  await assertGuestCanWrite(getAccessAuthFromEvent(event));
+  const auth = getAccessAuthFromEvent(event);
+  const shareToken = getShareTokenFromEvent(event);
+  assertHomeSystemPathMutable(relativePath, 'mutate');
+  await assertCanEditFile(relativePath, auth, shareToken);
   if (isFortuneSidecarRelativePath(relativePath)) {
     throw new Error('FortuneSheet 편집용 보조 파일입니다. 연결된 스프레드시트를 삭제해 주세요.');
   }
@@ -841,7 +857,11 @@ ipcMain.handle('fs:writeFile', async (event, relativePath, base64 = '') => {
 });
 
 ipcMain.handle('fs:copy', async (event, fromRelative, toRelative) => {
-  await assertGuestCanWrite(getAccessAuthFromEvent(event));
+  const auth = getAccessAuthFromEvent(event);
+  const shareToken = getShareTokenFromEvent(event);
+  assertHomeSystemPathMutable(toRelative, 'mutate');
+  await assertCanAccessFile(fromRelative, auth, shareToken);
+  await assertCanEditFile(toRelative, auth, shareToken);
   const result = await fsService.copyPath(fromRelative, toRelative);
   await syncFortuneSidecarCopy(fromRelative, toRelative);
   notifyFsChanged([fromRelative, toRelative]);
@@ -849,7 +869,12 @@ ipcMain.handle('fs:copy', async (event, fromRelative, toRelative) => {
 });
 
 ipcMain.handle('fs:move', async (event, fromRelative, toRelative) => {
-  await assertGuestCanWrite(getAccessAuthFromEvent(event));
+  const auth = getAccessAuthFromEvent(event);
+  const shareToken = getShareTokenFromEvent(event);
+  assertHomeSystemPathMutable(fromRelative, 'rename-source');
+  assertHomeSystemPathMutable(toRelative, 'mutate');
+  await assertCanEditFile(fromRelative, auth, shareToken);
+  await assertCanEditFile(toRelative, auth, shareToken);
   await syncSharePathRename(fromRelative, toRelative, getPortableRoot());
   await syncFileAccessRename(fromRelative, toRelative, getPortableRoot());
   await syncFavoritesRename(fromRelative, toRelative, getPortableRoot());
@@ -962,7 +987,7 @@ ipcMain.handle('history:restore', async (event, relativePath, entryId, shareToke
   return result;
 });
 
-ipcMain.handle('editors:getStatus', async () => getEditorCoresStatus(getPortableRoot(), getInstallRoot()));
+ipcMain.handle('editors:getStatus', async () => getEditorCoresStatus(getExeRoot(), getInstallRoot()));
 
 ipcMain.handle('editors:update', async (event) => {
   if (!isDev) {
@@ -1070,33 +1095,54 @@ ipcMain.handle('favorites:set', async (event, { path: relativePath, favorited } 
 });
 
 ipcMain.handle('trash:getMap', async (event) => {
-  await assertCanAccessTrash(getAccessAuthFromEvent(event));
-  return getTrashMap(getPortableRoot());
+  const auth = getAccessAuthFromEvent(event);
+  await assertCanAccessTrash(auth);
+  return filterTrashMapByHomeAccess(await getTrashMap(getPortableRoot()), auth);
 });
 
 ipcMain.handle('trash:move', async (event, { path: relativePath } = {}) => {
-  await assertGuestCanWrite(getAccessAuthFromEvent(event));
+  const auth = getAccessAuthFromEvent(event);
+  const shareToken = getShareTokenFromEvent(event);
+  assertHomeSystemPathMutable(relativePath, 'mutate');
+  await assertCanEditFile(relativePath, auth, shareToken);
   const result = await trashPath(relativePath, getPortableRoot());
   notifyFsChanged(relativePath);
   return result;
 });
 
 ipcMain.handle('trash:restore', async (event, { path: relativePath } = {}) => {
-  await assertCanAccessTrash(getAccessAuthFromEvent(event));
+  const auth = getAccessAuthFromEvent(event);
+  await assertCanAccessTrash(auth);
+  const map = filterTrashMapByHomeAccess(await getTrashMap(getPortableRoot()), auth);
+  if (!map[String(relativePath ?? '').replace(/\\/g, '/')]) {
+    throw new Error('휴지통 정보를 찾을 수 없습니다.');
+  }
+  const originalPath = map[String(relativePath ?? '').replace(/\\/g, '/')].originalPath;
+  await assertCanEditFile(originalPath, auth, getShareTokenFromEvent(event));
   const result = await restorePath(relativePath, getPortableRoot());
   notifyFsChanged(relativePath);
   return result;
 });
 
 ipcMain.handle('trash:empty', async (event) => {
-  await assertCanAccessTrash(getAccessAuthFromEvent(event));
+  await assertGuestCanWrite(getAccessAuthFromEvent(event));
   const result = await emptyTrash(getPortableRoot());
   notifyFsChanged();
   return result;
 });
 
 ipcMain.handle('trash:deletePermanent', async (event, { path: relativePath } = {}) => {
-  await assertCanAccessTrash(getAccessAuthFromEvent(event));
+  const auth = getAccessAuthFromEvent(event);
+  await assertCanAccessTrash(auth);
+  const normalized = String(relativePath ?? '').replace(/\\/g, '/');
+  const map = filterTrashMapByHomeAccess(await getTrashMap(getPortableRoot()), auth);
+  if (normalized.startsWith('__trash/') && !map[normalized]) {
+    throw new Error('휴지통 정보를 찾을 수 없습니다.');
+  }
+  assertHomeSystemPathMutable(relativePath, 'mutate');
+  if (!normalized.startsWith('__trash/')) {
+    await assertCanEditFile(relativePath, auth, getShareTokenFromEvent(event));
+  }
   const result = await deletePermanent(relativePath, getPortableRoot());
   notifyFsChanged(relativePath);
   return result;
@@ -1121,9 +1167,9 @@ ipcMain.handle('settings:update', async (event, patch = {}) => {
 });
 
 /**
- * Persist data root under 설정 → 일반, then relaunch so open files / Yjs rooms
- * bind to the new tree. Pass null/empty to fall back to `{portableRoot}/data`
- * (and `.env` DATA_ROOT if set).
+ * Persist workspace root under 설정 → 일반, then relaunch so open files / Yjs rooms
+ * bind to the new tree. Pass null/empty to fall back to `{portableRoot}`
+ * (with `share/` + `private/` under it; `.env` DATA_ROOT if set).
  */
 ipcMain.handle('settings:applyDataRoot', async (event, rawPath = null) => {
   assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
@@ -1138,6 +1184,7 @@ ipcMain.handle('settings:applyDataRoot', async (event, rawPath = null) => {
   }
 
   const settings = await updateAppSettings({ dataRoot: configured }, portableRoot);
+  const workspaceRoot = resolveWorkspaceRoot(portableRoot, settings.dataRoot);
   const effective = resolveDataRoot(portableRoot, settings.dataRoot);
 
   setImmediate(() => {
@@ -1150,8 +1197,9 @@ ipcMain.handle('settings:applyDataRoot', async (event, rawPath = null) => {
     ok: true,
     willRelaunch: true,
     configured: settings.dataRoot,
+    workspaceRoot,
     effective,
-    defaultDataRoot: path.join(portableRoot, DEFAULT_DATA_DIR),
+    defaultDataRoot: portableRoot,
   };
 });
 
@@ -1202,14 +1250,36 @@ if (gotSingleInstanceLock) {
     }
     if (!launchedHidden) createSplashWindow();
 
-    const portableRoot = resolvePortableRoot(isDev);
-    const settings = await getAppSettings(portableRoot);
-    const dataRoot = resolveDataRoot(portableRoot, settings.dataRoot);
-    await configureServerFromSettings(portableRoot);
+    const exeRoot = resolveExeRoot(isDev);
+    await migrateUserDataStateToInstall(exeRoot);
+
+    let settings = await getAppSettings(exeRoot);
+    try {
+      const { prepareWorkspaceLayout } = await import('./electron/workspaceLayoutMigration.js');
+      const nextSettings = await prepareWorkspaceLayout(exeRoot, settings);
+      if (nextSettings?.dataRoot !== settings.dataRoot) {
+        settings = await updateAppSettings({ dataRoot: nextSettings.dataRoot }, exeRoot);
+      } else {
+        settings = nextSettings;
+      }
+    } catch (err) {
+      console.warn('[data] workspace layout prepare failed:', err);
+    }
+
+    const workspaceRoot = resolveWorkspaceRoot(exeRoot, settings.dataRoot);
+    const dataRoot = resolveDataRoot(exeRoot, settings.dataRoot);
+    console.log(
+      `[data] workspaceRoot=${workspaceRoot}` +
+        (settings.dataRoot ? ` (configured=${settings.dataRoot})` : ' (default)') +
+        `; share=${dataRoot}; install=${exeRoot}`,
+    );
+    await configureServerFromSettings(exeRoot);
 
     initAppContext({
-      portableRoot,
+      portableRoot: exeRoot,
+      exeRoot,
       installRoot: app.getAppPath(),
+      workspaceRoot,
       dataRoot,
       tempPath: app.getPath('temp'),
       isDev,
@@ -1219,15 +1289,36 @@ if (gotSingleInstanceLock) {
       }),
     });
 
+    try {
+      const { finalizeWorkspaceLayout } = await import('./electron/workspaceLayoutMigration.js');
+      await finalizeWorkspaceLayout();
+    } catch (err) {
+      console.warn('[data] workspace layout finalize failed:', err);
+    }
     await ensureDataRoot();
     try {
-      await ensureBootstrapAdmin(portableRoot);
+      const seedResult = await ensureSampleDataSeeded({ isDev });
+      if (seedResult.seeded) {
+        console.log(`[data] seeded samples from ${seedResult.from}`);
+      }
+    } catch (err) {
+      console.warn('[data] sample seed failed:', err);
+    }
+    try {
+      await ensureBootstrapAdmin(exeRoot);
     } catch (err) {
       console.warn('[auth] bootstrap admin seed failed:', err);
     }
 
     try {
-      await pruneRememberedSessions(portableRoot);
+      const { ensureAllMemberHomes } = await import('./electron/memberHomeService.js');
+      await ensureAllMemberHomes(exeRoot);
+    } catch (err) {
+      console.warn('[data] ensure member homes failed:', err);
+    }
+
+    try {
+      await pruneRememberedSessions(exeRoot);
     } catch (err) {
       console.warn('[auth] session prune failed:', err);
     }

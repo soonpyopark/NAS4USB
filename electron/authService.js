@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DEFAULT_ADMIN_ID, DEFAULT_ADMIN_PW } from '../shared/constants.js';
-import { getPortableRoot } from './appContext.js';
+import { getExeRoot, getPortableRoot } from './appContext.js';
 import { resolveAdminCredentials } from './envConfig.js';
 import {
   findActiveMemberByCredentials,
@@ -185,7 +185,7 @@ export function revokeAdminSession(token) {
  * @param {string} portableRoot
  */
 export function verifyAdminLogin(id, password, portableRoot) {
-  const { adminId, adminPassword } = resolveAdminCredentials(portableRoot);
+  const { adminId, adminPassword } = resolveAdminCredentials(getExeRoot());
   const providedId = String(id ?? '').trim();
   const providedPassword = String(password ?? '');
 
@@ -210,13 +210,19 @@ export function verifyAdminLogin(id, password, portableRoot) {
  */
 export async function loginAdmin(id, password, portableRoot, { remember = false } = {}) {
   const providedId = String(id ?? '').trim();
-  const { adminId } = resolveAdminCredentials(portableRoot);
+  const { adminId } = resolveAdminCredentials(getExeRoot());
   const isAdminLogin = providedId.toLowerCase() === String(adminId).trim().toLowerCase();
 
   const member = await findActiveMemberByCredentials(id, password, portableRoot);
   if (member) {
     let role = member.role === 'super_admin' || isAdminLogin ? 'super_admin' : member.role;
     const token = createAdminSession(member.loginId, role, remember);
+    try {
+      const { ensureMemberHome } = await import('./memberHomeService.js');
+      await ensureMemberHome(member.loginId);
+    } catch (err) {
+      console.warn('[auth] ensure member home failed:', err);
+    }
     return {
       success: true,
       adminId: member.loginId,
@@ -232,6 +238,12 @@ export async function loginAdmin(id, password, portableRoot, { remember = false 
     verifyAdminLogin(id, password, portableRoot)
   ) {
     const token = createAdminSession(adminId, 'super_admin', remember);
+    try {
+      const { ensureMemberHome } = await import('./memberHomeService.js');
+      await ensureMemberHome(adminId);
+    } catch (err) {
+      console.warn('[auth] ensure member home failed:', err);
+    }
     return { success: true, adminId, role: 'super_admin', token };
   }
 
@@ -251,7 +263,7 @@ export async function isDefaultAdminPasswordActive(portableRoot) {
   );
   if (member) return true;
 
-  const { adminId } = resolveAdminCredentials(portableRoot);
+  const { adminId } = resolveAdminCredentials(getExeRoot());
   if (await hasMemberLoginId(adminId, portableRoot)) return false;
 
   return verifyAdminLogin(DEFAULT_ADMIN_ID, DEFAULT_ADMIN_PW, portableRoot);

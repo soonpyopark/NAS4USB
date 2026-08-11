@@ -105,30 +105,39 @@ export async function findUnpackedDir(outputDir, pattern) {
 }
 
 /**
- * Seed portable/install `data/` from tracked samples in `seed/data/`,
- * and write pristine settings (guest view/read/write off).
+ * Seed portable/install settings (and optionally sample documents).
+ * Sample files under `data/` must not be harvested into an MSI — WiX `<Files>`
+ * corrupts non-ASCII names. MSI builds omit samples and settings so upgrades
+ * never wipe a user's `dataRoot`; runtime seeds from `app.asar/seed/data`.
+ *
  * @param {string} portableDir
+ * @param {{ includeSampleData?: boolean, writeSettings?: boolean }} [options]
  */
-export async function seedPortableData(portableDir) {
-  const dataDir = path.join(portableDir, 'data');
+export async function seedPortableData(portableDir, options = {}) {
+  const includeSampleData = options.includeSampleData !== false;
+  const writeSettings = options.writeSettings !== false;
+  const dataDir = path.join(portableDir, '공유폴더');
   const seedDir = path.join(projectRoot, 'seed', 'data');
   await fs.mkdir(dataDir, { recursive: true });
+  await fs.mkdir(path.join(portableDir, '개인폴더'), { recursive: true });
 
-  if (await pathExists(seedDir)) {
+  if (includeSampleData && (await pathExists(seedDir))) {
     await fs.cp(seedDir, dataDir, { recursive: true });
   }
 
-  const settings = {
-    allowedIpCidrs: [],
-    guestPermissions: { ...DEFAULT_GUEST_PERMISSIONS },
-    loggedInPermissions: { ...DEFAULT_LOGGED_IN_PERMISSIONS },
-    themeAccentColor: DEFAULT_ACCENT_COLOR,
-  };
-  await fs.writeFile(
-    path.join(portableDir, '.nas4usb-settings.json'),
-    `${JSON.stringify(settings, null, 2)}\n`,
-    'utf8',
-  );
+  if (writeSettings) {
+    const settings = {
+      allowedIpCidrs: [],
+      guestPermissions: { ...DEFAULT_GUEST_PERMISSIONS },
+      loggedInPermissions: { ...DEFAULT_LOGGED_IN_PERMISSIONS },
+      themeAccentColor: DEFAULT_ACCENT_COLOR,
+    };
+    await fs.writeFile(
+      path.join(portableDir, '.nas4usb-settings.json'),
+      `${JSON.stringify(settings, null, 2)}\n`,
+      'utf8',
+    );
+  }
 
   // A dev machine's "로그인 유지" tokens must never ship inside a build.
   await fs.rm(path.join(portableDir, '.nas4usb-sessions.json'), { force: true });

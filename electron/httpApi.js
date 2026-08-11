@@ -3,6 +3,7 @@ import {
   getAppPaths,
   getDataRoot,
   getPortableRoot,
+  getExeRoot,
   getInstallRoot,
   getSyncInfo,
   getTempPath,
@@ -34,6 +35,8 @@ import {
   assertCanAccessTrash,
   assertCanEditFile,
   assertGuestCanWrite,
+  assertHomeSystemPathMutable,
+  filterTrashMapByHomeAccess,
   pathExistsWithAccessFilter,
   readDirWithAccessFilter,
   readFileBase64WithAccessFilter,
@@ -142,6 +145,7 @@ function getAccessAuth(req) {
   return {
     isLoggedIn: Boolean(session),
     loginId: session?.adminId ?? null,
+    role: session?.role === 'super_admin' ? 'super_admin' : session ? 'member' : null,
   };
 }
 
@@ -221,8 +225,11 @@ export async function handleHttpApiRequest(req, res) {
     }
 
     if (method === 'POST' && url.pathname === '/api/fs/delete') {
-      await assertGuestCanWrite(getAccessAuth(req));
       const body = await readJsonBody(req);
+      const auth = getAccessAuth(req);
+      const shareToken = getShareTokenFromQuery(url);
+      assertHomeSystemPathMutable(body.path, 'mutate');
+      await assertCanEditFile(body.path ?? '', auth, shareToken);
       if (isFortuneSidecarRelativePath(body.path)) {
         sendJson(res, 400, { error: 'FortuneSheet 편집용 보조 파일입니다. 연결된 스프레드시트를 삭제해 주세요.' });
         return true;
@@ -239,8 +246,13 @@ export async function handleHttpApiRequest(req, res) {
     }
 
     if (method === 'POST' && url.pathname === '/api/fs/rename') {
-      await assertGuestCanWrite(getAccessAuth(req));
       const body = await readJsonBody(req);
+      const auth = getAccessAuth(req);
+      const shareToken = getShareTokenFromQuery(url);
+      assertHomeSystemPathMutable(body.from, 'rename-source');
+      assertHomeSystemPathMutable(body.to, 'mutate');
+      await assertCanEditFile(body.from ?? '', auth, shareToken);
+      await assertCanEditFile(body.to ?? '', auth, shareToken);
       await syncSharePathRename(body.from, body.to, getPortableRoot());
       await syncFileAccessRename(body.from, body.to, getPortableRoot());
       await syncFavoritesRename(body.from, body.to, getPortableRoot());
@@ -285,8 +297,12 @@ export async function handleHttpApiRequest(req, res) {
     }
 
     if (method === 'POST' && url.pathname === '/api/fs/copy') {
-      await assertGuestCanWrite(getAccessAuth(req));
       const body = await readJsonBody(req);
+      const auth = getAccessAuth(req);
+      const shareToken = getShareTokenFromQuery(url);
+      assertHomeSystemPathMutable(body.to, 'mutate');
+      await assertCanAccessFile(body.from ?? '', auth, shareToken);
+      await assertCanEditFile(body.to ?? '', auth, shareToken);
       const result = await fsService.copyPath(body.from, body.to);
       await syncFortuneSidecarCopy(body.from, body.to);
       notifyFsChanged([body.from, body.to]);
@@ -295,8 +311,13 @@ export async function handleHttpApiRequest(req, res) {
     }
 
     if (method === 'POST' && url.pathname === '/api/fs/move') {
-      await assertGuestCanWrite(getAccessAuth(req));
       const body = await readJsonBody(req);
+      const auth = getAccessAuth(req);
+      const shareToken = getShareTokenFromQuery(url);
+      assertHomeSystemPathMutable(body.from, 'rename-source');
+      assertHomeSystemPathMutable(body.to, 'mutate');
+      await assertCanEditFile(body.from ?? '', auth, shareToken);
+      await assertCanEditFile(body.to ?? '', auth, shareToken);
       await syncSharePathRename(body.from, body.to, getPortableRoot());
       await syncFileAccessRename(body.from, body.to, getPortableRoot());
       await syncFavoritesRename(body.from, body.to, getPortableRoot());
@@ -418,7 +439,7 @@ export async function handleHttpApiRequest(req, res) {
     }
 
     if (method === 'GET' && url.pathname === '/api/editors/status') {
-      sendJson(res, 200, await getEditorCoresStatus(getPortableRoot(), getInstallRoot()));
+      sendJson(res, 200, await getEditorCoresStatus(getExeRoot(), getInstallRoot()));
       return true;
     }
 
@@ -585,14 +606,18 @@ export async function handleHttpApiRequest(req, res) {
     }
 
     if (method === 'GET' && url.pathname === '/api/trash/map') {
-      await assertCanAccessTrash(getAccessAuth(req));
-      sendJson(res, 200, await getTrashMap(getPortableRoot()));
+      const auth = getAccessAuth(req);
+      await assertCanAccessTrash(auth);
+      sendJson(res, 200, filterTrashMapByHomeAccess(await getTrashMap(getPortableRoot()), auth));
       return true;
     }
 
     if (method === 'POST' && url.pathname === '/api/trash/move') {
-      await assertGuestCanWrite(getAccessAuth(req));
       const body = await readJsonBody(req);
+      const auth = getAccessAuth(req);
+      const shareToken = getShareTokenFromQuery(url);
+      assertHomeSystemPathMutable(body.path, 'mutate');
+      await assertCanEditFile(body.path ?? '', auth, shareToken);
       const result = await trashPath(body.path, getPortableRoot());
       notifyFsChanged(body.path);
       sendJson(res, 200, result);
@@ -600,8 +625,16 @@ export async function handleHttpApiRequest(req, res) {
     }
 
     if (method === 'POST' && url.pathname === '/api/trash/restore') {
-      await assertCanAccessTrash(getAccessAuth(req));
       const body = await readJsonBody(req);
+      const auth = getAccessAuth(req);
+      await assertCanAccessTrash(auth);
+      const map = filterTrashMapByHomeAccess(await getTrashMap(getPortableRoot()), auth);
+      const trashKey = String(body.path ?? '').replace(/\\/g, '/');
+      if (!map[trashKey]) {
+        sendJson(res, 400, { error: '휴지통 정보를 찾을 수 없습니다.' });
+        return true;
+      }
+      await assertCanEditFile(map[trashKey].originalPath, auth, getShareTokenFromQuery(url));
       const result = await restorePath(body.path, getPortableRoot());
       notifyFsChanged(body.path);
       sendJson(res, 200, result);
@@ -609,7 +642,7 @@ export async function handleHttpApiRequest(req, res) {
     }
 
     if (method === 'POST' && url.pathname === '/api/trash/empty') {
-      await assertCanAccessTrash(getAccessAuth(req));
+      await assertGuestCanWrite(getAccessAuth(req));
       const result = await emptyTrash(getPortableRoot());
       notifyFsChanged();
       sendJson(res, 200, result);
@@ -617,8 +650,19 @@ export async function handleHttpApiRequest(req, res) {
     }
 
     if (method === 'POST' && url.pathname === '/api/trash/deletePermanent') {
-      await assertCanAccessTrash(getAccessAuth(req));
       const body = await readJsonBody(req);
+      const auth = getAccessAuth(req);
+      await assertCanAccessTrash(auth);
+      const normalized = String(body.path ?? '').replace(/\\/g, '/');
+      const map = filterTrashMapByHomeAccess(await getTrashMap(getPortableRoot()), auth);
+      if (normalized.startsWith('__trash/') && !map[normalized]) {
+        sendJson(res, 400, { error: '휴지통 정보를 찾을 수 없습니다.' });
+        return true;
+      }
+      assertHomeSystemPathMutable(body.path, 'mutate');
+      if (!normalized.startsWith('__trash/')) {
+        await assertCanEditFile(body.path ?? '', auth, getShareTokenFromQuery(url));
+      }
       const result = await deletePermanent(body.path, getPortableRoot());
       notifyFsChanged(body.path);
       sendJson(res, 200, result);

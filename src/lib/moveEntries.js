@@ -5,8 +5,8 @@ import { isTrashPath, TRASH_FOLDER } from './trashPaths.js';
  * @param {string} relativePath
  */
 export function formatDataPath(relativePath) {
-  if (relativePath === '.') return 'data';
-  return `data/${relativePath.replace(/\\/g, '/')}`;
+  if (relativePath === '.') return '워크스페이스';
+  return relativePath.replace(/\\/g, '/');
 }
 
 /**

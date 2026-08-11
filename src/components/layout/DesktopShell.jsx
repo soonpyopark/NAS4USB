@@ -4,7 +4,8 @@ import TopBar from './TopBar.jsx';
 import StatusBar from './StatusBar.jsx';
 
 const SIDEBAR_DEFAULT_WIDTH = 288;
-const SIDEBAR_MIN_WIDTH = 200;
+/** Do not allow shrinking below the initial startup width. */
+const SIDEBAR_MIN_WIDTH = SIDEBAR_DEFAULT_WIDTH;
 const SIDEBAR_MAX_RATIO = 0.5;
 
 export default function DesktopShell({
@@ -14,6 +15,7 @@ export default function DesktopShell({
   infoLoading,
   currentPath,
   mainView = 'explorer',
+  settingsOpen = false,
   onNavigate,
   onOpenSettings,
   onOpenFile,
@@ -79,7 +81,7 @@ export default function DesktopShell({
         syncInfo={syncInfo}
         infoLoading={infoLoading}
         onOpenSettings={onOpenSettings}
-        settingsOpen={mainView === 'settings'}
+        settingsOpen={settingsOpen}
       />
 
       <div ref={layoutRef} className="flex min-h-0 flex-1">

@@ -11,6 +11,7 @@ import {
 } from '../../../shared/ipAllowlistIo.js';
 import { downloadTextFile, readFileAsText } from '../../lib/downloadTextFile.js';
 import { useAppConfirm } from '../../hooks/useAppConfirm.jsx';
+import ViewerModal from '../editors/ViewerModal.jsx';
 import GeneralSettingsPanel from './GeneralSettingsPanel.jsx';
 import MembersSettingsPanel from './MembersSettingsPanel.jsx';
 import ServerSettingsPanel from './ServerSettingsPanel.jsx';
@@ -28,7 +29,7 @@ const SETTINGS_TABS = [
   { id: 'members', label: '회원 관리' },
 ];
 
-export default function SettingsView() {
+export default function SettingsView({ onClose }) {
   const { alert: appAlert, confirm: appConfirm, dialog: settingsDialog } = useAppConfirm();
   /** @type {[AllowedIpEntry[], Function]} */
   const [allowedIpCidrs, setAllowedIpCidrs] = useState([]);
@@ -215,10 +216,11 @@ export default function SettingsView() {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-white">
+    <ViewerModal title="환경설정" onClose={onClose} allowClose={Boolean(onClose)}>
       {settingsDialog}
-      <div className="border-b border-slate-200 px-4 pt-3">
-        <div className="flex gap-1" role="tablist" aria-label="환경설정">
+      <div className="flex h-full min-h-0 flex-col bg-white">
+      <div className="border-b border-slate-200 px-4 pt-2">
+        <div className="flex flex-wrap gap-1" role="tablist" aria-label="환경설정">
           {SETTINGS_TABS.map((tab) => {
             const selected = activeTab === tab.id;
             return (
@@ -405,6 +407,7 @@ export default function SettingsView() {
           </div>
         ) : null}
       </div>
-    </div>
+      </div>
+    </ViewerModal>
   );
 }

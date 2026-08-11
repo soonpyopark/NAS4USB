@@ -110,6 +110,8 @@ async function applyPortableExeIcon(portableDirPath) {
  */
 async function finalizePortableFolder(portableDir, meta) {
   await seedPortableData(portableDir);
+  // Marker must match electron/portablePaths.js PORTABLE_MARKER (no Electron import here).
+  await fs.writeFile(path.join(portableDir, '.nas4usb-portable'), '1\n', 'utf8');
 
   await fs.copyFile(
     path.join(projectRoot, 'allow-firewall-inbound.bat'),

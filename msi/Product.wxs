@@ -43,8 +43,9 @@
     <StandardDirectory Id="DesktopFolder" />
 
     <Feature Id="ProductFeature" Title="NAS4USB" Level="1">
-      <!-- Mutable app data (data/, settings, history) is created at first launch —
-           build-msi.mjs excludes it from staging so Windows Installer never harvests/locks it. -->
+      <!-- Runtime state (.nas4usb-*.json, data/) is created beside the exe and must
+           NOT be harvested — MSI upgrades would otherwise delete it, and WiX also
+           corrupts Hangul sample names. Samples live in app.asar. -->
       <Files Directory="INSTALLFOLDER" Include="NAS4USB\**" />
 
       <Component

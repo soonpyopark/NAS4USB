@@ -28,11 +28,14 @@ const SETTINGS_FILE = '.nas4usb-settings.json';
  *   dataRoot: string | null,
  * }} AppSettings
  *
- * @typedef {{ isLoggedIn?: boolean, loginId?: string | null } | boolean} AccessAuth
+ * @typedef {{ isLoggedIn?: boolean, loginId?: string | null, role?: string | null } | boolean} AccessAuth
  */
 
 /**
- * Empty / whitespace → null (use `{portableRoot}/data`, then `.env`).
+ * Empty / whitespace → null (use `{portableRoot}` as workspace root, then `.env`).
+ *
+ * `dataRoot` in settings is the workspace root directory. Under it the app creates
+ * `share/` (공유폴더) and `private/` (개인폴더).
  *
  * @param {unknown} value
  * @returns {string | null}
@@ -109,15 +112,18 @@ async function saveStore(portableRoot, settings) {
 
 /**
  * @param {AccessAuth} auth
- * @returns {{ isLoggedIn: boolean, loginId: string | null }}
+ * @returns {{ isLoggedIn: boolean, loginId: string | null, role: string | null }}
  */
 export function resolveAccessAuth(auth) {
   if (typeof auth === 'boolean') {
-    return { isLoggedIn: auth, loginId: null };
+    return { isLoggedIn: auth, loginId: null, role: null };
   }
+  const role =
+    auth?.role === 'super_admin' ? 'super_admin' : auth?.role === 'member' ? 'member' : null;
   return {
     isLoggedIn: Boolean(auth?.isLoggedIn),
     loginId: auth?.loginId ? String(auth.loginId) : null,
+    role,
   };
 }
 

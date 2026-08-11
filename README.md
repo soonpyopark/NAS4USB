@@ -52,7 +52,7 @@ notepad .env
 |------|--------|------|
 | `PORT` | `3009` | HTTP + Y.js WebSocket 포트 |
 | `HOSTNAME` | `0.0.0.0` | LAN 접속 허용 (`127.0.0.1` = 로컬만) |
-| `DATA_ROOT` | `data` | 문서 저장 루트 (상대·절대 경로) |
+| `DATA_ROOT` | (프로그램 폴더) | 데이터 루트. 하위에 `share`·`private` 생성 |
 | `ADMIN_ID` / `ADMIN_PW` | `admin` / `admin1234` | 총괄관리자 (변경 권장) |
 
 ### 3) 실행
@@ -91,6 +91,9 @@ npm run build:msi
 ```
 
 출력: `msi/NAS4USB v<버전>_<타임스탬프>.msi` (WiX CLI 7+ 필요)
+
+설정·회원·data 등은 설치 폴더(`%LOCALAPPDATA%\NAS4USB`)에 두되, MSI 패키지에는 넣지 않습니다.  
+업데이트는 프로그램 파일만 교체하고 런타임 설정은 그대로 둡니다. (USB 포터블도 exe 옆과 동일)
 
 ### 릴리스 빌드 (MSI + portable, 동일 빌드 시각)
 

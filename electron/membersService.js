@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { getPortableRoot } from './appContext.js';
+import { getExeRoot, getPortableRoot } from './appContext.js';
 import { resolveAdminCredentials } from './envConfig.js';
 import {
   BOOTSTRAP_ADMIN_MEMBER_ID,
@@ -142,7 +142,7 @@ export async function getMemberAccessPermissionsByLoginId(
  * @param {string} [portableRoot]
  */
 export async function ensureBootstrapAdmin(portableRoot = getPortableRoot()) {
-  const { adminId, adminPassword } = resolveAdminCredentials(portableRoot);
+  const { adminId, adminPassword } = resolveAdminCredentials(getExeRoot());
   const loginId = String(adminId).trim() || 'admin';
   const members = await loadMembers(portableRoot);
   const bootstrap = members.find((member) => isBootstrapAdminMemberId(member.id));
@@ -345,7 +345,7 @@ export async function saveMembersPayload(payload, portableRoot = getPortableRoot
   }
 
   await ensureBootstrapAdmin(portableRoot);
-  const { adminId } = resolveAdminCredentials(portableRoot);
+  const { adminId } = resolveAdminCredentials(getExeRoot());
   const bootstrapLoginKey = String(adminId).trim().toLowerCase();
 
   const existingMembers = await loadMembers(portableRoot);
@@ -357,9 +357,17 @@ export async function saveMembersPayload(payload, portableRoot = getPortableRoot
     return { ok: false, message: '기본 관리자(admin) 계정은 삭제할 수 없습니다.' };
   }
 
+  /** @type {string[]} */
+  const deletedHomeLoginIds = existingMembers
+    .filter((member) => deleteIds.has(member.id) && !isBootstrapAdminMemberId(member.id))
+    .map((member) => String(member.loginId ?? '').trim())
+    .filter(Boolean);
+
   /** @type {MemberRecord[]} */
   let nextMembers = existingMembers.filter((member) => !deleteIds.has(member.id));
   const loginIds = new Set(nextMembers.map((member) => member.loginId.toLowerCase()));
+  /** @type {Array<{ from: string, to: string }>} */
+  const homeRenames = [];
 
   for (const patch of memberPayload) {
     if (!patch?.id || patch._delete) continue;
@@ -372,6 +380,9 @@ export async function saveMembersPayload(payload, portableRoot = getPortableRoot
     let loginId = String(patch.loginId ?? '').trim();
     if (isBootstrap) {
       loginId = existing.loginId;
+    }
+    if (!isBootstrap && existing.loginId !== loginId) {
+      homeRenames.push({ from: existing.loginId, to: loginId });
     }
     const displayName = isBootstrap
       ? existing.displayName || loginId
@@ -470,6 +481,35 @@ export async function saveMembersPayload(payload, portableRoot = getPortableRoot
   }
 
   await writeMembers(nextMembers, portableRoot);
+
+  try {
+    const {
+      deleteMemberHome,
+      ensureMemberHome,
+      pruneOrphanMemberHomes,
+      renameMemberHomeIfNeeded,
+    } = await import('./memberHomeService.js');
+    for (const loginId of deletedHomeLoginIds) {
+      await deleteMemberHome(loginId).catch((err) => {
+        console.warn(`[members] delete home failed for ${loginId}:`, err);
+      });
+    }
+    for (const rename of homeRenames) {
+      await renameMemberHomeIfNeeded(rename.from, rename.to).catch(() => {});
+    }
+    for (const member of nextMembers) {
+      if (!member.active) continue;
+      await ensureMemberHome(member.loginId).catch(() => {});
+    }
+    await pruneOrphanMemberHomes(portableRoot, {
+      loginIds: nextMembers.map((member) => member.loginId),
+    }).catch((err) => {
+      console.warn('[members] prune orphan homes failed:', err);
+    });
+  } catch (err) {
+    console.warn('[members] ensure member homes failed:', err);
+  }
+
   const listed = await listMembers(portableRoot);
   return { ok: true, members: listed.members };
 }

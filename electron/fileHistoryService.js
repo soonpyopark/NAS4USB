@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { getDataRoot, getPortableRoot } from './appContext.js';
+import { getDataRoot, getPortableRoot, resolvePortablePath } from './appContext.js';
 import { purgeYjsRoomForPath } from './yjsRoom.js';
 import { getFortuneSidecarPath } from '../shared/fortuneSheetSidecar.js';
 
@@ -149,7 +149,8 @@ export async function archiveCurrentVersion(relativePath, dataRoot = getDataRoot
   const normalized = normalizePath(relativePath);
   if (!isFileHistorySupported(normalized)) return null;
 
-  const destination = path.join(dataRoot, normalized);
+  void dataRoot;
+  const destination = resolvePortablePath(normalized);
   try {
     await fs.access(destination);
   } catch {
@@ -163,7 +164,7 @@ export async function archiveCurrentVersion(relativePath, dataRoot = getDataRoot
   // callers are responsible for that ordering (see XlsxEditorShell.jsx's handleSave, which
   // archives via commitWorkspace() before it calls writeFortuneSidecar with the new sheets).
   if (hasFortuneSidecar(normalized)) {
-    const sidecarPath = path.join(dataRoot, getFortuneSidecarPath(normalized));
+    const sidecarPath = resolvePortablePath(getFortuneSidecarPath(normalized));
     await fs.copyFile(sidecarPath, sidecarSnapshotPath(dir, entry.id)).catch(() => {
       // No sidecar yet (plain xlsx never opened in the editor, or no images ever inserted) —
       // fine, preview/restore will fall back to parsing the plain xlsx bytes.
@@ -267,7 +268,8 @@ export async function restoreFileHistoryEntry(
     throw new Error('복원할 이력을 찾을 수 없습니다.');
   }
 
-  const destination = path.join(dataRoot, normalized);
+  void dataRoot;
+  const destination = resolvePortablePath(normalized);
 
   await fs.mkdir(path.dirname(destination), { recursive: true });
   await fs.copyFile(snapshotPath, destination);
@@ -360,7 +362,8 @@ export async function syncFileHistoryMoveTree(
     }
   }
 
-  await walk(path.join(dataRoot, fromPath), '');
+  void dataRoot;
+  await walk(resolvePortablePath(fromPath), '');
 }
 
 /**

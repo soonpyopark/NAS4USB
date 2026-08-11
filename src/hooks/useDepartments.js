@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
+import { SHARED_FOLDER } from '../../shared/constants.js';
 import { isDepartmentCode } from '../lib/departments.js';
 
 /**
- * Scan data root for department folders (7-digit codes).
+ * Scan the shared folder for department folders (7-digit codes).
  */
 export function useDepartments() {
   const [departments, setDepartments] = useState([]);
@@ -11,7 +12,7 @@ export function useDepartments() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const entries = await window.nas4usb.fs.readDir('.');
+      const entries = await window.nas4usb.fs.readDir(SHARED_FOLDER);
       const codes = entries
         .filter((entry) => entry.isDirectory && isDepartmentCode(entry.name))
         .map((entry) => entry.name)

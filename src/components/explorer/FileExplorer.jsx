@@ -39,7 +39,7 @@ import { resolveFileEntryStatus } from '../../lib/fileEntryStatus.js';
 import { downloadFileEntries } from '../../lib/downloadEntries.js';
 import { moveEntries } from '../../lib/moveEntries.js';
 import { uploadFilesAtPath } from '../../lib/fsWriteActions.js';
-import { isTrashPath, isTrashSubfolder, TRASH_FOLDER } from '../../lib/trashPaths.js';
+import { isTrashPath, isTrashSubfolder, SHARED_FOLDER, TRASH_FOLDER } from '../../lib/trashPaths.js';
 import { isTiptapDocumentRelativePath } from '../../../shared/tiptapAssetPaths.js';
 import { FAVORITES_FOLDER, isFavoritesPath } from '../../lib/favoritesPaths.js';
 import { guardOpenFileEntry } from '../../lib/openFileGuard.js';
@@ -48,12 +48,22 @@ import { useTrash } from '../../hooks/useTrash.js';
 import { useAppConfirm } from '../../hooks/useAppConfirm.jsx';
 import { useFileDropZone } from '../../hooks/useFileDropZone.js';
 import { useAdminAuthContext } from '../../context/AdminAuthContext.jsx';
+import { useLoginDialog } from '../../context/LoginDialogContext.jsx';
 import { useFsSync } from '../../context/FsSyncContext.jsx';
 import { useFsRemoteRefresh } from '../../hooks/useFsRemoteRefresh.js';
 import { useFolderContentSearch } from '../../hooks/useFolderContentSearch.js';
 import FileDropOverlay from '../common/FileDropOverlay.jsx';
+import ViewAccessDeniedPanel from '../common/ViewAccessDeniedPanel.jsx';
 import { canOpenFileForEdit, VIEW_OPEN_DENIED_MESSAGE, GUEST_READ_DENIED_MESSAGE } from '../../lib/fileEditAccess.js';
 import { useGuestPermissions } from '../../hooks/useGuestPermissions.js';
+import {
+  canWriteAtPath,
+  effectivePermissionsForPath,
+  isHomesContainerPath,
+  isMemberHomeRootPath,
+  isOwnMemberHomePath,
+} from '../../lib/memberHomes.js';
+import { isProtectedSharedSystemPath } from '../../../shared/workspacePaths.js';
 
 export default function FileExplorer({
   currentPath,
@@ -96,15 +106,23 @@ export default function FileExplorer({
   const { shareMap, refreshShareMap } = useShareLinks();
   const { accessMap, refreshAccessMap, setFileAccess } = useFileAccess();
   const { favoritesMap, refreshFavoritesMap, setFavorite } = useFavorites();
-  const { isAdminLoggedIn } = useAdminAuthContext();
+  const { isAdminLoggedIn, adminId } = useAdminAuthContext();
+  const { openLogin } = useLoginDialog();
   const { effectivePermissions } = useGuestPermissions();
-  const canWrite = effectivePermissions.write;
+  const globalWrite = Boolean(effectivePermissions.write);
+  const canViewContent = Boolean(effectivePermissions.view) || Boolean(effectivePermissions.write);
+  const homeViewBypass =
+    isAdminLoggedIn &&
+    (isHomesContainerPath(currentPath) || isOwnMemberHomePath(currentPath, adminId));
+  const showViewAccessDenied = !canViewContent && !homeViewBypass;
+  const isInTrashView = isTrashPath(currentPath);
+  const isInFavoritesView = isFavoritesPath(currentPath);
+  const canWrite = isInTrashView
+    ? globalWrite || isAdminLoggedIn
+    : canWriteAtPath(currentPath, adminId, isAdminLoggedIn, globalWrite);
   const { notifyLocalChange } = useFsSync();
   const { refresh: refreshTrash } = useTrash();
   const { confirm: appConfirm, alert: appAlert, dialog: confirmDialog } = useAppConfirm();
-
-  const isInTrashView = isTrashPath(currentPath);
-  const isInFavoritesView = isFavoritesPath(currentPath);
 
   const [viewMode, setViewMode] = useState('list');
   const [searchQuery, setSearchQuery] = useState('');
@@ -320,7 +338,19 @@ export default function FileExplorer({
       });
       return;
     }
-    setRenameEntry(targets[0]);
+    const target = targets[0];
+    if (
+      isProtectedSharedSystemPath(target.relativePath) ||
+      isHomesContainerPath(target.relativePath) ||
+      isMemberHomeRootPath(target.relativePath)
+    ) {
+      void appAlert({
+        title: '이름 변경',
+        body: '공유폴더·개인폴더의 이름은 바꿀 수 없습니다.',
+      });
+      return;
+    }
+    setRenameEntry(target);
   };
 
   const handleRenameConfirm = async (nextName) => {
@@ -465,7 +495,7 @@ export default function FileExplorer({
     clearSelection();
 
     if (wasInTrashView) {
-      onNavigate('.');
+      onNavigate(SHARED_FOLDER);
     }
 
     await refreshAll();
@@ -549,9 +579,15 @@ export default function FileExplorer({
     }
     const canOpen = await guardOpenFileEntry(entry, { onMissing: () => void refreshAll() });
     if (!canOpen) return;
-    if (!canOpenFileForEdit(entry.relativePath, accessMap, isAdminLoggedIn, effectivePermissions)) {
+    const pathPerms = effectivePermissionsForPath(
+      entry.relativePath,
+      adminId,
+      isAdminLoggedIn,
+      effectivePermissions,
+    );
+    if (!canOpenFileForEdit(entry.relativePath, accessMap, isAdminLoggedIn, pathPerms)) {
       nativeAlert(
-        !effectivePermissions.write && effectivePermissions.read === false
+        !pathPerms.write && pathPerms.read === false
           ? GUEST_READ_DENIED_MESSAGE
           : VIEW_OPEN_DENIED_MESSAGE,
       );
@@ -720,10 +756,27 @@ export default function FileExplorer({
           (isTiptapDocumentRelativePath(contextTargets[0].relativePath) ||
             /\.md$/i.test(contextTargets[0].relativePath)),
         canEditOpen: contextTarget
-          ? canOpenFileForEdit(contextTarget.relativePath, accessMap, isAdminLoggedIn, effectivePermissions)
+          ? canOpenFileForEdit(
+              contextTarget.relativePath,
+              accessMap,
+              isAdminLoggedIn,
+              effectivePermissionsForPath(
+                contextTarget.relativePath,
+                adminId,
+                isAdminLoggedIn,
+                effectivePermissions,
+              ),
+            )
           : false,
         isAdminLoggedIn,
-        canWrite,
+        canWrite: isInTrashView
+          ? canWrite
+          : canWriteAtPath(
+              contextTarget?.relativePath ?? contextTargetPath,
+              adminId,
+              isAdminLoggedIn,
+              globalWrite,
+            ),
       })
     : buildBackgroundContextMenuItems({
         targetPath: contextTargetPath,
@@ -737,7 +790,9 @@ export default function FileExplorer({
         onRefresh: refreshAll,
         onEmptyTrash: handleEmptyTrash,
         isAdminLoggedIn,
-        canWrite,
+        canWrite: isInTrashView
+          ? canWrite
+          : canWriteAtPath(contextTargetPath, adminId, isAdminLoggedIn, globalWrite),
       });
 
   keyHandlersRef.current = {
@@ -831,7 +886,7 @@ export default function FileExplorer({
             onChange={(event) => setSearchContents(event.target.checked)}
             className="h-3.5 w-3.5 cursor-pointer accent-nas-accent"
           />
-          본문 포함
+          본문 검색
         </label>
       </div>
 
@@ -852,7 +907,12 @@ export default function FileExplorer({
         viewMode={viewMode}
         onViewModeChange={setViewMode}
         hasSelection={selectedEntries.length > 0}
-        canRename={selectedEntries.length === 1}
+        canRename={
+          selectedEntries.length === 1 &&
+          !isProtectedSharedSystemPath(selectedEntries[0].relativePath) &&
+          !isHomesContainerPath(selectedEntries[0].relativePath) &&
+          !isMemberHomeRootPath(selectedEntries[0].relativePath)
+        }
         hasClipboard={hasClipboard}
         isInTrashView={isInTrashView}
         isInFavoritesView={isInFavoritesView}
@@ -879,6 +939,7 @@ export default function FileExplorer({
         canShowProperties={selectedEntries.length === 1}
         isAdminLoggedIn={isAdminLoggedIn}
         canWrite={canWrite}
+        canEmptyTrash={globalWrite}
       />
 
       {isInTrashView && (
@@ -901,24 +962,27 @@ export default function FileExplorer({
         </div>
       )}
 
-      <FileList
-        entries={visibleEntries}
-        loading={loading}
-        viewMode={viewMode}
-        selectedSet={selectedSet}
-        accessMap={accessMap}
-        shareMap={shareMap}
-        favoritesMap={favoritesMap}
-        onOpen={handleOpen}
-        onSelect={handleSelect}
-        onToggleCheckbox={handleToggleCheckbox}
-        onToggleSelectAll={() => toggleSelectAllVisible(visibleEntries)}
-        onContextMenu={openContextMenu}
-        onBackgroundClick={clearSelection}
-        onShareLinkClick={handleShareLinkBadgeClick}
-        onPropertiesClick={handleShowProperties}
-      />
-
+      {showViewAccessDenied ? (
+        <ViewAccessDeniedPanel isLoggedIn={isAdminLoggedIn} onLogin={() => openLogin()} />
+      ) : (
+        <FileList
+          entries={visibleEntries}
+          loading={loading}
+          viewMode={viewMode}
+          selectedSet={selectedSet}
+          accessMap={accessMap}
+          shareMap={shareMap}
+          favoritesMap={favoritesMap}
+          onOpen={handleOpen}
+          onSelect={handleSelect}
+          onToggleCheckbox={handleToggleCheckbox}
+          onToggleSelectAll={() => toggleSelectAllVisible(visibleEntries)}
+          onContextMenu={openContextMenu}
+          onBackgroundClick={clearSelection}
+          onShareLinkClick={handleShareLinkBadgeClick}
+          onPropertiesClick={handleShowProperties}
+        />
+      )}
       {contextMenu && contextItems.length > 0 && (
         <ContextMenu
           x={contextMenu.x}

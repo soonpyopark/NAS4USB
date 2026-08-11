@@ -152,12 +152,26 @@ async function stageForMsi(winUnpackedDir) {
     }
   }
 
-  // Drop mutable runtime state; then seed sample documents into data/.
-  // Windows Installer can lock harvested files it doesn't own, so never stage .env / cache / history.
-  for (const name of ['data', '.cache', '.nas4usb', '.env']) {
+  // Drop mutable runtime state. Do NOT stage sample data or settings JSON —
+  // WiX mangles Hangul names, and harvesting settings would wipe them on upgrade.
+  // Samples live in app.asar; settings/data are created at runtime beside the exe.
+  for (const name of [
+    'data',
+    '공유폴더',
+    '개인폴더',
+    '.cache',
+    '.nas4usb',
+    '.env',
+    '.nas4usb-settings.json',
+    '.nas4usb-members.json',
+    '.nas4usb-sessions.json',
+    '.nas4usb-portable',
+  ]) {
     await fsp.rm(path.join(STAGE_DIR, name), { recursive: true, force: true });
   }
-  await seedPortableData(STAGE_DIR);
+  // Legacy unpacks may still carry a WiX-corrupt resources/seed — never ship it.
+  await fsp.rm(path.join(STAGE_DIR, 'resources', 'seed'), { recursive: true, force: true });
+  await seedPortableData(STAGE_DIR, { includeSampleData: false, writeSettings: false });
 
   log(`staged: ${STAGE_DIR}`);
   return mainExe;

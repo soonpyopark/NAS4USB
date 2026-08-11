@@ -1,6 +1,13 @@
-import { TRASH_FOLDER, FAVORITES_FOLDER, isTrashRelativePath } from '../../shared/constants.js';
+import {
+  DEFAULT_DATA_DIR,
+  TRASH_FOLDER,
+  FAVORITES_FOLDER,
+  SHARED_FOLDER,
+  isTrashRelativePath,
+} from '../../shared/constants.js';
+import { HOMES_DISK_DIR, HOMES_FOLDER } from './memberHomes.js';
 
-export { TRASH_FOLDER, FAVORITES_FOLDER };
+export { TRASH_FOLDER, FAVORITES_FOLDER, SHARED_FOLDER };
 
 /**
  * @param {string} relativePath
@@ -40,8 +47,9 @@ export function isFsNotFoundError(error) {
  * @param {string} currentPath
  */
 export function filterTrashFromEntries(entries, currentPath) {
-  if (currentPath !== '.') return entries;
-  return entries.filter((entry) => entry.relativePath !== TRASH_FOLDER);
+  const normalized = String(currentPath ?? '').replace(/\\/g, '/');
+  if (normalized !== '.' && normalized !== SHARED_FOLDER) return entries;
+  return entries.filter((entry) => entry.relativePath !== TRASH_FOLDER && entry.name !== TRASH_FOLDER);
 }
 
 /**
@@ -50,6 +58,8 @@ export function filterTrashFromEntries(entries, currentPath) {
 export function formatBreadcrumbSegment(segment) {
   if (segment === TRASH_FOLDER) return '휴지통';
   if (segment === FAVORITES_FOLDER) return '즐겨찾기';
+  if (segment === HOMES_FOLDER || segment === HOMES_DISK_DIR) return HOMES_FOLDER;
+  if (segment === SHARED_FOLDER || segment === DEFAULT_DATA_DIR) return SHARED_FOLDER;
   return segment;
 }
 

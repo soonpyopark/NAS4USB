@@ -33,6 +33,7 @@ export default function FileExplorerToolbar({
   onRestore,
   isAdminLoggedIn = true,
   canWrite = true,
+  canEmptyTrash = true,
 }) {
   const showWriteActions = canWrite && !isInTrashView && !isInFavoritesView;
   const showTrashAdminActions = canWrite && isInTrashView;
@@ -94,9 +95,11 @@ export default function FileExplorerToolbar({
             >
               복원
             </button>
-            <button type="button" className="nas-btn-ghost text-red-600" onClick={onEmptyTrash}>
-              휴지통 비우기
-            </button>
+            {canEmptyTrash && (
+              <button type="button" className="nas-btn-ghost text-red-600" onClick={onEmptyTrash}>
+                휴지통 비우기
+              </button>
+            )}
           </>
         )}
         {showDeleteAction && !isInTrashView && (

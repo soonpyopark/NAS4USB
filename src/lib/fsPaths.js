@@ -1,3 +1,6 @@
+import { SHARED_FOLDER } from '../../shared/constants.js';
+import { HOMES_FOLDER } from '../../shared/memberHomes.js';
+
 /**
  * @param {string} currentPath
  * @param {string} name
@@ -96,6 +99,16 @@ export function readFileAsBase64(file) {
 /** @typedef {'asc'|'desc'} SortDirection */
 
 /**
+ * Keep 공유폴더 above 개인폴더 at the workspace root (Korean name order would reverse them).
+ * @param {string} name
+ */
+function workspaceRootFolderRank(name) {
+  if (name === SHARED_FOLDER) return 0;
+  if (name === HOMES_FOLDER) return 1;
+  return 2;
+}
+
+/**
  * @param {import('../types/nas4usb.d.ts').FsEntry[]} entries
  * @param {SortField} sortField
  * @param {SortDirection} sortDirection
@@ -105,6 +118,9 @@ export function sortEntries(entries, sortField, sortDirection) {
 
   return [...entries].sort((a, b) => {
     if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+
+    const rootRank = workspaceRootFolderRank(a.name) - workspaceRootFolderRank(b.name);
+    if (rootRank !== 0) return rootRank;
 
     switch (sortField) {
       case 'modifiedAt':

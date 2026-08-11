@@ -55,15 +55,12 @@ export function readServerEnvRaw(portableRoot, isDev) {
 }
 
 /**
- * 데이터 루트 경로를 해석합니다.
- * - 설정 UI (`settings.dataRoot`)가 있으면 최우선
- * - 그다음 `.env` / 환경변수 `DATA_ROOT`·`DATA_PATH`
- * - 기본값: `{portableRoot}/data`
- *
+ * Resolve configured path string (settings / env) to an absolute path, or null.
  * @param {string} portableRoot
- * @param {string | null | undefined} [settingsDataRoot]
+ * @param {string | null | undefined} settingsDataRoot
+ * @returns {string | null}
  */
-export function resolveDataRoot(portableRoot, settingsDataRoot = null) {
+function readConfiguredWorkspacePath(portableRoot, settingsDataRoot = null) {
   const fromSettings =
     settingsDataRoot != null && String(settingsDataRoot).trim()
       ? String(settingsDataRoot).trim()
@@ -76,9 +73,7 @@ export function resolveDataRoot(portableRoot, settingsDataRoot = null) {
     process.env.DATA_ROOT ??
     process.env.DATA_PATH;
 
-  if (!configured || !String(configured).trim()) {
-    return path.join(portableRoot, DEFAULT_DATA_DIR);
-  }
+  if (!configured || !String(configured).trim()) return null;
 
   const trimmed = String(configured).trim();
   return path.isAbsolute(trimmed)
@@ -87,11 +82,46 @@ export function resolveDataRoot(portableRoot, settingsDataRoot = null) {
 }
 
 /**
- * @param {string} dataRoot
+ * Workspace root (설정/DATA_ROOT). Under it: `share/` + `private/`.
+ * Default: `{portableRoot}`.
+ *
+ * @param {string} portableRoot
+ * @param {string | null | undefined} [settingsDataRoot]
+ */
+export function resolveWorkspaceRoot(portableRoot, settingsDataRoot = null) {
+  const configured = readConfiguredWorkspacePath(portableRoot, settingsDataRoot);
+  if (!configured) return path.resolve(portableRoot);
+  return configured;
+}
+
+/**
+ * Shared documents folder = `{workspaceRoot}/share`.
+ * Kept as `resolveDataRoot` for call-site compatibility.
+ *
+ * @param {string} portableRoot
+ * @param {string | null | undefined} [settingsDataRoot]
+ */
+export function resolveDataRoot(portableRoot, settingsDataRoot = null) {
+  return path.join(resolveWorkspaceRoot(portableRoot, settingsDataRoot), DEFAULT_DATA_DIR);
+}
+
+/**
+ * @param {string} sharedRoot absolute path of the share/ folder
  * @param {string} portableRoot
  */
-export function isDefaultDataRoot(dataRoot, portableRoot) {
-  return path.resolve(dataRoot) === path.resolve(portableRoot, DEFAULT_DATA_DIR);
+export function isDefaultDataRoot(sharedRoot, portableRoot) {
+  return (
+    path.resolve(sharedRoot) ===
+    path.resolve(path.join(portableRoot, DEFAULT_DATA_DIR))
+  );
+}
+
+/**
+ * @param {string} workspaceRoot
+ * @param {string} portableRoot
+ */
+export function isDefaultWorkspaceRoot(workspaceRoot, portableRoot) {
+  return path.resolve(workspaceRoot) === path.resolve(portableRoot);
 }
 
 /**

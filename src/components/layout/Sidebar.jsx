@@ -20,6 +20,7 @@ import { useFavorites } from '../../hooks/useFavorites.js';
 import { useTrash } from '../../hooks/useTrash.js';
 import { useFileDropZone } from '../../hooks/useFileDropZone.js';
 import { useAdminAuthContext } from '../../context/AdminAuthContext.jsx';
+import { useLoginDialog } from '../../context/LoginDialogContext.jsx';
 import { useFsSync } from '../../context/FsSyncContext.jsx';
 import { useFsRemoteRefresh } from '../../hooks/useFsRemoteRefresh.js';
 import FileDropOverlay from '../common/FileDropOverlay.jsx';
@@ -48,8 +49,16 @@ import { useGuestPermissions } from '../../hooks/useGuestPermissions.js';
 import { downloadFileEntries } from '../../lib/downloadEntries.js';
 import { moveEntries } from '../../lib/moveEntries.js';
 import { TRASH_ACCESS_DENIED_MESSAGE } from '../../../shared/constants.js';
-import { isTrashPath, isTrashSubfolder, TRASH_FOLDER } from '../../lib/trashPaths.js';
+import { isTrashPath, isTrashSubfolder, SHARED_FOLDER, TRASH_FOLDER } from '../../lib/trashPaths.js';
 import { FAVORITES_FOLDER, isFavoritesPath } from '../../lib/favoritesPaths.js';
+import {
+  canWriteAtPath,
+  effectivePermissionsForPath,
+  isHomesContainerPath,
+  isMemberHomeRootPath,
+  memberHomeRelativePath,
+} from '../../lib/memberHomes.js';
+import { isProtectedSharedSystemPath } from '../../../shared/workspacePaths.js';
 import { isTiptapDocumentRelativePath } from '../../../shared/tiptapAssetPaths.js';
 import { guardOpenFileEntry } from '../../lib/openFileGuard.js';
 import { nativeAlert } from '../../lib/nativeDialog.js';
@@ -77,14 +86,25 @@ export default function Sidebar({
   const { shareMap, refreshShareMap } = useShareLinks();
   const { accessMap, refreshAccessMap, setFileAccess } = useFileAccess();
   const { favoritesMap, favoritesCount, refreshFavoritesMap, setFavorite } = useFavorites();
-  const { isAdminLoggedIn } = useAdminAuthContext();
+  const { isAdminLoggedIn, adminId } = useAdminAuthContext();
+  const { openLogin } = useLoginDialog();
   const { effectivePermissions } = useGuestPermissions();
-  const canWrite = effectivePermissions.write;
-  const { notifyLocalChange } = useFsSync();
-  const { count: trashCount, refresh: refreshTrash } = useTrash({ enabled: canWrite });
-
+  const globalWrite = Boolean(effectivePermissions.write);
+  const canViewContent = Boolean(effectivePermissions.view) || Boolean(effectivePermissions.write);
+  const showViewAccessDenied = !canViewContent && !isAdminLoggedIn;
   const isInTrashView = isTrashPath(currentPath);
   const isInFavoritesView = isFavoritesPath(currentPath);
+  const canWrite = isInTrashView
+    ? globalWrite || isAdminLoggedIn
+    : canWriteAtPath(currentPath, adminId, isAdminLoggedIn, globalWrite);
+  const myHomePath = isAdminLoggedIn ? memberHomeRelativePath(adminId) : null;
+  const { notifyLocalChange } = useFsSync();
+  const canUseTrash = globalWrite || isAdminLoggedIn;
+  const { count: trashCount, refresh: refreshTrash } = useTrash({ enabled: canUseTrash });
+  const isInMyHomeView = Boolean(
+    myHomePath &&
+      (currentPath === myHomePath || String(currentPath).startsWith(`${myHomePath}/`)),
+  );
 
   const [contextMenu, setContextMenu] = useState(null);
   const [propertiesEntry, setPropertiesEntry] = useState(null);
@@ -254,6 +274,17 @@ export default function Sidebar({
 
   const handleRename = (entry) => {
     if (!entry) return;
+    if (
+      isProtectedSharedSystemPath(entry.relativePath) ||
+      isHomesContainerPath(entry.relativePath) ||
+      isMemberHomeRootPath(entry.relativePath)
+    ) {
+      void appAlert({
+        title: '이름 변경',
+        body: '공유폴더·개인폴더의 이름은 바꿀 수 없습니다.',
+      });
+      return;
+    }
     setRenameEntry(entry);
   };
 
@@ -363,7 +394,7 @@ export default function Sidebar({
     await refreshTrash();
 
     if (wasInTrashView) {
-      onNavigate('.');
+      onNavigate(SHARED_FOLDER);
     }
 
     await fs.refresh();
@@ -513,9 +544,15 @@ export default function Sidebar({
     }
     const canOpen = await guardOpenFileEntry(entry, { onMissing: notifyChange });
     if (!canOpen) return;
-    if (!canOpenFileForEdit(entry.relativePath, accessMap, isAdminLoggedIn, effectivePermissions)) {
+    const pathPerms = effectivePermissionsForPath(
+      entry.relativePath,
+      adminId,
+      isAdminLoggedIn,
+      effectivePermissions,
+    );
+    if (!canOpenFileForEdit(entry.relativePath, accessMap, isAdminLoggedIn, pathPerms)) {
       nativeAlert(
-        !effectivePermissions.write && effectivePermissions.read === false
+        !pathPerms.write && pathPerms.read === false
           ? GUEST_READ_DENIED_MESSAGE
           : VIEW_OPEN_DENIED_MESSAGE,
       );
@@ -574,10 +611,27 @@ export default function Sidebar({
               /\.md$/i.test(contextTarget.relativePath)),
         ),
         canEditOpen: contextTarget
-          ? canOpenFileForEdit(contextTarget.relativePath, accessMap, isAdminLoggedIn, effectivePermissions)
+          ? canOpenFileForEdit(
+              contextTarget.relativePath,
+              accessMap,
+              isAdminLoggedIn,
+              effectivePermissionsForPath(
+                contextTarget.relativePath,
+                adminId,
+                isAdminLoggedIn,
+                effectivePermissions,
+              ),
+            )
           : false,
         isAdminLoggedIn,
-        canWrite,
+        canWrite: isInTrashView
+          ? canWrite
+          : canWriteAtPath(
+              contextTarget?.relativePath ?? contextTargetPath,
+              adminId,
+              isAdminLoggedIn,
+              globalWrite,
+            ),
       })
     : buildBackgroundContextMenuItems({
         targetPath: contextTargetPath,
@@ -591,7 +645,9 @@ export default function Sidebar({
         onRefresh: notifyChange,
         onEmptyTrash: handleEmptyTrash,
         isAdminLoggedIn,
-        canWrite,
+        canWrite: isInTrashView
+          ? canWrite
+          : canWriteAtPath(contextTargetPath, adminId, isAdminLoggedIn, globalWrite),
       });
 
   return (
@@ -649,6 +705,8 @@ export default function Sidebar({
             onNavigate={onNavigate}
             onOpenFile={handleOpenFileFromTree}
             onContextMenu={openContextMenu}
+            viewAccessDenied={showViewAccessDenied}
+            onRequestLogin={showViewAccessDenied ? () => openLogin() : undefined}
             onBackgroundContextMenu={(event, targetPath = currentPath) =>
               openContextMenu(event, null, targetPath)
             }
@@ -677,10 +735,27 @@ export default function Sidebar({
           )}
         </button>
 
+        {myHomePath && (
+          <button
+            type="button"
+            onClick={() => onNavigate(myHomePath)}
+            className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-[10pt] transition-colors ${
+              mainView !== 'settings' && isInMyHomeView
+                ? 'bg-nas-accent text-white'
+                : 'text-slate-300 hover:bg-nas-sidebarHover hover:text-white'
+            }`}
+          >
+            <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M12 3l8 6v11a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1V9l8-6z" />
+            </svg>
+            <span className="truncate">내 폴더</span>
+          </button>
+        )}
+
         <button
           type="button"
           onClick={() => {
-            if (canWrite) {
+            if (canUseTrash) {
               onNavigate(TRASH_FOLDER);
               return;
             }
@@ -706,7 +781,7 @@ export default function Sidebar({
           }}
           className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-[10pt] transition-colors ${
             mainView !== 'settings' &&
-            canWrite &&
+            canUseTrash &&
             (currentPath === TRASH_FOLDER || currentPath.startsWith(`${TRASH_FOLDER}/`))
               ? 'bg-nas-accent text-white'
               : 'text-slate-300 hover:bg-nas-sidebarHover hover:text-white'
@@ -716,7 +791,7 @@ export default function Sidebar({
             <path d="M9 3h6l1 2h4v2H4V5h4l1-2zm1 6h2v9h-2V9zm3 0h2v9h-2V9zM6 9h2v9H6V9z" />
           </svg>
           <span className="truncate">휴지통</span>
-          {canWrite && trashCount > 0 && (
+          {canUseTrash && trashCount > 0 && (
             <span className="ml-auto rounded-full bg-slate-600 px-1.5 py-0.5 text-[10px] text-slate-100">
               {trashCount}
             </span>

@@ -16,9 +16,9 @@ export default function StatusBar({ paths, syncInfo, currentPath }) {
     <footer className="flex h-7 shrink-0 items-center justify-between border-t border-nas-border bg-white px-4 text-xs text-nas-muted">
       <span className="truncate">
         {formatPath(currentPath)}
-        {paths?.dataRoot && (
-          <span className="ml-3 hidden lg:inline" title={paths.dataRoot}>
-            data: {paths.dataRoot}
+        {paths?.workspaceRoot && (
+          <span className="ml-3 hidden lg:inline" title={paths.workspaceRoot}>
+            root: {paths.workspaceRoot}
           </span>
         )}
       </span>

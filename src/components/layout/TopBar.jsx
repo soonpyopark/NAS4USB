@@ -16,6 +16,8 @@ import { nativeAlert, nativePrompt } from '../../lib/nativeDialog.js';
 
 const settingsIconBtnClass =
   'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-transparent text-slate-500 transition-colors hover:border-slate-200 hover:bg-slate-100 hover:text-slate-800';
+const settingsIconBtnActiveClass =
+  'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-nas-accentBorder bg-nas-accentSoft text-nas-accent transition-colors';
 
 function HelpQuestionIcon() {
   return (
@@ -222,9 +224,9 @@ export default function TopBar({
           {isSuperAdmin ? (
             <button
               type="button"
-              className={settingsIconBtnClass}
-              aria-label="환경설정"
-              title="환경설정 (총괄관리자)"
+              className={settingsOpen ? settingsIconBtnActiveClass : settingsIconBtnClass}
+              aria-label={settingsOpen ? '환경설정 닫기' : '환경설정'}
+              title={settingsOpen ? '환경설정 닫기' : '환경설정 (총괄관리자)'}
               aria-pressed={settingsOpen}
               onClick={() => onOpenSettings?.()}
             >

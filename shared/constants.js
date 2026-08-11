@@ -9,7 +9,7 @@ export const APP_VERSION = '1.0.4';
  * Refreshed by `build:release` / `build:msi` / `build:dist:exe` for update checks
  * when the GitHub tag version is unchanged (same-version republish).
  */
-export const APP_BUILD_STAMP = '260810_220724';
+export const APP_BUILD_STAMP = '260811_162656';
 
 /** Application display name. */
 export const APP_NAME = 'NAS4USB';
@@ -26,11 +26,18 @@ export const APP_ICON_LABEL = 'N$U';
 /** Web/Electron UI icon (served from Vite public/). */
 export const APP_ICON_URL = '/icon.png';
 
-/** Initial department folder under data/. */
+/** Initial department folder under the shared folder. */
 export const DEFAULT_DEPARTMENT_CODE = '0000001';
 
-/** Default data directory name under portable/build root. */
-export const DEFAULT_DATA_DIR = 'data';
+/** Virtual / UI name for the shared documents folder. */
+export const SHARED_FOLDER = '공유폴더';
+
+/** Previous default on-disk names for the shared documents folder. */
+export const LEGACY_DATA_DIR = 'data';
+export const LEGACY_SHARED_DISK_DIR = '공유폴더';
+
+/** Default on-disk shared-directory name under portable/build root. */
+export const DEFAULT_DATA_DIR = 'share';
 
 /** Default administrator credentials (override via `.env`). */
 export const DEFAULT_ADMIN_ID = 'admin';

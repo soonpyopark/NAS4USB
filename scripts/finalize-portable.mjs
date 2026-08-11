@@ -5,6 +5,7 @@ import { seedPortableData, projectRoot } from './build-dist-common.mjs';
 const portableDir = path.resolve(projectRoot, process.argv[2] ?? 'exe_new');
 
 await seedPortableData(portableDir);
+await fs.writeFile(path.join(portableDir, '.nas4usb-portable'), '1\n', 'utf8');
 await fs.copyFile(
   path.join(projectRoot, 'allow-firewall-inbound.bat'),
   path.join(portableDir, 'allow-firewall-inbound.bat'),

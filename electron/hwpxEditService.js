@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { getDataRoot, getPortableRoot, getTempPath } from './appContext.js';
+import { getDataRoot, getPortableRoot, getTempPath, resolvePortablePath } from './appContext.js';
 import { LEGACY_HISTORY_ROOT, LEGACY_LOCKS_FILE } from '../shared/legacyConfig.js';
 
 const LOCKS_FILE = '.nas4usb/hwpx-locks.json';
@@ -242,7 +242,8 @@ export async function restoreHwpxHistoryEntry(
   const normalized = normalizePath(relativePath);
   await assertHwpxNotLockedByOther(normalized, actor.holderId, portableRoot);
 
-  const destination = path.join(dataRoot, normalized);
+  void dataRoot;
+  const destination = resolvePortablePath(normalized);
   const dir = await resolveHistoryDir(portableRoot, normalized);
   const snapshotPath = path.join(dir, `${entryId}.hwpx`);
 
@@ -313,7 +314,8 @@ export async function startHwpxSystemEdit(
     }
   }
 
-  const sourcePath = path.join(dataRoot, normalized);
+  void dataRoot;
+  const sourcePath = resolvePortablePath(normalized);
   try {
     await fs.access(sourcePath);
   } catch {
@@ -380,8 +382,9 @@ export async function finishHwpxSystemEdit(
     throw new Error('편집을 종료할 권한이 없습니다.');
   }
 
+  void dataRoot;
   const normalized = session.relativePath;
-  const destination = path.join(dataRoot, normalized);
+  const destination = resolvePortablePath(normalized);
   const store = await loadLockStore(portableRoot);
   const lock = store.locks[normalized];
   if (!lock || lock.editSessionId !== editSessionId) {

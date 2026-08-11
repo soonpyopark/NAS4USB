@@ -3,7 +3,7 @@ import { getParentPath } from '../../lib/fsPaths.js';
 
 function formatParentPath(relativePath) {
   const parent = getParentPath(relativePath);
-  return parent === '.' ? 'data' : `data/${parent.replace(/\\/g, '/')}`;
+  return parent === '.' ? '워크스페이스' : parent.replace(/\\/g, '/');
 }
 
 export default function FileSearchResults({
