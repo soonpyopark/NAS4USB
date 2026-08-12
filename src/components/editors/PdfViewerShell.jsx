@@ -36,6 +36,7 @@ import {
   pdfUnderlinePresetColor,
 } from '../../lib/pdf/pdfMarkup.js';
 import { loadPdfViewerSidecar, writePdfViewerSidecar } from '../../lib/pdf/pdfViewerSidecar.js';
+import { downloadPdfMarkupsXlsx } from '../../lib/pdf/exportPdfMarkupsXlsx.js';
 import {
   embedMarkupsIntoPdfBytes,
   isSamePdfAnnotTarget,
@@ -57,7 +58,7 @@ const PAGE_ROOT_MARGIN = '1400px 0px';
 const PDF_SIDE_RAIL_WIDTH_PX = 220;
 
 /**
- * Chromium-like PDF.js viewer: zoom, page nav, rotate, download, print, search.
+ * Chromium-like PDF.js viewer: zoom, page nav, rotate, print, markup Excel export, search.
  *
  * @param {{
  *   relativePath: string,
@@ -914,8 +915,13 @@ export default function PdfViewerShell({
         }
         if (typeof view?.rotation === 'number') setRotation(view.rotation);
         if (typeof view?.twoPageView === 'boolean') setTwoPageView(view.twoPageView);
+        // Set current page before first layout so renderAllPages keepPage is correct.
+        // Scroll jump still waits until shells exist (pendingRestorePageRef).
         if (typeof view?.page === 'number' && view.page >= 1) {
-          pendingRestorePageRef.current = view.page;
+          const savedPage = Math.min(pdf.numPages, Math.max(1, Math.round(view.page)));
+          pendingRestorePageRef.current = savedPage;
+          setCurrentPage(savedPage);
+          setPageInput(String(savedPage));
         }
 
         const savedMarkups = Array.isArray(sidecar?.markups) ? sidecar.markups : [];
@@ -962,6 +968,9 @@ export default function PdfViewerShell({
   }, [cancelPageRenders, clearSearch, relativePath, streamUrl, teardownThumbnails]);
 
   // After first layout, jump to saved page then enable autosave.
+  // Keep pendingRestorePageRef until scroll succeeds — ResizeObserver / zoom
+  // re-renders cancel the timer via cleanup; clearing pending early left the
+  // viewer on page 1 and autosave overwrote the sidecar.
   useEffect(() => {
     if (!docReady || loading || rendering || !pageCount) return undefined;
 
@@ -972,23 +981,24 @@ export default function PdfViewerShell({
     }
 
     const target = Math.min(pageCount, Math.max(1, Math.round(pendingPage)));
-    pendingRestorePageRef.current = null;
 
     const timer = window.setTimeout(() => {
       const scroller = scrollRef.current;
       const pageEl = scroller?.querySelector(`[data-pdf-page="${target}"]`);
-      if (pageEl instanceof HTMLElement) {
-        setCurrentPage(target);
-        setPageInput(String(target));
-        ignoreScrollPageSyncRef.current = true;
-        pageEl.scrollIntoView({ behavior: 'auto', block: 'start' });
-        window.setTimeout(() => {
-          ignoreScrollPageSyncRef.current = false;
-          skipViewerSaveRef.current = false;
-        }, 200);
-      } else {
-        skipViewerSaveRef.current = false;
+      if (!(pageEl instanceof HTMLElement)) {
+        // Shells not ready yet; leave pending for the next settled render.
+        return;
       }
+
+      pendingRestorePageRef.current = null;
+      setCurrentPage(target);
+      setPageInput(String(target));
+      ignoreScrollPageSyncRef.current = true;
+      pageEl.scrollIntoView({ behavior: 'auto', block: 'start' });
+      window.setTimeout(() => {
+        ignoreScrollPageSyncRef.current = false;
+        skipViewerSaveRef.current = false;
+      }, 250);
     }, 60);
 
     return () => window.clearTimeout(timer);
@@ -1535,15 +1545,23 @@ export default function PdfViewerShell({
     window.addEventListener('pointerdown', onPointerDown, true);
     return () => window.removeEventListener('pointerdown', onPointerDown, true);
   }, [closeMarksContextMenu, marksContextMenu]);
-  const handleDownload = useCallback(() => {
-    const anchor = document.createElement('a');
-    anchor.href = absoluteStreamUrl;
-    anchor.download = fileName || 'document.pdf';
-    anchor.rel = 'noopener';
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-  }, [absoluteStreamUrl, fileName]);
+  const handleExportMarkups = useCallback(() => {
+    const entries = markupsRef.current;
+    if (!entries.length) {
+      setSaveMessage('내보낼 형광펜·밑줄이 없습니다.');
+      window.setTimeout(() => setSaveMessage(''), 2500);
+      return;
+    }
+    try {
+      downloadPdfMarkupsXlsx(entries, fileName || 'document.pdf');
+      setSaveMessage(`형광펜 ${entries.length}건을 엑셀로 내보냈습니다.`);
+      window.setTimeout(() => setSaveMessage(''), 2500);
+    } catch (err) {
+      setSaveMessage(
+        err instanceof Error ? `형광펜 내보내기 실패: ${err.message}` : '형광펜 내보내기에 실패했습니다.',
+      );
+    }
+  }, [fileName]);
 
   const handlePrint = useCallback(() => {
     const frame = document.createElement('iframe');
@@ -2006,19 +2024,19 @@ export default function PdfViewerShell({
           type="button"
           className="nas-btn-ghost text-xs"
           disabled={busy}
-          onClick={handleDownload}
-          title="다운로드"
-        >
-          다운로드
-        </button>
-        <button
-          type="button"
-          className="nas-btn-ghost text-xs"
-          disabled={busy}
           onClick={handlePrint}
           title="인쇄"
         >
           인쇄
+        </button>
+        <button
+          type="button"
+          className="nas-btn-ghost text-xs"
+          disabled={busy || markups.length === 0}
+          onClick={handleExportMarkups}
+          title="형광펜·밑줄을 Excel로 내보내기"
+        >
+          형광펜 내보내기
         </button>
       </div>
 

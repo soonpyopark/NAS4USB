@@ -3,6 +3,7 @@ dist/
 .cache/
 .dist-build/
 vendor/whiteboard4share/
+public/pdfjs/
 exe/
 exe_new/
 mac/

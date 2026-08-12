@@ -15,6 +15,11 @@ const MIME_TYPES = {
   '.ico': 'image/x-icon',
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.otf': 'font/otf',
+  // pdf.js CMap / Type1 standard fonts
+  '.bcmap': 'application/octet-stream',
+  '.pfb': 'application/octet-stream',
   '.wasm': 'application/wasm',
   '.webmanifest': 'application/manifest+json',
   '.map': 'application/json; charset=utf-8',
@@ -41,7 +46,30 @@ export async function serveStaticDist(req, res, distRoot) {
       filePath = path.join(filePath, 'index.html');
     }
   } catch {
-    if (requestPath.startsWith('rhwp-studio/')) {
+    // Never SPA-fallback binary/module assets — pdf.js wasm/worker must 404, not get index.html.
+    const ext = path.extname(requestPath).toLowerCase();
+    const noSpaFallback = new Set([
+      '.wasm',
+      '.mjs',
+      '.js',
+      '.css',
+      '.map',
+      '.json',
+      '.woff',
+      '.woff2',
+      '.ttf',
+      '.otf',
+      '.bcmap',
+      '.pfb',
+      '.png',
+      '.jpg',
+      '.jpeg',
+      '.svg',
+      '.ico',
+      '.gif',
+      '.webp',
+    ]);
+    if (requestPath.startsWith('rhwp-studio/') || noSpaFallback.has(ext)) {
       res.writeHead(404);
       res.end('Not found');
       return true;

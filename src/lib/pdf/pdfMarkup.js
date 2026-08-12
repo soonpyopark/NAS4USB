@@ -681,6 +681,81 @@ export function clientPointToPagePoint(pageWrap, clientX, clientY, cssScale = 1)
 }
 
 /**
+ * @param {number[] | undefined} quadPoints
+ * @param {import('pdfjs-dist').PageViewport} viewport
+ * @returns {Array<{ left: number, top: number, width: number, height: number }>}
+ */
+function viewportRectsFromQuadPoints(quadPoints, viewport) {
+  /** @type {Array<{ left: number, top: number, width: number, height: number }>} */
+  const rects = [];
+  if (!Array.isArray(quadPoints) || quadPoints.length < 8) return rects;
+
+  for (let index = 0; index + 7 < quadPoints.length; index += 8) {
+    /** @type {number[]} */
+    const xs = [];
+    /** @type {number[]} */
+    const ys = [];
+    for (let point = 0; point < 4; point += 1) {
+      const [vx, vy] = viewport.convertToViewportPoint(
+        Number(quadPoints[index + point * 2]) || 0,
+        Number(quadPoints[index + point * 2 + 1]) || 0,
+      );
+      xs.push(vx);
+      ys.push(vy);
+    }
+    const left = Math.min(...xs);
+    const right = Math.max(...xs);
+    const top = Math.min(...ys);
+    const bottom = Math.max(...ys);
+    const width = right - left;
+    const height = bottom - top;
+    if (width < 0.5 || height < 0.5) continue;
+    rects.push({ left, top, width, height });
+  }
+  return rects;
+}
+
+/**
+ * @param {PdfWord} word
+ * @param {{ left: number, top: number, width: number, height: number }} rect
+ */
+function wordCenterInCssRect(word, rect) {
+  const cx = (word.x0 + word.x1) / 2;
+  const cy = (word.y0 + word.y1) / 2;
+  return (
+    cx >= rect.left &&
+    cx <= rect.left + rect.width &&
+    cy >= rect.top &&
+    cy <= rect.top + rect.height
+  );
+}
+
+/**
+ * Tiny PDF Editor stores Highlight/Underline without Contents — recover text from
+ * page glyphs under QuadPoints (or the annotation Rect).
+ *
+ * @param {PdfWord[]} words
+ * @param {Array<{ left: number, top: number, width: number, height: number }>} hitRects
+ */
+function textFromWordsInRects(words, hitRects) {
+  if (!words.length || !hitRects.length) return '';
+
+  let selected = words.filter((word) => hitRects.some((rect) => wordCenterInCssRect(word, rect)));
+  if (!selected.length) {
+    // Looser fallback: any overlap with the union of hit rects.
+    selected = words.filter((word) =>
+      hitRects.some((rect) => {
+        const right = rect.left + rect.width;
+        const bottom = rect.top + rect.height;
+        return word.x1 >= rect.left && word.x0 <= right && word.y1 >= rect.top && word.y0 <= bottom;
+      }),
+    );
+  }
+  if (!selected.length) return '';
+  return selectionTextFromWords(selected).trim();
+}
+
+/**
  * Read Highlight / Underline annotations from a PDF (read-only preview).
  * @param {import('pdfjs-dist').PDFDocumentProxy} pdf
  * @returns {Promise<PdfMarkupEntry[]>}
@@ -693,6 +768,7 @@ export async function loadPdfMarkupAnnotations(pdf) {
     const page = await pdf.getPage(pageNumber);
     const viewport = page.getViewport({ scale: 1, rotation: 0 });
     const annotations = await page.getAnnotations({ intent: 'display' });
+    const pageWords = await extractPageWords(page, 0);
 
     for (let index = 0; index < annotations.length; index += 1) {
       const annot = annotations[index];
@@ -713,14 +789,23 @@ export async function loadPdfMarkupAnnotations(pdf) {
       const height = Math.abs(vy2 - vy1);
       if (width < 1 || height < 1) continue;
 
-      const text = String(annot.contentsObj?.str || annot.contents || '').trim();
+      const boundRect = { left, top, width, height };
+      const quadRects = viewportRectsFromQuadPoints(
+        /** @type {number[] | undefined} */ (annot.quadPoints),
+        viewport,
+      );
+      const displayRects = quadRects.length ? quadRects : [boundRect];
+
+      const embeddedText = String(annot.contentsObj?.str || annot.contents || '').trim();
+      const recoveredText = embeddedText || textFromWordsInRects(pageWords, displayRects);
+
       entries.push({
         id: `pdf-${pageNumber}-${index}`,
         pageNumber,
         kind: isUnderline ? 'underline' : 'highlight',
         color: rgbArrayToCss(annot.color),
-        text: text || `(${pageNumber}페이지)`,
-        rects: [{ left, top, width, height }],
+        text: recoveredText || `(${pageNumber}페이지)`,
+        rects: displayRects,
         source: 'pdf',
         pdfRect: [x1, y1, x2, y2],
       });

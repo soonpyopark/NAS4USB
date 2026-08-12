@@ -39,6 +39,7 @@ function main() {
   syncBuildStamp(stamp);
 
   run('npm run prepare:icons');
+  run('npm run prepare:pdfjs');
   fs.rmSync(RELEASE_STAGING_DIR, { recursive: true, force: true });
   buildRenderer();
   packagePlatform('--win', RELEASE_STAGING_DIR);

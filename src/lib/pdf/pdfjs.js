@@ -2,14 +2,30 @@
 // which modern pdfjs-dist 6.x requires without a polyfill.
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import pdfWorkerSrc from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
-import pdfWasmAsset from 'pdfjs-dist/wasm/jbig2.wasm?url';
 
 let workerReady = false;
 
-/** Trailing-slash base URL for pdf.js wasm/ (jbig2, openjpeg, …). */
-function pdfWasmBaseUrl() {
-  const idx = pdfWasmAsset.lastIndexOf('/');
-  return idx >= 0 ? pdfWasmAsset.slice(0, idx + 1) : './';
+/**
+ * pdf.js fetches fixed names (jbig2.wasm, openjpeg.wasm, …) under wasmUrl.
+ * Vite `?url` hashing breaks that, so assets are copied to public/pdfjs/ by
+ * scripts/prepare-pdfjs-assets.mjs.
+ *
+ * Must be an absolute URL: with useWorkerFetch the worker calls fetch(url)
+ * and resolves relative paths against the worker script, not the page — so
+ * `./pdfjs/cmaps/` would 404 and CJK/CID text renders as blank white.
+ *
+ * @param {string} subpath trailing-slash folder under public/pdfjs/
+ */
+function pdfjsAssetBase(subpath) {
+  const base = import.meta.env.BASE_URL || './';
+  const root = base.endsWith('/') ? base : `${base}/`;
+  const baseUri =
+    typeof document !== 'undefined' && document.baseURI
+      ? document.baseURI
+      : typeof location !== 'undefined'
+        ? location.href
+        : 'http://127.0.0.1/';
+  return new URL(`${root}pdfjs/${subpath}`, baseUri).href;
 }
 
 export function ensurePdfjsWorker() {
@@ -29,7 +45,10 @@ export async function loadPdfDocument(url) {
     withCredentials: true,
     useSystemFonts: true,
     useWasm: true,
-    wasmUrl: pdfWasmBaseUrl(),
+    wasmUrl: pdfjsAssetBase('wasm/'),
+    cMapUrl: pdfjsAssetBase('cmaps/'),
+    cMapPacked: true,
+    standardFontDataUrl: pdfjsAssetBase('standard_fonts/'),
   });
   return loadingTask.promise;
 }
