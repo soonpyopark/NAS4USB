@@ -136,3 +136,56 @@ export async function exportMarkdownFileAsHtml(relativePath, fileName) {
   const base64 = await window.nas4usb.fs.readFile(relativePath);
   return exportMarkdownTextAsHtml(fileName, decodeTextBase64(base64));
 }
+
+/**
+ * Markdown → HTML → HWPX (pandoc AST → pypandoc-hwpx).
+ *
+ * @param {string} fileName
+ * @param {string} markdown
+ * @returns {Promise<import('../saveToFolder.js').SaveResult | null>}
+ */
+export async function exportMarkdownTextAsHwpx(fileName, markdown) {
+  if (!window.nas4usb?.tiptap?.exportHwpx) {
+    throw new Error('이 환경에서는 HWPX 내보내기를 지원하지 않습니다.');
+  }
+
+  const title = getMarkdownFileStem(fileName);
+  const bodyHtml = markdownToBodyHtml(markdown);
+  const html = `<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>${escapeHtml(title)}</title>
+</head>
+<body>
+${bodyHtml}
+</body>
+</html>`;
+  const outName = exportFileName(title, 'hwpx');
+
+  const converted = await window.nas4usb.tiptap.exportHwpx({
+    html,
+    fileName: outName,
+    assets: [],
+  });
+
+  if (!converted?.base64) {
+    throw new Error('HWPX 변환 결과가 비어 있습니다.');
+  }
+
+  return saveFileToPickedFolder({
+    fileName: converted.fileName || outName,
+    base64: converted.base64,
+    mimeType: 'application/octet-stream',
+    title: 'HWPX를 저장할 폴더 선택',
+  });
+}
+
+/**
+ * @param {string} relativePath
+ * @param {string} fileName
+ */
+export async function exportMarkdownFileAsHwpx(relativePath, fileName) {
+  const base64 = await window.nas4usb.fs.readFile(relativePath);
+  return exportMarkdownTextAsHwpx(fileName, decodeTextBase64(base64));
+}

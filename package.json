@@ -10,6 +10,7 @@
     "dev:restart": "node scripts/dev-process.mjs restart",
     "prepare:icons": "node scripts/prepare-app-icon.mjs",
     "prepare:pdfjs": "node scripts/prepare-pdfjs-assets.mjs",
+    "prepare:hwpx-export": "node scripts/prepare-hwpx-export.mjs",
     "prepare:wb4s-deps": "node scripts/prepare-wb4s-src.mjs",
     "prepare:wb4s-src": "node scripts/prepare-wb4s-src.mjs",
     "build:rhwp-studio": "node scripts/build-rhwp-studio.mjs",
@@ -152,6 +153,13 @@
       {
         "from": "lib",
         "to": "lib",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "tools/hwpx-export",
+        "to": "tools/hwpx-export",
         "filter": [
           "**/*"
         ]

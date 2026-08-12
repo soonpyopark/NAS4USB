@@ -35,10 +35,15 @@ is below; the full inventory of direct npm dependencies is in THIRD_PARTY_NOTICE
 | Vite | MIT | https://github.com/vitejs/vite |
 | Yjs / y-websocket / y-prosemirror | MIT | https://github.com/yjs |
 | TipTap (+ ProseMirror) | MIT | https://github.com/ueberdosis/tiptap |
+| CodeMirror 6 | MIT | https://github.com/codemirror/dev |
 | FortuneSheet | MIT | https://github.com/ruilisi/fortune-sheet |
 | rhwp (@rhwp/core, @rhwp/editor) | MIT | https://github.com/edwardkim/rhwp |
-| WhiteBoard4Share (wb4s) | MIT | https://github.com/soonpyopark/WhiteBoard4Share |
+| WhiteBoard4Share (wb4s) | AGPL-3.0-only | https://github.com/soonpyopark/WhiteBoard4Share |
 | PDF.js (pdfjs-dist) | Apache-2.0 | https://github.com/mozilla/pdf.js |
+| Pandoc (bundled binary, HWPX export) | GPL-2.0-or-later | https://github.com/jgm/pandoc |
+| pypandoc-hwpx (vendored) | MIT | https://github.com/msjang/pypandoc-hwpx |
+| pypandoc | MIT | https://github.com/JessicaTegner/pypandoc |
+| Pillow | MIT-CMU | https://github.com/python-pillow/Pillow |
 | SheetJS Community (xlsx) | Apache-2.0 | https://sheetjs.com/ |
 | xlsx-js-style | Apache-2.0 | https://github.com/gitbrent/xlsx-js-style |
 | JSZip | MIT OR GPL-3.0-or-later | https://github.com/Stuk/jszip |
@@ -51,11 +56,16 @@ is below; the full inventory of direct npm dependencies is in THIRD_PARTY_NOTICE
 | Source Han Serif K (rhwp fonts) | SIL OFL 1.1 | bundled under public/rhwp-studio/fonts/ |
 
 Editor core versions: lib/cores-manifest.json.
+HWPX export toolchain: tools/hwpx-export/ (see tools/hwpx-export/README.md).
 Offline USB update packages may be placed under lib/updates/ (see lib/updates/README.md).
 
 Rhwp studio WASM bundles (public/rhwp-studio/, public/rhwp-core/) and wb4s editor
 bundles (public/wb4s-editor/) are built from upstream sources during npm run build
 and are not authored as first-party source of this repository.
+
+The bundled Pandoc executable is distributed under GPL-2.0-or-later and remains a
+separate program invoked for TipTap/Markdown → HWPX conversion; NAS4USB's MIT
+license does not relicense Pandoc.
 
 Portable/Electron distributions also include LICENSE.electron.txt and
 LICENSES.chromium.html from the Electron runtime.

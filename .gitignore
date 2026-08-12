@@ -3,6 +3,12 @@ dist/
 .cache/
 .dist-build/
 vendor/whiteboard4share/
+vendor/pypandoc-hwpx/
+tools/hwpx-export/pandoc/
+tools/hwpx-export/pydeps/
+tools/hwpx-export/vendor/
+tools/hwpx-export/*.zip
+tools/hwpx-export/_pandoc_unpack/
 public/pdfjs/
 exe/
 exe_new/

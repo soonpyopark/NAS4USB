@@ -775,6 +775,19 @@ export async function handleHttpApiRequest(req, res) {
       return true;
     }
 
+    if (method === 'POST' && url.pathname === '/api/tiptap/exportHwpx') {
+      // Host converts TipTap HTML → HWPX (requires prepare:hwpx-export on the server machine).
+      const body = await readJsonBody(req);
+      const { convertHtmlToHwpxBase64 } = await import('./hwpxExportService.js');
+      const result = await convertHtmlToHwpxBase64({
+        html: body.html ?? '',
+        fileName: body.fileName ?? 'document.hwpx',
+        assets: Array.isArray(body.assets) ? body.assets : [],
+      });
+      sendJson(res, 200, result);
+      return true;
+    }
+
     sendJson(res, 404, { error: 'API route not found.' });
     return true;
   } catch (error) {

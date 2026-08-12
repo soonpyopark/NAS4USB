@@ -202,6 +202,18 @@ export function createHttpNas4usbClient() {
       getStatus: () => apiFetch('/editors/status'),
     },
 
+    tiptap: {
+      exportHwpx: (payload) =>
+        apiFetch(
+          '/tiptap/exportHwpx',
+          {
+            method: 'POST',
+            body: JSON.stringify(payload ?? {}),
+          },
+          180000,
+        ),
+    },
+
     auth: {
       login: ({ id, password, rememberMe }) =>
         apiFetch('/auth/login', {

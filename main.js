@@ -1036,6 +1036,15 @@ ipcMain.handle('history:restore', async (event, relativePath, entryId, shareToke
 
 ipcMain.handle('editors:getStatus', async () => getEditorCoresStatus(getExeRoot(), getInstallRoot()));
 
+ipcMain.handle('tiptap:exportHwpx', async (_event, payload = {}) => {
+  const { convertHtmlToHwpxBase64 } = await import('./electron/hwpxExportService.js');
+  return convertHtmlToHwpxBase64({
+    html: payload.html ?? '',
+    fileName: payload.fileName ?? 'document.hwpx',
+    assets: Array.isArray(payload.assets) ? payload.assets : [],
+  });
+});
+
 ipcMain.handle('editors:update', async (event) => {
   if (!isDev) {
     throw new Error('에디터 업데이트는 개발 모드에서만 사용할 수 있습니다.');

@@ -19,8 +19,9 @@ updated (NAS4USB **1.0.5**). Exact resolved versions are in `package-lock.json`.
 | Yjs | 13.x | MIT | https://github.com/yjs/yjs |
 | y-websocket | 2.x | MIT | https://github.com/yjs/y-websocket |
 | y-prosemirror | 1.x | MIT | https://github.com/yjs/y-prosemirror |
-| TipTap | 3.29.x | MIT | https://github.com/ueberdosis/tiptap |
+| TipTap | 3.30.x | MIT | https://github.com/ueberdosis/tiptap |
 | ProseMirror (via TipTap / `@tiptap/pm`) | — | MIT | https://prosemirror.net |
+| CodeMirror 6 | 6.x | MIT | https://github.com/codemirror/dev |
 | FortuneSheet (`@fortune-sheet/react`) | 1.0.4 | MIT | https://github.com/ruilisi/fortune-sheet |
 | rhwp (`@rhwp/core`, `@rhwp/editor`) | 0.8.2 | MIT | https://github.com/edwardkim/rhwp |
 | WhiteBoard4Share | 1.0.6 | AGPL-3.0-only | https://github.com/soonpyopark/WhiteBoard4Share |
@@ -40,12 +41,34 @@ Bundled editor outputs (`public/rhwp-studio/`, `public/rhwp-core/`,
 
 ---
 
+## TipTap / Markdown → HWPX export toolchain
+
+Prepared by `npm run prepare:hwpx-export` into `tools/hwpx-export/`
+(and copied into release packages). Host **Python 3** is required at runtime
+to run the converter. See [`tools/hwpx-export/README.md`](tools/hwpx-export/README.md).
+
+| Component | Version | License | Project / notes |
+|-----------|---------|---------|-----------------|
+| Pandoc (Windows `pandoc.exe` bundle) | 3.10.1 | GPL-2.0-or-later | https://github.com/jgm/pandoc/releases/tag/3.10.1 — official release binary under `tools/hwpx-export/pandoc/` |
+| pypandoc-hwpx | vendored | MIT | https://github.com/msjang/pypandoc-hwpx — synced to `tools/hwpx-export/vendor/pypandoc_hwpx/` (includes `blank.hwpx` reference doc) |
+| pypandoc | 1.17 | MIT | https://github.com/JessicaTegner/pypandoc — `tools/hwpx-export/pydeps/` |
+| Pillow | 12.3.x | MIT-CMU | https://github.com/python-pillow/Pillow — `tools/hwpx-export/pydeps/` (image embedding in HWPX) |
+
+**Pandoc GPL note:** The Pandoc executable is a separate GPL-licensed program
+invoked for HTML→JSON AST conversion. Shipping `pandoc.exe` does not place
+NAS4USB application source under the GPL; keep Pandoc’s license terms available
+to recipients of the binary distribution
+([GPL-2.0](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html)).
+
+---
+
 ## Direct npm dependencies (`package.json`)
 
 ### Production (`dependencies`)
 
 | Package | License |
 |---------|---------|
+| `@codemirror/*` / `codemirror` | MIT |
 | `@fortune-sheet/react` | MIT |
 | `@rhwp/core` | MIT |
 | `@rhwp/editor` | MIT |
@@ -97,3 +120,6 @@ but used by the app):
   repository). It does **not** relicense third-party components.
 - When you distribute binaries, keep `LICENSE`, this file, and (for Electron
   builds) `LICENSE.electron.txt` / `LICENSES.chromium.html` available to users.
+- When shipping HWPX export tools, also keep Pandoc’s GPL terms and the
+  pypandoc-hwpx / pypandoc / Pillow notices available (see
+  `tools/hwpx-export/`).

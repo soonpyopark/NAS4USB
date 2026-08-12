@@ -77,6 +77,9 @@ window.nas4usb = {
     getStatus: () => {},
     update: () => {},
   },
+  tiptap: {
+    exportHwpx: (payload) => {},
+  },
   auth: {
     login: ({ id, password, rememberMe }) => {},
     showDefaultAdminHint: () => {},

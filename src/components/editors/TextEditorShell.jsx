@@ -46,6 +46,7 @@ export default function TextEditorShell({
   const [bound, setBound] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [exportingHtml, setExportingHtml] = useState(false);
+  const [exportingHwpx, setExportingHwpx] = useState(false);
   const unbindRef = useRef(null);
   const initialTextRef = useRef('');
   const diskRevisionRef = useRef('');
@@ -143,7 +144,7 @@ export default function TextEditorShell({
   }, [doc, relativePath, shareReadOnly, workspace]);
 
   const handleExportHtml = useCallback(async () => {
-    if (!isMarkdown || exportingHtml || shareReadOnly) return;
+    if (!isMarkdown || exportingHtml || exportingHwpx || shareReadOnly) return;
     if (!editorHandleRef.current) return;
     setExportingHtml(true);
     setLoadError(null);
@@ -161,7 +162,28 @@ export default function TextEditorShell({
     } finally {
       setExportingHtml(false);
     }
-  }, [exportingHtml, fileName, isMarkdown, shareReadOnly]);
+  }, [exportingHtml, exportingHwpx, fileName, isMarkdown, shareReadOnly]);
+
+  const handleExportHwpx = useCallback(async () => {
+    if (!isMarkdown || exportingHtml || exportingHwpx || shareReadOnly) return;
+    if (!editorHandleRef.current) return;
+    setExportingHwpx(true);
+    setLoadError(null);
+    try {
+      const { exportMarkdownTextAsHwpx } = await import('../../lib/text/exportMarkdown.js');
+      const saved = await exportMarkdownTextAsHwpx(fileName, editorHandleRef.current.getText());
+      if (!saved) return;
+      const { showAppAlert } = await import('../../lib/nativeDialog.js');
+      await showAppAlert({
+        title: 'HWPX로 내보내기',
+        body: `내보냈습니다.\n${saved.absolutePath ?? saved.fileName}`,
+      });
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'HWPX로 내보내기에 실패했습니다.');
+    } finally {
+      setExportingHwpx(false);
+    }
+  }, [exportingHtml, exportingHwpx, fileName, isMarkdown, shareReadOnly]);
 
   const handleClose = async () => {
     unbindRef.current?.();
@@ -211,6 +233,10 @@ export default function TextEditorShell({
           isMarkdown && !isLoading && !shareReadOnly ? handleExportHtml : undefined
         }
         exportingHtml={exportingHtml}
+        onExportHwpx={
+          isMarkdown && !isLoading && !shareReadOnly ? handleExportHwpx : undefined
+        }
+        exportingHwpx={exportingHwpx}
         onSave={handleSave}
         onClose={handleClose}
         allowClose={allowClose}

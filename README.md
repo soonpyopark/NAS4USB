@@ -23,8 +23,8 @@ USB(또는 단일 폴더)만으로 **오프라인 LAN NAS**와 **실시간 공�
 | 워크스페이스 | UI **공유폴더** / **개인폴더** ↔ 디스크 `share` / `private` |
 | LAN 동기화 | Y.js WebSocket — 같은 방(room)에 접속한 클라이언트 간 CRDT 동기화 |
 | HWPX 편집 | rhwp-studio 기반 `.hwpx` 브라우저 에디터 |
-| Markdown / TXT | textarea 편집 · MD 미리보기 |
-| TipTap 문서 | `.tiptap` — Notion-like TipTap 에디터 (ZIP+첨부, 슬래시 메뉴, 실시간 협업) |
+| TipTap 문서 | `.tiptap` — Notion-like TipTap 에디터 (ZIP+첨부, 슬래시 메뉴, 실시간 협업, HTML/HWPX 내보내기 · Pandoc + [pypandoc-hwpx](https://github.com/msjang/pypandoc-hwpx)) |
+| Markdown / TXT | CodeMirror 편집 · MD 미리보기 · MD는 HTML/HWPX 내보내기 |
 | 스프레드시트 | FortuneSheet — `.xlsx` / `.xls` |
 | 화이트보드 | `.wb4s` — WhiteBoard4Share 엔진 |
 | PDF 미리보기 | 썸네일 · 너비/높이/페이지 맞춤 · 2쪽 보기 · 검색 · 형광펜/밑줄 · 엑셀 내보내기 |
@@ -199,6 +199,7 @@ npm run build:release
 | `npm run build:release` | MSI + portable을 동일 빌드 스탬프로 생성 |
 | `npm run sync-version` | `APP_VERSION` → package.json / MSI License 동기화 |
 | `npm run update:all` | 에디터 코어 + npm 의존성 업데이트 |
+| `npm run prepare:hwpx-export` | TipTap/MD→HWPX용 Pandoc·pypandoc-hwpx·pydeps 준비 (호스트 Python 3 필요) |
 | `npm run build:update_all` | 코어 업데이트 + `build:release` |
 
 ---
@@ -222,8 +223,9 @@ NAS4USB/
 ├── data/                   기본 문서 저장소 예(개발 시)
 │   ├── share/              공유폴더 디스크명
 │   └── private/            개인폴더 디스크명
+├── tools/hwpx-export/      TipTap·MD → HWPX (Pandoc + pypandoc-hwpx)
 ├── build/                  앱 아이콘 (prepare:icons)
-├── LICENSE                 MIT
+├── LICENSE                 MIT (+ Third-Party Components)
 ├── THIRD_PARTY_NOTICES.md  사용 오픈소스 고지
 ├── msi/                    MSI·portable zip 산출
 └── exe/                    build:dist:exe 출력
@@ -239,10 +241,13 @@ NAS4USB/
 | Spreadsheet | `@fortune-sheet/react` | MIT |
 | Whiteboard | `lib/updates/wb4s` / WhiteBoard4Share | AGPL-3.0-only |
 | TipTap | `@tiptap/react`, `@tiptap/starter-kit` 등 | MIT |
+| Markdown / TXT | CodeMirror 6 | MIT |
 | PDF 미리보기 | `pdfjs-dist` (PDF.js) — `src/lib/pdf/`, `PdfViewerShell` | Apache-2.0 |
 | 실시간 동기화 | `yjs`, `y-websocket` | MIT |
+| TipTap·MD → HWPX | Pandoc 3.10.1 + pypandoc-hwpx + pypandoc + Pillow (`tools/hwpx-export`) | GPL-2.0-or-later / MIT / MIT-CMU |
 
-버전 기록: `lib/cores-manifest.json`
+버전 기록: `lib/cores-manifest.json`  
+HWPX 내보내기 준비: `npm run prepare:hwpx-export` (자세한 내용 [`tools/hwpx-export/README.md`](tools/hwpx-export/README.md))
 
 ---
 
@@ -262,8 +267,9 @@ Electron/Chromium 및 npm 패키지 등 서드파티는 각 라이선스를 따�
 | 데스크톱 런타임 | Electron, Chromium | MIT / Chromium licenses |
 | UI | React, Vite, Tailwind CSS | MIT |
 | 협업 | Yjs, y-websocket | MIT |
-| 문서 편집 | TipTap, rhwp, FortuneSheet, WhiteBoard4Share | MIT / AGPL-3.0-only |
+| 문서 편집 | TipTap, CodeMirror, rhwp, FortuneSheet, WhiteBoard4Share | MIT / AGPL-3.0-only |
 | 문서/미디어 | PDF.js, SheetJS (`xlsx`), JSZip, KaTeX | Apache-2.0 / MIT 등 |
+| HWPX 변환 | [Pandoc](https://github.com/jgm/pandoc), [pypandoc-hwpx](https://github.com/msjang/pypandoc-hwpx), pypandoc, Pillow | GPL-2.0-or-later / MIT / MIT-CMU |
 
 자세한 표와 직접 의존성 목록은 `THIRD_PARTY_NOTICES.md`와 `LICENSE` 하단 **Third-Party Components**를 참고하세요.
 

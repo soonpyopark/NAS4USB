@@ -55,6 +55,10 @@ contextBridge.exposeInMainWorld('nas4usb', {
     update: () => ipcRenderer.invoke('editors:update'),
   },
 
+  tiptap: {
+    exportHwpx: (payload) => ipcRenderer.invoke('tiptap:exportHwpx', payload ?? {}),
+  },
+
   auth: {
     login: ({ id, password, rememberMe }) =>
       ipcRenderer.invoke('auth:login', { id, password, rememberMe }),
