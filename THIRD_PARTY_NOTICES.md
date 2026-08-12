@@ -23,7 +23,7 @@ updated (NAS4USB **1.0.5**). Exact resolved versions are in `package-lock.json`.
 | ProseMirror (via TipTap / `@tiptap/pm`) | — | MIT | https://prosemirror.net |
 | FortuneSheet (`@fortune-sheet/react`) | 1.0.4 | MIT | https://github.com/ruilisi/fortune-sheet |
 | rhwp (`@rhwp/core`, `@rhwp/editor`) | 0.8.2 | MIT | https://github.com/edwardkim/rhwp |
-| WhiteBoard4Share | 1.0.5 | MIT | https://github.com/soonpyopark/WhiteBoard4Share |
+| WhiteBoard4Share | 1.0.6 | AGPL-3.0-only | https://github.com/soonpyopark/WhiteBoard4Share |
 | PDF.js (`pdfjs-dist`) | 6.x | Apache-2.0 | https://github.com/mozilla/pdf.js |
 | SheetJS Community Edition (`xlsx`) | 0.18.5 | Apache-2.0 | https://sheetjs.com/ |
 | xlsx-js-style | 1.2.0 | Apache-2.0 | https://github.com/gitbrent/xlsx-js-style |

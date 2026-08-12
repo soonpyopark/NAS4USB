@@ -26,7 +26,6 @@ const SETTINGS_FILE = '.nas4usb-settings.json';
  *   webServerMode: import('../shared/webServerConfig.js').WebServerMode | null,
  *   themeAccentColor: string,
  *   dataRoot: string | null,
- *   shareLinksBypassIpAllowlist: boolean,
  * }} AppSettings
  *
  * @typedef {{ isLoggedIn?: boolean, loginId?: string | null, role?: string | null } | boolean} AccessAuth
@@ -59,7 +58,6 @@ function emptySettings() {
     webServerMode: null,
     themeAccentColor: DEFAULT_ACCENT_COLOR,
     dataRoot: null,
-    shareLinksBypassIpAllowlist: false,
   };
 }
 
@@ -97,7 +95,6 @@ async function loadStore(portableRoot) {
       webServerMode: normalizeWebServerMode(parsed?.webServerMode),
       themeAccentColor: normalizeAccentColor(parsed?.themeAccentColor),
       dataRoot: normalizeConfiguredDataRoot(parsed?.dataRoot),
-      shareLinksBypassIpAllowlist: parsed?.shareLinksBypassIpAllowlist === true,
     };
   } catch {
     return emptySettings();
@@ -143,17 +140,6 @@ export async function getAppSettings(portableRoot = getPortableRoot()) {
 export async function getAllowedIpCidrs(portableRoot = getPortableRoot()) {
   const settings = await loadStore(portableRoot);
   return settings.allowedIpCidrs;
-}
-
-/**
- * When true, clients with a valid share-link token may connect even if their IP
- * is outside `allowedIpCidrs`.
- *
- * @param {string} [portableRoot]
- */
-export async function getShareLinksBypassIpAllowlist(portableRoot = getPortableRoot()) {
-  const settings = await loadStore(portableRoot);
-  return settings.shareLinksBypassIpAllowlist === true;
 }
 
 /**
@@ -246,9 +232,6 @@ export async function updateAppSettings(patch, portableRoot = getPortableRoot())
   }
   if (patch && 'dataRoot' in patch) {
     settings.dataRoot = normalizeConfiguredDataRoot(patch.dataRoot);
-  }
-  if (patch && 'shareLinksBypassIpAllowlist' in patch) {
-    settings.shareLinksBypassIpAllowlist = patch.shareLinksBypassIpAllowlist === true;
   }
   await saveStore(portableRoot, settings);
   return settings;

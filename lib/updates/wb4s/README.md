@@ -1,6 +1,6 @@
 # WhiteBoard4Share update package (optional)
 
-USB 오프라인 환경에서 GitHub clone이 불가할 때, 이 폴더에 WhiteBoard4Share v1.0.3 소스 트리를 넣어 두면 **에디터 업데이트**가 이 경로를 사용합니다.
+USB 오프라인 환경에서 GitHub clone이 불가할 때, 이 폴더에 WhiteBoard4Share v1.0.6 소스 트리를 넣어 두면 **에디터 업데이트**가 이 경로를 사용합니다.
 
 ## 준비 방법 (인터넷 가능 PC)
 

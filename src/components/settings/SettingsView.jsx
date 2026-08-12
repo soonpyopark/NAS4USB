@@ -33,7 +33,6 @@ export default function SettingsView({ onClose }) {
   const { alert: appAlert, confirm: appConfirm, dialog: settingsDialog } = useAppConfirm();
   /** @type {[AllowedIpEntry[], Function]} */
   const [allowedIpCidrs, setAllowedIpCidrs] = useState([]);
-  const [shareLinksBypassIpAllowlist, setShareLinksBypassIpAllowlist] = useState(false);
   /** @type {[SettingsTabId, Function]} */
   const [activeTab, setActiveTab] = useState('general');
   const [ipCidrDraft, setIpCidrDraft] = useState('');
@@ -46,7 +45,6 @@ export default function SettingsView({ onClose }) {
 
   const applySettings = useCallback((settings) => {
     setAllowedIpCidrs(normalizeAllowedIpCidrs(settings?.allowedIpCidrs ?? []));
-    setShareLinksBypassIpAllowlist(settings?.shareLinksBypassIpAllowlist === true);
   }, []);
 
   const loadSettings = useCallback(async () => {
@@ -77,10 +75,7 @@ export default function SettingsView({ onClose }) {
   }, []);
 
   /**
-   * @param {{
-   *   allowedIpCidrs?: AllowedIpEntry[],
-   *   shareLinksBypassIpAllowlist?: boolean,
-   * }} patch
+   * @param {{ allowedIpCidrs?: AllowedIpEntry[] }} patch
    * @param {{ silent?: boolean }} [options]
    */
   const persistSettings = async (patch, { silent = true } = {}) => {
@@ -95,10 +90,6 @@ export default function SettingsView({ onClose }) {
         loggedInPermissions: normalizeGuestPermissionsFromUi(
           current?.loggedInPermissions ?? DEFAULT_GUEST_PERMISSIONS,
         ),
-        shareLinksBypassIpAllowlist:
-          typeof patch.shareLinksBypassIpAllowlist === 'boolean'
-            ? patch.shareLinksBypassIpAllowlist
-            : shareLinksBypassIpAllowlist,
       });
       applySettings(next);
       if (!silent) {
@@ -114,13 +105,6 @@ export default function SettingsView({ onClose }) {
     } finally {
       setSaving(false);
     }
-  };
-
-  const toggleShareLinksBypassIp = async () => {
-    const next = !shareLinksBypassIpAllowlist;
-    setShareLinksBypassIpAllowlist(next);
-    const ok = await persistSettings({ shareLinksBypassIpAllowlist: next });
-    if (!ok) setShareLinksBypassIpAllowlist(!next);
   };
 
   const addAllowedIp = async () => {
@@ -302,26 +286,6 @@ export default function SettingsView({ onClose }) {
                     <code className="rounded bg-slate-100 px-1 text-[12px]">127.0.0.1</code> 은
                     항상 허용됩니다.
                   </p>
-                  <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2.5">
-                    <input
-                      type="checkbox"
-                      className="mt-0.5 h-4 w-4 rounded border-slate-300 text-nas-accent focus:ring-nas-accent"
-                      checked={shareLinksBypassIpAllowlist}
-                      disabled={saving}
-                      onChange={() => void toggleShareLinksBypassIp()}
-                    />
-                    <span className="min-w-0 space-y-0.5">
-                      <span className="block text-sm font-medium text-slate-800">
-                        공유링크는 허용 IP 밖에서도 접속 허용
-                      </span>
-                      <span className="block text-xs leading-relaxed text-slate-500">
-                        켜면 유효한 공유링크(
-                        <code className="rounded bg-slate-100 px-1">?share=…</code>
-                        )를 가진 사용자만 IP 목록과 무관하게 접속할 수 있습니다. 일반
-                        접속·로그인에는 허용 IP가 그대로 적용됩니다.
-                      </span>
-                    </span>
-                  </label>
                   <div className="flex gap-2">
                     <button
                       type="button"

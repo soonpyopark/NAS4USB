@@ -28,7 +28,7 @@ USB(또는 단일 폴더)만으로 **오프라인 LAN NAS**와 **실시간 공�
 | 스프레드시트 | FortuneSheet — `.xlsx` / `.xls` |
 | 화이트보드 | `.wb4s` — WhiteBoard4Share 엔진 |
 | PDF 미리보기 | 썸네일 · 너비/높이/페이지 맞춤 · 2쪽 보기 · 검색 · 형광펜/밑줄 · 엑셀 내보내기 |
-| 파일 접근 제어 | 비공개·열람제한·공유 링크 (총괄관리자) · 허용 IP · 공유링크 IP 우회 옵션 |
+| 파일 접근 제어 | 비공개·열람제한·공유 링크 (총괄관리자) |
 | 회원 개인폴더 | 활성 회원 홈 자동 생성 · 삭제 시 정리 · 고아 폴더 prune |
 | 휴지통 | 총괄관리자 전용 |
 | 게스트 UI | 열람 권한 없을 때 로그인 유도 / 관리자 문의 안내 |
@@ -237,7 +237,7 @@ NAS4USB/
 |------|----------------|---------------------|
 | HWPX (rhwp) | `@rhwp/core`, `@rhwp/editor` | MIT |
 | Spreadsheet | `@fortune-sheet/react` | MIT |
-| Whiteboard | `lib/updates/wb4s` / WhiteBoard4Share | MIT |
+| Whiteboard | `lib/updates/wb4s` / WhiteBoard4Share | AGPL-3.0-only |
 | TipTap | `@tiptap/react`, `@tiptap/starter-kit` 등 | MIT |
 | PDF 미리보기 | `pdfjs-dist` (PDF.js) — `src/lib/pdf/`, `PdfViewerShell` | Apache-2.0 |
 | 실시간 동기화 | `yjs`, `y-websocket` | MIT |
@@ -262,7 +262,7 @@ Electron/Chromium 및 npm 패키지 등 서드파티는 각 라이선스를 따�
 | 데스크톱 런타임 | Electron, Chromium | MIT / Chromium licenses |
 | UI | React, Vite, Tailwind CSS | MIT |
 | 협업 | Yjs, y-websocket | MIT |
-| 문서 편집 | TipTap, rhwp, FortuneSheet, WhiteBoard4Share | MIT |
+| 문서 편집 | TipTap, rhwp, FortuneSheet, WhiteBoard4Share | MIT / AGPL-3.0-only |
 | 문서/미디어 | PDF.js, SheetJS (`xlsx`), JSZip, KaTeX | Apache-2.0 / MIT 등 |
 
 자세한 표와 직접 의존성 목록은 `THIRD_PARTY_NOTICES.md`와 `LICENSE` 하단 **Third-Party Components**를 참고하세요.

@@ -38,6 +38,23 @@ import {
 import { loadPdfViewerSidecar, writePdfViewerSidecar } from '../../lib/pdf/pdfViewerSidecar.js';
 import { downloadPdfMarkupsXlsx } from '../../lib/pdf/exportPdfMarkupsXlsx.js';
 import {
+  IconPdfChevronLeft,
+  IconPdfChevronRight,
+  IconPdfExportExcel,
+  IconPdfFitHeight,
+  IconPdfFitPage,
+  IconPdfFitWidth,
+  IconPdfHighlight,
+  IconPdfPrint,
+  IconPdfRotate,
+  IconPdfSearch,
+  IconPdfSearchClose,
+  IconPdfThumbs,
+  IconPdfTwoPages,
+  IconPdfZoomIn,
+  IconPdfZoomOut,
+} from './pdf/PdfToolbarIcons.jsx';
+import {
   embedMarkupsIntoPdfBytes,
   isSamePdfAnnotTarget,
   viewportRectsToPdfUserRects,
@@ -193,6 +210,7 @@ export default function PdfViewerShell({
   const twoPageViewRef = useRef(twoPageView);
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [showSearchBar, setShowSearchBar] = useState(false);
   const [matches, setMatches] = useState(/** @type {import('../../lib/pdf/pdfjs.js').PdfTextMatch[]} */ ([]));
   const [activeMatch, setActiveMatch] = useState(-1);
   const [searching, setSearching] = useState(false);
@@ -1753,6 +1771,18 @@ export default function PdfViewerShell({
     }
   }, [relativePath, savingToFile]);
 
+  const openSearchBar = useCallback(() => {
+    setShowSearchBar(true);
+    window.requestAnimationFrame(() => {
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+    });
+  }, []);
+
+  const closeSearchBar = useCallback(() => {
+    setShowSearchBar(false);
+  }, []);
+
   useEffect(() => {
     const onKeyDown = (event) => {
       const target = event.target;
@@ -1762,8 +1792,13 @@ export default function PdfViewerShell({
 
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') {
         event.preventDefault();
-        searchInputRef.current?.focus();
-        searchInputRef.current?.select();
+        openSearchBar();
+        return;
+      }
+
+      if (event.key === 'Escape' && showSearchBar) {
+        event.preventDefault();
+        closeSearchBar();
         return;
       }
 
@@ -1828,14 +1863,17 @@ export default function PdfViewerShell({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [
     canSaveToFile,
+    closeSearchBar,
     copyActiveMarkupText,
     currentPage,
     goNextMatch,
     goPrevMatch,
     goToPage,
     handleSaveToFile,
+    openSearchBar,
     removeMarkup,
     resetZoom,
+    showSearchBar,
     zoomBy,
   ]);
 
@@ -1873,38 +1911,41 @@ export default function PdfViewerShell({
         <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{loadError}</div>
       )}
 
-      <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-200 bg-slate-50 px-3 py-1.5">
+      <div className="flex flex-wrap items-center gap-0.5 border-b border-slate-200 bg-slate-50 px-2 py-1">
         <button
           type="button"
-          className={`nas-btn-ghost text-xs ${showThumbnails ? 'bg-slate-200' : ''}`}
+          className={`pdf-tb-btn ${showThumbnails ? 'pdf-tb-btn--active' : ''}`}
           disabled={busy}
           onClick={() => toggleSidePanel('thumbs')}
           title="썸네일 패널"
+          aria-label="썸네일 패널"
           aria-pressed={showThumbnails}
         >
-          썸네일
+          <IconPdfThumbs />
         </button>
         <button
           type="button"
-          className={`nas-btn-ghost text-xs ${showMarksPanel ? 'bg-slate-200' : ''}`}
+          className={`pdf-tb-btn ${showMarksPanel ? 'pdf-tb-btn--active' : ''}`}
           disabled={busy}
           onClick={() => toggleSidePanel('marks')}
           title="형광펜 · 밑줄 목록"
+          aria-label="형광펜 · 밑줄 목록"
           aria-pressed={showMarksPanel}
         >
-          형광펜
+          <IconPdfHighlight />
         </button>
 
         <span className="mx-1 h-4 w-px bg-slate-300" />
 
         <button
           type="button"
-          className="nas-btn-ghost text-xs"
+          className="pdf-tb-btn"
           disabled={busy || currentPage <= 1}
           onClick={() => goToPage(currentPage - 1)}
           title="이전 페이지"
+          aria-label="이전 페이지"
         >
-          ◀
+          <IconPdfChevronLeft />
         </button>
         <input
           type="text"
@@ -1928,115 +1969,140 @@ export default function PdfViewerShell({
           }}
           aria-label="페이지 번호"
         />
-        <span className="text-xs text-slate-500">/ {pageCount || '—'}</span>
+        <span className="px-0.5 text-xs text-slate-500">/ {pageCount || '—'}</span>
         <button
           type="button"
-          className="nas-btn-ghost text-xs"
+          className="pdf-tb-btn"
           disabled={busy || currentPage >= pageCount}
           onClick={() => goToPage(currentPage + 1)}
           title="다음 페이지"
+          aria-label="다음 페이지"
         >
-          ▶
+          <IconPdfChevronRight />
         </button>
 
         <span className="mx-1 h-4 w-px bg-slate-300" />
 
-        <span className="px-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-400">
-          보기
-        </span>
         <button
           type="button"
-          className="nas-btn-ghost text-xs"
+          className="pdf-tb-btn"
           disabled={busy || displayScale <= PDF_MIN_SCALE}
           onClick={() => zoomBy('out')}
           title="축소 (Ctrl+-)"
+          aria-label="축소"
         >
-          −
+          <IconPdfZoomOut />
         </button>
         <button
           type="button"
-          className="nas-btn-ghost min-w-[3.25rem] text-xs"
+          className="pdf-tb-btn min-w-[2.75rem] px-1 text-xs font-medium"
           disabled={busy}
           onClick={resetZoom}
           title="실제 크기 100% (Ctrl+0)"
+          aria-label={`현재 배율 ${zoomPercent}%`}
         >
           {zoomPercent}%
         </button>
         <button
           type="button"
-          className="nas-btn-ghost text-xs"
+          className="pdf-tb-btn"
           disabled={busy || displayScale >= PDF_MAX_SCALE}
           onClick={() => zoomBy('in')}
           title="확대 (Ctrl+=)"
+          aria-label="확대"
         >
-          +
+          <IconPdfZoomIn />
         </button>
         <button
           type="button"
-          className={`nas-btn-ghost text-xs ${zoomMode === 'fitWidth' ? 'bg-slate-200' : ''}`}
+          className={`pdf-tb-btn ${zoomMode === 'fitWidth' ? 'pdf-tb-btn--active' : ''}`}
           disabled={busy}
           onClick={setFitWidth}
           title="너비에 맞춤"
+          aria-label="너비에 맞춤"
+          aria-pressed={zoomMode === 'fitWidth'}
         >
-          너비
+          <IconPdfFitWidth />
         </button>
         <button
           type="button"
-          className={`nas-btn-ghost text-xs ${zoomMode === 'fitHeight' ? 'bg-slate-200' : ''}`}
+          className={`pdf-tb-btn ${zoomMode === 'fitHeight' ? 'pdf-tb-btn--active' : ''}`}
           disabled={busy}
           onClick={setFitHeight}
           title="높이에 맞춤"
+          aria-label="높이에 맞춤"
+          aria-pressed={zoomMode === 'fitHeight'}
         >
-          높이
+          <IconPdfFitHeight />
         </button>
         <button
           type="button"
-          className={`nas-btn-ghost text-xs ${zoomMode === 'fitPage' ? 'bg-slate-200' : ''}`}
+          className={`pdf-tb-btn ${zoomMode === 'fitPage' ? 'pdf-tb-btn--active' : ''}`}
           disabled={busy}
           onClick={setFitPage}
           title="페이지 맞춤"
+          aria-label="페이지 맞춤"
+          aria-pressed={zoomMode === 'fitPage'}
         >
-          페이지
+          <IconPdfFitPage />
         </button>
         <button
           type="button"
-          className={`nas-btn-ghost text-xs ${twoPageView ? 'bg-slate-200' : ''}`}
+          className={`pdf-tb-btn ${twoPageView ? 'pdf-tb-btn--active' : ''}`}
           disabled={busy || pageCount < 2}
           onClick={toggleTwoPageView}
           title="두 페이지를 나란히 보기"
+          aria-label="두 페이지를 나란히 보기"
           aria-pressed={twoPageView}
         >
-          2쪽
+          <IconPdfTwoPages />
         </button>
 
         <span className="mx-1 h-4 w-px bg-slate-300" />
 
         <button
           type="button"
-          className="nas-btn-ghost text-xs"
+          className="pdf-tb-btn"
           disabled={busy}
           onClick={rotateClockwise}
           title="시계 방향 회전"
+          aria-label="시계 방향 회전"
         >
-          회전
+          <IconPdfRotate />
         </button>
         <button
           type="button"
-          className="nas-btn-ghost text-xs"
+          className="pdf-tb-btn"
           disabled={busy}
           onClick={handlePrint}
           title="인쇄"
+          aria-label="인쇄"
         >
-          인쇄
+          <IconPdfPrint />
         </button>
         <button
           type="button"
-          className="nas-btn-ghost text-xs"
+          className="pdf-tb-btn"
           disabled={busy || markups.length === 0}
           onClick={handleExportMarkups}
           title="형광펜·밑줄을 Excel로 내보내기"
+          aria-label="형광펜 내보내기"
         >
-          형광펜 내보내기
+          <IconPdfExportExcel />
+        </button>
+
+        <span className="mx-1 h-4 w-px bg-slate-300" />
+
+        <button
+          type="button"
+          className={`pdf-tb-btn ${showSearchBar ? 'pdf-tb-btn--active' : ''}`}
+          disabled={busy}
+          onClick={() => (showSearchBar ? closeSearchBar() : openSearchBar())}
+          title="검색 (Ctrl+F)"
+          aria-label="검색"
+          aria-pressed={showSearchBar}
+        >
+          <IconPdfSearch />
         </button>
       </div>
 
@@ -2051,56 +2117,67 @@ export default function PdfViewerShell({
           {saveMessage}
         </div>
       ) : null}
-      <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-3 py-2">
-        <label className="sr-only" htmlFor="pdf-search-input">
-          PDF 텍스트 검색
-        </label>
-        <input
-          id="pdf-search-input"
-          ref={searchInputRef}
-          type="search"
-          className="min-w-[180px] flex-1 rounded border border-slate-300 px-2 py-1 text-sm outline-none focus:border-nas-accent"
-          placeholder="검색어 입력 후 Enter · 결과는 Enter로 다음"
-          value={searchQuery}
-          disabled={busy}
-          onChange={(event) => {
-            setSearchQuery(event.target.value);
-            if (!event.target.value.trim()) clearSearch();
-          }}
-          onKeyDown={handleSearchKeyDown}
-        />
-        <button
-          type="button"
-          className="nas-btn-ghost text-xs"
-          disabled={busy || searching || !searchQuery.trim()}
-          onClick={() => void runSearch(searchQuery)}
-        >
-          검색
-        </button>
-        <button
-          type="button"
-          className="nas-btn-ghost text-xs"
-          disabled={!hasActiveResults}
-          onClick={goPrevMatch}
-        >
-          이전
-        </button>
-        <button
-          type="button"
-          className="nas-btn-ghost text-xs"
-          disabled={!hasActiveResults}
-          onClick={goNextMatch}
-        >
-          다음
-        </button>
-        <span
-          className={`min-w-[7rem] text-xs ${
-            searchMessage === '검색 결과가 없습니다' ? 'font-medium text-amber-700' : 'text-slate-500'
-          }`}
-        >
-          {matchLabel}
-        </span>
-      </div>
+      {showSearchBar ? (
+        <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-3 py-2">
+          <label className="sr-only" htmlFor="pdf-search-input">
+            PDF 텍스트 검색
+          </label>
+          <input
+            id="pdf-search-input"
+            ref={searchInputRef}
+            type="search"
+            className="min-w-[180px] flex-1 rounded border border-slate-300 px-2 py-1 text-sm outline-none focus:border-nas-accent"
+            placeholder="검색어 입력 후 Enter · 결과는 Enter로 다음"
+            value={searchQuery}
+            disabled={busy}
+            onChange={(event) => {
+              setSearchQuery(event.target.value);
+              if (!event.target.value.trim()) clearSearch();
+            }}
+            onKeyDown={handleSearchKeyDown}
+          />
+          <button
+            type="button"
+            className="nas-btn-ghost text-xs"
+            disabled={busy || searching || !searchQuery.trim()}
+            onClick={() => void runSearch(searchQuery)}
+          >
+            검색
+          </button>
+          <button
+            type="button"
+            className="nas-btn-ghost text-xs"
+            disabled={!hasActiveResults}
+            onClick={goPrevMatch}
+          >
+            이전
+          </button>
+          <button
+            type="button"
+            className="nas-btn-ghost text-xs"
+            disabled={!hasActiveResults}
+            onClick={goNextMatch}
+          >
+            다음
+          </button>
+          <span
+            className={`min-w-[7rem] text-xs ${
+              searchMessage === '검색 결과가 없습니다' ? 'font-medium text-amber-700' : 'text-slate-500'
+            }`}
+          >
+            {matchLabel}
+          </span>
+          <button
+            type="button"
+            className="pdf-tb-btn"
+            onClick={closeSearchBar}
+            title="검색 닫기 (Esc)"
+            aria-label="검색 닫기"
+          >
+            <IconPdfSearchClose />
+          </button>
+        </div>
+      ) : null}
 
       <div className="relative flex min-h-0 flex-1 bg-slate-200">
         {showThumbnails && (
@@ -2350,6 +2427,30 @@ export default function PdfViewerShell({
           width: fit-content;
           max-width: 100%;
           margin: 0 auto 12px;
+        }
+        .pdf-tb-btn {
+          display: inline-flex;
+          height: 1.75rem;
+          width: 1.75rem;
+          align-items: center;
+          justify-content: center;
+          border-radius: 0.375rem;
+          border: none;
+          background: transparent;
+          color: #475569;
+          cursor: pointer;
+        }
+        .pdf-tb-btn:hover:not(:disabled) {
+          background: #e2e8f0;
+          color: #0f172a;
+        }
+        .pdf-tb-btn:disabled {
+          cursor: not-allowed;
+          opacity: 0.4;
+        }
+        .pdf-tb-btn--active {
+          background: #e0f2fe;
+          color: #0369a1;
         }
         .pdf-page-wrap {
           position: relative;

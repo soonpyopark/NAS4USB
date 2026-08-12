@@ -62,11 +62,43 @@ export async function copyDir(src, dest, { excludeDirs = [] } = {}) {
   }
 }
 
+/**
+ * `electron/` is excluded from sync (large binaries), but upstream `npm run build`
+ * still runs prepare:icon which needs electron/icon-source.png.
+ * @param {string} root
+ * @param {string} [preferredSourceDir]
+ */
+async function ensureWb4sIconSource(root, preferredSourceDir) {
+  const engineRoot = getWb4sCacheSrc(root);
+  const dest = path.join(engineRoot, 'electron', 'icon-source.png');
+  if (await pathExists(dest)) return;
+
+  const candidates = [
+    preferredSourceDir ? path.join(preferredSourceDir, 'electron', 'icon-source.png') : null,
+    path.join(getWb4sSiblingSrc(root), 'electron', 'icon-source.png'),
+    path.join(root, 'build', 'icon-source.png'),
+    path.join(root, 'build', 'icon.png'),
+  ].filter(Boolean);
+
+  for (const src of candidates) {
+    if (!(await pathExists(src))) continue;
+    await fs.mkdir(path.dirname(dest), { recursive: true });
+    await fs.copyFile(src, dest);
+    console.log(`[wb4s-engine] seeded electron/icon-source.png from ${src}`);
+    return;
+  }
+
+  throw new Error(
+    'wb4s prepare:icon needs electron/icon-source.png (sibling electron/ or build/icon-source.png)',
+  );
+}
+
 async function syncFromDirectory(root, sourceDir, label) {
   const engineRoot = getWb4sCacheSrc(root);
   console.log(`[wb4s-engine] syncing from ${label} → ${engineRoot}`);
   await fs.rm(engineRoot, { recursive: true, force: true });
   await copyDir(sourceDir, engineRoot, { excludeDirs: [...WB4S_SYNC_EXCLUDE_DIRS] });
+  await ensureWb4sIconSource(root, sourceDir);
 }
 
 async function cloneUpstream(root) {
@@ -211,6 +243,7 @@ export async function buildWb4sEditorBundle(root) {
   const publicOut = path.join(root, 'public', 'wb4s-editor');
 
   await ensureWb4sDependencies(root);
+  await ensureWb4sIconSource(root);
   console.log('[wb4s-editor] vite build …');
   await runCommand(engineRoot, 'npm', ['run', 'build'], { shell: process.platform === 'win32' });
 
