@@ -521,6 +521,61 @@ export function getTextBlockSelection(words, anchor, cursor) {
 }
 
 /**
+ * @param {PdfWord[]} words
+ * @param {number} indexA
+ * @param {number} indexB
+ * @returns {PdfTextSelection | null}
+ */
+export function getTextBlockSelectionByIndices(words, indexA, indexB) {
+  if (!words.length || indexA < 0 || indexB < 0) return null;
+  if (indexA >= words.length || indexB >= words.length) return null;
+  const a = words[indexA];
+  const b = words[indexB];
+  return getTextBlockSelection(
+    words,
+    { x: (a.x0 + a.x1) / 2, y: (a.y0 + a.y1) / 2 },
+    { x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 },
+  );
+}
+
+/**
+ * Handle anchors for an active selection (scale-1 page coords).
+ * @param {Array<{ left: number, top: number, width: number, height: number }>} rects
+ * @returns {{ start: { x: number, y: number }, end: { x: number, y: number } } | null}
+ */
+export function selectionHandlePoints(rects) {
+  if (!Array.isArray(rects) || !rects.length) return null;
+  const first = rects[0];
+  const last = rects[rects.length - 1];
+  return {
+    start: { x: first.left, y: first.top + first.height / 2 },
+    end: { x: last.left + last.width, y: last.top + last.height / 2 },
+  };
+}
+
+/**
+ * @param {{ x: number, y: number }} point
+ * @param {Array<{ left: number, top: number, width: number, height: number }>} rects
+ * @param {number} [hitRadius]
+ * @returns {'start' | 'end' | null}
+ */
+export function hitTestSelectionHandle(point, rects, hitRadius = 18) {
+  const handles = selectionHandlePoints(rects);
+  if (!handles || !point) return null;
+  const r2 = hitRadius * hitRadius;
+  const dist2 = (a, b) => {
+    const dx = a.x - b.x;
+    const dy = a.y - b.y;
+    return dx * dx + dy * dy;
+  };
+  const startDist = dist2(point, handles.start);
+  const endDist = dist2(point, handles.end);
+  if (startDist <= r2 && startDist <= endDist) return 'start';
+  if (endDist <= r2) return 'end';
+  return null;
+}
+
+/**
  * Capture current DOM selection as CSS-pixel rects relative to a page wrap
  * (current on-screen page size — divide by cssScale to store at scale 1).
  * @param {HTMLElement} pageWrap
@@ -688,17 +743,20 @@ export function clientPointToPagePoint(pageWrap, clientX, clientY, cssScale = 1)
 function viewportRectsFromQuadPoints(quadPoints, viewport) {
   /** @type {Array<{ left: number, top: number, width: number, height: number }>} */
   const rects = [];
-  if (!Array.isArray(quadPoints) || quadPoints.length < 8) return rects;
+  // pdf.js returns Float32Array — Array.isArray is false, so treat as array-like.
+  const points =
+    quadPoints && typeof quadPoints.length === 'number' ? Array.from(quadPoints) : null;
+  if (!points || points.length < 8) return rects;
 
-  for (let index = 0; index + 7 < quadPoints.length; index += 8) {
+  for (let index = 0; index + 7 < points.length; index += 8) {
     /** @type {number[]} */
     const xs = [];
     /** @type {number[]} */
     const ys = [];
     for (let point = 0; point < 4; point += 1) {
       const [vx, vy] = viewport.convertToViewportPoint(
-        Number(quadPoints[index + point * 2]) || 0,
-        Number(quadPoints[index + point * 2 + 1]) || 0,
+        Number(points[index + point * 2]) || 0,
+        Number(points[index + point * 2 + 1]) || 0,
       );
       xs.push(vx);
       ys.push(vy);
@@ -837,12 +895,59 @@ export async function mountPdfTextLayer(page, cssViewport, container) {
 }
 
 /**
+ * @param {{ x: number, y: number }} point
+ * @param {Array<{ left: number, top: number, width: number, height: number }>} rects
+ * @param {number} [pad]
+ */
+export function pointInSelectionRects(point, rects, pad = 0) {
+  if (!point || !Array.isArray(rects) || !rects.length) return false;
+  for (const rect of rects) {
+    if (
+      point.x >= rect.left - pad &&
+      point.x <= rect.left + rect.width + pad &&
+      point.y >= rect.top - pad &&
+      point.y <= rect.top + rect.height + pad
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Interactive handles on the hit layer (must receive touch; selection layer is pointer-events:none).
  * @param {HTMLElement} layer
  * @param {Array<{ left: number, top: number, width: number, height: number }>} rects
  * @param {number} cssScale
  */
-export function paintLiveSelectionOnLayer(layer, rects, cssScale) {
-  layer.querySelectorAll('[data-pdf-sel]').forEach((node) => node.remove());
+export function paintSelectionHandles(layer, rects, cssScale) {
+  layer.querySelectorAll('[data-pdf-sel-handle]').forEach((node) => node.remove());
+  if (!Array.isArray(rects) || !rects.length) return;
+  const handles = selectionHandlePoints(rects);
+  if (!handles) return;
+  const scale = Math.max(0.01, cssScale || 1);
+
+  for (const [role, point] of [
+    ['start', handles.start],
+    ['end', handles.end],
+  ]) {
+    const el = document.createElement('div');
+    el.dataset.pdfSelHandle = role;
+    el.className = `pdf-sel-handle pdf-sel-handle--${role}`;
+    el.style.left = `${point.x * scale}px`;
+    el.style.top = `${point.y * scale}px`;
+    layer.appendChild(el);
+  }
+}
+
+/**
+ * @param {HTMLElement} layer
+ * @param {Array<{ left: number, top: number, width: number, height: number }>} rects
+ * @param {number} cssScale
+ * @param {{ showHandles?: boolean }} [options]
+ */
+export function paintLiveSelectionOnLayer(layer, rects, cssScale, options = {}) {
+  layer.querySelectorAll('[data-pdf-sel], [data-pdf-sel-handle]').forEach((node) => node.remove());
   const scale = Math.max(0.01, cssScale || 1);
   for (const rect of rects) {
     const el = document.createElement('div');
@@ -854,11 +959,14 @@ export function paintLiveSelectionOnLayer(layer, rects, cssScale) {
     el.style.height = `${rect.height * scale}px`;
     layer.appendChild(el);
   }
+
+  // Handles are painted on the hit layer (interactive); optional visual-only copy skipped.
+  void options;
 }
 
 export function clearLiveSelectionLayer(layer) {
   if (!layer) return;
-  layer.querySelectorAll('[data-pdf-sel]').forEach((node) => node.remove());
+  layer.querySelectorAll('[data-pdf-sel], [data-pdf-sel-handle]').forEach((node) => node.remove());
 }
 
 /**

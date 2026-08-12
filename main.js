@@ -625,6 +625,53 @@ ipcMain.handle('find:stop', (event, action = 'clearSelection') => {
   return true;
 });
 
+/** @type {WeakSet<import('electron').WebContents>} */
+const pdfVolumePagingEnabled = new WeakSet();
+/** @type {WeakSet<import('electron').WebContents>} */
+const pdfVolumePagingHooked = new WeakSet();
+
+/**
+ * @param {import('electron').Input} input
+ * @returns {'next' | 'prev' | null}
+ */
+function volumeKeyPageDirection(input) {
+  const key = String(input.key || '');
+  const code = String(input.code || '');
+  if (key === 'AudioVolumeDown' || key === 'VolumeDown' || code === 'AudioVolumeDown') {
+    return 'next';
+  }
+  if (key === 'AudioVolumeUp' || key === 'VolumeUp' || code === 'AudioVolumeUp') {
+    return 'prev';
+  }
+  return null;
+}
+
+/**
+ * @param {import('electron').WebContents} webContents
+ */
+function ensurePdfVolumePagingHook(webContents) {
+  if (pdfVolumePagingHooked.has(webContents)) return;
+  pdfVolumePagingHooked.add(webContents);
+  webContents.on('before-input-event', (event, input) => {
+    if (!pdfVolumePagingEnabled.has(webContents)) return;
+    if (input.type !== 'keyDown') return;
+    const direction = volumeKeyPageDirection(input);
+    if (!direction) return;
+    event.preventDefault();
+    if (!webContents.isDestroyed()) {
+      webContents.send('pdf:volumePageTurn', direction);
+    }
+  });
+}
+
+ipcMain.handle('pdf:setVolumeKeysForPaging', (event, enabled) => {
+  const webContents = event.sender;
+  ensurePdfVolumePagingHook(webContents);
+  if (enabled) pdfVolumePagingEnabled.add(webContents);
+  else pdfVolumePagingEnabled.delete(webContents);
+  return true;
+});
+
 ipcMain.handle('fs:openPath', async (_event, relativePath) => {
   if (typeof relativePath !== 'string' || !relativePath) {
     throw new Error('열 파일 경로가 올바르지 않습니다.');

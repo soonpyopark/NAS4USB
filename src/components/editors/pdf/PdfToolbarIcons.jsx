@@ -154,3 +154,19 @@ export function IconPdfSearchClose() {
     </Svg>
   );
 }
+
+export function IconPdfTriangleUp() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+      <path d="M12 7l7 10H5L12 7z" />
+    </svg>
+  );
+}
+
+export function IconPdfTriangleDown() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+      <path d="M12 17L5 7h14l-7 10z" />
+    </svg>
+  );
+}

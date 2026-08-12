@@ -1,7 +1,13 @@
 // Use legacy build: Electron 33 / Chromium lacks Map.getOrInsertComputed,
 // which modern pdfjs-dist 6.x requires without a polyfill.
-import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import {
+  GlobalWorkerOptions,
+  PasswordResponses,
+  getDocument,
+} from 'pdfjs-dist/legacy/build/pdf.mjs';
 import pdfWorkerSrc from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
+
+export { PasswordResponses };
 
 let workerReady = false;
 
@@ -10,46 +16,91 @@ let workerReady = false;
  * Vite `?url` hashing breaks that, so assets are copied to public/pdfjs/ by
  * scripts/prepare-pdfjs-assets.mjs.
  *
- * Must be an absolute URL: with useWorkerFetch the worker calls fetch(url)
- * and resolves relative paths against the worker script, not the page — so
- * `./pdfjs/cmaps/` would 404 and CJK/CID text renders as blank white.
+ * Must be an absolute http(s) URL: with useWorkerFetch the worker calls
+ * fetch(url) and resolves relative paths against the worker script, not the
+ * page — so `./pdfjs/cmaps/` would 404 and CJK/CID text renders blank.
+ * Prefer location.origin so BASE_URL `./` never yields a worker-relative path.
  *
  * @param {string} subpath trailing-slash folder under public/pdfjs/
  */
 function pdfjsAssetBase(subpath) {
   const base = import.meta.env.BASE_URL || './';
-  const root = base.endsWith('/') ? base : `${base}/`;
+  // Vite portable builds use `./`; treat that as site root for absolute URLs.
+  const rootPath = base === './' || base === '.' ? '/' : base.endsWith('/') ? base : `${base}/`;
+  const origin =
+    typeof location !== 'undefined' && location.origin && location.origin !== 'null'
+      ? location.origin
+      : 'http://127.0.0.1';
+  return new URL(`pdfjs/${subpath}`, `${origin}${rootPath}`).href;
+}
+
+function absoluteWorkerSrc(workerUrl) {
+  if (typeof workerUrl !== 'string' || !workerUrl) return workerUrl;
+  if (/^(https?:|blob:|data:)/i.test(workerUrl)) return workerUrl;
+  const origin =
+    typeof location !== 'undefined' && location.origin && location.origin !== 'null'
+      ? location.origin
+      : 'http://127.0.0.1';
   const baseUri =
-    typeof document !== 'undefined' && document.baseURI
-      ? document.baseURI
-      : typeof location !== 'undefined'
-        ? location.href
-        : 'http://127.0.0.1/';
-  return new URL(`${root}pdfjs/${subpath}`, baseUri).href;
+    typeof document !== 'undefined' && document.baseURI ? document.baseURI : `${origin}/`;
+  return new URL(workerUrl, baseUri).href;
 }
 
 export function ensurePdfjsWorker() {
   if (workerReady) return;
-  GlobalWorkerOptions.workerSrc = pdfWorkerSrc;
+  GlobalWorkerOptions.workerSrc = absoluteWorkerSrc(pdfWorkerSrc);
   workerReady = true;
 }
 
 /**
  * @param {string} url
+ * @param {{
+ *   password?: string,
+ *   onPasswordNeed?: (reason: number) => Promise<string | null | undefined>,
+ * }} [options]
  * @returns {Promise<import('pdfjs-dist').PDFDocumentProxy>}
  */
-export async function loadPdfDocument(url) {
+export async function loadPdfDocument(url, options = {}) {
   ensurePdfjsWorker();
+  const wasmUrl = pdfjsAssetBase('wasm/');
+  const cMapUrl = pdfjsAssetBase('cmaps/');
+  const standardFontDataUrl = pdfjsAssetBase('standard_fonts/');
+  const initialPassword =
+    typeof options.password === 'string' && options.password ? options.password : undefined;
+
   const loadingTask = getDocument({
     url,
+    ...(initialPassword ? { password: initialPassword } : {}),
     withCredentials: true,
     useSystemFonts: true,
-    useWasm: true,
-    wasmUrl: pdfjsAssetBase('wasm/'),
-    cMapUrl: pdfjsAssetBase('cmaps/'),
+    // pdf.js 6.x WasmImage: when jbig2.wasm init fails, Promise.race can settle
+    // with null before jbig2_nowasm_fallback.js finishes → blank scanned pages
+    // ("JBig2 failed to initialize" / "Dependent image isn't ready yet").
+    // Force the JS decoders (still loaded from wasmUrl/*_nowasm_fallback.js).
+    useWasm: false,
+    useWorkerFetch: true,
+    wasmUrl,
+    cMapUrl,
     cMapPacked: true,
-    standardFontDataUrl: pdfjsAssetBase('standard_fonts/'),
+    standardFontDataUrl,
   });
+
+  if (typeof options.onPasswordNeed === 'function') {
+    loadingTask.onPassword = (updatePassword, reason) => {
+      void Promise.resolve(options.onPasswordNeed(reason))
+        .then((password) => {
+          if (password == null || password === '') {
+            updatePassword(new Error('PasswordCancelled'));
+            return;
+          }
+          updatePassword(String(password));
+        })
+        .catch((err) => {
+          updatePassword(err instanceof Error ? err : new Error(String(err)));
+        });
+    };
+  }
+
   return loadingTask.promise;
 }
 

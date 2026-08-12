@@ -71,6 +71,8 @@ export default function FileExplorer({
   onOpenFile,
   syncInfo,
   isEditorOpen = false,
+  compactMode = false,
+  onShowFolders,
 }) {
   const {
     entries,
@@ -865,29 +867,43 @@ export default function FileExplorer({
       onContextMenu={(event) => openContextMenu(event, null)}
     >
       {!isInTrashView && !isInFavoritesView && isFileDragOver && <FileDropOverlay />}
-      <div className="flex items-center gap-3 border-b border-nas-border px-4 py-3">
-        <div className="min-w-0 flex-1">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-nas-border px-4 py-3">
+        {compactMode && typeof onShowFolders === 'function' ? (
+          <button
+            type="button"
+            className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-nas-border bg-white px-2.5 text-[10pt] text-nas-text hover:bg-nas-sidebarHover"
+            onClick={onShowFolders}
+            title="폴더 목록으로"
+            aria-label="폴더 목록으로"
+          >
+            <span aria-hidden="true">←</span>
+            폴더
+          </button>
+        ) : null}
+        <div className="min-w-0 flex-[1_1_12rem]">
           <Breadcrumb currentPath={currentPath} onNavigate={onNavigate} />
         </div>
-        <input
-          type="search"
-          value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
-          placeholder={searchContents ? '이름·본문 검색…' : '현재 폴더 검색…'}
-          className="h-8 w-full max-w-[220px] shrink-0 rounded-md border border-nas-border bg-[#efefef] px-3 text-[10pt] outline-none focus:border-nas-accent focus:ring-1 focus:ring-nas-accent"
-        />
-        <label
-          className="flex shrink-0 cursor-pointer items-center gap-1.5 text-[10pt] text-nas-muted"
-          title="현재 폴더의 문서 내용까지 검색합니다 (txt·md·hwpx·docx·xlsx·pdf 등)"
-        >
+        <div className="flex min-w-0 flex-[1_1_14rem] items-center gap-3">
           <input
-            type="checkbox"
-            checked={searchContents}
-            onChange={(event) => setSearchContents(event.target.checked)}
-            className="h-3.5 w-3.5 cursor-pointer accent-nas-accent"
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder={searchContents ? '이름·본문 검색…' : '현재 폴더 검색…'}
+            className="h-8 min-w-0 flex-1 rounded-md border border-nas-border bg-[#efefef] px-3 text-[10pt] outline-none focus:border-nas-accent focus:ring-1 focus:ring-nas-accent sm:max-w-[220px]"
           />
-          본문 검색
-        </label>
+          <label
+            className="flex shrink-0 cursor-pointer items-center gap-1.5 text-[10pt] text-nas-muted"
+            title="현재 폴더의 문서 내용까지 검색합니다 (txt·md·hwpx·docx·xlsx·pdf 등)"
+          >
+            <input
+              type="checkbox"
+              checked={searchContents}
+              onChange={(event) => setSearchContents(event.target.checked)}
+              className="h-3.5 w-3.5 cursor-pointer accent-nas-accent"
+            />
+            본문 검색
+          </label>
+        </div>
       </div>
 
       {searchContents && searchQuery.trim() && (

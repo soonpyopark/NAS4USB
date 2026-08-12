@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import ViewerModal from './ViewerModal.jsx';
-import { AppModalButton } from '../common/AppModal.jsx';
+import { AppModal, AppModalActions, AppModalBody, AppModalButton } from '../common/AppModal.jsx';
 import { buildMediaStreamUrl } from '../../lib/media/streamUrl.js';
 import { getPdfMimeType } from '../../lib/media/mediaTypes.js';
 import {
   PDF_MAX_SCALE,
   PDF_MIN_SCALE,
+  PasswordResponses,
   computeFitHeightScale,
   computeFitPageScale,
   computeFitWidthScale,
@@ -28,12 +29,18 @@ import {
   findMarkupAtPagePoint,
   getPageDisplayScale,
   getTextBlockSelection,
+  getTextBlockSelectionByIndices,
+  hitTestSelectionHandle,
   loadPdfMarkupAnnotations,
   mountPdfTextLayer,
   paintLiveSelectionOnLayer,
   paintMarkupOnLayer,
+  paintSelectionHandles,
   pdfHighlightPresetColor,
   pdfUnderlinePresetColor,
+  pointInSelectionRects,
+  selectionHandlePoints,
+  wordIndexAtPoint,
 } from '../../lib/pdf/pdfMarkup.js';
 import { loadPdfViewerSidecar, writePdfViewerSidecar } from '../../lib/pdf/pdfViewerSidecar.js';
 import { downloadPdfMarkupsXlsx } from '../../lib/pdf/exportPdfMarkupsXlsx.js';
@@ -50,6 +57,8 @@ import {
   IconPdfSearch,
   IconPdfSearchClose,
   IconPdfThumbs,
+  IconPdfTriangleDown,
+  IconPdfTriangleUp,
   IconPdfTwoPages,
   IconPdfZoomIn,
   IconPdfZoomOut,
@@ -150,6 +159,14 @@ export default function PdfViewerShell({
   const [loading, setLoading] = useState(true);
   const [rendering, setRendering] = useState(false);
   const [loadError, setLoadError] = useState(null);
+  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [passwordValue, setPasswordValue] = useState('');
+  const [passwordHint, setPasswordHint] = useState('');
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const passwordInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
+  const passwordWaitRef = useRef(
+    /** @type {{ resolve: (value: string | null) => void } | null} */ (null),
+  );
   const [pageCount, setPageCount] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageInput, setPageInput] = useState('1');
@@ -176,6 +193,9 @@ export default function PdfViewerShell({
      *   pageNumber: number,
      *   text: string,
      *   rects: Array<{ left: number, top: number, width: number, height: number }>,
+     *   start: { x: number, y: number },
+     *   end: { x: number, y: number },
+     *   showHandles?: boolean,
      * } | null} */ (null),
   );
   const [marksContextMenu, setMarksContextMenu] = useState(
@@ -198,7 +218,16 @@ export default function PdfViewerShell({
      *   moved: boolean,
      *   selection: import('../../lib/pdf/pdfMarkup.js').PdfTextSelection | null,
      *   pendingMarkupId?: string,
+     *   pointerId?: number,
+     *   pointerType?: string,
+     *   touchPhase?: 'pending' | 'selecting' | 'handle',
+     *   handleRole?: 'start' | 'end',
+     *   startClientX?: number,
+     *   startClientY?: number,
      * } | null} */ (null),
+  );
+  const lastTapRef = useRef(
+    /** @type {{ time: number, pageNumber: number, x: number, y: number } | null} */ (null),
   );
   /** Skip autosave until initial sidecar restore finishes. */
   const skipViewerSaveRef = useRef(true);
@@ -900,6 +929,40 @@ export default function PdfViewerShell({
     /** @type {import('pdfjs-dist').PDFDocumentProxy | null} */
     let pdf = null;
 
+    const closePasswordPrompt = (result) => {
+      const wait = passwordWaitRef.current;
+      passwordWaitRef.current = null;
+      setPasswordOpen(false);
+      setPasswordBusy(false);
+      setPasswordValue('');
+      setPasswordHint('');
+      wait?.resolve(result);
+    };
+
+    /**
+     * @param {number} reason
+     * @returns {Promise<string | null>}
+     */
+    const askPassword = (reason) => {
+      if (cancelled) return Promise.resolve(null);
+      // Drop a stale waiter (should not happen, but keeps UI consistent).
+      if (passwordWaitRef.current) {
+        passwordWaitRef.current.resolve(null);
+        passwordWaitRef.current = null;
+      }
+      setPasswordValue('');
+      setPasswordBusy(false);
+      setPasswordHint(
+        reason === PasswordResponses.INCORRECT_PASSWORD
+          ? '암호가 올바르지 않습니다. 다시 입력해 주세요.'
+          : '이 PDF는 암호로 보호되어 있습니다.',
+      );
+      setPasswordOpen(true);
+      return new Promise((resolve) => {
+        passwordWaitRef.current = { resolve };
+      });
+    };
+
     async function load() {
       setLoading(true);
       setLoadError(null);
@@ -914,10 +977,11 @@ export default function PdfViewerShell({
       pdfRef.current = null;
       skipViewerSaveRef.current = true;
       pendingRestorePageRef.current = null;
+      closePasswordPrompt(null);
 
       try {
         const [loadedPdf, sidecar] = await Promise.all([
-          loadPdfDocument(streamUrl),
+          loadPdfDocument(streamUrl, { onPasswordNeed: askPassword }),
           loadPdfViewerSidecar(relativePath),
         ]);
         pdf = loadedPdf;
@@ -966,7 +1030,13 @@ export default function PdfViewerShell({
           });
       } catch (err) {
         if (!cancelled) {
-          setLoadError(err instanceof Error ? err.message : 'PDF를 표시할 수 없습니다.');
+          const message = err instanceof Error ? err.message : String(err ?? '');
+          const cancelledPassword = /PasswordCancelled/i.test(message);
+          setLoadError(
+            cancelledPassword
+              ? '암호 입력이 취소되어 PDF를 열 수 없습니다.'
+              : message || 'PDF를 표시할 수 없습니다.',
+          );
           setLoading(false);
           skipViewerSaveRef.current = false;
         }
@@ -977,6 +1047,7 @@ export default function PdfViewerShell({
 
     return () => {
       cancelled = true;
+      closePasswordPrompt(null);
       renderTokenRef.current += 1;
       cancelPageRenders();
       teardownThumbnails();
@@ -984,6 +1055,37 @@ export default function PdfViewerShell({
       void destroyPdfDocument(pdf);
     };
   }, [cancelPageRenders, clearSearch, relativePath, streamUrl, teardownThumbnails]);
+
+  useEffect(() => {
+    if (!passwordOpen) return undefined;
+    const timer = window.setTimeout(() => passwordInputRef.current?.focus(), 40);
+    return () => window.clearTimeout(timer);
+  }, [passwordOpen]);
+
+  const submitPdfPassword = useCallback(() => {
+    const wait = passwordWaitRef.current;
+    if (!wait || passwordBusy) return;
+    const value = passwordValue;
+    if (!value) {
+      setPasswordHint('암호를 입력해 주세요.');
+      passwordInputRef.current?.focus();
+      return;
+    }
+    setPasswordBusy(true);
+    passwordWaitRef.current = null;
+    setPasswordOpen(false);
+    wait.resolve(value);
+  }, [passwordBusy, passwordValue]);
+
+  const cancelPdfPassword = useCallback(() => {
+    const wait = passwordWaitRef.current;
+    passwordWaitRef.current = null;
+    setPasswordOpen(false);
+    setPasswordBusy(false);
+    setPasswordValue('');
+    setPasswordHint('');
+    wait?.resolve(null);
+  }, []);
 
   // After first layout, jump to saved page then enable autosave.
   // Keep pendingRestorePageRef until scroll succeeds — ResizeObserver / zoom
@@ -1113,12 +1215,29 @@ export default function PdfViewerShell({
     }
   }, [currentPage, showThumbnails, rendering]);
 
+  const [scrollEdges, setScrollEdges] = useState({ atTop: true, atBottom: true });
+
+  const updateScrollEdges = useCallback(() => {
+    const scroller = scrollRef.current;
+    if (!scroller) {
+      setScrollEdges({ atTop: true, atBottom: true });
+      return;
+    }
+    const maxTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+    const top = scroller.scrollTop;
+    setScrollEdges({
+      atTop: top <= 2,
+      atBottom: top >= maxTop - 2,
+    });
+  }, []);
+
   // Track current page from scroll.
   useEffect(() => {
     const scroller = scrollRef.current;
     if (!scroller || !pageCount) return undefined;
 
     const onScroll = () => {
+      updateScrollEdges();
       if (ignoreScrollPageSyncRef.current) return;
       const pages = scroller.querySelectorAll('[data-pdf-page]');
       if (!pages.length) return;
@@ -1150,9 +1269,10 @@ export default function PdfViewerShell({
       });
     };
 
+    updateScrollEdges();
     scroller.addEventListener('scroll', onScroll, { passive: true });
     return () => scroller.removeEventListener('scroll', onScroll);
-  }, [pageCount, rendering, twoPageView]);
+  }, [pageCount, rendering, twoPageView, updateScrollEdges]);
 
   // Resize refreshes fit modes only.
   useEffect(() => {
@@ -1194,9 +1314,29 @@ export default function PdfViewerShell({
       pageEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
       window.setTimeout(() => {
         ignoreScrollPageSyncRef.current = false;
+        updateScrollEdges();
       }, 400);
     },
-    [pageCount],
+    [pageCount, updateScrollEdges],
+  );
+
+  /** Fit-width: nudge viewport; fit-height/page: jump pages. */
+  const handleFabNavigate = useCallback(
+    (direction) => {
+      if (zoomModeRef.current === 'fitWidth') {
+        const scroller = scrollRef.current;
+        if (!scroller) return;
+        const step = Math.max(140, Math.round(scroller.clientHeight * 0.45));
+        scroller.scrollBy({
+          top: direction === 'up' ? -step : step,
+          behavior: 'smooth',
+        });
+        window.setTimeout(() => updateScrollEdges(), 320);
+        return;
+      }
+      goToPage(currentPageRef.current + (direction === 'up' ? -1 : 1));
+    },
+    [goToPage, updateScrollEdges],
   );
 
   const zoomBy = useCallback((direction) => {
@@ -1223,6 +1363,13 @@ export default function PdfViewerShell({
     for (const layer of selectionLayerRefs.current.values()) {
       clearLiveSelectionLayer(layer);
     }
+    const scroller = scrollRef.current;
+    if (!scroller) return;
+    scroller.querySelectorAll('[data-pdf-hit="1"]').forEach((hit) => {
+      if (!(hit instanceof HTMLElement)) return;
+      hit.querySelectorAll('[data-pdf-sel-handle]').forEach((node) => node.remove());
+      hit.style.touchAction = 'pan-x pan-y';
+    });
   }, []);
 
   const closeSelectionMenu = useCallback(() => {
@@ -1311,6 +1458,9 @@ export default function PdfViewerShell({
     [goToPage, showMarkupSelection],
   );
 
+  const openMarksContextMenuRef = useRef(openMarksContextMenu);
+  openMarksContextMenuRef.current = openMarksContextMenu;
+
   const removeMarkup = useCallback(
     (id) => {
       if (!id) return;
@@ -1394,24 +1544,123 @@ export default function PdfViewerShell({
     repaintMarkupLayers();
   }, [markups, activeMarkupId, repaintMarkupLayers]);
 
-  // Tiny-style: line-band live selection + popup menu; markup click selects list item.
+  // Mouse/pen: drag selects. Touch: pan scrolls; double-tap selects a word; handles extend range.
   useEffect(() => {
     const scroller = scrollRef.current;
     if (!scroller || !docReady) return undefined;
 
-    const updateLive = (pageNumber, selection) => {
-      const layer = selectionLayerRefs.current.get(pageNumber);
-      if (!layer) return;
+    const TOUCH_SCROLL_SLOP_PX = 12;
+    const DOUBLE_TAP_MS = 420;
+    const DOUBLE_TAP_SLOP_PX = 40;
+
+    const clearSelectionDrag = () => {
+      selectionDragRef.current = null;
+    };
+
+    const pageScale = (pageNumber) => {
       const pageWrap = scroller.querySelector(`[data-pdf-page="${pageNumber}"]`);
-      const scale =
-        pageWrap instanceof HTMLElement
-          ? getPageDisplayScale(pageWrap, pageCssScaleRef.current || displayScaleRef.current || 1)
-          : pageCssScaleRef.current || displayScaleRef.current || 1;
-      if (!selection?.rects?.length) {
-        clearLiveSelectionLayer(layer);
-        return;
+      return pageWrap instanceof HTMLElement
+        ? getPageDisplayScale(pageWrap, pageCssScaleRef.current || displayScaleRef.current || 1)
+        : pageCssScaleRef.current || displayScaleRef.current || 1;
+    };
+
+    const hitLayerForPage = (pageNumber) => {
+      const pageWrap = scroller.querySelector(`[data-pdf-page="${pageNumber}"]`);
+      const hit = pageWrap?.querySelector('[data-pdf-hit="1"]');
+      return hit instanceof HTMLElement ? hit : null;
+    };
+
+    const updateLive = (pageNumber, selection, showHandles = false) => {
+      const layer = selectionLayerRefs.current.get(pageNumber);
+      const scale = pageScale(pageNumber);
+      const rects = selection?.rects || [];
+      if (layer) {
+        if (!rects.length) clearLiveSelectionLayer(layer);
+        else paintLiveSelectionOnLayer(layer, rects, scale);
       }
-      paintLiveSelectionOnLayer(layer, selection.rects, scale);
+      const hit = hitLayerForPage(pageNumber);
+      if (hit) {
+        paintSelectionHandles(hit, showHandles ? rects : [], scale);
+        hit.style.touchAction = showHandles && rects.length ? 'none' : 'pan-x pan-y';
+      }
+    };
+
+    const menuAnchorFromRects = (pageNumber, rects) => {
+      const pageWrap = scroller.querySelector(`[data-pdf-page="${pageNumber}"]`);
+      if (!(pageWrap instanceof HTMLElement) || !rects?.length) {
+        return { clientX: window.innerWidth / 2, clientY: 120 };
+      }
+      const scale = pageScale(pageNumber);
+      const box = pageWrap.getBoundingClientRect();
+      const first = rects[0];
+      const last = rects[rects.length - 1];
+      const left = Math.min(first.left, last.left);
+      const right = Math.max(first.left + first.width, last.left + last.width);
+      const clientX = box.left + ((left + right) / 2) * scale;
+      const clientY = box.top + first.top * scale;
+      return {
+        clientX: Math.min(Math.max(16, clientX), window.innerWidth - 16),
+        clientY: Math.min(Math.max(16, clientY), window.innerHeight - 16),
+      };
+    };
+
+    const openSelectionFromRange = (pageNumber, selection, start, end) => {
+      if (!selection?.text?.trim() || !selection.rects.length) return;
+      const handles = selectionHandlePoints(selection.rects);
+      const anchor = menuAnchorFromRects(pageNumber, selection.rects);
+      updateLive(pageNumber, selection, true);
+      setSelectionMenu({
+        clientX: anchor.clientX,
+        clientY: anchor.clientY,
+        pageNumber,
+        text: selection.text,
+        rects: selection.rects,
+        start: handles ? { ...handles.start } : { ...start },
+        end: handles ? { ...handles.end } : { ...end },
+        showHandles: true,
+      });
+    };
+
+    const capturePointer = (target, pointerId) => {
+      try {
+        if (target instanceof Element && typeof target.setPointerCapture === 'function') {
+          target.setPointerCapture(pointerId);
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    const beginHandleDrag = (event, pageNumber, handleRole, menu) => {
+      event.preventDefault();
+      event.stopPropagation();
+      closeMarksContextMenu();
+      window.getSelection()?.removeAllRanges();
+      const first = menu.rects[0];
+      const last = menu.rects[menu.rects.length - 1];
+      const fixed =
+        handleRole === 'start'
+          ? { x: last.left + last.width, y: last.top + last.height / 2 }
+          : { x: first.left, y: first.top + first.height / 2 };
+      const hit = hitLayerForPage(pageNumber);
+      if (hit) hit.style.touchAction = 'none';
+      selectionDragRef.current = {
+        pageNumber,
+        anchor: fixed,
+        moved: true,
+        selection: {
+          text: menu.text,
+          words: [],
+          rects: menu.rects,
+        },
+        pointerId: event.pointerId,
+        pointerType: event.pointerType || 'mouse',
+        touchPhase: 'handle',
+        handleRole,
+        startClientX: event.clientX,
+        startClientY: event.clientY,
+      };
+      capturePointer(event.target instanceof Element ? event.target : hit, event.pointerId);
     };
 
     const onPointerDown = (event) => {
@@ -1420,10 +1669,7 @@ export default function PdfViewerShell({
       if (!(target instanceof Element)) return;
       if (target.closest('[data-pdf-selection-menu]')) return;
       if (target.closest('[data-pdf-marks-menu]')) return;
-
-      closeSelectionMenu();
-      closeMarksContextMenu();
-      window.getSelection()?.removeAllRanges();
+      if (target.closest('.pdf-page-fab')) return;
 
       const pageWrap = target.closest('[data-pdf-page]');
       if (!(pageWrap instanceof HTMLElement) || !scroller.contains(pageWrap)) return;
@@ -1432,48 +1678,121 @@ export default function PdfViewerShell({
       const pageNumber = Number(pageWrap.dataset.pdfPage || '0');
       if (!pageNumber) return;
 
-      const scale = pageCssScaleRef.current || displayScaleRef.current || 1;
-      const anchor = clientPointToPagePoint(pageWrap, event.clientX, event.clientY, scale);
+      const scale = pageScale(pageNumber);
+      const point = clientPointToPagePoint(pageWrap, event.clientX, event.clientY, scale);
+      const isTouch = event.pointerType === 'touch';
+      const menu = selectionMenuRef.current;
+
+      // Drag selection handles while a text selection is active.
+      if (menu?.showHandles && menu.pageNumber === pageNumber && menu.rects?.length) {
+        const fromDom = target.closest('[data-pdf-sel-handle]');
+        const domRole = fromDom?.getAttribute('data-pdf-sel-handle');
+        const handleHitRadius = (isTouch ? 36 : 16) / Math.max(0.35, scale);
+        const handleRole =
+          domRole === 'start' || domRole === 'end'
+            ? domRole
+            : hitTestSelectionHandle(point, menu.rects, handleHitRadius);
+        if (handleRole === 'start' || handleRole === 'end') {
+          beginHandleDrag(event, pageNumber, handleRole, menu);
+          return;
+        }
+
+        // Inside current selection: keep handles/menu (tablet Chrome often misses the knob).
+        if (pointInSelectionRects(point, menu.rects, 10 / Math.max(0.35, scale))) {
+          event.preventDefault();
+          return;
+        }
+      }
+
+      closeSelectionMenu();
+      closeMarksContextMenu();
+      window.getSelection()?.removeAllRanges();
+      clearAllLiveSelections();
 
       const words = pageWordsRefs.current.get(pageNumber);
       if (!words?.length) {
-        // No text metrics yet — allow markup click only.
-        const hitMarkup = findMarkupAtPagePoint(markupsRef.current, pageNumber, anchor);
+        const hitMarkup = findMarkupAtPagePoint(markupsRef.current, pageNumber, point);
         if (hitMarkup) {
           event.preventDefault();
           selectMarkupEntryRef.current(hitMarkup);
         } else {
           setActiveMarkupId('');
-          clearAllLiveSelections();
         }
-        selectionDragRef.current = null;
+        clearSelectionDrag();
         return;
       }
 
-      // Defer markup select until click (no drag) so highlights don't block text selection.
-      const pendingMarkup = findMarkupAtPagePoint(markupsRef.current, pageNumber, anchor);
+      const pendingMarkup = findMarkupAtPagePoint(markupsRef.current, pageNumber, point);
       setActiveMarkupId('');
-      selectionDragRef.current = {
+
+      /** @type {NonNullable<typeof selectionDragRef.current>} */
+      const drag = {
         pageNumber,
-        anchor,
+        anchor: point,
         moved: false,
         selection: null,
         pendingMarkupId: pendingMarkup?.id || '',
+        pointerId: event.pointerId,
+        pointerType: event.pointerType || 'mouse',
+        startClientX: event.clientX,
+        startClientY: event.clientY,
       };
-      clearAllLiveSelections();
+
+      if (isTouch) {
+        drag.touchPhase = 'pending';
+        selectionDragRef.current = drag;
+        return;
+      }
+
+      selectionDragRef.current = drag;
       event.preventDefault();
     };
 
     const onPointerMove = (event) => {
       const drag = selectionDragRef.current;
-      if (!drag) return;
+      if (!drag || drag.pointerId !== event.pointerId) return;
+
+      if (drag.touchPhase === 'pending') {
+        const dx = event.clientX - (drag.startClientX || 0);
+        const dy = event.clientY - (drag.startClientY || 0);
+        if (dx * dx + dy * dy >= TOUCH_SCROLL_SLOP_PX * TOUCH_SCROLL_SLOP_PX) {
+          clearSelectionDrag();
+          lastTapRef.current = null;
+        }
+        return;
+      }
+
       const pageWrap = scroller.querySelector(`[data-pdf-page="${drag.pageNumber}"]`);
       if (!(pageWrap instanceof HTMLElement)) return;
       const words = pageWordsRefs.current.get(drag.pageNumber);
       if (!words?.length) return;
 
-      const scale = pageCssScaleRef.current || displayScaleRef.current || 1;
+      const scale = pageScale(drag.pageNumber);
       const cursor = clientPointToPagePoint(pageWrap, event.clientX, event.clientY, scale);
+
+      if (drag.touchPhase === 'handle') {
+        event.preventDefault();
+        const fixed = drag.anchor;
+        const selection = getTextBlockSelection(words, fixed, cursor);
+        if (!selection) return;
+        drag.selection = selection;
+        const start = drag.handleRole === 'start' ? cursor : fixed;
+        const end = drag.handleRole === 'start' ? fixed : cursor;
+        const anchor = menuAnchorFromRects(drag.pageNumber, selection.rects);
+        updateLive(drag.pageNumber, selection, true);
+        setSelectionMenu({
+          clientX: anchor.clientX,
+          clientY: anchor.clientY,
+          pageNumber: drag.pageNumber,
+          text: selection.text,
+          rects: selection.rects,
+          start: { ...start },
+          end: { ...end },
+          showHandles: true,
+        });
+        return;
+      }
+
       const dx = cursor.x - drag.anchor.x;
       const dy = cursor.y - drag.anchor.y;
       if (!drag.moved && dx * dx + dy * dy < 0.35) return;
@@ -1482,33 +1801,98 @@ export default function PdfViewerShell({
 
       const selection = getTextBlockSelection(words, drag.anchor, cursor);
       drag.selection = selection;
-      updateLive(drag.pageNumber, selection);
+      updateLive(drag.pageNumber, selection, false);
       event.preventDefault();
     };
 
-    const onPointerUp = (event) => {
+    const finishPointer = (event) => {
       if (event.target instanceof Element && event.target.closest('[data-pdf-selection-menu]')) {
         return;
       }
 
       const drag = selectionDragRef.current;
-      if (!drag) return;
+      if (!drag || (drag.pointerId != null && drag.pointerId !== event.pointerId)) return;
 
+      const wasTouchPending = drag.touchPhase === 'pending';
+      const wasHandle = drag.touchPhase === 'handle';
       const pageWrap = scroller.querySelector(`[data-pdf-page="${drag.pageNumber}"]`);
       const words = pageWordsRefs.current.get(drag.pageNumber);
-      const scale = pageCssScaleRef.current || displayScaleRef.current || 1;
+      const scale = pageScale(drag.pageNumber);
       let selection = drag.selection;
-      if (pageWrap instanceof HTMLElement && words?.length && drag.moved) {
+
+      if (pageWrap instanceof HTMLElement && words?.length && (drag.moved || wasHandle)) {
         const cursor = clientPointToPagePoint(pageWrap, event.clientX, event.clientY, scale);
-        selection = getTextBlockSelection(words, drag.anchor, cursor);
-        drag.selection = selection;
-        updateLive(drag.pageNumber, selection);
+        if (wasHandle) {
+          selection = getTextBlockSelection(words, drag.anchor, cursor) || selection;
+          const start = drag.handleRole === 'start' ? cursor : drag.anchor;
+          const end = drag.handleRole === 'start' ? drag.anchor : cursor;
+          clearSelectionDrag();
+          if (selection?.text?.trim() && selection.rects.length) {
+            openSelectionFromRange(drag.pageNumber, selection, start, end);
+          }
+          return;
+        }
+        if (drag.moved && drag.touchPhase !== 'pending') {
+          selection = getTextBlockSelection(words, drag.anchor, cursor);
+        }
       }
+
       const pendingMarkupId = drag.pendingMarkupId;
       const pageNumber = drag.pageNumber;
-      selectionDragRef.current = null;
+      const moved = drag.moved;
+      const anchor = drag.anchor;
+      clearSelectionDrag();
 
-      if (!drag.moved && pendingMarkupId) {
+      if (wasTouchPending) {
+        const now = Date.now();
+        const last = lastTapRef.current;
+        const dx = last ? event.clientX - last.x : 0;
+        const dy = last ? event.clientY - last.y : 0;
+        const isDouble =
+          Boolean(last) &&
+          last.pageNumber === pageNumber &&
+          now - last.time <= DOUBLE_TAP_MS &&
+          dx * dx + dy * dy <= DOUBLE_TAP_SLOP_PX * DOUBLE_TAP_SLOP_PX;
+
+        if (isDouble && words?.length && pageWrap instanceof HTMLElement) {
+          event.preventDefault();
+          lastTapRef.current = null;
+          const point = clientPointToPagePoint(pageWrap, event.clientX, event.clientY, scale);
+          const wordIdx = wordIndexAtPoint(words, point);
+          const picked = getTextBlockSelectionByIndices(words, wordIdx, wordIdx);
+          if (picked?.text?.trim()) {
+            const word = words[wordIdx];
+            const start = { x: word.x0, y: (word.y0 + word.y1) / 2 };
+            const end = { x: word.x1, y: (word.y0 + word.y1) / 2 };
+            try {
+              navigator.vibrate?.(10);
+            } catch {
+              // ignore
+            }
+            openSelectionFromRange(pageNumber, picked, start, end);
+            return;
+          }
+        }
+
+        lastTapRef.current = {
+          time: now,
+          pageNumber,
+          x: event.clientX,
+          y: event.clientY,
+        };
+
+        if (pendingMarkupId) {
+          const entry = markupsRef.current.find((item) => item.id === pendingMarkupId);
+          if (entry) {
+            selectMarkupEntryRef.current(entry);
+            return;
+          }
+        }
+        clearAllLiveSelections();
+        return;
+      }
+
+      if (!moved && pendingMarkupId) {
         const entry = markupsRef.current.find((item) => item.id === pendingMarkupId);
         if (entry) {
           selectMarkupEntryRef.current(entry);
@@ -1517,13 +1901,11 @@ export default function PdfViewerShell({
       }
 
       if (selection?.text?.trim() && selection.rects.length) {
-        setSelectionMenu({
-          clientX: event.clientX,
-          clientY: event.clientY,
-          pageNumber,
-          text: selection.text,
-          rects: selection.rects,
-        });
+        const endPoint =
+          pageWrap instanceof HTMLElement
+            ? clientPointToPagePoint(pageWrap, event.clientX, event.clientY, scale)
+            : anchor;
+        openSelectionFromRange(pageNumber, selection, anchor, endPoint);
         return;
       }
 
@@ -1535,20 +1917,48 @@ export default function PdfViewerShell({
         closeSelectionMenu();
         closeMarksContextMenu();
         clearAllLiveSelections();
-        selectionDragRef.current = null;
+        clearSelectionDrag();
+        lastTapRef.current = null;
         setActiveMarkupId('');
         window.getSelection()?.removeAllRanges();
       }
     };
 
+    const onContextMenu = (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest('[data-pdf-selection-menu]')) return;
+      if (target.closest('[data-pdf-marks-menu]')) return;
+
+      const pageWrap = target.closest('[data-pdf-page]');
+      if (!(pageWrap instanceof HTMLElement) || !scroller.contains(pageWrap)) return;
+      if (pageWrap.dataset.pdfReady !== '1') return;
+
+      const pageNumber = Number(pageWrap.dataset.pdfPage || '0');
+      if (!pageNumber) return;
+
+      const scale = pageScale(pageNumber);
+      const point = clientPointToPagePoint(pageWrap, event.clientX, event.clientY, scale);
+      const hitMarkup = findMarkupAtPagePoint(markupsRef.current, pageNumber, point);
+      if (!hitMarkup) return;
+
+      clearSelectionDrag();
+      openMarksContextMenuRef.current(event, hitMarkup);
+    };
+
     scroller.addEventListener('pointerdown', onPointerDown);
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp);
+    scroller.addEventListener('contextmenu', onContextMenu);
+    window.addEventListener('pointermove', onPointerMove, { passive: false });
+    window.addEventListener('pointerup', finishPointer);
+    window.addEventListener('pointercancel', finishPointer);
     window.addEventListener('keydown', onKeyDown);
     return () => {
+      clearSelectionDrag();
       scroller.removeEventListener('pointerdown', onPointerDown);
+      scroller.removeEventListener('contextmenu', onContextMenu);
       window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointerup', finishPointer);
+      window.removeEventListener('pointercancel', finishPointer);
       window.removeEventListener('keydown', onKeyDown);
     };
   }, [clearAllLiveSelections, closeMarksContextMenu, closeSelectionMenu, docReady]);
@@ -1857,6 +2267,18 @@ export default function PdfViewerShell({
       } else if (event.key === 'PageUp' || event.key === 'ArrowLeft') {
         event.preventDefault();
         goToPage(currentPage - 1);
+      } else if (
+        !window.nas4usb?.pdfViewer?.setVolumeKeysForPaging &&
+        (event.key === 'AudioVolumeDown' || event.key === 'VolumeDown')
+      ) {
+        event.preventDefault();
+        goToPage(currentPage + 1);
+      } else if (
+        !window.nas4usb?.pdfViewer?.setVolumeKeysForPaging &&
+        (event.key === 'AudioVolumeUp' || event.key === 'VolumeUp')
+      ) {
+        event.preventDefault();
+        goToPage(currentPage - 1);
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -1876,6 +2298,31 @@ export default function PdfViewerShell({
     showSearchBar,
     zoomBy,
   ]);
+
+  // Tablet: volume down = next page, volume up = previous (while PDF viewer is open).
+  useEffect(() => {
+    if (!docReady) return undefined;
+    const api = window.nas4usb?.pdfViewer;
+    if (!api?.setVolumeKeysForPaging || !api?.subscribeVolumePageTurn) return undefined;
+
+    void api.setVolumeKeysForPaging(true);
+    const unsubscribe = api.subscribeVolumePageTurn((direction) => {
+      const page = currentPageRef.current;
+      if (direction === 'next') goToPage(page + 1);
+      else if (direction === 'prev') goToPage(page - 1);
+    });
+
+    return () => {
+      unsubscribe?.();
+      void api.setVolumeKeysForPaging(false);
+    };
+  }, [docReady, goToPage]);
+
+  useEffect(() => {
+    if (!docReady) return undefined;
+    const timer = window.setTimeout(() => updateScrollEdges(), 80);
+    return () => window.clearTimeout(timer);
+  }, [docReady, zoomMode, displayScale, pageCount, rendering, updateScrollEdges]);
 
   const matchLabel =
     matches.length > 0 && activeMatch >= 0
@@ -1910,6 +2357,49 @@ export default function PdfViewerShell({
       {loadError && (
         <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{loadError}</div>
       )}
+
+      <AppModal
+        open={passwordOpen}
+        onClose={cancelPdfPassword}
+        title="PDF 암호"
+        raised
+        showCloseButton
+      >
+        <AppModalBody>
+          <p className="text-sm text-slate-600">
+            {passwordHint || '이 PDF는 암호로 보호되어 있습니다.'}
+          </p>
+          <label className="mt-3 block text-sm text-slate-700">
+            암호
+            <input
+              ref={passwordInputRef}
+              type="password"
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-nas-accent"
+              value={passwordValue}
+              autoComplete="current-password"
+              disabled={passwordBusy}
+              onChange={(event) => setPasswordValue(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  submitPdfPassword();
+                } else if (event.key === 'Escape') {
+                  event.preventDefault();
+                  cancelPdfPassword();
+                }
+              }}
+            />
+          </label>
+        </AppModalBody>
+        <AppModalActions>
+          <AppModalButton variant="primary" onClick={submitPdfPassword} disabled={passwordBusy}>
+            열기
+          </AppModalButton>
+          <AppModalButton onClick={cancelPdfPassword} disabled={passwordBusy}>
+            취소
+          </AppModalButton>
+        </AppModalActions>
+      </AppModal>
 
       <div className="flex flex-wrap items-center gap-0.5 border-b border-slate-200 bg-slate-50 px-2 py-1">
         <button
@@ -2232,8 +2722,9 @@ export default function PdfViewerShell({
             >
               {markups.length === 0 ? (
                 <p className="px-1 py-2 text-[11px] leading-relaxed text-slate-500">
-                  형광펜이나 밑줄 친 내용이 없습니다. 본문에서 텍스트를 드래그한 뒤 메뉴에서
-                  형광펜·밑줄을 추가한 다음 [저장]으로 원본 PDF에 기록하세요. 읽던 위치는
+                  형광펜이나 밑줄 친 내용이 없습니다. 본문에서 텍스트를 선택한 뒤 메뉴에서
+                  형광펜·밑줄을 추가하고 [저장]으로 원본 PDF에 기록하세요. 태블릿은 손가락으로
+                  스크롤하고, 텍스트는 더블 탭한 뒤 파란 핸들로 범위를 조절하세요. 읽던 위치는
                   자동 보관됩니다.
                 </p>
               ) : (
@@ -2277,10 +2768,49 @@ export default function PdfViewerShell({
         <div className="relative min-h-0 min-w-0 flex-1">
           {(loading || rendering) && !loadError && (
             <p className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-slate-200/70 text-sm text-slate-600">
-              {loading ? 'PDF 불러오는 중…' : '레이아웃 준비 중…'}
+              {passwordOpen
+                ? '암호 입력 대기 중…'
+                : loading
+                  ? 'PDF 불러오는 중…'
+                  : '레이아웃 준비 중…'}
             </p>
           )}
           <div ref={scrollRef} className="pdf-scroll h-full min-h-0 overflow-auto p-3" />
+
+          {docReady && pageCount > 0 && (
+            <div
+              className="pdf-page-fab"
+              role="group"
+              aria-label={zoomMode === 'fitWidth' ? '화면 스크롤' : '페이지 이동'}
+            >
+              <button
+                type="button"
+                className="pdf-page-fab__btn"
+                disabled={
+                  busy ||
+                  (zoomMode === 'fitWidth' ? scrollEdges.atTop : currentPage <= 1)
+                }
+                onClick={() => handleFabNavigate('up')}
+                title={zoomMode === 'fitWidth' ? '위로 스크롤' : '이전 페이지'}
+                aria-label={zoomMode === 'fitWidth' ? '위로 스크롤' : '이전 페이지'}
+              >
+                <IconPdfTriangleUp />
+              </button>
+              <button
+                type="button"
+                className="pdf-page-fab__btn"
+                disabled={
+                  busy ||
+                  (zoomMode === 'fitWidth' ? scrollEdges.atBottom : currentPage >= pageCount)
+                }
+                onClick={() => handleFabNavigate('down')}
+                title={zoomMode === 'fitWidth' ? '아래로 스크롤' : '다음 페이지'}
+                aria-label={zoomMode === 'fitWidth' ? '아래로 스크롤' : '다음 페이지'}
+              >
+                <IconPdfTriangleDown />
+              </button>
+            </div>
+          )}
 
           {selectionMenu &&
             createPortal(
@@ -2288,8 +2818,14 @@ export default function PdfViewerShell({
                 data-pdf-selection-menu="1"
                 className="pdf-selection-menu"
                 style={{
-                  left: Math.min(selectionMenu.clientX, window.innerWidth - 280),
-                  top: Math.min(selectionMenu.clientY + 8, window.innerHeight - 160),
+                  left: Math.min(
+                    Math.max(8, selectionMenu.clientX - 140),
+                    window.innerWidth - 320,
+                  ),
+                  top: Math.min(
+                    Math.max(8, selectionMenu.clientY - 168),
+                    window.innerHeight - 190,
+                  ),
                 }}
                 role="menu"
               >
@@ -2304,10 +2840,6 @@ export default function PdfViewerShell({
                       );
                     }}
                   >
-                    <span
-                      className="pdf-selection-menu__swatch"
-                      style={{ background: pdfHighlightPresetColor(highlightColorId) }}
-                    />
                     형광펜
                   </button>
                   <div className="pdf-selection-menu__colors" role="group" aria-label="형광펜 색상">
@@ -2338,10 +2870,6 @@ export default function PdfViewerShell({
                       );
                     }}
                   >
-                    <span
-                      className="pdf-selection-menu__swatch pdf-selection-menu__swatch--underline"
-                      style={{ borderBottomColor: pdfUnderlinePresetColor(underlineColorId) }}
-                    />
                     밑줄
                   </button>
                   <div className="pdf-selection-menu__colors" role="group" aria-label="밑줄 색상">
@@ -2419,6 +2947,43 @@ export default function PdfViewerShell({
 
       <style>{`
         .pdf-scroll { scrollbar-gutter: stable; }
+        .pdf-page-fab {
+          position: absolute;
+          right: 14px;
+          top: 50%;
+          bottom: auto;
+          transform: translateY(-50%);
+          z-index: 20;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          pointer-events: none;
+        }
+        .pdf-page-fab__btn {
+          pointer-events: auto;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 46px;
+          height: 46px;
+          border-radius: 9999px;
+          border: 1px solid rgba(15, 23, 42, 0.12);
+          background: rgba(255, 255, 255, 0.42);
+          color: rgba(15, 23, 42, 0.72);
+          backdrop-filter: blur(6px);
+          -webkit-backdrop-filter: blur(6px);
+          box-shadow: 0 2px 10px rgba(15, 23, 42, 0.12);
+          cursor: pointer;
+          transition: background 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+        }
+        .pdf-page-fab__btn:hover:not(:disabled) {
+          background: rgba(255, 255, 255, 0.7);
+          color: rgba(15, 23, 42, 0.92);
+        }
+        .pdf-page-fab__btn:disabled {
+          opacity: 0.35;
+          cursor: default;
+        }
         .pdf-spread-row {
           display: flex;
           justify-content: center;
@@ -2493,13 +3058,52 @@ export default function PdfViewerShell({
           inset: 0;
           z-index: 4;
           cursor: text;
-          touch-action: none;
+          /* Allow finger pan/scroll; long-press arms text selection in JS. */
+          touch-action: pan-x pan-y;
           background: transparent;
         }
         .pdf-live-selection {
           position: absolute;
           background: rgba(51, 153, 255, 0.35);
           border-radius: 1px;
+        }
+        .pdf-sel-handle {
+          position: absolute;
+          z-index: 7;
+          width: 28px;
+          height: 28px;
+          margin-left: -14px;
+          margin-top: -14px;
+          border-radius: 50%;
+          background: #3380ff;
+          border: 2px solid #fff;
+          box-shadow: 0 1px 4px rgba(15, 23, 42, 0.35);
+          pointer-events: auto;
+          touch-action: none;
+          box-sizing: border-box;
+          cursor: grab;
+        }
+        .pdf-sel-handle--start {
+          cursor: grab;
+        }
+        .pdf-sel-handle--end {
+          cursor: grab;
+        }
+        .pdf-sel-handle::after {
+          content: '';
+          position: absolute;
+          left: 50%;
+          width: 2px;
+          height: 16px;
+          margin-left: -1px;
+          background: #3380ff;
+          pointer-events: none;
+        }
+        .pdf-sel-handle--start::after {
+          top: 26px;
+        }
+        .pdf-sel-handle--end::after {
+          bottom: 26px;
         }
         .pdf-search-hit {
           position: absolute;
@@ -2557,10 +3161,10 @@ export default function PdfViewerShell({
         .pdf-selection-menu {
           position: fixed;
           z-index: 11050;
-          min-width: 240px;
-          padding: 6px;
+          min-width: 300px;
+          padding: 10px;
           border: 1px solid #d1d5db;
-          border-radius: 6px;
+          border-radius: 8px;
           background: #fff;
           box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
           color: #333;
@@ -2568,28 +3172,33 @@ export default function PdfViewerShell({
         .pdf-selection-menu__row {
           display: flex;
           align-items: center;
-          gap: 6px;
-          padding: 2px 0;
+          gap: 8px;
+          padding: 4px 0;
         }
         .pdf-selection-menu__action {
           display: inline-flex;
           align-items: center;
           gap: 8px;
-          min-width: 88px;
-          padding: 6px 10px;
+          width: 3.75rem;
+          min-width: 3.75rem;
+          min-height: 40px;
+          padding: 8px 10px;
           border: none;
           border-radius: 4px;
           background: transparent;
           color: #333;
-          font-size: 12px;
+          font-size: 13px;
           text-align: left;
           cursor: pointer;
+          flex-shrink: 0;
+          box-sizing: border-box;
         }
         .pdf-selection-menu__action:hover {
           background: #ebebeb;
         }
         .pdf-selection-menu__action--full {
           width: 100%;
+          min-width: 0;
           margin-top: 2px;
         }
         .pdf-marks-context-menu {
@@ -2607,8 +3216,8 @@ export default function PdfViewerShell({
           cursor: not-allowed;
         }
         .pdf-selection-menu__swatch {
-          width: 12px;
-          height: 12px;
+          width: 16px;
+          height: 16px;
           border-radius: 999px;
           border: 1px solid #aaa;
           flex-shrink: 0;
@@ -2618,24 +3227,29 @@ export default function PdfViewerShell({
           border: none;
           border-bottom: 3px solid;
           border-radius: 0;
-          height: 8px;
+          height: 10px;
         }
         .pdf-selection-menu__colors {
           display: inline-flex;
           align-items: center;
-          gap: 4px;
+          gap: 8px;
+          flex-wrap: wrap;
         }
         .pdf-color-chip {
-          width: 16px;
-          height: 16px;
+          width: 34px;
+          height: 34px;
+          min-width: 34px;
+          min-height: 34px;
           border-radius: 999px;
           border: 1px solid rgba(15, 23, 42, 0.25);
           padding: 0;
           cursor: pointer;
+          touch-action: manipulation;
+          flex-shrink: 0;
         }
         .pdf-color-chip--active {
           outline: 2px solid #0ea5e9;
-          outline-offset: 1px;
+          outline-offset: 2px;
         }
         .pdf-mark-item {
           display: flex;

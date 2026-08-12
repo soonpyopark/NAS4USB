@@ -129,6 +129,10 @@ window.nas4usb = {
     export: () => {},
     save: (payload) => {},
   },
+  pdfViewer: {
+    setVolumeKeysForPaging: (enabled) => {},
+    subscribeVolumePageTurn: (callback) => {},
+  },
 };
 
 export {};

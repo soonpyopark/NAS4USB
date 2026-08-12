@@ -141,4 +141,18 @@ contextBridge.exposeInMainWorld('nas4usb', {
       };
     },
   },
+
+  pdfViewer: {
+    setVolumeKeysForPaging: (enabled) =>
+      ipcRenderer.invoke('pdf:setVolumeKeysForPaging', Boolean(enabled)),
+    subscribeVolumePageTurn: (callback) => {
+      const handler = (_event, direction) => {
+        callback(direction);
+      };
+      ipcRenderer.on('pdf:volumePageTurn', handler);
+      return () => {
+        ipcRenderer.removeListener('pdf:volumePageTurn', handler);
+      };
+    },
+  },
 });
