@@ -5,7 +5,7 @@ NAS4USB itself is licensed under the **MIT License**
 NAS4USB uses or ships with. Each component remains under its own license.
 
 Versions below reflect the dependency tree at the time this file was last
-updated (NAS4USB **1.0.4**). Exact resolved versions are in `package-lock.json`.
+updated (NAS4USB **1.0.5**). Exact resolved versions are in `package-lock.json`.
 
 ---
 
