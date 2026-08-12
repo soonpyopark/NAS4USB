@@ -1,6 +1,7 @@
 import { sortEntries } from './fsPaths.js';
 import { isTiptapAssetSidecarRelativePath } from '../../shared/tiptapAssetPaths.js';
 import { isFortuneSidecarRelativePath } from '../../shared/fortuneSheetSidecar.js';
+import { isPdfViewerSidecarRelativePath } from '../../shared/pdfViewerSidecar.js';
 
 /**
  * @param {string} query
@@ -26,6 +27,7 @@ export async function searchFileEntries(query, { maxResults = 200, signal } = {}
 
       if (isTiptapAssetSidecarRelativePath(entry.relativePath)) continue;
       if (isFortuneSidecarRelativePath(entry.relativePath)) continue;
+      if (isPdfViewerSidecarRelativePath(entry.relativePath)) continue;
 
       if (entry.name.toLowerCase().includes(normalized)) {
         results.push(entry);

@@ -2,8 +2,15 @@
 // which modern pdfjs-dist 6.x requires without a polyfill.
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import pdfWorkerSrc from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url';
+import pdfWasmAsset from 'pdfjs-dist/wasm/jbig2.wasm?url';
 
 let workerReady = false;
+
+/** Trailing-slash base URL for pdf.js wasm/ (jbig2, openjpeg, …). */
+function pdfWasmBaseUrl() {
+  const idx = pdfWasmAsset.lastIndexOf('/');
+  return idx >= 0 ? pdfWasmAsset.slice(0, idx + 1) : './';
+}
 
 export function ensurePdfjsWorker() {
   if (workerReady) return;
@@ -21,6 +28,8 @@ export async function loadPdfDocument(url) {
     url,
     withCredentials: true,
     useSystemFonts: true,
+    useWasm: true,
+    wasmUrl: pdfWasmBaseUrl(),
   });
   return loadingTask.promise;
 }
@@ -147,6 +156,17 @@ export function computeFitPageScale(page, containerSize, rotation = 0) {
   const sx = containerSize.width / width;
   const sy = containerSize.height / height;
   return Math.max(0.1, Math.min(sx, sy));
+}
+
+/**
+ * @param {import('pdfjs-dist').PDFPageProxy} page
+ * @param {number} containerHeight
+ * @param {number} [rotation]
+ */
+export function computeFitHeightScale(page, containerHeight, rotation = 0) {
+  const { height } = getPageBaseSize(page, rotation);
+  if (!height) return 1;
+  return Math.max(0.1, containerHeight / height);
 }
 
 export const PDF_MIN_SCALE = 0.25;

@@ -4,11 +4,12 @@
 
 # NAS4USB
 
-USB(또는 단일 폴더)만으로 **오프라인 LAN NAS**와 **실시간 공동 편집**을 제공하는 Windows/macOS Electron 앱입니다.
+USB(또는 단일 폴더)만으로 **오프라인 LAN NAS**와 **실시간 공동 편집**을 제공하는 Windows/macOS Electron 앱입니다. (v1.0.4)
 
 - **Electron + Vite + React** — 로컬 파일 탐색기 UI
-- **Y.js** — HWPX·XLSX·화이트보드 실시간 동기화 (기본 포트 `3009`)
+- **Y.js** — HWPX·XLSX·화이트보드·TipTap 실시간 동기화 (기본 포트 `3009`)
 - **에디터 코어** — rhwp(HWPX), FortuneSheet(XLSX), WhiteBoard4Share(.wb4s), TipTap(.tiptap)
+- **PDF 미리보기** — PDF.js 기반 연속 스크롤 · 썸네일 · 보기(줌) · 형광펜/밑줄([저장] 시 원본 기록)
 
 > **용도:** USB 이동·교실/회의실 LAN 협업. 인터넷 없이 동작하도록 설계되었습니다.
 
@@ -18,16 +19,38 @@ USB(또는 단일 폴더)만으로 **오프라인 LAN NAS**와 **실시간 공�
 
 | 기능 | 설명 |
 |------|------|
-| USB 포터블 | `NAS4USB.exe` + `data/` 폴더를 USB에 복사해 실행 |
+| USB 포터블 | `NAS4USB.exe` + 데이터 폴더를 USB에 복사해 실행 |
+| 워크스페이스 | UI **공유폴더** / **개인폴더** ↔ 디스크 `share` / `private` |
 | LAN 동기화 | Y.js WebSocket — 같은 방(room)에 접속한 클라이언트 간 CRDT 동기화 |
 | HWPX 편집 | rhwp-studio 기반 `.hwpx` 브라우저 에디터 |
 | Markdown / TXT | textarea 편집 · MD 미리보기 |
 | TipTap 문서 | `.tiptap` — Notion-like TipTap 에디터 (ZIP+첨부, 슬래시 메뉴, 실시간 협업) |
 | 스프레드시트 | FortuneSheet — `.xlsx` / `.xls` |
 | 화이트보드 | `.wb4s` — WhiteBoard4Share 엔진 |
+| PDF 미리보기 | 썸네일 · 너비/높이/페이지 맞춤 · 2쪽 보기 · 검색 · 형광펜/밑줄 목록 |
 | 파일 접근 제어 | 비공개·열람제한·공유 링크 (총괄관리자) |
+| 회원 개인폴더 | 활성 회원 홈 자동 생성 · 삭제 시 정리 · 고아 폴더 prune |
 | 휴지통 | 총괄관리자 전용 |
+| 게스트 UI | 열람 권한 없을 때 로그인 유도 / 관리자 문의 안내 |
 | 에디터 코어 업데이트 | `update_all.bat` — rhwp / wb4s / npm 코어 일괄 갱신 |
+
+### 워크스페이스 경로
+
+| UI(가상) | 디스크(기본) | 비고 |
+|----------|--------------|------|
+| 공유폴더 | `{DATA_ROOT}/share` | 공통 문서 |
+| 개인폴더 | `{DATA_ROOT}/private/<회원ID>` | 회원별 홈 |
+| (설정) | `DATA_ROOT` / 설정 `dataRoot` | 부모 루트. 미설정 시 프로그램 폴더 |
+
+구버전에서 공유 루트가 `data`·`공유폴더`이거나 개인이 `개인폴더`인 경우, 실행 시 `share`/`private` 레이아웃으로 이전합니다.
+
+### PDF 미리보기 (요약)
+
+- **보기:** 확대/축소, 너비·높이·페이지 맞춤, 2쪽 보기, 회전, 다운로드, 인쇄
+- **썸네일 / 형광펜:** 왼쪽 사이드 패널 전환
+- **형광펜·밑줄:** 텍스트 드래그 → 메뉴에서 적용. **[저장]**으로 원본 PDF에 Highlight/Underline 기록·삭제 반영. 읽던 페이지·줌은 `파일명.pdf.viewer.json`에 자동 보관. PDF에 이미 있는 주석은 목록에 `· PDF`로 표시
+- **목록 연동:** 목록↔본문 클릭으로 선택, 우클릭/`Delete` 삭제, `Ctrl+C` 복사. `· PDF` 삭제는 [저장] 후 원본에서도 제거
+- 페이지는 보이는 구간만 지연 렌더링합니다.
 
 ---
 
@@ -141,17 +164,19 @@ npm run build:dist:mac
 update_all.bat
 ```
 
-업데이트 후 portable exe까지 빌드:
+업데이트 후 릴리스 패키지까지 빌드:
 
 ```bat
 npm run build:update_all
 ```
 
+(`update_all.bat` 후 `npm run build:release` — MSI + portable 동일 스탬프)
+
 또는:
 
 ```bat
 npm run update:all
-npm run build:dist:exe
+npm run build:release
 ```
 
 옵션: `build` `force` `skip-git` `skip-npm` `skip-cores`  
@@ -165,6 +190,7 @@ npm run build:dist:exe
 | 명령 | 설명 |
 |------|------|
 | `npm run dev` | 아이콘·wb4s 준비 후 Electron 개발 실행 |
+| `npm run dev:restart` / `dev:stop` | 개발 서버 재시작 / 중지 (포트 3009) |
 | `npm run build` | rhwp-studio · wb4s · Vite 프로덕션 빌드 |
 | `npm run build:dist:exe` | Windows portable 폴더 생성 |
 | `npm run build:dist:mac` | macOS `.app` portable 폴더 생성 |
@@ -172,7 +198,7 @@ npm run build:dist:exe
 | `npm run build:release` | MSI + portable을 동일 빌드 스탬프로 생성 |
 | `npm run sync-version` | `APP_VERSION` → package.json / MSI License 동기화 |
 | `npm run update:all` | 에디터 코어 + npm 의존성 업데이트 |
-| `npm run build:update_all` | 업데이트 + Windows exe 빌드 |
+| `npm run build:update_all` | 코어 업데이트 + `build:release` |
 
 ---
 
@@ -181,19 +207,24 @@ npm run build:dist:exe
 ```
 NAS4USB/
 ├── main.js                 Electron 진입점
-├── electron/               메인 프로세스 (서버, IPC, 파일 API)
+├── electron/               메인 프로세스 (서버, IPC, 파일 API, 워크스페이스)
 ├── src/                    React UI (Vite root)
-├── shared/                 공유 상수·유틸
+│   ├── components/editors/ PdfViewerShell 등 뷰어·에디터
+│   └── lib/pdf/            PDF.js 로드·검색·형광펜/선택·뷰어 사이드카
+├── shared/                 공유 상수·경로(공유폴더/개인폴더 ↔ share/private)
 ├── lib/rhwp/               rhwp 어댑터 (파싱은 @rhwp/core WASM)
 ├── lib/updates/            오프라인 USB용 코어 업데이트 패키지
 ├── public/rhwp-studio/     HWPX 에디터 번들 (빌드 산출)
 ├── public/wb4s-editor/     화이트보드 embed 번들
 ├── scripts/                빌드·배포·update_all 스크립트
 ├── update_all.bat          코어 일괄 업데이트 (Windows)
-├── data/                   기본 문서 저장소
+├── data/                   기본 문서 저장소 예(개발 시)
+│   ├── share/              공유폴더 디스크명
+│   └── private/            개인폴더 디스크명
 ├── build/                  앱 아이콘 (prepare:icons)
 ├── LICENSE                 MIT
 ├── THIRD_PARTY_NOTICES.md  사용 오픈소스 고지
+├── msi/                    MSI·portable zip 산출
 └── exe/                    build:dist:exe 출력
 ```
 
@@ -206,8 +237,8 @@ NAS4USB/
 | HWPX (rhwp) | `@rhwp/core`, `@rhwp/editor` | MIT |
 | Spreadsheet | `@fortune-sheet/react` | MIT |
 | Whiteboard | `lib/updates/wb4s` / WhiteBoard4Share | MIT |
-| TipTap | `@tiptap/react`, `@tiptap/starter-kit` | MIT |
-| PDF | `pdfjs-dist` (PDF.js) | Apache-2.0 |
+| TipTap | `@tiptap/react`, `@tiptap/starter-kit` 등 | MIT |
+| PDF 미리보기 | `pdfjs-dist` (PDF.js) — `src/lib/pdf/`, `PdfViewerShell` | Apache-2.0 |
 | 실시간 동기화 | `yjs`, `y-websocket` | MIT |
 
 버전 기록: `lib/cores-manifest.json`

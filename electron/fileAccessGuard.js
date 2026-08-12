@@ -34,6 +34,10 @@ import {
   getSpreadsheetPathForFortuneSidecar,
   isFortuneSidecarRelativePath,
 } from '../shared/fortuneSheetSidecar.js';
+import {
+  getPdfPathForViewerSidecar,
+  isPdfViewerSidecarRelativePath,
+} from '../shared/pdfViewerSidecar.js';
 import { getTiptapAssetSidecarPath } from '../shared/tiptapAssetPaths.js';
 
 const ACCESS_DENIED_MESSAGE = '이 파일에 접근할 권한이 없습니다.';
@@ -71,6 +75,9 @@ function isPathCoveredByShareLink(relativePath, sharedRelativePath) {
   if (normalizedPath === sharedPath) return true;
   if (isFortuneSidecarRelativePath(normalizedPath)) {
     return getSpreadsheetPathForFortuneSidecar(normalizedPath) === sharedPath;
+  }
+  if (isPdfViewerSidecarRelativePath(normalizedPath)) {
+    return getPdfPathForViewerSidecar(normalizedPath) === sharedPath;
   }
   const tiptapAssetsDir = getTiptapAssetSidecarPath(sharedPath);
   if (normalizedPath === tiptapAssetsDir || normalizedPath.startsWith(`${tiptapAssetsDir}/`)) {

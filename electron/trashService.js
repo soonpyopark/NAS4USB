@@ -8,6 +8,11 @@ import {
   isFortuneSidecarRelativePath,
 } from './fortuneSidecarService.js';
 import {
+  syncPdfViewerSidecarDelete,
+  syncPdfViewerSidecarMoveTree,
+  isPdfViewerSidecarRelativePath,
+} from './pdfViewerSidecarService.js';
+import {
   getTiptapAssetSidecarPath,
   isTiptapAssetSidecarRelativePath,
   isTiptapDocumentRelativePath,
@@ -107,6 +112,7 @@ async function syncMetadataMoveTree(fromRelative, toRelative, portableRoot) {
   await syncFileAccessMoveTree(fromRelative, toRelative, portableRoot);
   await syncFavoritesMoveTree(fromRelative, toRelative, portableRoot);
   await syncFortuneSidecarMoveTree(fromRelative, toRelative);
+  await syncPdfViewerSidecarMoveTree(fromRelative, toRelative);
   await syncFileHistoryMoveTree(fromRelative, toRelative, getDataRoot(), portableRoot);
 }
 
@@ -177,6 +183,12 @@ export async function trashPath(relativePath, portableRoot = getPortableRoot()) 
   if (isFortuneSidecarRelativePath(normalized)) {
     throw new Error(
       'FortuneSheet 편집용 보조 파일입니다. 연결된 스프레드시트를 삭제해 주세요.',
+    );
+  }
+
+  if (isPdfViewerSidecarRelativePath(normalized)) {
+    throw new Error(
+      'PDF 뷰어 보조 파일입니다. 연결된 PDF를 삭제해 주세요.',
     );
   }
 
@@ -271,6 +283,11 @@ export async function deletePermanent(relativePath, portableRoot = getPortableRo
         'FortuneSheet 편집용 보조 파일입니다. 연결된 스프레드시트를 삭제해 주세요.',
       );
     }
+    if (isPdfViewerSidecarRelativePath(normalized)) {
+      throw new Error(
+        'PDF 뷰어 보조 파일입니다. 연결된 PDF를 삭제해 주세요.',
+      );
+    }
     if (isTiptapDocumentRelativePath(normalized)) {
       const sidecar = getTiptapAssetSidecarPath(normalized);
       if (await fsService.pathExists(sidecar)) {
@@ -290,6 +307,7 @@ export async function deletePermanent(relativePath, portableRoot = getPortableRo
   await syncFileAccessDelete(normalized, portableRoot);
   await syncFavoritesDelete(normalized, portableRoot);
   await syncFortuneSidecarDelete(normalized);
+  await syncPdfViewerSidecarDelete(normalized);
   await syncFileHistoryDelete(normalized, portableRoot);
   await fsService.deletePath(normalized);
 

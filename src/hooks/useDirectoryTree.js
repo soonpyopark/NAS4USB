@@ -5,6 +5,7 @@ import { readDirWithRetry } from '../lib/readDirWithRetry.js';
 import { filterTrashFromEntries, isFsNotFoundError } from '../lib/trashPaths.js';
 import { filterTiptapAssetSidecarFromEntries } from '../../shared/tiptapAssetPaths.js';
 import { filterFortuneSidecarFromEntries } from '../../shared/fortuneSheetSidecar.js';
+import { filterPdfViewerSidecarFromEntries } from '../../shared/pdfViewerSidecar.js';
 
 /**
  * @param {string} currentPath
@@ -19,9 +20,11 @@ export function useDirectoryTree(currentPath) {
     setLoadingPaths((prev) => new Set(prev).add(relativePath));
     try {
       const entries = await readDirWithRetry(relativePath);
-      const sorted = filterFortuneSidecarFromEntries(
-        filterTiptapAssetSidecarFromEntries(
-          filterTrashFromEntries(sortEntries(entries, 'name', 'asc'), relativePath),
+      const sorted = filterPdfViewerSidecarFromEntries(
+        filterFortuneSidecarFromEntries(
+          filterTiptapAssetSidecarFromEntries(
+            filterTrashFromEntries(sortEntries(entries, 'name', 'asc'), relativePath),
+          ),
         ),
       );
       setChildrenMap((prev) => ({ ...prev, [relativePath]: sorted }));
@@ -90,9 +93,11 @@ export function useDirectoryTree(currentPath) {
           const entries = await readDirWithRetry(path);
           return [
             path,
-            filterFortuneSidecarFromEntries(
-              filterTiptapAssetSidecarFromEntries(
-                filterTrashFromEntries(sortEntries(entries, 'name', 'asc'), path),
+            filterPdfViewerSidecarFromEntries(
+              filterFortuneSidecarFromEntries(
+                filterTiptapAssetSidecarFromEntries(
+                  filterTrashFromEntries(sortEntries(entries, 'name', 'asc'), path),
+                ),
               ),
             ),
           ];

@@ -5,6 +5,7 @@ import { filterTrashFromEntries, isFsNotFoundError, isTrashPath } from '../lib/t
 import { isFavoritesPath } from '../lib/favoritesPaths.js';
 import { filterTiptapAssetSidecarFromEntries } from '../../shared/tiptapAssetPaths.js';
 import { filterFortuneSidecarFromEntries } from '../../shared/fortuneSheetSidecar.js';
+import { filterPdfViewerSidecarFromEntries } from '../../shared/pdfViewerSidecar.js';
 import { buildNewFileContent, resolveNewFileName } from '../lib/files/newFileFactory.js';
 import { convertHwpBase64ToHwpx, isHwpFileName, toHwpxFileName } from '@nas4usb/rhwp/hwpConvert.js';
 
@@ -24,8 +25,10 @@ export function useFileSystem(currentPath) {
       } else {
         const result = await readDirWithRetry(currentPath);
         setEntries(
-          filterFortuneSidecarFromEntries(
-            filterTiptapAssetSidecarFromEntries(filterTrashFromEntries(result, currentPath)),
+          filterPdfViewerSidecarFromEntries(
+            filterFortuneSidecarFromEntries(
+              filterTiptapAssetSidecarFromEntries(filterTrashFromEntries(result, currentPath)),
+            ),
           ),
         );
       }

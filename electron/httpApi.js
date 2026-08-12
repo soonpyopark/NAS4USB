@@ -80,6 +80,12 @@ import {
   syncFortuneSidecarRename,
   isFortuneSidecarRelativePath,
 } from './fortuneSidecarService.js';
+import {
+  syncPdfViewerSidecarCopy,
+  syncPdfViewerSidecarDelete,
+  syncPdfViewerSidecarRename,
+  isPdfViewerSidecarRelativePath,
+} from './pdfViewerSidecarService.js';
 import { syncTiptapAssetRename } from './tiptapAssetService.js';
 import { streamFile } from './mediaStream.js';
 import { getStreamContentType } from '../shared/mediaTypes.js';
@@ -234,10 +240,15 @@ export async function handleHttpApiRequest(req, res) {
         sendJson(res, 400, { error: 'FortuneSheet 편집용 보조 파일입니다. 연결된 스프레드시트를 삭제해 주세요.' });
         return true;
       }
+      if (isPdfViewerSidecarRelativePath(body.path)) {
+        sendJson(res, 400, { error: 'PDF 뷰어 보조 파일입니다. 연결된 PDF를 삭제해 주세요.' });
+        return true;
+      }
       await syncSharePathDelete(body.path, getPortableRoot());
       await syncFileAccessDelete(body.path, getPortableRoot());
       await syncFavoritesDelete(body.path, getPortableRoot());
       await syncFortuneSidecarDelete(body.path);
+      await syncPdfViewerSidecarDelete(body.path);
       await syncFileHistoryDelete(body.path, getPortableRoot());
       const result = await fsService.deletePath(body.path);
       notifyFsChanged(body.path);
@@ -257,6 +268,7 @@ export async function handleHttpApiRequest(req, res) {
       await syncFileAccessRename(body.from, body.to, getPortableRoot());
       await syncFavoritesRename(body.from, body.to, getPortableRoot());
       await syncFortuneSidecarRename(body.from, body.to);
+      await syncPdfViewerSidecarRename(body.from, body.to);
       await syncTiptapAssetRename(body.from, body.to);
       await syncFileHistoryRename(body.from, body.to, getPortableRoot());
       const result = await fsService.renamePath(body.from, body.to);
@@ -305,6 +317,7 @@ export async function handleHttpApiRequest(req, res) {
       await assertCanEditFile(body.to ?? '', auth, shareToken);
       const result = await fsService.copyPath(body.from, body.to);
       await syncFortuneSidecarCopy(body.from, body.to);
+      await syncPdfViewerSidecarCopy(body.from, body.to);
       notifyFsChanged([body.from, body.to]);
       sendJson(res, 200, result);
       return true;
@@ -322,6 +335,7 @@ export async function handleHttpApiRequest(req, res) {
       await syncFileAccessRename(body.from, body.to, getPortableRoot());
       await syncFavoritesRename(body.from, body.to, getPortableRoot());
       await syncFortuneSidecarRename(body.from, body.to);
+      await syncPdfViewerSidecarRename(body.from, body.to);
       await syncTiptapAssetRename(body.from, body.to);
       await syncFileHistoryRename(body.from, body.to, getPortableRoot());
       const result = await fsService.movePath(body.from, body.to);
@@ -425,6 +439,7 @@ export async function handleHttpApiRequest(req, res) {
       await syncFileAccessRename(fromPath, result.relativePath, getPortableRoot());
       await syncFavoritesRename(fromPath, result.relativePath, getPortableRoot());
       await syncFortuneSidecarRename(fromPath, result.relativePath);
+      await syncPdfViewerSidecarRename(fromPath, result.relativePath);
       await syncTiptapAssetRename(fromPath, result.relativePath);
       await syncFileHistoryRename(fromPath, result.relativePath, getPortableRoot());
       notifyFsChanged([fromPath, result.relativePath]);
