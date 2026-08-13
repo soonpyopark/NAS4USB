@@ -237,6 +237,11 @@
   max-width: 32rem;
 }
 
+/* Editor-core version table: long npm package@version lists need more width. */
+.modal-dialog--editors {
+  max-width: 52rem;
+}
+
 /* Revision-history list: wide enough that each entry's timestamp/size and its
    [미리보기]/[복원]/[삭제] buttons stay on a single line. */
 .modal-dialog--history {
@@ -402,6 +407,180 @@
   min-height: 0;
   flex: 1;
   flex-direction: column;
+}
+
+.comic-reader-root {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  background: #1b1a19;
+  color: #f3f2f1;
+}
+
+.sibling-file-nav {
+  position: absolute;
+  z-index: 20;
+  top: 50%;
+  display: flex;
+  height: 3.25rem;
+  width: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0.375rem;
+  background: rgba(15, 23, 42, 0.55);
+  color: #f8fafc;
+  font-size: 1.75rem;
+  line-height: 1;
+  transform: translateY(-50%);
+  cursor: pointer;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.sibling-file-nav:hover:not(:disabled) {
+  background: rgba(15, 23, 42, 0.8);
+}
+
+.sibling-file-nav:disabled {
+  opacity: 0.28;
+  cursor: default;
+}
+
+.sibling-file-nav--prev {
+  left: 0.75rem;
+}
+
+.sibling-file-nav--next {
+  right: 0.75rem;
+}
+
+.comic-reader-mode-select {
+  height: 2rem;
+  border: 1px solid #8a8886;
+  border-radius: 0.25rem;
+  padding: 0 0.5rem;
+  background: #fff;
+  color: #323130;
+  font-size: 0.8125rem;
+}
+
+.comic-reader-status,
+.comic-reader-error {
+  margin: 1.5rem;
+  text-align: center;
+}
+
+.comic-reader-error {
+  color: #f1707b;
+}
+
+.comic-reader-scroller {
+  min-height: 0;
+  flex: 1;
+  outline: none;
+  overflow: auto;
+}
+
+.comic-reader-vertical {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  padding: 0.5rem 0 2rem;
+}
+
+.comic-reader-page-block {
+  display: block;
+  width: min(100%, 960px);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.comic-reader-page-block img,
+.comic-reader-page-img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
+
+.comic-reader-page-placeholder {
+  display: flex;
+  min-height: 12rem;
+  align-items: center;
+  justify-content: center;
+  color: #a19f9d;
+}
+
+.comic-reader-paged {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.comic-reader-spread {
+  display: flex;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  transform-origin: center center;
+}
+
+.comic-reader-epub {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  background: #faf9f8;
+  color: #323130;
+}
+
+.comic-reader-epub-host,
+.comic-reader-epub-frame {
+  position: relative;
+  min-height: 0;
+  flex: 1;
+  width: 100%;
+  border: 0;
+  background: #fff;
+}
+
+.comic-reader-epub-nav {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  border-top: 1px solid #edebe9;
+  background: #fff;
+}
+
+.comic-reader-epub-page {
+  min-width: 4.5rem;
+  text-align: center;
+  font-size: 0.8125rem;
+  color: #605e5c;
+}
+
+.comic-reader-epub-nav button {
+  height: 2rem;
+  border: 1px solid #8a8886;
+  border-radius: 0.25rem;
+  padding: 0 0.75rem;
+  background: #fff;
+  cursor: pointer;
+}
+
+.comic-reader-epub-nav button:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 .modal-properties {

@@ -86,7 +86,8 @@ export async function commitWorkspace(sessionId, dataRoot) {
   // Archive whatever is currently on disk before it gets overwritten, so it becomes
   // a restorable "이력" entry (no-op for unsupported extensions or first-time saves).
   await archiveCurrentVersion(session.relativePath).catch(() => {});
-  await fs.mkdir(path.dirname(destination), { recursive: true });
+  const { ensureParentDir } = await import('./fsService.js');
+  await ensureParentDir(destination);
   await fs.copyFile(session.workingPath, destination);
   session.dirty = false;
   return { relativePath: session.relativePath };
@@ -111,7 +112,8 @@ export async function renameWorkspace(sessionId, newRelativePath, dataRoot) {
 
   const oldDestination = resolvePortablePath(session.relativePath);
   const newDestination = resolvePortablePath(normalized);
-  await fs.mkdir(path.dirname(newDestination), { recursive: true });
+  const { ensureParentDir } = await import('./fsService.js');
+  await ensureParentDir(newDestination);
   await fs.copyFile(session.workingPath, newDestination);
 
   try {

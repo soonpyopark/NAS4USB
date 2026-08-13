@@ -12,6 +12,7 @@ import VideoPlayerShell from './components/editors/VideoPlayerShell.jsx';
 import ImageViewerShell from './components/editors/ImageViewerShell.jsx';
 import PdfViewerShell from './components/editors/PdfViewerShell.jsx';
 import HtmlViewerShell from './components/editors/HtmlViewerShell.jsx';
+import ComicReaderShell from './components/editors/ComicReaderShell.jsx';
 
 const TipTapEditorShell = lazy(() => import('./components/editors/TipTapEditorShell.jsx'));
 import { ShareLinkError, ShareLinkLoading } from './components/share/ShareLinkScreen.jsx';
@@ -29,10 +30,15 @@ import { getShareTokenFromUrl } from './lib/shareAccess.js';
 import { isShareViewOnly, resolveOpenShareMode } from './lib/shareLinkAccess.js';
 import { resolveUnknownFileOpenAction } from './lib/unknownFileOpen.js';
 import { syncInfoForPath } from './lib/externalFoldersUi.js';
+import { nativeAlert } from './lib/nativeDialog.js';
+import { shouldUseLegacyImagePdfViewers, setLegacyViewerSettingsFlag } from './lib/comicReader/legacyViewerFlag.js';
 import {
+  ARCHIVE_EXTENSIONS,
   AUDIO_EXTENSIONS,
+  EPUB_EXTENSIONS,
   HTML_EXTENSIONS,
   IMAGE_EXTENSIONS,
+  isImageExtension,
   PDF_EXTENSIONS,
   VIDEO_EXTENSIONS,
 } from './lib/media/mediaTypes.js';
@@ -94,8 +100,10 @@ const OPENABLE_EXTENSIONS = {
   ...Object.fromEntries(CODE_TEXT_EXTENSIONS.map((ext) => [ext, 'text'])),
   ...Object.fromEntries(AUDIO_EXTENSIONS.map((ext) => [ext, 'audio'])),
   ...Object.fromEntries(VIDEO_EXTENSIONS.map((ext) => [ext, 'video'])),
-  ...Object.fromEntries(IMAGE_EXTENSIONS.map((ext) => [ext, 'image'])),
+  ...Object.fromEntries(IMAGE_EXTENSIONS.map((ext) => [ext, 'reader'])),
   ...Object.fromEntries(PDF_EXTENSIONS.map((ext) => [ext, 'pdf'])),
+  ...Object.fromEntries(ARCHIVE_EXTENSIONS.map((ext) => [ext, 'reader'])),
+  ...Object.fromEntries(EPUB_EXTENSIONS.map((ext) => [ext, 'reader'])),
   ...Object.fromEntries(HTML_EXTENSIONS.map((ext) => [ext, 'html'])),
 };
 
@@ -107,9 +115,18 @@ const OPENABLE_EXTENSIONS = {
  *   fullscreen?: boolean,
  *   onClose: () => void,
  *   onRenamed: (entry?: { relativePath: string, name: string }) => void,
+ *   onOpenFile?: (entry: object) => void | Promise<boolean>,
  * }} props
  */
-function OpenEditorLayer({ openEditor, syncInfo, allowClose, fullscreen = false, onClose, onRenamed }) {
+function OpenEditorLayer({
+  openEditor,
+  syncInfo,
+  allowClose,
+  fullscreen = false,
+  onClose,
+  onRenamed,
+  onOpenFile,
+}) {
   if (!openEditor) return null;
 
   const shareMode = openEditor.shareMode ?? null;
@@ -220,15 +237,30 @@ function OpenEditorLayer({ openEditor, syncInfo, allowClose, fullscreen = false,
     );
   }
 
-  if (openEditor.type === 'image') {
+  if (openEditor.type === 'reader') {
+    const extension = openEditor.extension ?? 'png';
+    if (shouldUseLegacyImagePdfViewers() && isImageExtension(extension)) {
+      return (
+        <ImageViewerShell
+          relativePath={openEditor.relativePath}
+          fileName={openEditor.name}
+          extension={extension}
+          onClose={onClose}
+          allowClose={allowClose}
+          fullscreen={fullscreen}
+          onOpenSibling={onOpenFile}
+        />
+      );
+    }
     return (
-      <ImageViewerShell
+      <ComicReaderShell
         relativePath={openEditor.relativePath}
         fileName={openEditor.name}
-        extension={openEditor.extension ?? 'png'}
+        extension={extension}
         onClose={onClose}
         allowClose={allowClose}
         fullscreen={fullscreen}
+        onOpenSibling={onOpenFile}
       />
     );
   }
@@ -329,6 +361,7 @@ function Nas4usbDesktop({
         allowClose
         onClose={onCloseEditor}
         onRenamed={onEditorRenamed}
+        onOpenFile={onOpenFile}
       />
     </>
   );
@@ -355,6 +388,24 @@ function Nas4usbAppMain() {
   );
 
   useFsChangeSync(handleRemoteFsChange, { isEditorOpen: Boolean(openEditor) });
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadLegacyFlag() {
+      try {
+        const settings = await window.nas4usb?.settings?.get?.();
+        if (!cancelled) {
+          setLegacyViewerSettingsFlag(Boolean(settings?.useLegacyImagePdfViewers));
+        }
+      } catch {
+        // ignore
+      }
+    }
+    loadLegacyFlag();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleOpenFile = useCallback(async (entry) => {
     if (entry.isDirectory) {
@@ -483,6 +534,7 @@ function Nas4usbAppMain() {
           fullscreen
           onClose={handleCloseEditor}
           onRenamed={handleEditorRenamed}
+          onOpenFile={handleOpenFile}
         />
       </div>
     );

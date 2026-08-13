@@ -182,14 +182,12 @@ export default function DesktopShell({
         ) : null}
 
         <main
-          className={`nas-desktop-main flex min-w-0 flex-1 flex-col p-4 ${
+          className={`nas-desktop-main flex min-h-0 min-w-0 flex-1 flex-col gap-2 p-4 ${
             showFiles ? '' : 'desktop-pane--hidden'
           }`}
           aria-hidden={!showFiles}
         >
-          <div className="nas-panel flex min-h-0 flex-1 flex-col overflow-hidden">
-            {explorerChildren}
-          </div>
+          {explorerChildren}
         </main>
       </div>
 

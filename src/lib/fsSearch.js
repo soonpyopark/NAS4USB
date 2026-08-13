@@ -2,6 +2,7 @@ import { sortEntries } from './fsPaths.js';
 import { isTiptapAssetSidecarRelativePath } from '../../shared/tiptapAssetPaths.js';
 import { isFortuneSidecarRelativePath } from '../../shared/fortuneSheetSidecar.js';
 import { isPdfViewerSidecarRelativePath } from '../../shared/pdfViewerSidecar.js';
+import { isExternalFolderPath } from '../../shared/externalFolders.js';
 
 /**
  * @param {string} query
@@ -28,6 +29,9 @@ export async function searchFileEntries(query, { maxResults = 200, signal } = {}
       if (isTiptapAssetSidecarRelativePath(entry.relativePath)) continue;
       if (isFortuneSidecarRelativePath(entry.relativePath)) continue;
       if (isPdfViewerSidecarRelativePath(entry.relativePath)) continue;
+
+      // External mounts can be huge (whole drives / cloud sync) — exclude entirely.
+      if (isExternalFolderPath(entry.relativePath)) continue;
 
       if (entry.name.toLowerCase().includes(normalized)) {
         results.push(entry);

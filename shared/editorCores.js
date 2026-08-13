@@ -1,4 +1,4 @@
-/** @typedef {'rhwp' | 'wb4s' | 'fortune-sheet' | 'tiptap'} EditorCoreId */
+/** @typedef {'rhwp' | 'wb4s' | 'fortune-sheet' | 'tiptap' | 'comic-reader'} EditorCoreId */
 
 /** @typedef {Object} EditorCoreDefinition
  * @property {EditorCoreId} id
@@ -61,6 +61,16 @@ export const EDITOR_CORES = [
       '@tiptap/extension-collaboration-caret',
       '@tiptap/extension-bubble-menu',
     ],
+  },
+  {
+    id: 'comic-reader',
+    label: 'Comic Reader (image/archive/epub)',
+    libDir: 'src/lib/comicReader',
+    submodulePath: 'src/lib/comicReader',
+    updatePackageDir: 'lib/updates/comic-reader',
+    repositoryUrl: 'https://github.com/mienaiyami/yomikiru',
+    npmPackage: 'epubjs',
+    npmPackages: ['epubjs', '7zip-min'],
   },
 ];
 

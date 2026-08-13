@@ -53,6 +53,7 @@ import { useFsSync } from '../../context/FsSyncContext.jsx';
 import { useFsRemoteRefresh } from '../../hooks/useFsRemoteRefresh.js';
 import { useFolderContentSearch } from '../../hooks/useFolderContentSearch.js';
 import FileDropOverlay from '../common/FileDropOverlay.jsx';
+import TransferStatusBanner from '../common/TransferStatusBanner.jsx';
 import ViewAccessDeniedPanel from '../common/ViewAccessDeniedPanel.jsx';
 import { canOpenFileForEdit, VIEW_OPEN_DENIED_MESSAGE, GUEST_READ_DENIED_MESSAGE } from '../../lib/fileEditAccess.js';
 import { useGuestPermissions } from '../../hooks/useGuestPermissions.js';
@@ -146,6 +147,8 @@ export default function FileExplorer({
   const [renameEntry, setRenameEntry] = useState(null);
   const [propertiesSaving, setPropertiesSaving] = useState(false);
   const [lastSelectedPath, setLastSelectedPath] = useState(null);
+  /** @type {[null | { kind: 'upload' | 'download', current: number, total: number, fileName?: string }, Function]} */
+  const [transfer, setTransfer] = useState(null);
 
   const uploadInputRef = useRef(null);
   const uploadTargetPathRef = useRef('.');
@@ -210,14 +213,27 @@ export default function FileExplorer({
     onRefreshMeta: refreshMaps,
   });
 
+  const reportTransferProgress = (kind) => (info) => {
+    setTransfer({
+      kind,
+      current: info.current,
+      total: info.total,
+      fileName: info.fileName,
+    });
+  };
+
   const handleFileDrop = async (files) => {
     if (isInTrashView || isInFavoritesView) return;
+    if (transfer) return;
 
     try {
-      await uploadFiles(files);
+      setTransfer({ kind: 'upload', current: 0, total: files.length, fileName: files[0]?.name });
+      await uploadFiles(files, { onProgress: reportTransferProgress('upload') });
       await refreshAll();
     } catch (err) {
       nativeAlert(err instanceof Error ? err.message : '파일 업로드에 실패했습니다.');
+    } finally {
+      setTransfer(null);
     }
   };
 
@@ -279,20 +295,35 @@ export default function FileExplorer({
     const files = Array.from(event.target.files ?? []);
     event.target.value = '';
     if (!files.length) return;
+    if (transfer) return;
     try {
-      await uploadFilesAtPath(uploadTargetPathRef.current, files);
+      setTransfer({ kind: 'upload', current: 0, total: files.length, fileName: files[0]?.name });
+      await uploadFilesAtPath(uploadTargetPathRef.current, files, {
+        onProgress: reportTransferProgress('upload'),
+      });
       await refreshAll();
     } catch (err) {
       nativeAlert(err instanceof Error ? err.message : '파일 업로드에 실패했습니다.');
+    } finally {
+      setTransfer(null);
     }
   };
 
   const handleDownload = async (entry) => {
     const targets = entry ? getTargetEntries(entry) : downloadableEntries;
+    if (transfer) return;
     try {
-      await downloadFileEntries(targets);
+      setTransfer({
+        kind: 'download',
+        current: 0,
+        total: targets.filter((item) => !item.isDirectory).length,
+        fileName: targets.find((item) => !item.isDirectory)?.name,
+      });
+      await downloadFileEntries(targets, { onProgress: reportTransferProgress('download') });
     } catch (err) {
       nativeAlert(err instanceof Error ? err.message : '다운로드에 실패했습니다.');
+    } finally {
+      setTransfer(null);
     }
   };
 
@@ -899,52 +930,35 @@ export default function FileExplorer({
   return (
     <div
       ref={containerRef}
-      className="relative flex min-h-0 flex-1 flex-col"
+      className="relative flex min-h-0 flex-1 flex-col gap-2"
       {...dropZoneProps}
       onContextMenu={(event) => openContextMenu(event, null)}
     >
       {!isInTrashView && !isInFavoritesView && isFileDragOver && <FileDropOverlay />}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-nas-border px-4 py-3">
-        {compactMode && typeof onShowFolders === 'function' ? (
-          <button
-            type="button"
-            className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-nas-border bg-white px-2.5 text-[10pt] text-nas-text hover:bg-nas-sidebarHover"
-            onClick={onShowFolders}
-            title="폴더 목록으로"
-            aria-label="폴더 목록으로"
-          >
-            <span aria-hidden="true">←</span>
-            폴더
-          </button>
-        ) : null}
-        <div className="min-w-0 flex-[1_1_12rem]">
-          <Breadcrumb currentPath={currentPath} onNavigate={onNavigate} />
-        </div>
-        <div className="flex min-w-0 flex-[1_1_14rem] items-center gap-3">
+      <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 px-0.5">
+        <input
+          type="search"
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder={searchContents ? '이름·본문 검색…' : '현재 폴더 검색…'}
+          className="h-8 w-full min-w-0 max-w-[220px] rounded-md border border-nas-border bg-white px-3 text-[10pt] outline-none focus:border-nas-accent focus:ring-1 focus:ring-nas-accent"
+        />
+        <label
+          className="flex shrink-0 cursor-pointer items-center gap-1.5 text-[10pt] text-nas-muted"
+          title="현재 폴더의 문서 내용까지 검색합니다 (txt·md·hwpx·docx·xlsx·pdf 등). 외부폴더는 본문 검색에서 제외됩니다."
+        >
           <input
-            type="search"
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder={searchContents ? '이름·본문 검색…' : '현재 폴더 검색…'}
-            className="h-8 min-w-0 flex-1 rounded-md border border-nas-border bg-[#efefef] px-3 text-[10pt] outline-none focus:border-nas-accent focus:ring-1 focus:ring-nas-accent sm:max-w-[220px]"
+            type="checkbox"
+            checked={searchContents}
+            onChange={(event) => setSearchContents(event.target.checked)}
+            className="h-3.5 w-3.5 cursor-pointer accent-nas-accent"
           />
-          <label
-            className="flex shrink-0 cursor-pointer items-center gap-1.5 text-[10pt] text-nas-muted"
-            title="현재 폴더의 문서 내용까지 검색합니다 (txt·md·hwpx·docx·xlsx·pdf 등)"
-          >
-            <input
-              type="checkbox"
-              checked={searchContents}
-              onChange={(event) => setSearchContents(event.target.checked)}
-              className="h-3.5 w-3.5 cursor-pointer accent-nas-accent"
-            />
             본문 검색
-          </label>
-        </div>
+        </label>
       </div>
 
       {searchContents && searchQuery.trim() && (
-        <div className="border-b border-nas-accentBorder bg-nas-accentSoft px-4 py-1.5 text-xs text-nas-accentText">
+        <div className="shrink-0 rounded-md border border-nas-accentBorder bg-nas-accentSoft px-4 py-1.5 text-xs text-nas-accentText">
           {contentSearch.searching
             ? `본문 검색 중… ${contentSearch.scanned}/${contentSearch.total}`
             : `본문 일치 ${contentSearch.matchedPaths.size}건 · ${contentSearch.total}개 파일 검사`}
@@ -952,6 +966,30 @@ export default function FileExplorer({
         </div>
       )}
 
+      <TransferStatusBanner transfer={transfer} />
+
+      <div
+        className={`nas-panel relative flex min-h-0 flex-1 flex-col overflow-hidden ${
+          transfer ? 'pointer-events-none opacity-90' : ''
+        }`}
+      >
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-nas-border px-4 py-3">
+          {compactMode && typeof onShowFolders === 'function' ? (
+            <button
+              type="button"
+              className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-nas-border bg-white px-2.5 text-[10pt] text-nas-text hover:bg-nas-sidebarHover"
+              onClick={onShowFolders}
+              title="폴더 목록으로"
+              aria-label="폴더 목록으로"
+            >
+              <span aria-hidden="true">←</span>
+              폴더
+            </button>
+          ) : null}
+          <div className="min-w-0 flex-1">
+            <Breadcrumb currentPath={currentPath} onNavigate={onNavigate} />
+          </div>
+        </div>
       <FileExplorerToolbar
         sortField={sortField}
         sortDirection={sortDirection}
@@ -1042,6 +1080,7 @@ export default function FileExplorer({
           onPropertiesClick={handleShowProperties}
         />
       )}
+      </div>
       {contextMenu && contextItems.length > 0 && (
         <ContextMenu
           x={contextMenu.x}

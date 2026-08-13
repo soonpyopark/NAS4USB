@@ -29,7 +29,7 @@ async function moveAssetsIfExists(fromDocPath, toDocPath) {
     await fsService.deletePath(toAssets).catch(() => {});
   }
 
-  await fs.mkdir(path.dirname(resolvePortablePath(toAssets)), { recursive: true }).catch(() => {});
+  await fsService.ensureParentDir(resolvePortablePath(toAssets)).catch(() => {});
 
   try {
     await fsService.renamePath(fromAssets, toAssets);

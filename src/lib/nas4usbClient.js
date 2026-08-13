@@ -355,5 +355,15 @@ export function createHttpNas4usbClient() {
           body: JSON.stringify(payload ?? {}),
         }),
     },
+
+    comic: {
+      openArchive: (relativePath) =>
+        apiFetch(`/comic/openArchive?path=${encodeURIComponent(relativePath ?? '')}`),
+      closeArchive: (sessionId) =>
+        apiFetch('/comic/closeArchive', {
+          method: 'POST',
+          body: JSON.stringify({ sessionId }),
+        }),
+    },
   };
 }

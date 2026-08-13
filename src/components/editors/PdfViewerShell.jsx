@@ -2572,7 +2572,7 @@ export default function PdfViewerShell({
         </button>
         <button
           type="button"
-          className="pdf-tb-btn"
+          className="pdf-tb-btn pdf-tb-btn--export"
           disabled={busy || markups.length === 0}
           onClick={handleExportMarkups}
           title="형광펜·밑줄을 Excel로 내보내기"
@@ -3016,6 +3016,13 @@ export default function PdfViewerShell({
         .pdf-tb-btn--active {
           background: #e0f2fe;
           color: #0369a1;
+        }
+        .pdf-tb-btn--export {
+          color: #2563eb;
+        }
+        .pdf-tb-btn--export:hover:not(:disabled) {
+          background: #dbeafe;
+          color: #1d4ed8;
         }
         .pdf-page-wrap {
           position: relative;

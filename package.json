@@ -106,7 +106,9 @@
     "@tiptap/starter-kit": "^3.30.0",
     "@tiptap/suggestion": "^3.30.0",
     "@tiptap/y-tiptap": "3.0.7",
+    "7zip-min": "^3.0.1",
     "codemirror": "^6.0.2",
+    "epubjs": "^0.3.93",
     "jszip": "^3.10.1",
     "katex": "^0.16.47",
     "lowlight": "^3.3.0",
@@ -149,6 +151,11 @@
       "package.json"
     ],
     "asar": true,
+    "asarUnpack": [
+      "**/node_modules/7zip-bin/**",
+      "**/node_modules/7zip-min/**",
+      "**/node_modules/7zip-min/node_modules/7zip-bin/**"
+    ],
     "extraFiles": [
       {
         "from": "lib",

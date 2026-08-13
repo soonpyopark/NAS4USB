@@ -35,15 +35,23 @@ export async function downloadFileEntry(entry) {
 }
 
 /**
- * @param {Array<{ relativePath: string, name?: string, isDirectory?: boolean }}>} entries
+ * @param {Array<{ relativePath: string, name?: string, isDirectory?: boolean }>} entries
+ * @param {{ onProgress?: (info: { current: number, total: number, fileName: string }) => void }} [options]
  */
-export async function downloadFileEntries(entries) {
+export async function downloadFileEntries(entries, options = {}) {
   const files = entries.filter((entry) => !entry.isDirectory);
   if (!files.length) {
     throw new Error('다운로드할 파일을 선택해 주세요.');
   }
 
-  for (const entry of files) {
+  const total = files.length;
+  for (let index = 0; index < files.length; index += 1) {
+    const entry = files[index];
+    options.onProgress?.({
+      current: index + 1,
+      total,
+      fileName: entry.name || entry.relativePath.split('/').pop() || 'download',
+    });
     await downloadFileEntry(entry);
   }
 }

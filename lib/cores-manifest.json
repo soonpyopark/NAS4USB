@@ -20,6 +20,11 @@
       "version": "@tiptap/core@3.30.0, @tiptap/pm@3.30.0, @tiptap/react@3.30.0, @tiptap/starter-kit@3.30.0, @tiptap/extension-collaboration@3.30.0, @tiptap/extension-collaboration-caret@3.30.0, @tiptap/extension-bubble-menu@3.30.0",
       "updatedAt": "2026-08-12T08:38:38.909Z",
       "method": "npm"
+    },
+    "comic-reader": {
+      "version": "epubjs@0.3.93, 7zip-min@3.0.1",
+      "updatedAt": "2026-08-13T03:29:00.000Z",
+      "method": "npm"
     }
   }
 }

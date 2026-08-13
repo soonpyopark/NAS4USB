@@ -160,4 +160,9 @@ contextBridge.exposeInMainWorld('nas4usb', {
       };
     },
   },
+
+  comic: {
+    openArchive: (relativePath) => ipcRenderer.invoke('comic:openArchive', relativePath),
+    closeArchive: (sessionId) => ipcRenderer.invoke('comic:closeArchive', sessionId),
+  },
 });

@@ -20,7 +20,7 @@ async function moveSidecarIfExists(fromSpreadsheetPath, toSpreadsheetPath) {
   if (fromSidecar === toSidecar) return;
   if (!(await fsService.pathExists(fromSidecar))) return;
 
-  await fs.mkdir(path.dirname(resolvePortablePath(toSidecar)), { recursive: true }).catch(() => {});
+  await fsService.ensureParentDir(resolvePortablePath(toSidecar)).catch(() => {});
   try {
     await fsService.renamePath(fromSidecar, toSidecar);
   } catch {
@@ -39,7 +39,7 @@ async function copySidecarIfExists(fromSpreadsheetPath, toSpreadsheetPath) {
   if (fromSidecar === toSidecar) return;
   if (!(await fsService.pathExists(fromSidecar))) return;
 
-  await fs.mkdir(path.dirname(resolvePortablePath(toSidecar)), { recursive: true }).catch(() => {});
+  await fsService.ensureParentDir(resolvePortablePath(toSidecar)).catch(() => {});
   await fsService.copyPath(fromSidecar, toSidecar);
 }
 

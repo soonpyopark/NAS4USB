@@ -4,12 +4,14 @@ import {
   isContentSearchableEntry,
   searchEntriesByContent,
 } from '../lib/fsContentSearch.js';
+import { isExternalFolderPath } from '../../shared/externalFolders.js';
 
 const EMPTY_MATCHES = new Set();
 
 /**
  * Scans the current folder's files for `query` inside their contents.
  * Only runs while `enabled` is true and a query is present.
+ * External-folder paths are never scanned (too slow / unbounded).
  *
  * @param {import('../types/nas4usb.d.ts').FsEntry[]} entries
  * @param {string} query
@@ -25,7 +27,9 @@ export function useFolderContentSearch(entries, query, enabled) {
     () =>
       (entries ?? []).filter(
         (entry) =>
-          isContentSearchableEntry(entry) && (entry.size ?? 0) <= CONTENT_SEARCH_MAX_BYTES,
+          !isExternalFolderPath(entry.relativePath) &&
+          isContentSearchableEntry(entry) &&
+          (entry.size ?? 0) <= CONTENT_SEARCH_MAX_BYTES,
       ),
     [entries],
   );

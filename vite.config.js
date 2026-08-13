@@ -72,6 +72,8 @@ export default defineConfig(({ mode }) => {
         '@tiptap/extension-table',
         '@tiptap/y-tiptap',
         'tippy.js',
+        'epubjs',
+        'jszip',
       ],
       // @tiptap/pm has only subpath exports (./state, ./model, …) — no "." entry.
       // Including the bare package in optimizeDeps makes Vite fail on startup.

@@ -29,6 +29,30 @@ function toUserFsError(error) {
 }
 
 /**
+ * Windows drive roots (`J:\`) cannot be created with mkdir (EPERM). Skip those.
+ * @param {string} absoluteDir
+ */
+function isFilesystemRoot(absoluteDir) {
+  const resolved = path.resolve(absoluteDir);
+  const root = path.parse(resolved).root;
+  if (!root) return false;
+  const normalizedResolved = resolved.replace(/[/\\]+$/, '') || resolved;
+  const normalizedRoot = root.replace(/[/\\]+$/, '') || root;
+  return normalizedResolved.toLowerCase() === normalizedRoot.toLowerCase();
+}
+
+/**
+ * Ensure the parent directory of an absolute file path exists.
+ * No-op for drive roots / filesystem roots (external mounts like `J:\file.pdf`).
+ * @param {string} absoluteFilePath
+ */
+export async function ensureParentDir(absoluteFilePath) {
+  const dir = path.dirname(absoluteFilePath);
+  if (!dir || dir === '.' || isFilesystemRoot(dir)) return;
+  await fs.mkdir(dir, { recursive: true });
+}
+
+/**
  * @param {string} parentRelative
  * @param {string} entryName
  */
@@ -227,7 +251,7 @@ export async function readFileBase64(relativePath) {
 export async function writeFileBase64(relativePath, base64 = '') {
   assertNotTrashTarget(relativePath);
   const absolute = resolvePortablePath(relativePath);
-  await fs.mkdir(path.dirname(absolute), { recursive: true });
+  await ensureParentDir(absolute);
   const existed = await pathExists(relativePath);
   await fs.writeFile(absolute, Buffer.from(base64, 'base64'));
   if (!existed) {
@@ -245,7 +269,7 @@ export async function copyPath(fromRelative, toRelative) {
 export async function movePath(fromRelative, toRelative) {
   const from = resolvePortablePath(fromRelative);
   const destination = resolvePortablePath(toRelative);
-  await fs.mkdir(path.dirname(destination), { recursive: true });
+  await ensureParentDir(destination);
 
   try {
     await fs.rename(from, destination);

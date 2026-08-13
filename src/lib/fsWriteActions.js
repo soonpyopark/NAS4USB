@@ -54,11 +54,21 @@ export async function createNewTypedFileAtPath(targetPath, type) {
 /**
  * @param {string} targetPath
  * @param {File[]} files
+ * @param {{ onProgress?: (info: { current: number, total: number, fileName: string }) => void }} [options]
  */
-export async function uploadFilesAtPath(targetPath, files) {
+export async function uploadFilesAtPath(targetPath, files, options = {}) {
   assertWritablePath(targetPath);
+  const list = Array.isArray(files) ? files : [];
+  const total = list.length;
 
-  for (const file of files) {
+  for (let index = 0; index < list.length; index += 1) {
+    const file = list[index];
+    options.onProgress?.({
+      current: index + 1,
+      total,
+      fileName: file.name,
+    });
+
     let base64 = await readFileAsBase64(file);
     let targetName = file.name;
 

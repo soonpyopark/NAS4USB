@@ -31,16 +31,37 @@ export const IMAGE_MIME_TYPES = {
   webp: 'image/webp',
   svg: 'image/svg+xml',
   bmp: 'image/bmp',
+  avif: 'image/avif',
+  apng: 'image/apng',
 };
 
 export const PDF_MIME_TYPE = 'application/pdf';
 export const HTML_MIME_TYPE = 'text/html; charset=utf-8';
+export const EPUB_MIME_TYPE = 'application/epub+zip';
+
+/** Comic / novel reader archives (Yomikiru-compatible openables). */
+export const ARCHIVE_MIME_TYPES = {
+  zip: 'application/zip',
+  cbz: 'application/vnd.comicbook+zip',
+  rar: 'application/vnd.rar',
+  cbr: 'application/vnd.comicbook-rar',
+  '7z': 'application/x-7z-compressed',
+};
 
 export const AUDIO_EXTENSIONS = Object.keys(AUDIO_MIME_TYPES);
 export const VIDEO_EXTENSIONS = Object.keys(VIDEO_MIME_TYPES);
 export const IMAGE_EXTENSIONS = Object.keys(IMAGE_MIME_TYPES);
 export const PDF_EXTENSIONS = ['pdf'];
 export const HTML_EXTENSIONS = ['html', 'htm'];
+export const EPUB_EXTENSIONS = ['epub'];
+export const ARCHIVE_EXTENSIONS = Object.keys(ARCHIVE_MIME_TYPES);
+/** Formats opened by ComicReaderShell (image/pdf/archives/epub). */
+export const READER_EXTENSIONS = [
+  ...IMAGE_EXTENSIONS,
+  ...PDF_EXTENSIONS,
+  ...ARCHIVE_EXTENSIONS,
+  ...EPUB_EXTENSIONS,
+];
 
 /**
  * @param {string | null | undefined} extension
@@ -116,6 +137,48 @@ export function getHtmlMimeType(_extension) {
 }
 
 /**
+ * @param {string | null | undefined} extension
+ */
+export function isEpubExtension(extension) {
+  return Boolean(extension && extension.toLowerCase() === 'epub');
+}
+
+/**
+ * @param {string | null | undefined} [_extension]
+ */
+export function getEpubMimeType(_extension) {
+  return EPUB_MIME_TYPE;
+}
+
+/**
+ * @param {string | null | undefined} extension
+ */
+export function isArchiveExtension(extension) {
+  return Boolean(extension && ARCHIVE_MIME_TYPES[extension.toLowerCase()]);
+}
+
+/**
+ * @param {string | null | undefined} extension
+ */
+export function getArchiveMimeType(extension) {
+  if (!extension) return 'application/octet-stream';
+  return ARCHIVE_MIME_TYPES[extension.toLowerCase()] ?? 'application/octet-stream';
+}
+
+/**
+ * @param {string | null | undefined} extension
+ */
+export function isReaderExtension(extension) {
+  const ext = String(extension ?? '').toLowerCase();
+  return (
+    isImageExtension(ext) ||
+    isPdfExtension(ext) ||
+    isArchiveExtension(ext) ||
+    isEpubExtension(ext)
+  );
+}
+
+/**
  * Content-Type for `/api/fs/stream` (media players, image/PDF/HTML in-app viewers).
  * @param {string | null | undefined} extension
  */
@@ -126,6 +189,8 @@ export function getStreamContentType(extension) {
   if (isImageExtension(ext)) return getImageMimeType(ext);
   if (isPdfExtension(ext)) return PDF_MIME_TYPE;
   if (isHtmlExtension(ext)) return HTML_MIME_TYPE;
+  if (isEpubExtension(ext)) return EPUB_MIME_TYPE;
+  if (isArchiveExtension(ext)) return getArchiveMimeType(ext);
   return 'application/octet-stream';
 }
 
@@ -141,5 +206,7 @@ export function guessMimeFromFileName(fileName) {
   if (isAudioExtension(ext)) return getAudioMimeType(ext);
   if (isPdfExtension(ext)) return PDF_MIME_TYPE;
   if (isHtmlExtension(ext)) return HTML_MIME_TYPE;
+  if (isEpubExtension(ext)) return EPUB_MIME_TYPE;
+  if (isArchiveExtension(ext)) return getArchiveMimeType(ext);
   return 'application/octet-stream';
 }

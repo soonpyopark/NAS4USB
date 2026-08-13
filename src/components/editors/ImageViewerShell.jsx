@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import ViewerModal from './ViewerModal.jsx';
+import SiblingFileSideButtons from './SiblingFileSideButtons.jsx';
+import { useSiblingFileNav } from '../../hooks/useSiblingFileNav.js';
 import { buildMediaStreamUrl } from '../../lib/media/streamUrl.js';
 import { getImageMimeType } from '../../lib/media/mediaTypes.js';
 
@@ -24,6 +26,7 @@ function stepScale(scale, direction) {
  *   onClose: () => void,
  *   allowClose?: boolean,
  *   fullscreen?: boolean,
+ *   onOpenSibling?: (entry: import('../../types/nas4usb.d.ts').FsEntry) => void | Promise<boolean>,
  * }} props
  */
 export default function ImageViewerShell({
@@ -33,6 +36,7 @@ export default function ImageViewerShell({
   onClose,
   allowClose = true,
   fullscreen = false,
+  onOpenSibling,
 }) {
   const mimeType = getImageMimeType(extension);
   const streamUrl = useMemo(() => buildMediaStreamUrl(relativePath), [relativePath]);
@@ -43,11 +47,20 @@ export default function ImageViewerShell({
       return streamUrl;
     }
   }, [streamUrl]);
+  const { prev, next } = useSiblingFileNav(relativePath, 'image');
 
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [scale, setScale] = useState(1);
   const [rotation, setRotation] = useState(0);
+
+  const openSibling = useCallback(
+    (entry) => {
+      if (!entry || !onOpenSibling) return;
+      void onOpenSibling(entry);
+    },
+    [onOpenSibling],
+  );
 
   useEffect(() => {
     setLoading(true);
@@ -177,11 +190,21 @@ export default function ImageViewerShell({
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'p') {
         event.preventDefault();
         handlePrint();
+        return;
+      }
+      if (event.key === 'ArrowLeft' && prev) {
+        event.preventDefault();
+        openSibling(prev);
+        return;
+      }
+      if (event.key === 'ArrowRight' && next) {
+        event.preventDefault();
+        openSibling(next);
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [handlePrint, resetZoom, zoomBy]);
+  }, [handlePrint, next, openSibling, prev, resetZoom, zoomBy]);
 
   const zoomPercent = Math.round(scale * 100);
   const busy = loading || Boolean(loadError);
@@ -255,6 +278,10 @@ export default function ImageViewerShell({
             이미지 불러오는 중…
           </p>
         )}
+
+        {onOpenSibling ? (
+          <SiblingFileSideButtons prev={prev} next={next} onOpen={openSibling} disabled={busy} />
+        ) : null}
 
         <img
           src={streamUrl}

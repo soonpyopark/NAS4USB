@@ -86,13 +86,15 @@ export default function EditorUpdateButton() {
         className="inline-flex h-7 shrink-0 items-center rounded-md border border-slate-600 bg-slate-800 px-2.5 text-[10pt] font-medium leading-none text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-700 disabled:cursor-wait disabled:opacity-50"
         onClick={openVersionDialog}
         disabled={loadingStatus || updating}
-        title="HWPX · HTML · WB4S · FortuneSheet 코어 버전 확인"
+        title="HWPX · TipTap · WB4S · FortuneSheet · Comic Reader 코어 버전 확인"
       >
         {loadingStatus ? '버전 확인…' : '에디터 버전 확인'}
       </button>
 
       <AppModal
         open={dialogOpen}
+        wide
+        className="modal-dialog--editors"
         onClose={() => {
           if (updating) return;
           setDialogOpen(false);

@@ -26,6 +26,9 @@ updated (NAS4USB **1.0.5**). Exact resolved versions are in `package-lock.json`.
 | rhwp (`@rhwp/core`, `@rhwp/editor`) | 0.8.2 | MIT | https://github.com/edwardkim/rhwp |
 | WhiteBoard4Share | 1.0.6 | AGPL-3.0-only | https://github.com/soonpyopark/WhiteBoard4Share |
 | PDF.js (`pdfjs-dist`) | 6.x | Apache-2.0 | https://github.com/mozilla/pdf.js |
+| epub.js (`epubjs`) | 0.3.x | BSD-2-Clause | https://github.com/futurepress/epub.js |
+| 7zip-min / 7zip-bin | 1.x | MIT / LGPL (7-Zip) | comic archive extract (`rar`/`cbr`/`7z`) |
+| Yomikiru (inspiration only) | — | MIT | https://github.com/mienaiyami/yomikiru — format/UX reference; not vendored |
 | SheetJS Community Edition (`xlsx`) | 0.18.5 | Apache-2.0 | https://sheetjs.com/ |
 | xlsx-js-style | 1.2.0 | Apache-2.0 | https://github.com/gitbrent/xlsx-js-style |
 | JSZip | 3.10.x | MIT OR GPL-3.0-or-later | https://github.com/Stuk/jszip |
@@ -75,6 +78,8 @@ to recipients of the binary distribution
 | `@tiptap/*` (core, react, starter-kit, extensions, …) | MIT (most packages); see each package for details |
 | `@tiptap/y-tiptap` | MIT |
 | `jszip` | MIT OR GPL-3.0-or-later |
+| `epubjs` | BSD-2-Clause |
+| `7zip-min` | MIT |
 | `katex` | MIT |
 | `lowlight` | MIT |
 | `prosemirror-tables` | MIT |
@@ -92,7 +97,8 @@ but used by the app):
 
 | Package | License | Notes |
 |---------|---------|-------|
-| `pdfjs-dist` | Apache-2.0 | PDF viewer / content search |
+| `pdfjs-dist` | Apache-2.0 | PDF viewer / comic reader pages / content search |
+| `7zip-bin` | LGPL (7-Zip binaries) | Used by `7zip-min` for archive extract |
 
 ### Development (`devDependencies`)
 

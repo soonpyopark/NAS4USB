@@ -271,7 +271,8 @@ export async function restoreFileHistoryEntry(
   void dataRoot;
   const destination = resolvePortablePath(normalized);
 
-  await fs.mkdir(path.dirname(destination), { recursive: true });
+  const { ensureParentDir } = await import('./fsService.js');
+  await ensureParentDir(destination);
   await fs.copyFile(snapshotPath, destination);
 
   // Full-fidelity sheets (with any inserted images) if this entry has one — the caller should

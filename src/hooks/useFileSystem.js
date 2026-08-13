@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { joinRelativePath, readFileAsBase64, resolveUniqueName, validateFolderName } from '../lib/fsPaths.js';
+import { joinRelativePath, resolveUniqueName, validateFolderName } from '../lib/fsPaths.js';
 import { readDirWithRetry } from '../lib/readDirWithRetry.js';
 import { filterTrashFromEntries, isFsNotFoundError, isTrashPath } from '../lib/trashPaths.js';
 import { isFavoritesPath } from '../lib/favoritesPaths.js';
@@ -7,7 +7,7 @@ import { filterTiptapAssetSidecarFromEntries } from '../../shared/tiptapAssetPat
 import { filterFortuneSidecarFromEntries } from '../../shared/fortuneSheetSidecar.js';
 import { filterPdfViewerSidecarFromEntries } from '../../shared/pdfViewerSidecar.js';
 import { buildNewFileContent, resolveNewFileName } from '../lib/files/newFileFactory.js';
-import { convertHwpBase64ToHwpx, isHwpFileName, toHwpxFileName } from '@nas4usb/rhwp/hwpConvert.js';
+import { uploadFilesAtPath } from '../lib/fsWriteActions.js';
 
 export function useFileSystem(currentPath) {
   const [entries, setEntries] = useState([]);
@@ -122,22 +122,11 @@ export function useFileSystem(currentPath) {
   }, []);
 
   const uploadFiles = useCallback(
-    async (/** @type {File[]} */ files) => {
+    async (/** @type {File[]} */ files, options = {}) => {
       if (isTrashPath(currentPath) || isFavoritesPath(currentPath)) {
         throw new Error('이 위치에는 파일을 추가할 수 없습니다.');
       }
-
-      for (const file of files) {
-        let base64 = await readFileAsBase64(file);
-        let targetName = file.name;
-
-        if (isHwpFileName(file.name)) {
-          base64 = await convertHwpBase64ToHwpx(base64, file.name);
-          targetName = toHwpxFileName(file.name);
-        }
-
-        await window.nas4usb.fs.writeFile(joinRelativePath(currentPath, targetName), base64);
-      }
+      await uploadFilesAtPath(currentPath, files, options);
     },
     [currentPath],
   );

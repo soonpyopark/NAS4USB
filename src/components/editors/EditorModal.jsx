@@ -65,14 +65,14 @@ export default function EditorModal({
         />
 
         <AppModalActions className="modal-editor-header__actions !mb-0 shrink-0">
-          {onExportHtml && (
-            <AppModalButton onClick={onExportHtml} disabled={exportingHtml || exportingHwpx}>
-              {exportingHtml ? '내보내는 중…' : 'HTML로 내보내기'}
-            </AppModalButton>
-          )}
           {onExportHwpx && (
             <AppModalButton onClick={onExportHwpx} disabled={exportingHtml || exportingHwpx}>
               {exportingHwpx ? '내보내는 중…' : 'HWPX로 내보내기'}
+            </AppModalButton>
+          )}
+          {onExportHtml && (
+            <AppModalButton onClick={onExportHtml} disabled={exportingHtml || exportingHwpx}>
+              {exportingHtml ? '내보내는 중…' : 'HTML로 내보내기'}
             </AppModalButton>
           )}
           {!hideHistory && (

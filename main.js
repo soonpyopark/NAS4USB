@@ -136,6 +136,7 @@ import {
   syncPdfViewerSidecarRename,
   isPdfViewerSidecarRelativePath,
 } from './electron/pdfViewerSidecarService.js';
+import { closeComicArchive, openComicArchive } from './electron/comicArchive.js';
 import { syncTiptapAssetRename } from './electron/tiptapAssetService.js';
 import { notifyFsChanged } from './electron/fsNotifyService.js';
 import {
@@ -679,6 +680,13 @@ ipcMain.handle('pdf:setVolumeKeysForPaging', (event, enabled) => {
   return true;
 });
 
+ipcMain.handle('comic:openArchive', async (event, relativePath) => {
+  await assertCanAccessFile(relativePath, getAccessAuthFromEvent(event), getShareTokenFromEvent(event));
+  return openComicArchive(relativePath);
+});
+
+ipcMain.handle('comic:closeArchive', async (_event, sessionId) => closeComicArchive(sessionId ?? ''));
+
 ipcMain.handle('fs:openPath', async (_event, relativePath) => {
   if (typeof relativePath !== 'string' || !relativePath) {
     throw new Error('열 파일 경로가 올바르지 않습니다.');
@@ -728,7 +736,7 @@ ipcMain.handle('fs:writeFileAbsolute', async (_event, params = {}) => {
   }
 
   const absolutePath = path.join(dir, targetName);
-  await fs.promises.mkdir(dir, { recursive: true });
+  await fsService.ensureParentDir(absolutePath);
   await fs.promises.writeFile(absolutePath, Buffer.from(base64 ?? '', 'base64'));
   return { fileName: targetName, absolutePath };
 });

@@ -29,6 +29,7 @@ const SETTINGS_FILE = '.nas4usb-settings.json';
  *   dataRoot: string | null,
  *   externalFolders: import('../shared/externalFolders.js').ExternalFolderMount[],
  *   ffmpegPath: string | null,
+ *   useLegacyImagePdfViewers: boolean,
  * }} AppSettings
  *
  * @typedef {{ isLoggedIn?: boolean, loginId?: string | null, role?: string | null } | boolean} AccessAuth
@@ -61,6 +62,14 @@ export function normalizeConfiguredFfmpegPath(value) {
 }
 
 /**
+ * Soft restore: route image/PDF to legacy viewers (see docs/RESTORE-pre-yomikiru-reader.md).
+ * @param {unknown} value
+ */
+export function normalizeUseLegacyImagePdfViewers(value) {
+  return value === true;
+}
+
+/**
  * @returns {AppSettings}
  */
 function emptySettings() {
@@ -74,6 +83,7 @@ function emptySettings() {
     dataRoot: null,
     externalFolders: [],
     ffmpegPath: null,
+    useLegacyImagePdfViewers: false,
   };
 }
 
@@ -113,6 +123,7 @@ async function loadStore(portableRoot) {
       dataRoot: normalizeConfiguredDataRoot(parsed?.dataRoot),
       externalFolders: normalizeExternalFolders(parsed?.externalFolders),
       ffmpegPath: normalizeConfiguredFfmpegPath(parsed?.ffmpegPath),
+      useLegacyImagePdfViewers: normalizeUseLegacyImagePdfViewers(parsed?.useLegacyImagePdfViewers),
     };
   } catch {
     return emptySettings();
@@ -256,6 +267,11 @@ export async function updateAppSettings(patch, portableRoot = getPortableRoot())
   }
   if (patch && 'ffmpegPath' in patch) {
     settings.ffmpegPath = normalizeConfiguredFfmpegPath(patch.ffmpegPath);
+  }
+  if (patch && 'useLegacyImagePdfViewers' in patch) {
+    settings.useLegacyImagePdfViewers = normalizeUseLegacyImagePdfViewers(
+      patch.useLegacyImagePdfViewers,
+    );
   }
   await saveStore(portableRoot, settings);
   return settings;

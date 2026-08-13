@@ -24,6 +24,7 @@ import { useLoginDialog } from '../../context/LoginDialogContext.jsx';
 import { useFsSync } from '../../context/FsSyncContext.jsx';
 import { useFsRemoteRefresh } from '../../hooks/useFsRemoteRefresh.js';
 import FileDropOverlay from '../common/FileDropOverlay.jsx';
+import TransferStatusBanner from '../common/TransferStatusBanner.jsx';
 import EditorUpdateButton from './EditorUpdateButton.jsx';
 import {
   openShareLinkForEntry,
@@ -81,6 +82,8 @@ export default function Sidebar({
   syncInfo,
 }) {
   const [searchQuery, setSearchQuery] = useState('');
+  /** @type {[null | { kind: 'upload' | 'download', current: number, total: number, fileName?: string }, Function]} */
+  const [transfer, setTransfer] = useState(null);
   const tree = useDirectoryTree(currentPath);
   const fs = useFileSystem(currentPath);
   const { confirm: appConfirm, alert: appAlert, dialog: confirmDialog } = useAppConfirm();
@@ -199,19 +202,32 @@ export default function Sidebar({
     uploadInputRef.current?.click();
   };
 
+  const reportTransferProgress = (kind) => (info) => {
+    setTransfer({
+      kind,
+      current: info.current,
+      total: info.total,
+      fileName: info.fileName,
+    });
+  };
+
   const handleUploadFiles = async (files, targetPath = dialogTargetPathRef.current) => {
+    if (transfer) return;
     try {
-      await uploadFilesAtPath(targetPath, files);
+      setTransfer({ kind: 'upload', current: 0, total: files.length, fileName: files[0]?.name });
+      await uploadFilesAtPath(targetPath, files, { onProgress: reportTransferProgress('upload') });
       await tree.expandPath(targetPath);
       await notifyChange();
     } catch (err) {
       nativeAlert(err instanceof Error ? err.message : '파일 업로드에 실패했습니다.');
+    } finally {
+      setTransfer(null);
     }
   };
 
   const { isFileDragOver, dropZoneProps } = useFileDropZone(
     (files) => handleUploadFiles(files, currentPath),
-    { enabled: !isInTrashView && canWrite },
+    { enabled: !isInTrashView && canWrite && !transfer },
   );
 
   const handleDownload = async (entry = downloadTarget) => {
@@ -220,11 +236,15 @@ export default function Sidebar({
       nativeAlert('다운로드할 파일을 선택해 주세요.');
       return;
     }
+    if (transfer) return;
 
     try {
-      await downloadFileEntries([target]);
+      setTransfer({ kind: 'download', current: 0, total: 1, fileName: target.name });
+      await downloadFileEntries([target], { onProgress: reportTransferProgress('download') });
     } catch (err) {
       nativeAlert(err instanceof Error ? err.message : '다운로드에 실패했습니다.');
+    } finally {
+      setTransfer(null);
     }
   };
 
@@ -714,12 +734,14 @@ export default function Sidebar({
         canPaste={hasClipboard}
       />
 
+      <TransferStatusBanner transfer={transfer} variant="dark" />
+
       <div className="border-b border-slate-700 px-2 py-2">
         <input
           type="search"
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
-          placeholder="폴더·파일 검색…"
+          placeholder="폴더·파일 검색 (외부폴더 제외)…"
           className="h-8 w-full rounded-md border border-slate-600 bg-[#efefef] px-3 text-[10pt] text-slate-800 placeholder:text-slate-500 outline-none focus:border-nas-accent"
         />
       </div>

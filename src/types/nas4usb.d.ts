@@ -137,6 +137,10 @@ window.nas4usb = {
     setVolumeKeysForPaging: (enabled) => {},
     subscribeVolumePageTurn: (callback) => {},
   },
+  comic: {
+    openArchive: (relativePath) => {},
+    closeArchive: (sessionId) => {},
+  },
 };
 
 export {};

@@ -90,6 +90,11 @@ import {
 import { syncTiptapAssetRename } from './tiptapAssetService.js';
 import { streamAbsoluteFile, streamFile } from './mediaStream.js';
 import { ensureVideoPreview, getFfmpegStatus } from './ffmpegPreviewService.js';
+import {
+  closeComicArchive,
+  getComicArchivePage,
+  openComicArchive,
+} from './comicArchive.js';
 import { getStreamContentType } from '../shared/mediaTypes.js';
 import { handleFsEventsRequest, notifyFsChanged, getFsRevisionPayload } from './fsNotifyService.js';
 import {
@@ -396,6 +401,39 @@ export async function handleHttpApiRequest(req, res) {
           error: error instanceof Error ? error.message : '영상 호환 변환에 실패했습니다.',
         });
       }
+      return true;
+    }
+
+    if (method === 'GET' && url.pathname === '/api/comic/openArchive') {
+      const relativePath = url.searchParams.get('path') ?? '';
+      await assertCanAccessFile(relativePath, getAccessAuth(req), getShareTokenFromQuery(url));
+      try {
+        sendJson(res, 200, await openComicArchive(relativePath));
+      } catch (error) {
+        sendJson(res, 500, {
+          error: error instanceof Error ? error.message : '압축 파일을 열지 못했습니다.',
+        });
+      }
+      return true;
+    }
+
+    if (method === 'GET' && url.pathname === '/api/comic/archivePage') {
+      const sessionId = url.searchParams.get('sessionId') ?? '';
+      const index = Number.parseInt(url.searchParams.get('index') ?? '', 10);
+      try {
+        const page = getComicArchivePage(sessionId, index);
+        await streamAbsoluteFile(req, res, page.absolutePath, page.mimeType);
+      } catch (error) {
+        sendJson(res, 404, {
+          error: error instanceof Error ? error.message : '페이지를 찾을 수 없습니다.',
+        });
+      }
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/comic/closeArchive') {
+      const body = await readJsonBody(req);
+      sendJson(res, 200, await closeComicArchive(body.sessionId ?? ''));
       return true;
     }
 

@@ -10,6 +10,7 @@ USB(또는 단일 폴더)만으로 **오프라인 LAN NAS**와 **실시간 공�
 - **Y.js** — HWPX·XLSX·화이트보드·TipTap 실시간 동기화 (기본 포트 `3009`)
 - **에디터 코어** — rhwp(HWPX), FortuneSheet(XLSX), WhiteBoard4Share(.wb4s), TipTap(.tiptap)
 - **PDF 미리보기** — PDF.js 기반 연속 스크롤 · 썸네일 · 보기(줌) · 형광펜/밑줄([저장] 시 원본 기록) · Excel 내보내기
+- **만화·소설 리더** — 이미지 / CBZ·CBR·ZIP·RAR·7Z / EPUB (Yomikiru 지원 형식에 맞춘 네이티브 셸; PDF는 기존 뷰어 유지)
 
 > **용도:** USB 이동·교실/회의실 LAN 협업. 인터넷 없이 동작하도록 설계되었습니다.
 
@@ -28,11 +29,12 @@ USB(또는 단일 폴더)만으로 **오프라인 LAN NAS**와 **실시간 공�
 | 스프레드시트 | FortuneSheet — `.xlsx` / `.xls` |
 | 화이트보드 | `.wb4s` — WhiteBoard4Share 엔진 |
 | PDF 미리보기 | 썸네일 · 너비/높이/페이지 맞춤 · 2쪽 보기 · 검색 · 형광펜/밑줄 · 엑셀 내보내기 |
+| 만화·소설 리더 | 이미지 · cbz/cbr/zip/rar/7z · epub (세로/LTR/RTL/두 쪽) |
 | 파일 접근 제어 | 비공개·열람제한·공유 링크 (총괄관리자) |
 | 회원 개인폴더 | 활성 회원 홈 자동 생성 · 삭제 시 정리 · 고아 폴더 prune |
 | 휴지통 | 총괄관리자 전용 |
 | 게스트 UI | 열람 권한 없을 때 로그인 유도 / 관리자 문의 안내 |
-| 에디터 코어 업데이트 | `update_all.bat` — rhwp / wb4s / npm 코어 일괄 갱신 |
+| 에디터 코어 업데이트 | `update_all.bat` — rhwp / wb4s / fortune-sheet / tiptap / comic-reader + npm 일괄 갱신 |
 
 ### 워크스페이스 경로
 
@@ -45,14 +47,14 @@ USB(또는 단일 폴더)만으로 **오프라인 LAN NAS**와 **실시간 공�
 
 구버전에서 공유 루트가 `data`·`공유폴더`이거나 개인이 `개인폴더`인 경우, 실행 시 `share`/`private` 레이아웃으로 이전합니다.
 
-### PDF 미리보기 (요약)
+### 만화·소설 리더 / PDF (요약)
 
-- **보기:** 확대/축소, 너비·높이·페이지 맞춤, 2쪽 보기, 회전, 인쇄
-- **썸네일 / 형광펜:** 왼쪽 사이드 패널 전환
-- **형광펜·밑줄:** 텍스트 드래그 → 메뉴에서 적용. **[저장]**으로 원본 PDF에 Highlight/Underline 기록·삭제 반영. 읽던 페이지·줌은 `파일명.pdf.viewer.json`에 자동 보관(파일당 공용). PDF에 이미 있는 주석(다른 뷰어 포함)은 목록에 `· PDF`로 표시하며, 본문이 비어 있으면 페이지에서 복원
-- **형광펜 내보내기:** 인쇄 오른쪽 — 형광펜·밑줄을 Excel(`파일명_형광펜_밑줄_YYMMDD_HHMMSS.xlsx`)로 저장
-- **목록 연동:** 목록↔본문 클릭으로 선택, 우클릭/`Delete` 삭제, `Ctrl+C` 복사. `· PDF` 삭제는 [저장] 후 원본에서도 제거
-- 페이지는 보이는 구간만 지연 렌더링합니다.
+- **PDF:** 기존 `PdfViewerShell` (썸네일 · 줌 · 형광펜/밑줄 · 사이드카 · 엑셀 내보내기)
+- **만화·소설:** 이미지·`cbz`/`cbr`/`zip`/`rar`/`7z`·`epub` → `ComicReaderShell` (세로 / 좌→우 / 우→좌 / 두 쪽)
+- **EPUB:** epub.js 기반 페이지 넘김 · 글자 크기(줌)
+- **압축:** `zip`/`cbz`는 JSZip, `rar`/`cbr`/`7z`는 서버(7-Zip) 추출
+- 이미지만 레거시 뷰어로 되돌리려면 소프트 복원 — [`docs/RESTORE-pre-yomikiru-reader.md`](docs/RESTORE-pre-yomikiru-reader.md)
+- UI 영감: [Yomikiru](https://github.com/mienaiyami/yomikiru) (MIT, 포크 아님)
 
 ---
 
@@ -212,8 +214,10 @@ NAS4USB/
 ├── main.js                 Electron 진입점
 ├── electron/               메인 프로세스 (서버, IPC, 파일 API, 워크스페이스)
 ├── src/                    React UI (Vite root)
-│   ├── components/editors/ PdfViewerShell 등 뷰어·에디터
-│   └── lib/pdf/            PDF.js 로드·검색·형광펜/선택·뷰어 사이드카
+│   ├── components/editors/ ComicReaderShell · PdfViewerShell 등 뷰어·에디터
+│   ├── lib/comicReader/    만화·PDF·압축·EPUB 페이지 해석
+│   └── lib/pdf/            (레거시) PDF.js 로드·검색·형광펜/선택·뷰어 사이드카
+├── docs/                   복원 체크포인트 등
 ├── shared/                 공유 상수·경로(공유폴더/개인폴더 ↔ share/private)
 ├── lib/rhwp/               rhwp 어댑터 (파싱은 @rhwp/core WASM)
 ├── lib/updates/            오프라인 USB용 코어 업데이트 패키지
@@ -243,6 +247,7 @@ NAS4USB/
 | Whiteboard | `lib/updates/wb4s` / WhiteBoard4Share | AGPL-3.0-only |
 | TipTap | `@tiptap/react`, `@tiptap/starter-kit` 등 | MIT |
 | Markdown / TXT | CodeMirror 6 | MIT |
+| 만화·소설 리더 | `ComicReaderShell` + `epubjs` / JSZip / 7zip-min | BSD-2-Clause / MIT |
 | PDF 미리보기 | `pdfjs-dist` (PDF.js) — `src/lib/pdf/`, `PdfViewerShell` | Apache-2.0 |
 | 실시간 동기화 | `yjs`, `y-websocket` | MIT |
 | TipTap·MD → HWPX | Pandoc 3.10.1 + pypandoc-hwpx + pypandoc + Pillow (`tools/hwpx-export`) | GPL-2.0-or-later / MIT / MIT-CMU |
