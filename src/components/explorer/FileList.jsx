@@ -1,4 +1,6 @@
 import { useEffect, useRef } from 'react';
+import { EXTERNAL_FOLDER, SHARED_FOLDER } from '../../../shared/constants.js';
+import { HOMES_FOLDER } from '../../../shared/memberHomes.js';
 import FileIcon from './FileIcon.jsx';
 import FileEntryStatusBadges, { FILE_STATUS_SLOT_WIDTH } from './FileEntryStatusBadges.jsx';
 
@@ -16,6 +18,15 @@ function formatModifiedDateLine(iso) {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+/** 공유폴더 · 개인폴더 · 외부폴더 (워크스페이스 루트 시스템 폴더) */
+function isWorkspaceRootSystemFolder(relativePath) {
+  return (
+    relativePath === SHARED_FOLDER ||
+    relativePath === HOMES_FOLDER ||
+    relativePath === EXTERNAL_FOLDER
+  );
 }
 
 const MODIFIED_DATE_COLUMN_CLASS = 'hidden w-44 min-w-[9.5rem] whitespace-nowrap px-2 py-2 md:table-cell';
@@ -119,8 +130,18 @@ export default function FileList({
                   onPropertiesClick={onPropertiesClick}
                 />
               </div>
-              <FileIcon entry={entry} className="h-12 w-12" />
-              <span className="w-full truncate text-[10pt] text-slate-700" title={entry.name}>
+              <FileIcon
+                entry={entry}
+                className={`h-12 w-12 ${
+                  isWorkspaceRootSystemFolder(entry.relativePath) ? '!text-red-500' : ''
+                }`}
+              />
+              <span
+                className={`w-full truncate text-[10pt] text-slate-700 ${
+                  isWorkspaceRootSystemFolder(entry.relativePath) ? 'font-bold' : ''
+                }`}
+                title={entry.name}
+              >
                 {entry.name}
               </span>
             </button>
@@ -202,9 +223,18 @@ export default function FileList({
                 </td>
                 <td className="max-w-0 px-4 py-2">
                   <div className="flex min-w-0 items-center gap-2 overflow-hidden">
-                    <FileIcon entry={entry} className="h-5 w-5 shrink-0" />
+                    <FileIcon
+                      entry={entry}
+                      className={`h-5 w-5 shrink-0 ${
+                        isWorkspaceRootSystemFolder(entry.relativePath) ? '!text-red-500' : ''
+                      }`}
+                    />
                     <span
-                      className="min-w-0 flex-1 truncate font-medium text-slate-700"
+                      className={`min-w-0 flex-1 truncate text-slate-700 ${
+                        isWorkspaceRootSystemFolder(entry.relativePath)
+                          ? 'font-bold'
+                          : 'font-medium'
+                      }`}
                       title={entry.name}
                     >
                       {entry.name}

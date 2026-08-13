@@ -1,4 +1,5 @@
 import { SHARED_FOLDER } from '../../shared/constants.js';
+import { isExternalFolderContainerPath } from '../../shared/externalFolders.js';
 import {
   HOMES_DISK_DIR,
   HOMES_FOLDER,
@@ -58,6 +59,7 @@ export function canWriteAtPath(currentPath, loginId, isLoggedIn, globalWrite) {
   const path = normalizeRelativePath(currentPath);
   if (!path || path === '.') return false;
   if (isHomesContainerPath(path)) return false;
+  if (isExternalFolderContainerPath(path)) return false;
   if (isLoggedIn && loginId && isOwnMemberHomePath(path, loginId)) return true;
   if (path === SHARED_FOLDER || path.startsWith(`${SHARED_FOLDER}/`)) {
     return Boolean(globalWrite);

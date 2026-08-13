@@ -28,6 +28,7 @@ import { SHARED_FOLDER } from '../shared/constants.js';
 import { getShareTokenFromUrl } from './lib/shareAccess.js';
 import { isShareViewOnly, resolveOpenShareMode } from './lib/shareLinkAccess.js';
 import { resolveUnknownFileOpenAction } from './lib/unknownFileOpen.js';
+import { syncInfoForPath } from './lib/externalFoldersUi.js';
 import {
   AUDIO_EXTENSIONS,
   HTML_EXTENSIONS,
@@ -113,13 +114,14 @@ function OpenEditorLayer({ openEditor, syncInfo, allowClose, fullscreen = false,
 
   const shareMode = openEditor.shareMode ?? null;
   const shareViewOnly = isShareViewOnly(shareMode);
+  const editorSyncInfo = syncInfoForPath(openEditor.relativePath, syncInfo);
 
   if (openEditor.type === 'hwpx') {
     return (
       <HwpxEditorShell
         relativePath={openEditor.relativePath}
         fileName={openEditor.name}
-        syncInfo={syncInfo}
+        syncInfo={editorSyncInfo}
         onClose={onClose}
         allowClose={allowClose}
         fullscreen={fullscreen}
@@ -134,7 +136,7 @@ function OpenEditorLayer({ openEditor, syncInfo, allowClose, fullscreen = false,
       <Wb4sEditorShell
         relativePath={openEditor.relativePath}
         fileName={openEditor.name}
-        syncInfo={syncInfo}
+        syncInfo={editorSyncInfo}
         onClose={onClose}
         onRenamed={onRenamed}
         allowClose={allowClose}
@@ -149,7 +151,7 @@ function OpenEditorLayer({ openEditor, syncInfo, allowClose, fullscreen = false,
       <XlsxEditorShell
         relativePath={openEditor.relativePath}
         fileName={openEditor.name}
-        syncInfo={syncInfo}
+        syncInfo={editorSyncInfo}
         onClose={onClose}
         allowClose={allowClose}
         fullscreen={fullscreen}
@@ -165,7 +167,7 @@ function OpenEditorLayer({ openEditor, syncInfo, allowClose, fullscreen = false,
         relativePath={openEditor.relativePath}
         fileName={openEditor.name}
         extension={openEditor.extension ?? 'txt'}
-        syncInfo={syncInfo}
+        syncInfo={editorSyncInfo}
         onClose={onClose}
         allowClose={allowClose}
         fullscreen={fullscreen}
@@ -181,7 +183,7 @@ function OpenEditorLayer({ openEditor, syncInfo, allowClose, fullscreen = false,
         <TipTapEditorShell
           relativePath={openEditor.relativePath}
           fileName={openEditor.name}
-          syncInfo={syncInfo}
+          syncInfo={editorSyncInfo}
           onClose={onClose}
           allowClose={allowClose}
           fullscreen={fullscreen}

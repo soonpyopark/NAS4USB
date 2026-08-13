@@ -120,6 +120,9 @@ export function createHttpNas4usbClient() {
         }
         return window.showDirectoryPicker({ mode: 'readwrite' });
       },
+      pickFile: async () => {
+        throw new Error('브라우저에서는 외부 FFmpeg 파일을 선택할 수 없습니다. Electron 앱을 사용해 주세요.');
+      },
     },
 
     subscribeFsChanged: (callback) => createFsChangeSubscription(callback),

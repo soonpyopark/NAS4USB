@@ -3,8 +3,9 @@ import { getStoredAdminToken } from '../nas4usbClient.js';
 
 /**
  * @param {string} relativePath
+ * @param {{ preview?: boolean }} [options]
  */
-export function buildMediaStreamUrl(relativePath) {
+export function buildMediaStreamUrl(relativePath, options = {}) {
   const params = new URLSearchParams({ path: relativePath });
   const shareToken = getShareTokenFromUrl();
   if (shareToken) params.set('share', shareToken);
@@ -12,6 +13,9 @@ export function buildMediaStreamUrl(relativePath) {
   // so pass it as a query param too — the server accepts either.
   const adminToken = getStoredAdminToken();
   if (adminToken) params.set('token', adminToken);
+  if (options.preview) {
+    return `/api/media/videoPreview?${params.toString()}`;
+  }
   return `/api/fs/stream?${params.toString()}`;
 }
 

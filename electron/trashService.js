@@ -1,7 +1,11 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { TRASH_FOLDER } from '../shared/constants.js';
+import { EXTERNAL_FOLDER, TRASH_FOLDER } from '../shared/constants.js';
 import { resolveUniqueName } from '../shared/uniqueName.js';
+import {
+  isExternalFolderPath,
+  isExternalMountRootPath,
+} from '../shared/externalFolders.js';
 import {
   syncFortuneSidecarDelete,
   syncFortuneSidecarMoveTree,
@@ -25,6 +29,11 @@ import { syncSharePathDelete, syncSharePathMoveTree } from './shareLinkService.j
 import { syncFileAccessDelete, syncFileAccessMoveTree } from './fileAccessService.js';
 import { syncFavoritesDelete, syncFavoritesMoveTree } from './favoritesService.js';
 import { syncFileHistoryDelete, syncFileHistoryMoveTree } from './fileHistoryService.js';
+
+export const EXTERNAL_TRASH_UNSUPPORTED_MESSAGE =
+  '외부 폴더 항목은 휴지통으로 옮길 수 없습니다. 삭제(영구)를 사용해 주세요.';
+export const EXTERNAL_MOUNT_DELETE_MESSAGE =
+  '외부폴더 연결은 환경설정에서만 추가·제거할 수 있습니다. 원본 파일은 삭제되지 않습니다.';
 
 const TRASH_INDEX_FILE = '.nas4usb-trash.json';
 
@@ -174,6 +183,14 @@ export async function trashPath(relativePath, portableRoot = getPortableRoot()) 
     throw new Error('삭제(휴지통)할 수 없는 항목입니다.');
   }
 
+  // External mounts live on other drives/cloud paths — never move into NAS `__trash`.
+  if (normalized === EXTERNAL_FOLDER || isExternalMountRootPath(normalized)) {
+    throw new Error(EXTERNAL_MOUNT_DELETE_MESSAGE);
+  }
+  if (isExternalFolderPath(normalized)) {
+    throw new Error(EXTERNAL_TRASH_UNSUPPORTED_MESSAGE);
+  }
+
   if (isTiptapAssetSidecarRelativePath(normalized)) {
     throw new Error(
       'TipTap 편집용 임시 폴더입니다. 연결된 .tiptap 파일을 삭제해 주세요.',
@@ -268,6 +285,10 @@ export async function deletePermanent(relativePath, portableRoot = getPortableRo
   const normalized = normalizePath(relativePath);
   if (!normalized || normalized === '.' || normalized === TRASH_FOLDER) {
     throw new Error('삭제(영구)할 수 없는 항목입니다.');
+  }
+
+  if (normalized === EXTERNAL_FOLDER || isExternalMountRootPath(normalized)) {
+    throw new Error(EXTERNAL_MOUNT_DELETE_MESSAGE);
   }
 
   const inTrash = isTrashPath(normalized);

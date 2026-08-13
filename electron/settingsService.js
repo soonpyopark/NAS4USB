@@ -11,6 +11,7 @@ import {
 import { getMemberAccessPermissionsByLoginId } from './membersService.js';
 import { normalizeWebServerMode, normalizeWebServerPort } from '../shared/webServerConfig.js';
 import { DEFAULT_ACCENT_COLOR, normalizeAccentColor } from '../shared/theme.js';
+import { normalizeExternalFolders } from '../shared/externalFolders.js';
 
 const SETTINGS_FILE = '.nas4usb-settings.json';
 
@@ -26,6 +27,8 @@ const SETTINGS_FILE = '.nas4usb-settings.json';
  *   webServerMode: import('../shared/webServerConfig.js').WebServerMode | null,
  *   themeAccentColor: string,
  *   dataRoot: string | null,
+ *   externalFolders: import('../shared/externalFolders.js').ExternalFolderMount[],
+ *   ffmpegPath: string | null,
  * }} AppSettings
  *
  * @typedef {{ isLoggedIn?: boolean, loginId?: string | null, role?: string | null } | boolean} AccessAuth
@@ -47,6 +50,17 @@ export function normalizeConfiguredDataRoot(value) {
 }
 
 /**
+ * Absolute path to a user-provided `ffmpeg` / `ffmpeg.exe` binary (not bundled).
+ * @param {unknown} value
+ * @returns {string | null}
+ */
+export function normalizeConfiguredFfmpegPath(value) {
+  if (value == null) return null;
+  const trimmed = String(value).trim();
+  return trimmed || null;
+}
+
+/**
  * @returns {AppSettings}
  */
 function emptySettings() {
@@ -58,6 +72,8 @@ function emptySettings() {
     webServerMode: null,
     themeAccentColor: DEFAULT_ACCENT_COLOR,
     dataRoot: null,
+    externalFolders: [],
+    ffmpegPath: null,
   };
 }
 
@@ -95,6 +111,8 @@ async function loadStore(portableRoot) {
       webServerMode: normalizeWebServerMode(parsed?.webServerMode),
       themeAccentColor: normalizeAccentColor(parsed?.themeAccentColor),
       dataRoot: normalizeConfiguredDataRoot(parsed?.dataRoot),
+      externalFolders: normalizeExternalFolders(parsed?.externalFolders),
+      ffmpegPath: normalizeConfiguredFfmpegPath(parsed?.ffmpegPath),
     };
   } catch {
     return emptySettings();
@@ -232,6 +250,12 @@ export async function updateAppSettings(patch, portableRoot = getPortableRoot())
   }
   if (patch && 'dataRoot' in patch) {
     settings.dataRoot = normalizeConfiguredDataRoot(patch.dataRoot);
+  }
+  if (patch && 'externalFolders' in patch) {
+    settings.externalFolders = normalizeExternalFolders(patch.externalFolders);
+  }
+  if (patch && 'ffmpegPath' in patch) {
+    settings.ffmpegPath = normalizeConfiguredFfmpegPath(patch.ffmpegPath);
   }
   await saveStore(portableRoot, settings);
   return settings;

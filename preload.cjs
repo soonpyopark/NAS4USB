@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('nas4usb', {
 
   dialog: {
     pickDirectory: (options) => ipcRenderer.invoke('dialog:pickDirectory', options),
+    pickFile: (options) => ipcRenderer.invoke('dialog:pickFile', options),
   },
   subscribeFsChanged: (callback) => {
     const handler = (_event, payload) => {

@@ -7,6 +7,7 @@ import {
   getInstallRoot,
   getSyncInfo,
   getTempPath,
+  setExternalFolders,
 } from './appContext.js';
 import * as fsService from './fsService.js';
 import {
@@ -87,7 +88,8 @@ import {
   isPdfViewerSidecarRelativePath,
 } from './pdfViewerSidecarService.js';
 import { syncTiptapAssetRename } from './tiptapAssetService.js';
-import { streamFile } from './mediaStream.js';
+import { streamAbsoluteFile, streamFile } from './mediaStream.js';
+import { ensureVideoPreview, getFfmpegStatus } from './ffmpegPreviewService.js';
 import { getStreamContentType } from '../shared/mediaTypes.js';
 import { handleFsEventsRequest, notifyFsChanged, getFsRevisionPayload } from './fsNotifyService.js';
 import {
@@ -373,6 +375,27 @@ export async function handleHttpApiRequest(req, res) {
       await assertCanAccessFile(relativePath, getAccessAuth(req), getShareTokenFromQuery(url));
       const extension = path.extname(relativePath).slice(1).toLowerCase();
       await streamFile(req, res, relativePath, getStreamContentType(extension));
+      return true;
+    }
+
+    if (method === 'GET' && url.pathname === '/api/media/ffmpegStatus') {
+      sendJson(res, 200, await getFfmpegStatus(getPortableRoot()));
+      return true;
+    }
+
+    if (method === 'GET' && url.pathname === '/api/media/videoPreview') {
+      const relativePath = url.searchParams.get('path') ?? '';
+      await assertCanAccessFile(relativePath, getAccessAuth(req), getShareTokenFromQuery(url));
+      try {
+        const preview = await ensureVideoPreview(relativePath, getPortableRoot());
+        res.setHeader('X-Nas4usb-Video-Preview', preview.remuxed ? 'remuxed' : 'source');
+        res.setHeader('X-Nas4usb-Video-Preview-Reason', preview.reason);
+        await streamAbsoluteFile(req, res, preview.absolutePath, preview.contentType);
+      } catch (error) {
+        sendJson(res, 500, {
+          error: error instanceof Error ? error.message : '영상 호환 변환에 실패했습니다.',
+        });
+      }
       return true;
     }
 
@@ -745,6 +768,9 @@ export async function handleHttpApiRequest(req, res) {
       assertSuperAdminAuthenticated(isSuperAdminAuthenticated(req));
       const body = await readJsonBody(req);
       const result = await updateAppSettings(body ?? {}, getPortableRoot());
+      if (body && 'externalFolders' in body) {
+        setExternalFolders(result.externalFolders);
+      }
       notifyFsChanged();
       sendJson(res, 200, result);
       return true;

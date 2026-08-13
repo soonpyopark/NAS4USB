@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { isExternalFolderPath } from '../shared/externalFolders.js';
 import { getPortableRoot, resolvePortablePath } from './appContext.js';
 import { LEGACY_SHARE_FILE } from '../shared/legacyConfig.js';
 import { SHARE_LINK_MODE_EDIT, SHARE_LINK_MODE_VIEW } from '../shared/shareLinkModes.js';
@@ -81,6 +82,10 @@ export async function setShareLink(relativePath, mode, portableRoot = getPortabl
   const normalizedPath = String(relativePath ?? '').replace(/\\/g, '/');
   if (!normalizedPath || normalizedPath === '.') {
     throw new Error('공유할 파일 경로가 올바르지 않습니다.');
+  }
+
+  if (isExternalFolderPath(normalizedPath)) {
+    throw new Error('외부폴더 항목은 공유 링크를 만들 수 없습니다. (LAN 협업 비대상)');
   }
 
   if (mode === null) {

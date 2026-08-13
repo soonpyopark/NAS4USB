@@ -59,6 +59,11 @@ import {
   memberHomeRelativePath,
 } from '../../lib/memberHomes.js';
 import { isProtectedSharedSystemPath } from '../../../shared/workspacePaths.js';
+import { isExternalMountRootPath, isExternalFolderContainerPath } from '../../../shared/externalFolders.js';
+import {
+  EXTERNAL_MOUNT_DELETE_HINT,
+  isExternalContentPath,
+} from '../../lib/externalFoldersUi.js';
 import { isTiptapDocumentRelativePath } from '../../../shared/tiptapAssetPaths.js';
 import { guardOpenFileEntry } from '../../lib/openFileGuard.js';
 import { nativeAlert } from '../../lib/nativeDialog.js';
@@ -277,11 +282,13 @@ export default function Sidebar({
     if (
       isProtectedSharedSystemPath(entry.relativePath) ||
       isHomesContainerPath(entry.relativePath) ||
-      isMemberHomeRootPath(entry.relativePath)
+      isMemberHomeRootPath(entry.relativePath) ||
+      isExternalFolderContainerPath(entry.relativePath) ||
+      isExternalMountRootPath(entry.relativePath)
     ) {
       void appAlert({
         title: '이름 변경',
-        body: '공유폴더·개인폴더의 이름은 바꿀 수 없습니다.',
+        body: '공유폴더·개인폴더·외부폴더의 이름은 바꿀 수 없습니다.',
       });
       return;
     }
@@ -310,6 +317,22 @@ export default function Sidebar({
   };
 
   const handleDelete = async (entry) => {
+    if (
+      isExternalMountRootPath(entry.relativePath) ||
+      isExternalFolderContainerPath(entry.relativePath)
+    ) {
+      await appAlert({
+        title: '외부 폴더',
+        body: EXTERNAL_MOUNT_DELETE_HINT,
+      });
+      return;
+    }
+
+    if (isExternalContentPath(entry.relativePath)) {
+      await handlePermanentDelete(entry);
+      return;
+    }
+
     const confirmed = await appConfirm({
       title: '삭제(휴지통)',
       body: `"${entry.name}"을(를) 삭제(휴지통)할까요?`,
@@ -317,11 +340,15 @@ export default function Sidebar({
       confirmVariant: 'danger',
     });
     if (!confirmed) return;
-    await fs.moveToTrash(entry.relativePath);
-    if (currentPath === entry.relativePath || currentPath.startsWith(`${entry.relativePath}/`)) {
-      onNavigate(getParentPath(entry.relativePath));
+    try {
+      await fs.moveToTrash(entry.relativePath);
+      if (currentPath === entry.relativePath || currentPath.startsWith(`${entry.relativePath}/`)) {
+        onNavigate(getParentPath(entry.relativePath));
+      }
+      await notifyChange();
+    } catch (err) {
+      nativeAlert(err instanceof Error ? err.message : '삭제(휴지통)에 실패했습니다.');
     }
-    await notifyChange();
   };
 
   const handleRestore = async (entry) => {
@@ -343,9 +370,23 @@ export default function Sidebar({
   };
 
   const handlePermanentDelete = async (entry) => {
+    if (
+      isExternalMountRootPath(entry.relativePath) ||
+      isExternalFolderContainerPath(entry.relativePath)
+    ) {
+      await appAlert({
+        title: '외부 폴더',
+        body: EXTERNAL_MOUNT_DELETE_HINT,
+      });
+      return;
+    }
+
+    const externalContent = isExternalContentPath(entry.relativePath);
     const confirmed = await appConfirm({
       title: '삭제(영구)',
-      body: `"${entry.name}"을(를) 삭제(영구)할까요?\n\n이 작업은 되돌릴 수 없습니다.`,
+      body: `"${entry.name}"을(를) 삭제(영구)할까요?\n\n이 작업은 되돌릴 수 없습니다.${
+        externalContent ? '\n외부 폴더 항목은 휴지통으로 옮기지 않고 바로 삭제됩니다.' : ''
+      }`,
       confirmLabel: '삭제(영구)',
       confirmVariant: 'danger',
     });
@@ -706,7 +747,6 @@ export default function Sidebar({
             onOpenFile={handleOpenFileFromTree}
             onContextMenu={openContextMenu}
             viewAccessDenied={showViewAccessDenied}
-            onRequestLogin={showViewAccessDenied ? () => openLogin() : undefined}
             onBackgroundContextMenu={(event, targetPath = currentPath) =>
               openContextMenu(event, null, targetPath)
             }

@@ -1,5 +1,9 @@
-import { SHARED_FOLDER } from '../../shared/constants.js';
+import { SHARED_FOLDER, EXTERNAL_FOLDER } from '../../shared/constants.js';
 import { HOMES_FOLDER } from '../../shared/memberHomes.js';
+import {
+  isExternalFolderPath,
+  isExternalMountRootPath,
+} from '../../shared/externalFolders.js';
 
 /**
  * @param {string} currentPath
@@ -102,10 +106,12 @@ export function readFileAsBase64(file) {
  * Keep 공유폴더 above 개인폴더 at the workspace root (Korean name order would reverse them).
  * @param {string} name
  */
-function workspaceRootFolderRank(name) {
-  if (name === SHARED_FOLDER) return 0;
-  if (name === HOMES_FOLDER) return 1;
-  return 2;
+function workspaceRootFolderRank(name, relativePath = '') {
+  if (name === SHARED_FOLDER || relativePath === SHARED_FOLDER) return 0;
+  if (name === HOMES_FOLDER || relativePath === HOMES_FOLDER) return 1;
+  if (name === EXTERNAL_FOLDER || relativePath === EXTERNAL_FOLDER) return 2;
+  if (isExternalFolderPath(relativePath) || relativePath.startsWith(`${EXTERNAL_FOLDER}/`)) return 3;
+  return 4;
 }
 
 /**
@@ -115,12 +121,23 @@ function workspaceRootFolderRank(name) {
  */
 export function sortEntries(entries, sortField, sortDirection) {
   const factor = sortDirection === 'asc' ? 1 : -1;
+  // Preserve settings order for external mounts (API list order).
+  const indexed = entries.map((entry, index) => ({ entry, index }));
 
-  return [...entries].sort((a, b) => {
+  indexed.sort((left, right) => {
+    const a = left.entry;
+    const b = right.entry;
     if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
 
-    const rootRank = workspaceRootFolderRank(a.name) - workspaceRootFolderRank(b.name);
+    const rootRank =
+      workspaceRootFolderRank(a.name, a.relativePath) -
+      workspaceRootFolderRank(b.name, b.relativePath);
     if (rootRank !== 0) return rootRank;
+
+    // External mount roots follow 환경설정 order, not name/date sort.
+    if (isExternalMountRootPath(a.relativePath) && isExternalMountRootPath(b.relativePath)) {
+      return left.index - right.index;
+    }
 
     switch (sortField) {
       case 'modifiedAt':
@@ -134,6 +151,8 @@ export function sortEntries(entries, sortField, sortDirection) {
         return factor * a.name.localeCompare(b.name, 'ko');
     }
   });
+
+  return indexed.map((item) => item.entry);
 }
 
 /**

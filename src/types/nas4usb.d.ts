@@ -50,6 +50,7 @@ window.nas4usb = {
   openExternal: (url) => {},
   dialog: {
     pickDirectory: (options) => {},
+    pickFile: (options) => {},
   },
   subscribeFsChanged: (callback) => {},
   fs: {

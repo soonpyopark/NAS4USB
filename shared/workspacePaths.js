@@ -1,5 +1,6 @@
 import {
   DEFAULT_DATA_DIR,
+  EXTERNAL_FOLDER,
   LEGACY_SHARED_DISK_DIR,
   SHARED_FOLDER,
   TRASH_FOLDER,
@@ -12,6 +13,7 @@ import {
   LEGACY_HOMES_FOLDER,
   normalizeRelativePath,
 } from './memberHomes.js';
+import { isExternalFolderPath } from './externalFolders.js';
 
 /**
  * @param {string} relativePath
@@ -31,7 +33,7 @@ export function isProtectedSharedSystemPath(relativePath) {
 }
 
 /**
- * Workspace root (`.`) is virtual: only 공유폴더 + 개인폴더.
+ * Workspace root (`.`) is virtual: 공유폴더 + 개인폴더 + 외부폴더.
  * @param {string} relativePath
  */
 export function isWorkspaceRootPath(relativePath) {
@@ -44,7 +46,7 @@ export function isWorkspaceRootPath(relativePath) {
  * - `__homes/...` / `private/...` → `개인폴더/...`
  * - `share/...` (disk name) → `공유폴더/...`
  * - unprefixed shared paths → `공유폴더/...`
- * - `__trash`, `__favorites`, already-prefixed paths unchanged
+ * - `__trash`, `__favorites`, `외부폴더/...`, already-prefixed paths unchanged
  *
  * @param {string} relativePath
  */
@@ -58,6 +60,10 @@ export function toCanonicalWorkspacePath(relativePath) {
     normalized === FAVORITES_FOLDER ||
     normalized.startsWith(`${FAVORITES_FOLDER}/`)
   ) {
+    return normalized;
+  }
+
+  if (isExternalFolderPath(normalized)) {
     return normalized;
   }
 
@@ -115,7 +121,7 @@ export function toCanonicalWorkspacePath(relativePath) {
 
 /**
  * @param {string} relativePath
- * @returns {{ kind: 'shared' | 'homes' | 'trash' | 'favorites' | 'workspace' | 'legacy-shared', rest: string }}
+ * @returns {{ kind: 'shared' | 'homes' | 'trash' | 'favorites' | 'workspace' | 'external' | 'legacy-shared', rest: string, mountId?: string }}
  */
 export function splitWorkspacePath(relativePath) {
   const normalized = normalizeRelativePath(relativePath);
@@ -139,6 +145,16 @@ export function splitWorkspacePath(relativePath) {
           ? ''
           : normalized.slice(FAVORITES_FOLDER.length + 1),
     };
+  }
+  if (normalized === EXTERNAL_FOLDER || normalized.startsWith(`${EXTERNAL_FOLDER}/`)) {
+    if (normalized === EXTERNAL_FOLDER) {
+      return { kind: 'external', rest: '', mountId: '' };
+    }
+    const after = normalized.slice(EXTERNAL_FOLDER.length + 1);
+    const slash = after.indexOf('/');
+    const mountId = slash < 0 ? after : after.slice(0, slash);
+    const rest = slash < 0 ? '' : after.slice(slash + 1);
+    return { kind: 'external', rest, mountId };
   }
   if (normalized === HOMES_FOLDER || normalized.startsWith(`${HOMES_FOLDER}/`)) {
     return {

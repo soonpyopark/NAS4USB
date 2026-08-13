@@ -79,9 +79,9 @@ function TreeNode({
         )}
         <FileIcon
           entry={entry}
-          className={`h-4 w-4 shrink-0 ${isActive ? 'text-white' : isTopLevel ? 'text-amber-400' : ''}`}
+          className={`h-4 w-4 shrink-0 ${isActive ? '!text-white' : isTopLevel ? '!text-red-500' : ''}`}
         />
-        <span className={`truncate ${isTopLevel ? 'font-medium' : ''}`}>{entry.name}</span>
+        <span className={`truncate ${isTopLevel ? 'font-bold' : ''}`}>{entry.name}</span>
       </button>
 
       {isFolder && isExpanded && (
@@ -127,7 +127,6 @@ export default function DirectoryTree({
   onContextMenu,
   onBackgroundContextMenu,
   viewAccessDenied = false,
-  onRequestLogin,
 }) {
   return (
     <div
@@ -137,17 +136,8 @@ export default function DirectoryTree({
       {viewAccessDenied ? (
         <div className="space-y-3 px-3 py-3">
           <p className="text-[10pt] leading-relaxed text-slate-400">
-            보기 권한이 없어 목록이 표시되지 않습니다.
+            보기 권한이 없습니다.
           </p>
-          {onRequestLogin ? (
-            <button
-              type="button"
-              onClick={onRequestLogin}
-              className="rounded-md bg-nas-accent px-2.5 py-1.5 text-[10pt] font-medium text-white hover:bg-nas-accentHover"
-            >
-              로그인
-            </button>
-          ) : null}
         </div>
       ) : rootEntries.length === 0 ? (
         <p className="px-3 py-2 text-[10pt] text-slate-500">폴더가 없습니다</p>

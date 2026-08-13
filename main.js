@@ -23,6 +23,7 @@ import {
   getTempPath,
   initAppContext,
   resolvePortablePath,
+  setExternalFolders,
 } from './electron/appContext.js';
 import * as fsService from './electron/fsService.js';
 import {
@@ -129,6 +130,12 @@ import {
   syncFortuneSidecarRename,
   isFortuneSidecarRelativePath,
 } from './electron/fortuneSidecarService.js';
+import {
+  syncPdfViewerSidecarCopy,
+  syncPdfViewerSidecarDelete,
+  syncPdfViewerSidecarRename,
+  isPdfViewerSidecarRelativePath,
+} from './electron/pdfViewerSidecarService.js';
 import { syncTiptapAssetRename } from './electron/tiptapAssetService.js';
 import { notifyFsChanged } from './electron/fsNotifyService.js';
 import {
@@ -694,6 +701,19 @@ ipcMain.handle('dialog:pickDirectory', async (event, options = {}) => {
   return result.filePaths[0];
 });
 
+ipcMain.handle('dialog:pickFile', async (event, options = {}) => {
+  const parentWindow = BrowserWindow.fromWebContents(event.sender);
+  /** @type {import('electron').FileFilter[]} */
+  const filters = Array.isArray(options?.filters) ? options.filters : undefined;
+  const result = await dialog.showOpenDialog(parentWindow ?? undefined, {
+    title: typeof options?.title === 'string' ? options.title : '파일 선택',
+    properties: ['openFile'],
+    filters,
+  });
+  if (result.canceled || !result.filePaths[0]) return null;
+  return result.filePaths[0];
+});
+
 ipcMain.handle('fs:writeFileAbsolute', async (_event, params = {}) => {
   const { directory, fileName, base64, unique = true } = params;
   if (typeof directory !== 'string' || typeof fileName !== 'string') {
@@ -863,6 +883,7 @@ ipcMain.handle('fs:rename', async (event, fromRelative, toRelative) => {
   await syncFileAccessRename(fromRelative, toRelative, getPortableRoot());
   await syncFavoritesRename(fromRelative, toRelative, getPortableRoot());
   await syncFortuneSidecarRename(fromRelative, toRelative);
+  await syncPdfViewerSidecarRename(fromRelative, toRelative);
   await syncTiptapAssetRename(fromRelative, toRelative);
   await syncFileHistoryRename(fromRelative, toRelative, getPortableRoot());
   const result = await fsService.renamePath(fromRelative, toRelative);
@@ -878,10 +899,14 @@ ipcMain.handle('fs:delete', async (event, relativePath) => {
   if (isFortuneSidecarRelativePath(relativePath)) {
     throw new Error('FortuneSheet 편집용 보조 파일입니다. 연결된 스프레드시트를 삭제해 주세요.');
   }
+  if (isPdfViewerSidecarRelativePath(relativePath)) {
+    throw new Error('PDF 뷰어 보조 파일입니다. 연결된 PDF를 삭제해 주세요.');
+  }
   await syncSharePathDelete(relativePath, getPortableRoot());
   await syncFileAccessDelete(relativePath, getPortableRoot());
   await syncFavoritesDelete(relativePath, getPortableRoot());
   await syncFortuneSidecarDelete(relativePath);
+  await syncPdfViewerSidecarDelete(relativePath);
   await syncFileHistoryDelete(relativePath, getPortableRoot());
   const result = await fsService.deletePath(relativePath);
   notifyFsChanged(relativePath);
@@ -911,6 +936,7 @@ ipcMain.handle('fs:copy', async (event, fromRelative, toRelative) => {
   await assertCanEditFile(toRelative, auth, shareToken);
   const result = await fsService.copyPath(fromRelative, toRelative);
   await syncFortuneSidecarCopy(fromRelative, toRelative);
+  await syncPdfViewerSidecarCopy(fromRelative, toRelative);
   notifyFsChanged([fromRelative, toRelative]);
   return result;
 });
@@ -926,6 +952,7 @@ ipcMain.handle('fs:move', async (event, fromRelative, toRelative) => {
   await syncFileAccessRename(fromRelative, toRelative, getPortableRoot());
   await syncFavoritesRename(fromRelative, toRelative, getPortableRoot());
   await syncFortuneSidecarRename(fromRelative, toRelative);
+  await syncPdfViewerSidecarRename(fromRelative, toRelative);
   await syncTiptapAssetRename(fromRelative, toRelative);
   await syncFileHistoryRename(fromRelative, toRelative, getPortableRoot());
   const result = await fsService.movePath(fromRelative, toRelative);
@@ -992,6 +1019,7 @@ ipcMain.handle('workspace:rename', async (event, sessionId, newRelativePath) => 
   await syncFileAccessRename(fromPath, result.relativePath, getPortableRoot());
   await syncFavoritesRename(fromPath, result.relativePath, getPortableRoot());
   await syncFortuneSidecarRename(fromPath, result.relativePath);
+  await syncPdfViewerSidecarRename(fromPath, result.relativePath);
   await syncTiptapAssetRename(fromPath, result.relativePath);
   await syncFileHistoryRename(fromPath, result.relativePath, getPortableRoot());
   notifyFsChanged([fromPath, result.relativePath]);
@@ -1218,6 +1246,9 @@ ipcMain.handle('settings:getTheme', async () => ({
 ipcMain.handle('settings:update', async (event, patch = {}) => {
   assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
   const result = await updateAppSettings(patch, getPortableRoot());
+  if (patch && 'externalFolders' in patch) {
+    setExternalFolders(result.externalFolders);
+  }
   notifyFsChanged();
   return result;
 });
@@ -1339,6 +1370,7 @@ if (gotSingleInstanceLock) {
       dataRoot,
       tempPath: app.getPath('temp'),
       isDev,
+      externalFolders: settings.externalFolders,
       getServerInfo: () => ({
         port: activeServerInfo?.port ?? getSyncPort(),
         addresses: activeServerInfo?.addresses ?? getLocalIPv4Addresses(),

@@ -52,6 +52,9 @@ export const TRASH_FOLDER = '__trash';
 /** Virtual folder path for the favorites document list in the explorer. */
 export const FAVORITES_FOLDER = '__favorites';
 
+/** Virtual prefix for admin-mounted external folders (no LAN collab). */
+export const EXTERNAL_FOLDER = '외부폴더';
+
 /** @param {string} relativePath */
 export function isTrashRelativePath(relativePath) {
   const normalized = String(relativePath ?? '').replace(/\\/g, '/');

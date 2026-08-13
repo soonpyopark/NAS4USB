@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import '../../styles/tiptap-editor.css';
 import 'tippy.js/dist/tippy.css';
@@ -21,9 +21,22 @@ import {
   createTiptapResolveFileUrl,
   createTiptapUploadFile,
 } from '../../lib/tiptap/uploadFile.js';
-import TipTapToolbar from './tiptap/TipTapToolbar.jsx';
+import TipTapToolbar, { TipTapZoomControls } from './tiptap/TipTapToolbar.jsx';
 import TipTapBubbleMenus from './tiptap/TipTapBubbleMenus.jsx';
 import TipTapTocPanel from './tiptap/TipTapTocPanel.jsx';
+
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 2;
+const ZOOM_STEP = 1.1;
+
+/**
+ * @param {number} zoom
+ * @param {'in' | 'out'} direction
+ */
+function stepZoom(zoom, direction) {
+  const next = direction === 'in' ? zoom * ZOOM_STEP : zoom / ZOOM_STEP;
+  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round(next * 100) / 100));
+}
 
 /**
  * TipTap editor with full open-source feature surface.
@@ -56,8 +69,18 @@ export default function TipTapEditorView({
   const videoInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   const audioInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   const fileInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
+  const scrollRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   const [tocOpen, setTocOpen] = useState(false);
   const [emojiOpenRequest, setEmojiOpenRequest] = useState(0);
+  const [zoom, setZoom] = useState(1);
+
+  const zoomBy = useCallback((direction) => {
+    setZoom((prev) => stepZoom(prev, direction));
+  }, []);
+
+  const resetZoom = useCallback(() => {
+    setZoom(1);
+  }, []);
   const uploadFile = useMemo(() => createTiptapUploadFile(relativePath), [relativePath]);
   const defaultResolveFileUrl = useMemo(
     () => createTiptapResolveFileUrl(relativePath),
@@ -171,18 +194,47 @@ export default function TipTapEditorView({
   }, [editor, collabProvider, collabUserName, collabUserColor]);
 
   useEffect(() => {
-    if (readOnly) return undefined;
-
     const onKeyDown = (event) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+      if (!(event.ctrlKey || event.metaKey)) return;
+      const key = event.key;
+      if (!readOnly && key.toLowerCase() === 's') {
         event.preventDefault();
         onSave?.();
+        return;
+      }
+      if (key === '=' || key === '+') {
+        event.preventDefault();
+        zoomBy('in');
+        return;
+      }
+      if (key === '-' || key === '_') {
+        event.preventDefault();
+        zoomBy('out');
+        return;
+      }
+      if (key === '0') {
+        event.preventDefault();
+        resetZoom();
       }
     };
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onSave, readOnly]);
+  }, [onSave, readOnly, resetZoom, zoomBy]);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return undefined;
+
+    const onWheel = (event) => {
+      if (!(event.ctrlKey || event.metaKey)) return;
+      event.preventDefault();
+      zoomBy(event.deltaY < 0 ? 'in' : 'out');
+    };
+
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [zoomBy, editor]);
 
   // When image/video/audio/file nodes are removed, delete sidecar files too.
   useEffect(() => {
@@ -257,7 +309,7 @@ export default function TipTapEditorView({
 
   return (
     <div className="tiptap-editor-shell">
-      {!readOnly && (
+      {!readOnly ? (
         <TipTapToolbar
           editor={editor}
           readOnly={readOnly}
@@ -268,14 +320,29 @@ export default function TipTapEditorView({
           onUploadAudio={openAudioPicker}
           onUploadFile={openFilePicker}
           emojiOpenRequest={emojiOpenRequest}
+          zoom={zoom}
+          onZoomIn={() => zoomBy('in')}
+          onZoomOut={() => zoomBy('out')}
+          onZoomReset={resetZoom}
         />
+      ) : (
+        <div className="tiptap-toolbar tiptap-toolbar--zoom-only" role="toolbar" aria-label="보기 배율">
+          <TipTapZoomControls
+            zoom={zoom}
+            onZoomIn={() => zoomBy('in')}
+            onZoomOut={() => zoomBy('out')}
+            onZoomReset={resetZoom}
+          />
+        </div>
       )}
 
       <TipTapBubbleMenus editor={editor} readOnly={readOnly} />
 
       <div className="tiptap-editor-shell__body">
-        <div className="tiptap-editor-shell__scroll">
-          <EditorContent editor={editor} />
+        <div className="tiptap-editor-shell__scroll" ref={scrollRef}>
+          <div className="tiptap-editor-shell__zoom" style={{ zoom }}>
+            <EditorContent editor={editor} />
+          </div>
         </div>
         <TipTapTocPanel editor={editor} open={tocOpen} onClose={() => setTocOpen(false)} />
       </div>

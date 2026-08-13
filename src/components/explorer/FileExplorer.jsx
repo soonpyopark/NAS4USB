@@ -64,6 +64,11 @@ import {
   isOwnMemberHomePath,
 } from '../../lib/memberHomes.js';
 import { isProtectedSharedSystemPath } from '../../../shared/workspacePaths.js';
+import { isExternalMountRootPath, isExternalFolderContainerPath } from '../../../shared/externalFolders.js';
+import {
+  EXTERNAL_MOUNT_DELETE_HINT,
+  isExternalContentPath,
+} from '../../lib/externalFoldersUi.js';
 
 export default function FileExplorer({
   currentPath,
@@ -344,11 +349,13 @@ export default function FileExplorer({
     if (
       isProtectedSharedSystemPath(target.relativePath) ||
       isHomesContainerPath(target.relativePath) ||
-      isMemberHomeRootPath(target.relativePath)
+      isMemberHomeRootPath(target.relativePath) ||
+      isExternalFolderContainerPath(target.relativePath) ||
+      isExternalMountRootPath(target.relativePath)
     ) {
       void appAlert({
         title: '이름 변경',
-        body: '공유폴더·개인폴더의 이름은 바꿀 수 없습니다.',
+        body: '공유폴더·개인폴더·외부폴더의 이름은 바꿀 수 없습니다.',
       });
       return;
     }
@@ -388,6 +395,20 @@ export default function FileExplorer({
       return;
     }
 
+    if (targets.some((target) => isExternalMountRootPath(target.relativePath) || isExternalFolderContainerPath(target.relativePath))) {
+      await appAlert({
+        title: '외부 폴더',
+        body: EXTERNAL_MOUNT_DELETE_HINT,
+      });
+      return;
+    }
+
+    // External mounts are not copied into NAS trash — permanent delete only.
+    if (targets.every((target) => isExternalContentPath(target.relativePath))) {
+      await handlePermanentDelete(entry);
+      return;
+    }
+
     const label =
       targets.length === 1
         ? `"${targets[0].name}"을(를) 삭제(휴지통)할까요?`
@@ -400,22 +421,38 @@ export default function FileExplorer({
     });
     if (!confirmed) return;
 
-    for (const target of targets) {
-      await moveToTrash(target.relativePath);
+    try {
+      for (const target of targets) {
+        await moveToTrash(target.relativePath);
+      }
+      clearSelection();
+      await refreshAll();
+    } catch (err) {
+      nativeAlert(err instanceof Error ? err.message : '삭제(휴지통)에 실패했습니다.');
     }
-
-    clearSelection();
-    await refreshAll();
   };
 
   const handlePermanentDelete = async (entry) => {
     const targets = getTargetEntries(entry);
     if (!targets.length) return;
 
+    if (targets.some((target) => isExternalMountRootPath(target.relativePath) || isExternalFolderContainerPath(target.relativePath))) {
+      await appAlert({
+        title: '외부 폴더',
+        body: EXTERNAL_MOUNT_DELETE_HINT,
+      });
+      return;
+    }
+
+    const externalOnly = targets.every((target) => isExternalContentPath(target.relativePath));
     const label =
       targets.length === 1
-        ? `"${targets[0].name}"을(를) 삭제(영구)할까요?\n\n이 작업은 되돌릴 수 없습니다.`
-        : `${targets.length}개 항목을 삭제(영구)할까요?\n\n이 작업은 되돌릴 수 없습니다.`;
+        ? `"${targets[0].name}"을(를) 삭제(영구)할까요?\n\n이 작업은 되돌릴 수 없습니다.${
+            externalOnly ? '\n외부 폴더 항목은 휴지통으로 옮기지 않고 바로 삭제됩니다.' : ''
+          }`
+        : `${targets.length}개 항목을 삭제(영구)할까요?\n\n이 작업은 되돌릴 수 없습니다.${
+            externalOnly ? '\n외부 폴더 항목은 휴지통으로 옮기지 않고 바로 삭제됩니다.' : ''
+          }`;
     const confirmed = await appConfirm({
       title: '삭제(영구)',
       body: label,
@@ -927,7 +964,9 @@ export default function FileExplorer({
           selectedEntries.length === 1 &&
           !isProtectedSharedSystemPath(selectedEntries[0].relativePath) &&
           !isHomesContainerPath(selectedEntries[0].relativePath) &&
-          !isMemberHomeRootPath(selectedEntries[0].relativePath)
+          !isMemberHomeRootPath(selectedEntries[0].relativePath) &&
+          !isExternalFolderContainerPath(selectedEntries[0].relativePath) &&
+          !isExternalMountRootPath(selectedEntries[0].relativePath)
         }
         hasClipboard={hasClipboard}
         isInTrashView={isInTrashView}
@@ -956,6 +995,10 @@ export default function FileExplorer({
         isAdminLoggedIn={isAdminLoggedIn}
         canWrite={canWrite}
         canEmptyTrash={globalWrite}
+        showTrashDelete={
+          selectedEntries.length === 0 ||
+          !selectedEntries.every((entry) => isExternalContentPath(entry.relativePath))
+        }
       />
 
       {isInTrashView && (

@@ -194,7 +194,7 @@ export default function Wb4sEditorShell({
             <Wb4sEditorView
               relativePath={relativePath}
               documentJson={documentJsonRef.current}
-              syncServerUrl={getSyncServerUrl(syncInfo)}
+              syncServerUrl={syncInfo ? getSyncServerUrl(syncInfo) : ''}
               userName={userName}
               onReady={handleEditorReady}
               onRenameTitle={handleRenameTitle}

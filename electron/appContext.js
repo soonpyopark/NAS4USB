@@ -2,6 +2,7 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 import {
   DEFAULT_DATA_DIR,
+  EXTERNAL_FOLDER,
   FAVORITES_FOLDER,
   SHARED_FOLDER,
   TRASH_FOLDER,
@@ -12,6 +13,7 @@ import {
   normalizeRelativePath,
 } from '../shared/memberHomes.js';
 import { splitWorkspacePath } from '../shared/workspacePaths.js';
+import { normalizeExternalFolders } from '../shared/externalFolders.js';
 
 /**
  * @typedef {{
@@ -22,6 +24,7 @@ import { splitWorkspacePath } from '../shared/workspacePaths.js';
  *   dataRoot: string,
  *   tempPath: string,
  *   isDev: boolean,
+ *   externalFolders?: import('../shared/externalFolders.js').ExternalFolderMount[],
  *   getServerInfo: () => { port: number, addresses: string[] },
  * }} AppContext
  */
@@ -33,7 +36,10 @@ let appContext = null;
  * @param {AppContext} context
  */
 export function initAppContext(context) {
-  appContext = context;
+  appContext = {
+    ...context,
+    externalFolders: normalizeExternalFolders(context.externalFolders),
+  };
   return appContext;
 }
 
@@ -42,6 +48,19 @@ export function getAppContext() {
     throw new Error('App context is not initialized.');
   }
   return appContext;
+}
+
+/**
+ * @param {import('../shared/externalFolders.js').ExternalFolderMount[]} folders
+ */
+export function setExternalFolders(folders) {
+  const ctx = getAppContext();
+  ctx.externalFolders = normalizeExternalFolders(folders);
+  return ctx.externalFolders;
+}
+
+export function getExternalFolders() {
+  return normalizeExternalFolders(getAppContext().externalFolders);
 }
 
 /** Mutable state root (settings, members, …). */
@@ -102,6 +121,7 @@ function safeJoinRoot(root, rest) {
  * Resolve a workspace-relative path to an absolute filesystem path.
  * - `공유폴더/...` → `{workspaceRoot}/share`
  * - `개인폴더/...` → `{workspaceRoot}/private`
+ * - `외부폴더/<id>/...` → mounted absolute folder
  * - `__trash/...` → under share
  */
 export function resolvePortablePath(relativePath = '') {
@@ -120,7 +140,22 @@ export function resolvePortablePath(relativePath = '') {
     throw new Error('즐겨찾기는 가상 폴더입니다.');
   }
 
-  const { kind, rest } = splitWorkspacePath(normalized);
+  if (normalized === EXTERNAL_FOLDER) {
+    throw new Error('외부폴더 목록은 가상 경로입니다.');
+  }
+
+  const { kind, rest, mountId } = splitWorkspacePath(normalized);
+
+  if (kind === 'external') {
+    if (!mountId) {
+      throw new Error('외부폴더 마운트를 찾을 수 없습니다.');
+    }
+    const mount = getExternalFolders().find((item) => item.id === mountId);
+    if (!mount?.absolutePath) {
+      throw new Error('외부폴더 마운트를 찾을 수 없습니다.');
+    }
+    return safeJoinRoot(path.resolve(mount.absolutePath), rest);
+  }
 
   if (kind === 'homes') {
     return safeJoinRoot(homesRoot, rest);
@@ -162,6 +197,8 @@ export function getAppPaths() {
     defaultSharedRoot: path.join(stateRoot, DEFAULT_DATA_DIR),
     sharedFolder: SHARED_FOLDER,
     homesFolder: HOMES_FOLDER,
+    externalFolder: EXTERNAL_FOLDER,
+    externalFolders: getExternalFolders(),
     sharedDiskDir: DEFAULT_DATA_DIR,
     homesDiskDir: HOMES_DISK_DIR,
     tempPath: ctx.tempPath,

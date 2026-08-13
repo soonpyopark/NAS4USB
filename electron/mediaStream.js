@@ -24,15 +24,13 @@ function parseRangeHeader(rangeHeader, total) {
 /**
  * @param {import('node:http').IncomingMessage} req
  * @param {import('node:http').ServerResponse} res
- * @param {string} relativePath
+ * @param {string} absolutePath
  * @param {string} contentType
  */
-export async function streamFile(req, res, relativePath, contentType) {
-  const absolute = resolvePortablePath(relativePath);
-
+export async function streamAbsoluteFile(req, res, absolutePath, contentType) {
   let stat;
   try {
-    stat = await fs.promises.stat(absolute);
+    stat = await fs.promises.stat(absolutePath);
   } catch (err) {
     if (err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT') {
       res.writeHead(404);
@@ -65,7 +63,7 @@ export async function streamFile(req, res, relativePath, contentType) {
       'Content-Length': end - start + 1,
       'Content-Type': contentType,
     });
-    fs.createReadStream(absolute, { start, end }).pipe(res);
+    fs.createReadStream(absolutePath, { start, end }).pipe(res);
     return;
   }
 
@@ -74,5 +72,15 @@ export async function streamFile(req, res, relativePath, contentType) {
     'Content-Type': contentType,
     'Accept-Ranges': 'bytes',
   });
-  fs.createReadStream(absolute).pipe(res);
+  fs.createReadStream(absolutePath).pipe(res);
+}
+
+/**
+ * @param {import('node:http').IncomingMessage} req
+ * @param {import('node:http').ServerResponse} res
+ * @param {string} relativePath
+ * @param {string} contentType
+ */
+export async function streamFile(req, res, relativePath, contentType) {
+  await streamAbsoluteFile(req, res, resolvePortablePath(relativePath), contentType);
 }

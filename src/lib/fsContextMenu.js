@@ -1,5 +1,7 @@
 import { isHtmlExtension, isImageExtension, isPdfExtension } from './media/mediaTypes.js';
 import { isTrashPath } from './trashPaths.js';
+import { isExternalContentPath, isExternalMountRoot } from './externalFoldersUi.js';
+import { isExternalFolderContainerPath } from '../../shared/externalFolders.js';
 
 /**
  * @param {{ relativePath?: string, isDirectory?: boolean, extension?: string } | null | undefined} entry
@@ -158,42 +160,60 @@ export function buildEntryContextMenuItems({
   }
 
   const pasteTarget = entry?.isDirectory ? entry.relativePath : null;
+  const externalMountRoot = entry ? isExternalMountRoot(entry.relativePath) : false;
+  const externalContainer = entry ? isExternalFolderContainerPath(entry.relativePath) : false;
+  const externalContent = entry ? isExternalContentPath(entry.relativePath) : false;
   const sharedItems = [
-    { id: 'copy', label: '복사', disabled: targetCount === 0, onClick: onCopy },
-    { id: 'cut', label: '잘라내기', disabled: targetCount === 0, onClick: onCut },
-    { id: 'move', label: '이동', disabled: targetCount === 0, onClick: onMove },
+    { id: 'copy', label: '복사', disabled: targetCount === 0 || externalMountRoot, onClick: onCopy },
+    { id: 'cut', label: '잘라내기', disabled: targetCount === 0 || externalMountRoot, onClick: onCut },
+    { id: 'move', label: '이동', disabled: targetCount === 0 || externalMountRoot, onClick: onMove },
     {
       id: 'paste',
       label: '붙여넣기',
-      disabled: !hasClipboard || !pasteTarget,
+      disabled: !hasClipboard || !pasteTarget || externalContainer,
       onClick: () => pasteTarget && onPaste(pasteTarget),
     },
     {
       id: 'rename',
       label: '이름 변경',
-      disabled: targetCount !== 1,
+      disabled: targetCount !== 1 || externalMountRoot,
       onClick: onRename,
     },
     {
       id: 'duplicate',
       label: '복제',
-      disabled: targetCount !== 1,
+      disabled: targetCount !== 1 || externalMountRoot,
       onClick: onDuplicate,
     },
-    {
-      id: 'delete',
-      label: '삭제(휴지통)',
-      danger: true,
-      disabled: targetCount === 0,
-      onClick: onDelete,
-    },
-    {
-      id: 'permanent-delete',
-      label: '삭제(영구)',
-      danger: true,
-      disabled: targetCount === 0,
-      onClick: () => onPermanentDelete?.(),
-    },
+    // External container/mounts: disconnect in settings only. External contents: permanent delete only.
+    ...(externalMountRoot
+      ? []
+      : externalContent
+        ? [
+            {
+              id: 'permanent-delete',
+              label: '삭제(영구)',
+              danger: true,
+              disabled: targetCount === 0,
+              onClick: () => onPermanentDelete?.(),
+            },
+          ]
+        : [
+            {
+              id: 'delete',
+              label: '삭제(휴지통)',
+              danger: true,
+              disabled: targetCount === 0,
+              onClick: onDelete,
+            },
+            {
+              id: 'permanent-delete',
+              label: '삭제(영구)',
+              danger: true,
+              disabled: targetCount === 0,
+              onClick: () => onPermanentDelete?.(),
+            },
+          ]),
     {
       id: 'properties',
       label: '속성',
@@ -213,19 +233,19 @@ export function buildEntryContextMenuItems({
       {
         id: 'open-system',
         label: '시스템으로 열기',
-        disabled: !entry || !onOpenSystem,
+        disabled: !entry || !onOpenSystem || externalContainer,
         onClick: () => entry && onOpenSystem?.(entry),
       },
       {
         id: 'upload',
         label: '업로드',
-        disabled: !entry || !onUpload,
+        disabled: !entry || !onUpload || externalContainer,
         onClick: () => entry && onUpload?.(entry.relativePath),
       },
       {
         id: 'download',
         label: '다운로드',
-        disabled: !onDownload || !canDownload,
+        disabled: !onDownload || !canDownload || externalContainer,
         onClick: () => onDownload?.(),
       },
       ...sharedItems,

@@ -25,6 +25,9 @@ import { applyAccentColor, currentAccentColor } from '../../lib/theme.js';
 const BUTTON_CLASS =
   'rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50';
 
+const ICON_BUTTON_CLASS =
+  'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-300 bg-white text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50';
+
 /** 설정 → 일반: data 루트, 시작 프로그램 등록, 앱 강조 색상. */
 export default function GeneralSettingsPanel() {
   const { alert: appAlert, confirm: appConfirm, dialog: generalDialog } = useAppConfirm();
@@ -34,6 +37,12 @@ export default function GeneralSettingsPanel() {
   const [autoLaunch, setAutoLaunch] = useState(null);
   /** @type {[DataRootState | null, Function]} */
   const [dataRoot, setDataRoot] = useState(null);
+  /** @type {[import('../../../shared/externalFolders.js').ExternalFolderMount[], Function]} */
+  const [externalFolders, setExternalFolders] = useState([]);
+  /** @type {[string | null, Function]} */
+  const [ffmpegPath, setFfmpegPath] = useState(/** @type {string | null} */ (null));
+  /** @type {[{ available: boolean, version: string | null } | null, Function]} */
+  const [ffmpegStatus, setFfmpegStatus] = useState(null);
   const [accent, setAccent] = useState(currentAccentColor);
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState('');
@@ -77,8 +86,35 @@ export default function GeneralSettingsPanel() {
         sharedRoot: paths?.dataRoot ?? '',
         homesRoot: paths?.homesRoot ?? '',
       });
+      setExternalFolders(
+        Array.isArray(settings?.externalFolders)
+          ? settings.externalFolders
+          : Array.isArray(paths?.externalFolders)
+            ? paths.externalFolders
+            : [],
+      );
+      setFfmpegPath(
+        typeof settings?.ffmpegPath === 'string' && settings.ffmpegPath.trim()
+          ? settings.ffmpegPath.trim()
+          : null,
+      );
     } catch {
       setDataRoot(null);
+    }
+
+    try {
+      const response = await fetch('/api/media/ffmpegStatus');
+      if (response.ok) {
+        const status = await response.json();
+        setFfmpegStatus({
+          available: Boolean(status?.available),
+          version: typeof status?.version === 'string' ? status.version : null,
+        });
+      } else {
+        setFfmpegStatus(null);
+      }
+    } catch {
+      setFfmpegStatus(null);
     }
 
     if (!electron) return;
@@ -163,6 +199,127 @@ export default function GeneralSettingsPanel() {
       `프로그램 폴더를 데이터 루트로 되돌리고 앱을 다시 시작합니다.\n\n${dataRoot.defaultDataRoot}`,
     );
   };
+
+  const addExternalFolder = () =>
+    run(async () => {
+      if (!electron) return;
+      const picked = await window.nas4usb.dialog.pickDirectory({
+        title: '외부 폴더 선택 (Google Drive, 다른 드라이브 등)',
+      });
+      if (!picked) return;
+      const { makeExternalMountId, defaultExternalFolderLabel, normalizeExternalFolders } =
+        await import('../../../shared/externalFolders.js');
+      const id = makeExternalMountId(picked);
+      if (externalFolders.some((item) => item.id === id || item.absolutePath === picked)) {
+        await appAlert({ title: '외부 폴더', body: '이미 추가된 폴더입니다.' });
+        return;
+      }
+      const next = normalizeExternalFolders([
+        ...externalFolders,
+        { id, label: defaultExternalFolderLabel(picked), absolutePath: picked },
+      ]);
+      await window.nas4usb.settings.update({ externalFolders: next });
+      setExternalFolders(next);
+      await appAlert({
+        title: '외부 폴더',
+        body: `추가했습니다.\n${picked}\n\n편집·저장은 가능하고, LAN 실시간 협업은 사용하지 않습니다.`,
+      });
+    });
+
+  /**
+   * @param {string} mountId
+   */
+  const removeExternalFolder = (mountId) =>
+    run(async () => {
+      const target = externalFolders.find((item) => item.id === mountId);
+      if (!target) return;
+      const ok = await appConfirm({
+        title: '외부 폴더 제거',
+        body: `연결만 해제합니다. 원본 폴더의 파일은 삭제되지 않습니다.\n\n${target.label}\n${target.absolutePath}`,
+        confirmLabel: '연결 해제',
+      });
+      if (!ok) return;
+      const next = externalFolders.filter((item) => item.id !== mountId);
+      await window.nas4usb.settings.update({ externalFolders: next });
+      setExternalFolders(next);
+    });
+
+  /**
+   * @param {string} mountId
+   * @param {-1 | 1} direction
+   */
+  const moveExternalFolderOrder = (mountId, direction) =>
+    run(async () => {
+      const { moveExternalFolder, normalizeExternalFolders } = await import(
+        '../../../shared/externalFolders.js'
+      );
+      const fromIndex = externalFolders.findIndex((item) => item.id === mountId);
+      if (fromIndex < 0) return;
+      const toIndex = fromIndex + direction;
+      if (toIndex < 0 || toIndex >= externalFolders.length) return;
+      const next = normalizeExternalFolders(moveExternalFolder(externalFolders, fromIndex, toIndex));
+      await window.nas4usb.settings.update({ externalFolders: next });
+      setExternalFolders(next);
+    });
+
+  /**
+   * @param {string} mountId
+   * @param {string} alias
+   */
+  const saveExternalFolderAlias = (mountId, alias) =>
+    run(async () => {
+      const target = externalFolders.find((item) => item.id === mountId);
+      if (!target) return;
+      const { sanitizeExternalFolderLabel, normalizeExternalFolders } = await import(
+        '../../../shared/externalFolders.js'
+      );
+      const label = sanitizeExternalFolderLabel(alias, target.absolutePath);
+      if (label === target.label) {
+        setExternalFolders((prev) =>
+          prev.map((item) => (item.id === mountId ? { ...item, label } : item)),
+        );
+        return;
+      }
+      const next = normalizeExternalFolders(
+        externalFolders.map((item) => (item.id === mountId ? { ...item, label } : item)),
+      );
+      await window.nas4usb.settings.update({ externalFolders: next });
+      setExternalFolders(next);
+    });
+
+  const chooseFfmpeg = () =>
+    run(async () => {
+      if (!electron) return;
+      const picked = await window.nas4usb.dialog.pickFile({
+        title: 'FFmpeg 실행 파일 선택',
+        filters: [
+          { name: 'FFmpeg', extensions: ['exe'] },
+          { name: 'All Files', extensions: ['*'] },
+        ],
+      });
+      if (!picked) return;
+      await window.nas4usb.settings.update({ ffmpegPath: picked });
+      setFfmpegPath(picked);
+      await refresh();
+      await appAlert({
+        title: '외부 코덱 (FFmpeg)',
+        body: `등록했습니다.\n${picked}\n\n동영상 미리보기에서 AC3/DTS 등 Chromium이 재생하지 못하는 오디오를 AAC로 변환합니다. 빌드에는 포함되지 않습니다.`,
+      });
+    });
+
+  const clearFfmpeg = () =>
+    run(async () => {
+      const ok = await appConfirm({
+        title: '외부 코덱 해제',
+        body: '등록된 FFmpeg 경로를 지우겠습니까? 동영상 미리보기는 기본 재생만 사용합니다.',
+        confirmLabel: '해제',
+      });
+      if (!ok) return;
+      await window.nas4usb.settings.update({ ffmpegPath: null });
+      setFfmpegPath(null);
+      setFfmpegStatus(null);
+      await refresh();
+    });
 
   /**
    * @param {{ enabled?: boolean, startHidden?: boolean }} patch
@@ -298,6 +455,150 @@ export default function GeneralSettingsPanel() {
           <p className="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-500">
             데이터 루트 정보를 불러오는 중입니다…
           </p>
+        )}
+      </section>
+
+      <section className="space-y-3">
+        <h3 className="text-sm font-semibold text-slate-800">외부 폴더</h3>
+        <p className="text-sm leading-relaxed text-slate-600">
+          Google Drive·iCloud·다른 드라이브 등 PC의 폴더를 탐색기에 추가합니다. 파일 열람·편집·저장은
+          가능하지만 <strong className="font-semibold">LAN 실시간 협업(Y.js)은 사용하지 않습니다</strong>.
+          총괄관리자만 추가·해제할 수 있으며, 아래 순서·별칭이 탐색기 표시에 반영됩니다.
+        </p>
+        {externalFolders.length > 0 ? (
+          <ul className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+            {externalFolders.map((mount, index) => (
+              <li
+                key={mount.id}
+                className={`flex items-center gap-2 px-2.5 py-2 ${
+                  index > 0 ? 'border-t border-slate-200' : ''
+                }`}
+              >
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    className={ICON_BUTTON_CLASS}
+                    disabled={busy || index === 0}
+                    title="위로"
+                    aria-label={`${mount.label} 위로`}
+                    onClick={() => void moveExternalFolderOrder(mount.id, -1)}
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    className={ICON_BUTTON_CLASS}
+                    disabled={busy || index >= externalFolders.length - 1}
+                    title="아래로"
+                    aria-label={`${mount.label} 아래로`}
+                    onClick={() => void moveExternalFolderOrder(mount.id, 1)}
+                  >
+                    ↓
+                  </button>
+                </div>
+                <label className="flex min-w-0 flex-1 items-center gap-2">
+                  <span className="shrink-0 text-xs font-medium text-slate-500">별칭</span>
+                  <input
+                    type="text"
+                    className="h-8 w-36 shrink-0 rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-800 outline-none focus:border-nas-accent focus:ring-1 focus:ring-nas-accent disabled:opacity-50 sm:w-44"
+                    value={mount.label}
+                    maxLength={80}
+                    disabled={busy}
+                    placeholder="표시 이름"
+                    title="탐색기에 표시할 별칭"
+                    aria-label={`${mount.absolutePath} 별칭`}
+                    onChange={(event) => {
+                      const nextLabel = event.target.value;
+                      setExternalFolders((prev) =>
+                        prev.map((item) =>
+                          item.id === mount.id ? { ...item, label: nextLabel } : item,
+                        ),
+                      );
+                    }}
+                    onBlur={(event) => void saveExternalFolderAlias(mount.id, event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.currentTarget.blur();
+                      }
+                    }}
+                  />
+                  <span
+                    className="min-w-0 flex-1 truncate font-mono text-[11px] text-slate-500"
+                    title={mount.absolutePath}
+                  >
+                    {mount.absolutePath}
+                  </span>
+                </label>
+                <button
+                  type="button"
+                  className={`${BUTTON_CLASS} h-8 shrink-0 px-2.5 py-0 text-xs`}
+                  disabled={busy}
+                  onClick={() => void removeExternalFolder(mount.id)}
+                >
+                  연결 해제
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-500">
+            추가된 외부 폴더가 없습니다.
+          </p>
+        )}
+        {!electron ? (
+          <p className="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-500">
+            외부 폴더는 서버 PC의 NAS4USB 앱에서만 추가할 수 있습니다.
+          </p>
+        ) : (
+          <button type="button" className={BUTTON_CLASS} disabled={busy} onClick={() => void addExternalFolder()}>
+            폴더 추가…
+          </button>
+        )}
+      </section>
+
+      <section className="space-y-3">
+        <h3 className="text-sm font-semibold text-slate-800">외부 코덱 (FFmpeg)</h3>
+        <p className="text-sm leading-relaxed text-slate-600">
+          Windows용 <strong className="font-semibold">ffmpeg.exe</strong>를 등록하면 동영상 미리보기에서
+          Chromium이 재생하지 못하는 오디오(AC3·DTS 등)를 AAC로 변환합니다. 프로그램 빌드에는 포함하지
+          않으며, 같은 폴더의 <code className="rounded bg-slate-100 px-1 text-[12px]">ffprobe.exe</code>가
+          있으면 코덱 판별에 사용합니다.
+        </p>
+        {ffmpegPath ? (
+          <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+            <p className="break-all font-mono text-xs text-slate-700">{ffmpegPath}</p>
+            <p className="text-xs text-slate-500">
+              {ffmpegStatus?.available
+                ? ffmpegStatus.version || '사용 가능'
+                : '경로가 저장됐지만 실행을 확인하지 못했습니다. 파일 경로를 확인해 주세요.'}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className={BUTTON_CLASS}
+                disabled={busy || !electron}
+                onClick={() => void chooseFfmpeg()}
+              >
+                다시 선택…
+              </button>
+              <button
+                type="button"
+                className={BUTTON_CLASS}
+                disabled={busy}
+                onClick={() => void clearFfmpeg()}
+              >
+                등록 해제
+              </button>
+            </div>
+          </div>
+        ) : !electron ? (
+          <p className="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-500">
+            FFmpeg 등록은 서버 PC의 NAS4USB 앱에서만 할 수 있습니다.
+          </p>
+        ) : (
+          <button type="button" className={BUTTON_CLASS} disabled={busy} onClick={() => void chooseFfmpeg()}>
+            ffmpeg.exe 등록…
+          </button>
         )}
       </section>
 

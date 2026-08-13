@@ -25,7 +25,7 @@ export default function XlsxEditorShell({
 }) {
   const workspace = useWorkspaceSession(relativePath);
   const { doc, status, synced, roomId, provider } = useYjsSession(relativePath, syncInfo, {
-    syncReady: syncInfo != null,
+    syncReady: true,
   });
   const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState(null);

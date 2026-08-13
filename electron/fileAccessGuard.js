@@ -4,6 +4,7 @@ import {
 } from '../shared/fileAccessVisibility.js';
 import {
   isTrashRelativePath,
+  EXTERNAL_FOLDER,
   SHARED_FOLDER,
   TRASH_ACCESS_DENIED_MESSAGE,
   TRASH_FOLDER,
@@ -23,7 +24,13 @@ import {
   isProtectedSharedSystemPath,
   isWorkspaceRootPath,
 } from '../shared/workspacePaths.js';
-import { getPortableRoot } from './appContext.js';
+import {
+  isExternalFolderPath,
+  isExternalFolderContainerPath,
+  isExternalMountRootPath,
+  joinExternalFolderPath,
+} from '../shared/externalFolders.js';
+import { getExternalFolders, getPortableRoot } from './appContext.js';
 import * as fsService from './fsService.js';
 import { getFileAccessMap } from './fileAccessService.js';
 import { getEffectiveAccessPermissions } from './settingsService.js';
@@ -52,7 +59,9 @@ export const HOME_ROOT_RENAME_DENIED_MESSAGE = '개인 폴더의 이름은 바�
 export const SHARED_SYSTEM_PROTECTED_MESSAGE =
   '공유폴더는 이름을 바꾸거나 삭제할 수 없습니다.';
 export const WORKSPACE_ROOT_WRITE_DENIED_MESSAGE =
-  '워크스페이스 루트에는 항목을 만들 수 없습니다. 공유폴더 또는 개인폴더를 이용해 주세요.';
+  '워크스페이스 루트에는 항목을 만들 수 없습니다. 공유폴더·개인폴더·외부폴더를 이용해 주세요.';
+export const EXTERNAL_MOUNT_PROTECTED_MESSAGE =
+  '외부폴더 연결은 환경설정에서만 추가·제거할 수 있습니다. 원본 파일은 삭제되지 않습니다.';
 /** @deprecated */
 export const GUEST_VIEW_DENIED_MESSAGE = ACCESS_VIEW_DENIED_MESSAGE;
 /** @deprecated */
@@ -145,12 +154,23 @@ export async function assertCanAccessFile(
   const normalizedPath = String(relativePath ?? '').replace(/\\/g, '/');
   if (isWorkspaceRootPath(normalizedPath)) return;
   if (normalizedPath === SHARED_FOLDER) return;
+  if (isExternalFolderContainerPath(normalizedPath)) return;
+  if (isExternalMountRootPath(normalizedPath)) return;
 
   const homeAccess = resolveHomePathAccess(normalizedPath, homeAuthFrom(auth));
   if (homeAccess === 'deny') {
     throw new Error(ACCESS_DENIED_MESSAGE);
   }
   if (homeAccess === 'allow') {
+    return;
+  }
+
+  // External folder contents follow shared-folder view/write permissions.
+  if (isExternalFolderPath(normalizedPath)) {
+    const perms = await getEffectiveAccessPermissions(auth, portableRoot);
+    if (!perms.view && !perms.write && !perms.read) {
+      throw new Error(ACCESS_VIEW_DENIED_MESSAGE);
+    }
     return;
   }
 
@@ -202,6 +222,9 @@ export function assertHomeSystemPathMutable(relativePath, mode = 'mutate') {
   if (isProtectedHomesSystemPath(normalizedPath)) {
     throw new Error(HOME_SYSTEM_PROTECTED_MESSAGE);
   }
+  if (isExternalMountRootPath(normalizedPath) || isExternalFolderContainerPath(normalizedPath)) {
+    throw new Error(EXTERNAL_MOUNT_PROTECTED_MESSAGE);
+  }
   if (mode === 'rename-source' && isMemberHomeRootPath(normalizedPath)) {
     throw new Error(HOME_ROOT_RENAME_DENIED_MESSAGE);
   }
@@ -237,7 +260,29 @@ function buildWorkspaceRootEntries(auth) {
       extension: null,
     });
   }
+  entries.push({
+    name: EXTERNAL_FOLDER,
+    relativePath: EXTERNAL_FOLDER,
+    isDirectory: true,
+    size: 0,
+    modifiedAt: new Date(0).toISOString(),
+    extension: null,
+  });
   return entries;
+}
+
+/**
+ * Mounts listed under the virtual `외부폴더` container (settings order).
+ */
+function buildExternalMountEntries() {
+  return getExternalFolders().map((mount) => ({
+    name: mount.label,
+    relativePath: joinExternalFolderPath(mount.id),
+    isDirectory: true,
+    size: 0,
+    modifiedAt: new Date(0).toISOString(),
+    extension: null,
+  }));
 }
 
 /**
@@ -275,6 +320,12 @@ export async function assertCanEditFile(
   if (isProtectedHomesSystemPath(normalizedPath)) {
     throw new Error(HOME_SYSTEM_PROTECTED_MESSAGE);
   }
+  if (isExternalMountRootPath(normalizedPath)) {
+    throw new Error(EXTERNAL_MOUNT_PROTECTED_MESSAGE);
+  }
+  if (isExternalFolderContainerPath(normalizedPath)) {
+    throw new Error(EXTERNAL_MOUNT_PROTECTED_MESSAGE);
+  }
 
   await assertCanAccessFile(relativePath, auth, shareToken, portableRoot);
 
@@ -309,6 +360,15 @@ export async function readDirWithAccessFilter(
       return rootEntries.filter((entry) => resolveHomePathAccess(entry.relativePath, home) === 'allow');
     }
     return rootEntries;
+  }
+
+  if (isExternalFolderContainerPath(normalizedPath)) {
+    await assertCanAccessFile(normalizedPath, auth, null, portableRoot);
+    const perms = await getEffectiveAccessPermissions(auth, portableRoot);
+    if (!perms.view && !perms.write && !perms.read) {
+      return [];
+    }
+    return buildExternalMountEntries();
   }
 
   if (normalizedPath && normalizedPath !== '.') {
@@ -373,7 +433,11 @@ export async function pathExistsWithAccessFilter(
   shareToken,
   portableRoot = getPortableRoot(),
 ) {
-  if (isWorkspaceRootPath(relativePath) || String(relativePath ?? '').replace(/\\/g, '/') === SHARED_FOLDER) {
+  if (
+    isWorkspaceRootPath(relativePath) ||
+    String(relativePath ?? '').replace(/\\/g, '/') === SHARED_FOLDER ||
+    isExternalFolderContainerPath(relativePath)
+  ) {
     return true;
   }
   try {
@@ -391,7 +455,12 @@ export async function statPathWithAccessFilter(
   portableRoot = getPortableRoot(),
 ) {
   const normalized = String(relativePath ?? '').replace(/\\/g, '/');
-  if (isWorkspaceRootPath(normalized) || normalized === SHARED_FOLDER || normalized === HOMES_FOLDER) {
+  if (
+    isWorkspaceRootPath(normalized) ||
+    normalized === SHARED_FOLDER ||
+    normalized === HOMES_FOLDER ||
+    isExternalFolderContainerPath(normalized)
+  ) {
     await assertCanAccessFile(relativePath, auth, shareToken, portableRoot);
     return {
       name: normalized === '.' || !normalized ? '홈' : normalized.split('/').pop(),

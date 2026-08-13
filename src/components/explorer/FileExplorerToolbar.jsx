@@ -34,6 +34,7 @@ export default function FileExplorerToolbar({
   isAdminLoggedIn = true,
   canWrite = true,
   canEmptyTrash = true,
+  showTrashDelete = true,
 }) {
   const showWriteActions = canWrite && !isInTrashView && !isInFavoritesView;
   const showTrashAdminActions = canWrite && isInTrashView;
@@ -102,7 +103,7 @@ export default function FileExplorerToolbar({
             )}
           </>
         )}
-        {showDeleteAction && !isInTrashView && (
+        {showDeleteAction && showTrashDelete && !isInTrashView && (
           <button type="button" className="nas-btn-ghost text-red-600" disabled={!hasSelection} onClick={onDelete}>
             삭제(휴지통)
           </button>
