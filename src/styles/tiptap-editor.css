@@ -21,6 +21,11 @@
   overflow: auto;
 }
 
+.tiptap-editor-shell__zoom {
+  min-height: 100%;
+  transform-origin: top center;
+}
+
 .tiptap-editor-shell .tiptap {
   /* A4 page width — aligns editing surface with print / PDF export */
   box-sizing: border-box;
@@ -688,10 +693,35 @@
 .tiptap-toolbar__meta {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 12px;
   font-size: 11px;
   color: #64748b;
   padding: 2px 2px 0;
+}
+
+.tiptap-toolbar__meta-end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.tiptap-toolbar__zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.tiptap-toolbar__zoom-label {
+  min-width: 3.25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.tiptap-toolbar--zoom-only {
+  justify-content: flex-end;
+  padding-block: 6px;
 }
 
 .tiptap-toolbar__hint {

@@ -78,6 +78,10 @@ const LINE_HEIGHTS = [
  *   onUploadVideo?: () => void,
  *   onUploadAudio?: () => void,
  *   onUploadFile?: () => void,
+ *   zoom?: number,
+ *   onZoomIn?: () => void,
+ *   onZoomOut?: () => void,
+ *   onZoomReset?: () => void,
  * }} props
  */
 export default function TipTapToolbar({
@@ -90,6 +94,10 @@ export default function TipTapToolbar({
   onUploadVideo,
   onUploadAudio,
   onUploadFile,
+  zoom = 1,
+  onZoomIn,
+  onZoomOut,
+  onZoomReset,
 }) {
   useTiptapEditorTick(editor);
 
@@ -503,10 +511,64 @@ export default function TipTapToolbar({
         <span>
           {chars.toLocaleString()}자 · {words.toLocaleString()}단어
         </span>
-        <span className="tiptap-toolbar__hint">
-          `/` 블록 · `:` 이모지 · `$…$` 수식 · 표 안 Tab 이동
-        </span>
+        <div className="tiptap-toolbar__meta-end">
+          <TipTapZoomControls
+            zoom={zoom}
+            onZoomIn={onZoomIn}
+            onZoomOut={onZoomOut}
+            onZoomReset={onZoomReset}
+          />
+          <span className="tiptap-toolbar__hint">
+            `/` 블록 · `:` 이모지 · `$…$` 수식 · 표 안 Tab 이동
+          </span>
+        </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * View-only zoom controls (does not change document content).
+ * @param {{
+ *   zoom: number,
+ *   onZoomIn?: () => void,
+ *   onZoomOut?: () => void,
+ *   onZoomReset?: () => void,
+ * }} props
+ */
+export function TipTapZoomControls({ zoom, onZoomIn, onZoomOut, onZoomReset }) {
+  const zoomPercent = Math.round(zoom * 100);
+  return (
+    <div className="tiptap-toolbar__zoom" role="group" aria-label="보기 배율">
+      <button
+        type="button"
+        className="tiptap-toolbar__btn"
+        disabled={zoom <= 0.5}
+        title="축소 (Ctrl+-)"
+        aria-label="축소"
+        onClick={() => onZoomOut?.()}
+      >
+        −
+      </button>
+      <button
+        type="button"
+        className="tiptap-toolbar__btn tiptap-toolbar__zoom-label"
+        title="실제 크기 100% (Ctrl+0)"
+        aria-label={`현재 배율 ${zoomPercent}%`}
+        onClick={() => onZoomReset?.()}
+      >
+        {zoomPercent}%
+      </button>
+      <button
+        type="button"
+        className="tiptap-toolbar__btn"
+        disabled={zoom >= 2}
+        title="확대 (Ctrl+=)"
+        aria-label="확대"
+        onClick={() => onZoomIn?.()}
+      >
+        +
+      </button>
     </div>
   );
 }

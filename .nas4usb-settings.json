@@ -25,14 +25,14 @@
   "dataRoot": "D:\\NAS4USB_Data",
   "externalFolders": [
     {
-      "id": "e9538feda",
-      "label": "I: 드라이브",
-      "absolutePath": "I:\\"
+      "id": "e973fbdc5",
+      "label": "MY 드라이브",
+      "absolutePath": "J:\\"
     },
     {
-      "id": "e973fbdc5",
-      "label": "J: 드라이브",
-      "absolutePath": "J:\\"
+      "id": "e9538feda",
+      "label": "GD 드라이브",
+      "absolutePath": "I:\\"
     },
     {
       "id": "ec5919930",
@@ -40,5 +40,6 @@
       "absolutePath": "C:\\Users\\user\\iCloudDrive"
     }
   ],
-  "ffmpegPath": null
+  "ffmpegPath": "D:\\My_Cursor\\(ffmpeg)\\ffmpeg.exe",
+  "useLegacyImagePdfViewers": false
 }
