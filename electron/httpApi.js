@@ -89,8 +89,13 @@ import {
   isPdfViewerSidecarRelativePath,
 } from './pdfViewerSidecarService.js';
 import { syncTiptapAssetRename } from './tiptapAssetService.js';
-import { streamAbsoluteFile, streamFile } from './mediaStream.js';
-import { ensureVideoPreview, getFfmpegStatus } from './ffmpegPreviewService.js';
+import { streamAbsoluteFile, streamFile, streamHlsAsset, rewriteHlsPlaylist } from './mediaStream.js';
+import {
+  ensureVideoPreview,
+  getFfmpegStatus,
+  getVideoPreviewStatus,
+  resolveVideoPreviewHlsFile,
+} from './ffmpegPreviewService.js';
 import {
   closeComicArchive,
   getComicArchivePage,
@@ -392,13 +397,55 @@ export async function handleHttpApiRequest(req, res) {
     if (method === 'GET' && url.pathname === '/api/media/videoPreview') {
       const relativePath = url.searchParams.get('path') ?? '';
       await assertCanAccessFile(relativePath, getAccessAuth(req), getShareTokenFromQuery(url));
+      const force = url.searchParams.get('force') === '1';
+      const prepare = url.searchParams.get('prepare') === '1';
+      const waitForFull = url.searchParams.get('full') === '1';
+      const hlsName = url.searchParams.get('hls');
       try {
-        const preview = await ensureVideoPreview(relativePath, getPortableRoot());
+        if (hlsName) {
+          const asset = await resolveVideoPreviewHlsFile(relativePath, hlsName);
+          await streamHlsAsset(req, res, asset.absolutePath, asset.contentType, {
+            rewritePlaylist:
+              hlsName === 'index.m3u8' ? (text) => rewriteHlsPlaylist(text, url) : undefined,
+          });
+          return true;
+        }
+
+        if (prepare && url.searchParams.get('status') === '1') {
+          sendJson(res, 200, await getVideoPreviewStatus(relativePath));
+          return true;
+        }
+
+        const preview = await ensureVideoPreview(relativePath, getPortableRoot(), {
+          force,
+          waitForFull,
+        });
+        if (prepare) {
+          sendJson(res, 200, {
+            ok: true,
+            remuxed: preview.remuxed,
+            reason: preview.reason,
+            stage: preview.stage,
+            fullReady: Boolean(preview.fullReady),
+            protocol: preview.protocol || 'native',
+          });
+          return true;
+        }
         res.setHeader('X-Nas4usb-Video-Preview', preview.remuxed ? 'remuxed' : 'source');
         res.setHeader('X-Nas4usb-Video-Preview-Reason', preview.reason);
-        await streamAbsoluteFile(req, res, preview.absolutePath, preview.contentType);
+        res.setHeader('X-Nas4usb-Video-Preview-Stage', preview.stage);
+        res.setHeader('Cache-Control', 'no-store');
+        if (preview.protocol === 'hls') {
+          const asset = await resolveVideoPreviewHlsFile(relativePath, 'index.m3u8');
+          await streamHlsAsset(req, res, asset.absolutePath, asset.contentType, {
+            rewritePlaylist: (text) => rewriteHlsPlaylist(text, url),
+          });
+        } else {
+          await streamAbsoluteFile(req, res, preview.absolutePath, preview.contentType);
+        }
       } catch (error) {
-        sendJson(res, 500, {
+        const status = Number(error?.statusCode) || 500;
+        sendJson(res, status, {
           error: error instanceof Error ? error.message : '영상 호환 변환에 실패했습니다.',
         });
       }

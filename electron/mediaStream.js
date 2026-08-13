@@ -1,6 +1,12 @@
 import fs from 'node:fs';
 import { resolvePortablePath } from './appContext.js';
 
+function sleep(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 /**
  * @param {string | undefined} rangeHeader
  * @param {number} total
@@ -73,6 +79,85 @@ export async function streamAbsoluteFile(req, res, absolutePath, contentType) {
     'Accept-Ranges': 'bytes',
   });
   fs.createReadStream(absolutePath).pipe(res);
+}
+
+const HLS_ASSET_NAME = /^(index\.m3u8|seg\d{5}\.ts)$/;
+
+/**
+ * @param {string} playlistText
+ * @param {URL} requestUrl
+ */
+export function rewriteHlsPlaylist(playlistText, requestUrl) {
+  const base = new URL(requestUrl.pathname, 'http://127.0.0.1');
+  base.searchParams.set('path', requestUrl.searchParams.get('path') ?? '');
+  for (const key of ['share', 'token']) {
+    const value = requestUrl.searchParams.get(key);
+    if (value) base.searchParams.set(key, value);
+  }
+
+  return playlistText
+    .split(/\r?\n/)
+    .map((line) => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) return line;
+      const name = trimmed.split('?')[0].split(/[/\\]/).pop() || '';
+      if (!HLS_ASSET_NAME.test(name) || name === 'index.m3u8') return line;
+      base.searchParams.set('hls', name);
+      return `${base.pathname}?${base.searchParams.toString()}`;
+    })
+    .join('\n');
+}
+
+/**
+ * @param {import('node:http').IncomingMessage} req
+ * @param {import('node:http').ServerResponse} res
+ * @param {string} absolutePath
+ * @param {string} contentType
+ * @param {{ rewritePlaylist?: (text: string) => string }} [options]
+ */
+export async function streamHlsAsset(req, res, absolutePath, contentType, options = {}) {
+  const isPlaylist = contentType.includes('mpegurl');
+  if (!isPlaylist) {
+    await streamAbsoluteFile(req, res, absolutePath, contentType);
+    return;
+  }
+
+  let text = '';
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    try {
+      text = await fs.promises.readFile(absolutePath, 'utf8');
+      if (text.includes('#EXTM3U') && (text.endsWith('\n') || text.includes('#EXT-X-ENDLIST'))) {
+        break;
+      }
+    } catch (err) {
+      const busy =
+        err && typeof err === 'object' && 'code' in err && (err.code === 'EBUSY' || err.code === 'EPERM');
+      if (!busy && attempt === 0) {
+        if (err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT') {
+          res.writeHead(404);
+          res.end();
+          return;
+        }
+      }
+    }
+    await sleep(50);
+  }
+
+  if (!text.includes('#EXTM3U')) {
+    res.writeHead(404);
+    res.end();
+    return;
+  }
+
+  const body = options.rewritePlaylist ? options.rewritePlaylist(text) : text;
+  const buf = Buffer.from(body, 'utf8');
+  res.writeHead(200, {
+    'Content-Type': contentType,
+    'Content-Length': buf.length,
+    'Cache-Control': 'no-store',
+    'Access-Control-Allow-Origin': '*',
+  });
+  res.end(buf);
 }
 
 /**
