@@ -776,95 +776,95 @@ export default function Sidebar({
         </div>
       )}
 
-      <div className="mt-auto border-t border-slate-700 px-2 py-2 space-y-1">
-        <button
-          type="button"
-          onClick={() => onNavigate(FAVORITES_FOLDER)}
-          className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-[10pt] transition-colors ${
-            mainView !== 'settings' && isInFavoritesView
-              ? 'bg-nas-accent text-white'
-              : 'text-slate-300 hover:bg-nas-sidebarHover hover:text-white'
-          }`}
-        >
-          <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d="M12 2.25l2.52 5.11 5.64.82-4.08 3.98.96 5.62L12 15.9l-5.04 2.88.96-5.62-4.08-3.98 5.64-.82L12 2.25z" />
-          </svg>
-          <span className="truncate">즐겨찾기</span>
-          {favoritesCount > 0 && (
-            <span className="ml-auto rounded-full bg-slate-600 px-1.5 py-0.5 text-[10px] text-slate-100">
-              {favoritesCount}
-            </span>
-          )}
-        </button>
-
-        {myHomePath && (
+      <div className="mt-auto border-t border-slate-700 px-2 py-2">
+        <div className="flex items-stretch gap-1">
           <button
             type="button"
-            onClick={() => onNavigate(myHomePath)}
-            className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-[10pt] transition-colors ${
-              mainView !== 'settings' && isInMyHomeView
+            title="즐겨찾기"
+            aria-label={favoritesCount > 0 ? `즐겨찾기 ${favoritesCount}개` : '즐겨찾기'}
+            onClick={() => onNavigate(FAVORITES_FOLDER)}
+            className={`relative flex min-w-0 flex-1 items-center justify-center rounded-md py-2.5 transition-colors ${
+              mainView !== 'settings' && isInFavoritesView
                 ? 'bg-nas-accent text-white'
                 : 'text-slate-300 hover:bg-nas-sidebarHover hover:text-white'
             }`}
           >
-            <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <path d="M12 3l8 6v11a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1V9l8-6z" />
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M12 2.25l2.52 5.11 5.64.82-4.08 3.98.96 5.62L12 15.9l-5.04 2.88.96-5.62-4.08-3.98 5.64-.82L12 2.25z" />
             </svg>
-            <span className="truncate">내 폴더</span>
+            {favoritesCount > 0 && (
+              <span className="absolute right-1 top-1 min-w-[1rem] rounded-full bg-slate-600 px-1 text-center text-[10px] leading-4 text-slate-100">
+                {favoritesCount}
+              </span>
+            )}
           </button>
-        )}
 
-        <button
-          type="button"
-          onClick={() => {
-            if (canUseTrash) {
-              onNavigate(TRASH_FOLDER);
-              return;
-            }
-            void appAlert({
-              title: '휴지통',
-              body: TRASH_ACCESS_DENIED_MESSAGE,
-            });
-          }}
-          onDragEnter={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-          }}
-          onDragOver={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            if (event.dataTransfer) {
-              event.dataTransfer.dropEffect = 'none';
-            }
-          }}
-          onDrop={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-          }}
-          className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-[10pt] transition-colors ${
-            mainView !== 'settings' &&
-            canUseTrash &&
-            (currentPath === TRASH_FOLDER || currentPath.startsWith(`${TRASH_FOLDER}/`))
-              ? 'bg-nas-accent text-white'
-              : 'text-slate-300 hover:bg-nas-sidebarHover hover:text-white'
-          }`}
-        >
-          <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d="M9 3h6l1 2h4v2H4V5h4l1-2zm1 6h2v9h-2V9zm3 0h2v9h-2V9zM6 9h2v9H6V9z" />
-          </svg>
-          <span className="truncate">휴지통</span>
-          {canUseTrash && trashCount > 0 && (
-            <span className="ml-auto rounded-full bg-slate-600 px-1.5 py-0.5 text-[10px] text-slate-100">
-              {trashCount}
-            </span>
+          {myHomePath && (
+            <button
+              type="button"
+              title="내 폴더"
+              aria-label="내 폴더"
+              onClick={() => onNavigate(myHomePath)}
+              className={`relative flex min-w-0 flex-1 items-center justify-center rounded-md py-2.5 transition-colors ${
+                mainView !== 'settings' && isInMyHomeView
+                  ? 'bg-nas-accent text-white'
+                  : 'text-slate-300 hover:bg-nas-sidebarHover hover:text-white'
+              }`}
+            >
+              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12 3l8 6v11a1 1 0 0 1-1 1h-5v-6H10v6H5a1 1 0 0 1-1-1V9l8-6z" />
+              </svg>
+            </button>
           )}
-        </button>
-      </div>
 
-      <div className="border-t border-slate-700 px-2 py-2">
-        <div className={`flex items-center gap-2${isAdminLoggedIn ? '' : ' px-1'}`}>
-          <span className="min-w-0 flex-1 truncate text-xs text-slate-400">USB 포터블 모드</span>
-          {isAdminLoggedIn && <EditorUpdateButton />}
+          <button
+            type="button"
+            title="휴지통"
+            aria-label={canUseTrash && trashCount > 0 ? `휴지통 ${trashCount}개` : '휴지통'}
+            onClick={() => {
+              if (canUseTrash) {
+                onNavigate(TRASH_FOLDER);
+                return;
+              }
+              void appAlert({
+                title: '휴지통',
+                body: TRASH_ACCESS_DENIED_MESSAGE,
+              });
+            }}
+            onDragEnter={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+            onDragOver={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              if (event.dataTransfer) {
+                event.dataTransfer.dropEffect = 'none';
+              }
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+            }}
+            className={`relative flex min-w-0 flex-1 items-center justify-center rounded-md py-2.5 transition-colors ${
+              mainView !== 'settings' &&
+              canUseTrash &&
+              (currentPath === TRASH_FOLDER || currentPath.startsWith(`${TRASH_FOLDER}/`))
+                ? 'bg-nas-accent text-white'
+                : 'text-slate-300 hover:bg-nas-sidebarHover hover:text-white'
+            }`}
+          >
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M9 3h6l1 2h4v2H4V5h4l1-2zm1 6h2v9h-2V9zm3 0h2v9h-2V9zM6 9h2v9H6V9z" />
+            </svg>
+            {canUseTrash && trashCount > 0 && (
+              <span className="absolute right-1 top-1 min-w-[1rem] rounded-full bg-slate-600 px-1 text-center text-[10px] leading-4 text-slate-100">
+                {trashCount}
+              </span>
+            )}
+          </button>
+
+          {isAdminLoggedIn && <EditorUpdateButton variant="icon" />}
         </div>
       </div>
 

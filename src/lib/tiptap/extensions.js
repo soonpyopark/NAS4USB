@@ -9,6 +9,7 @@ import Typography from '@tiptap/extension-typography';
 import CharacterCount from '@tiptap/extension-character-count';
 import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
+import Underline from '@tiptap/extension-underline';
 import { TextStyleKit } from '@tiptap/extension-text-style';
 import Collaboration, { isChangeOrigin } from '@tiptap/extension-collaboration';
 import CollaborationCaret from '@tiptap/extension-collaboration-caret';
@@ -122,6 +123,7 @@ export function createTiptapExtensions(options = {}) {
       katexOptions: { throwOnError: false },
     }),
     Highlight.configure({ multicolor: true }),
+    Underline,
     TextAlign.configure({
       types: ['heading', 'paragraph'],
     }),

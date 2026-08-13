@@ -108,14 +108,14 @@ export const TIPTAP_DOCUMENT_EXPORT_CSS = `
   }
   .tiptap-doc-export th,
   .tiptap-doc-export td {
-    border: 1px solid #000000;
-    padding: 0.25em 0.45em;
+    border: 1px solid #d1d5db;
+    padding: 0.4em 0.6em;
     vertical-align: top;
     word-break: break-word;
   }
   .tiptap-doc-export th {
-    font-weight: 700;
-    background: transparent;
+    font-weight: 600;
+    background: #f9fafb;
   }
   .tiptap-doc-export hr {
     border: 0;

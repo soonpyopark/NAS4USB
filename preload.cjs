@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webFrame } = require('electron');
 
 contextBridge.exposeInMainWorld('nas4usb', {
   __source: 'electron',
@@ -117,6 +117,16 @@ contextBridge.exposeInMainWorld('nas4usb', {
     getTheme: () => ipcRenderer.invoke('settings:getTheme'),
     update: (patch) => ipcRenderer.invoke('settings:update', patch),
     applyDataRoot: (path) => ipcRenderer.invoke('settings:applyDataRoot', path),
+  },
+
+  spellcheck: {
+    setEnabled: (enabled) => {
+      try {
+        webFrame.setSpellCheckEnabled(Boolean(enabled));
+      } catch {
+        // ignore
+      }
+    },
   },
 
   server: {

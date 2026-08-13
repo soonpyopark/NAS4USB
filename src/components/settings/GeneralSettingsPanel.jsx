@@ -3,6 +3,7 @@ import { ACCENT_COLOR_PRESETS, normalizeAccentColor } from '../../../shared/them
 import { useAppConfirm } from '../../hooks/useAppConfirm.jsx';
 import { isElectronRenderer } from '../../lib/runtime.js';
 import { applyAccentColor, currentAccentColor } from '../../lib/theme.js';
+import { applySpellcheckEnabled } from '../../lib/spellcheck.js';
 
 /**
  * @typedef {{
@@ -44,6 +45,7 @@ export default function GeneralSettingsPanel() {
   /** @type {[{ available: boolean, version: string | null } | null, Function]} */
   const [ffmpegStatus, setFfmpegStatus] = useState(null);
   const [accent, setAccent] = useState(currentAccentColor);
+  const [spellcheckEnabled, setSpellcheckEnabled] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState('');
   const saveTimerRef = useRef(/** @type {ReturnType<typeof setTimeout> | null} */ (null));
@@ -59,6 +61,7 @@ export default function GeneralSettingsPanel() {
     try {
       const theme = await window.nas4usb.settings.getTheme();
       setAccent(applyAccentColor(theme?.accentColor));
+      setSpellcheckEnabled(applySpellcheckEnabled(theme?.spellcheckEnabled === true));
       setLoadError('');
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : '테마 설정을 불러오지 못했습니다.');
@@ -371,6 +374,24 @@ export default function GeneralSettingsPanel() {
     }, 300);
   };
 
+  /**
+   * @param {boolean} enabled
+   */
+  const chooseSpellcheck = (enabled) => {
+    setSpellcheckEnabled(applySpellcheckEnabled(enabled));
+    void (async () => {
+      try {
+        await window.nas4usb.settings.update({ spellcheckEnabled: enabled });
+      } catch (error) {
+        await appAlert({
+          title: '맞춤법 검사',
+          body: error instanceof Error ? error.message : '맞춤법 검사 설정을 저장하지 못했습니다.',
+        });
+        await refresh();
+      }
+    })();
+  };
+
   const usingCustomDataRoot = Boolean(dataRoot?.configured);
 
   return (
@@ -646,6 +667,24 @@ export default function GeneralSettingsPanel() {
             {autoLaunch?.reason ?? '자동 실행 상태를 확인하는 중입니다…'}
           </p>
         )}
+      </section>
+
+      <section className="space-y-3">
+        <h3 className="text-sm font-semibold text-slate-800">맞춤법 검사</h3>
+        <p className="text-sm leading-relaxed text-slate-600">
+          TipTap·텍스트 편집기에서 Chromium/Windows 맞춤법 검사(빨간 밑줄)를 사용할지 정합니다. 이
+          NAS4USB에 접속하는 기기에 같이 적용됩니다.
+        </p>
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-slate-300 accent-nas-accent"
+            checked={spellcheckEnabled}
+            disabled={busy}
+            onChange={(event) => chooseSpellcheck(event.target.checked)}
+          />
+          맞춤법 검사 사용
+        </label>
       </section>
 
       <section className="space-y-3">

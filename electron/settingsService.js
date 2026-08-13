@@ -30,6 +30,7 @@ const SETTINGS_FILE = '.nas4usb-settings.json';
  *   externalFolders: import('../shared/externalFolders.js').ExternalFolderMount[],
  *   ffmpegPath: string | null,
  *   useLegacyImagePdfViewers: boolean,
+ *   spellcheckEnabled: boolean,
  * }} AppSettings
  *
  * @typedef {{ isLoggedIn?: boolean, loginId?: string | null, role?: string | null } | boolean} AccessAuth
@@ -62,6 +63,14 @@ export function normalizeConfiguredFfmpegPath(value) {
 }
 
 /**
+ * Chromium spellcheck (red underline) in editors. Default off.
+ * @param {unknown} value
+ */
+export function normalizeSpellcheckEnabled(value) {
+  return value === true;
+}
+
+/**
  * Soft restore: route image/PDF to legacy viewers (see docs/RESTORE-pre-yomikiru-reader.md).
  * @param {unknown} value
  */
@@ -84,6 +93,7 @@ function emptySettings() {
     externalFolders: [],
     ffmpegPath: null,
     useLegacyImagePdfViewers: false,
+    spellcheckEnabled: false,
   };
 }
 
@@ -124,6 +134,7 @@ async function loadStore(portableRoot) {
       externalFolders: normalizeExternalFolders(parsed?.externalFolders),
       ffmpegPath: normalizeConfiguredFfmpegPath(parsed?.ffmpegPath),
       useLegacyImagePdfViewers: normalizeUseLegacyImagePdfViewers(parsed?.useLegacyImagePdfViewers),
+      spellcheckEnabled: normalizeSpellcheckEnabled(parsed?.spellcheckEnabled),
     };
   } catch {
     return emptySettings();
@@ -188,6 +199,18 @@ export async function getGuestPermissions(portableRoot = getPortableRoot()) {
 export async function getThemeAccentColor(portableRoot = getPortableRoot()) {
   const settings = await loadStore(portableRoot);
   return settings.themeAccentColor;
+}
+
+/**
+ * Public UI prefs (no auth): accent colour + editor spellcheck.
+ * @param {string} [portableRoot]
+ */
+export async function getPublicUiPrefs(portableRoot = getPortableRoot()) {
+  const settings = await loadStore(portableRoot);
+  return {
+    accentColor: settings.themeAccentColor,
+    spellcheckEnabled: settings.spellcheckEnabled,
+  };
 }
 
 /**
@@ -272,6 +295,9 @@ export async function updateAppSettings(patch, portableRoot = getPortableRoot())
     settings.useLegacyImagePdfViewers = normalizeUseLegacyImagePdfViewers(
       patch.useLegacyImagePdfViewers,
     );
+  }
+  if (patch && 'spellcheckEnabled' in patch) {
+    settings.spellcheckEnabled = normalizeSpellcheckEnabled(patch.spellcheckEnabled);
   }
   await saveStore(portableRoot, settings);
   return settings;

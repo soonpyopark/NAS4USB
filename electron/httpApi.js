@@ -73,7 +73,8 @@ import {
   restorePath,
   trashPath,
 } from './trashService.js';
-import { getAppSettings, getAccessPermissionsBundle, getEffectiveAccessPermissions, getThemeAccentColor, updateAppSettings } from './settingsService.js';
+import { getAppSettings, getAccessPermissionsBundle, getEffectiveAccessPermissions, getPublicUiPrefs, updateAppSettings } from './settingsService.js';
+import { setSessionSpellCheckerEnabled } from './spellcheckSession.js';
 import { listMembers, saveMembersPayload, getMembersExportRecords } from './membersService.js';
 import {
   syncFortuneSidecarCopy,
@@ -798,7 +799,7 @@ export async function handleHttpApiRequest(req, res) {
     }
 
     if (method === 'GET' && url.pathname === '/api/settings/theme') {
-      sendJson(res, 200, { accentColor: await getThemeAccentColor(getPortableRoot()) });
+      sendJson(res, 200, await getPublicUiPrefs(getPortableRoot()));
       return true;
     }
 
@@ -808,6 +809,9 @@ export async function handleHttpApiRequest(req, res) {
       const result = await updateAppSettings(body ?? {}, getPortableRoot());
       if (body && 'externalFolders' in body) {
         setExternalFolders(result.externalFolders);
+      }
+      if (body && 'spellcheckEnabled' in body) {
+        setSessionSpellCheckerEnabled(result.spellcheckEnabled);
       }
       notifyFsChanged();
       sendJson(res, 200, result);

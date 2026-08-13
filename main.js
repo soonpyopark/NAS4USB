@@ -11,6 +11,7 @@ import {
   versionLabel,
 } from './shared/updateCheck.js';
 import { resolveAppIconPath, resolveAppIconImagePath } from './electron/appIcon.js';
+import { setSessionSpellCheckerEnabled } from './electron/spellcheckSession.js';
 import { fetchLatestRelease } from './electron/updateCheck.js';
 import {
   ensureDataRoot,
@@ -117,7 +118,7 @@ import {
   restorePath,
   trashPath,
 } from './electron/trashService.js';
-import { getAppSettings, getAccessPermissionsBundle, getEffectiveAccessPermissions, getThemeAccentColor, updateAppSettings, normalizeConfiguredDataRoot } from './electron/settingsService.js';
+import { getAppSettings, getAccessPermissionsBundle, getEffectiveAccessPermissions, getPublicUiPrefs, updateAppSettings, normalizeConfiguredDataRoot } from './electron/settingsService.js';
 import {
   listMembers,
   saveMembersPayload,
@@ -257,6 +258,15 @@ function closeSplashWindow() {
   splashWindow = null;
 }
 
+async function applySpellCheckerFromSettings() {
+  try {
+    const settings = await getAppSettings(getPortableRoot());
+    setSessionSpellCheckerEnabled(settings.spellcheckEnabled);
+  } catch {
+    setSessionSpellCheckerEnabled(false);
+  }
+}
+
 function createMainWindow() {
   const iconPath = resolveAppIconPath();
 
@@ -289,6 +299,7 @@ function createMainWindow() {
   });
 
   mainWindow.loadURL(currentAppUrl());
+  void applySpellCheckerFromSettings();
 
   if (isDev) {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
@@ -1247,15 +1258,16 @@ ipcMain.handle('settings:get', async (event) => {
 
 ipcMain.handle('settings:getGuestPermissions', async (event) => getAccessPermissionsBundle(getPortableRoot(), getAccessAuthFromEvent(event)));
 
-ipcMain.handle('settings:getTheme', async () => ({
-  accentColor: await getThemeAccentColor(getPortableRoot()),
-}));
+ipcMain.handle('settings:getTheme', async () => getPublicUiPrefs(getPortableRoot()));
 
 ipcMain.handle('settings:update', async (event, patch = {}) => {
   assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
   const result = await updateAppSettings(patch, getPortableRoot());
   if (patch && 'externalFolders' in patch) {
     setExternalFolders(result.externalFolders);
+  }
+  if (patch && 'spellcheckEnabled' in patch) {
+    setSessionSpellCheckerEnabled(result.spellcheckEnabled);
   }
   notifyFsChanged();
   return result;

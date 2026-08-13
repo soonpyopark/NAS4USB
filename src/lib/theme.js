@@ -3,6 +3,7 @@ import {
   accentCssVariables,
   normalizeAccentColor,
 } from '../../shared/theme.js';
+import { applySpellcheckEnabled } from './spellcheck.js';
 
 /**
  * Paints the accent palette onto `:root`. Every `nas-*` Tailwind token reads
@@ -34,8 +35,10 @@ export function currentAccentColor() {
 export async function loadAndApplyAccentColor() {
   try {
     const theme = await window.nas4usb?.settings?.getTheme?.();
+    applySpellcheckEnabled(theme?.spellcheckEnabled === true);
     return applyAccentColor(theme?.accentColor ?? DEFAULT_ACCENT_COLOR);
   } catch {
+    applySpellcheckEnabled(false);
     return applyAccentColor(DEFAULT_ACCENT_COLOR);
   }
 }

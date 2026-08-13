@@ -121,6 +121,9 @@ window.nas4usb = {
     update: (patch) => {},
     applyDataRoot: (path) => {},
   },
+  spellcheck: {
+    setEnabled: (enabled) => {},
+  },
   server: {
     getInfo: () => {},
     applyConfig: (patch) => {},

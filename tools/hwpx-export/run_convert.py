@@ -9,6 +9,7 @@ import sys
 
 def _bootstrap_paths() -> str:
     here = os.path.dirname(os.path.abspath(__file__))
+    sys.path.insert(0, here)
     pydeps = os.path.join(here, "pydeps")
     vendor_root = os.path.join(here, "vendor")
     pandoc_dir = os.path.join(here, "pandoc")
@@ -56,6 +57,9 @@ def main() -> int:
 
     try:
         from pypandoc_hwpx.PandocToHwpx import PandocToHwpx
+        import nas4usb_pandoc_hwpx
+
+        nas4usb_pandoc_hwpx.apply()
     except Exception as err:  # noqa: BLE001 — surface import errors to NAS4USB
         print(
             "Failed to import pypandoc-hwpx. Run `npm run prepare:hwpx-export` "

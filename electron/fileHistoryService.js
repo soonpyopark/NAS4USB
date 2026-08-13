@@ -139,8 +139,9 @@ async function appendHistorySnapshot(sourcePath, dir) {
 }
 
 /**
- * Called right before a save overwrites the destination file — archives what is
- * currently on disk (if any) so it becomes a restorable history entry.
+ * Snapshot the file currently on disk as a restorable history entry.
+ * Called after commit writes the live editor content, so the snapshot is the
+ * current document (not the previous on-disk version).
  * @param {string} relativePath
  * @param {string} [dataRoot]
  * @param {string} [portableRoot]
@@ -160,9 +161,7 @@ export async function archiveCurrentVersion(relativePath, dataRoot = getDataRoot
   const dir = historyDir(portableRoot, normalized);
   const entry = await appendHistorySnapshot(destination, dir);
 
-  // Must run *before* the caller overwrites the live sidecar with the new save's content —
-  // callers are responsible for that ordering (see XlsxEditorShell.jsx's handleSave, which
-  // archives via commitWorkspace() before it calls writeFortuneSidecar with the new sheets).
+  // Sidecar must already match this save (XlsxEditorShell writes it before commit).
   if (hasFortuneSidecar(normalized)) {
     const sidecarPath = resolvePortablePath(getFortuneSidecarPath(normalized));
     await fs.copyFile(sidecarPath, sidecarSnapshotPath(dir, entry.id)).catch(() => {

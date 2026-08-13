@@ -12,6 +12,8 @@ import {
   insertTiptapMediaAtView,
   pickTiptapMediaFile,
 } from '../../lib/tiptap/insertMedia.js';
+import { clipboardHasEditableHtml, insertHtmlIntoView } from '../../lib/tiptap/clipboardHtml.js';
+import { useSpellcheckEnabled } from '../../hooks/useSpellcheckEnabled.js';
 import {
   collectReferencedAssetPathsFromPmDoc,
   cleanupUnreferencedTiptapAssets,
@@ -73,6 +75,7 @@ export default function TipTapEditorView({
   const [tocOpen, setTocOpen] = useState(false);
   const [emojiOpenRequest, setEmojiOpenRequest] = useState(0);
   const [zoom, setZoom] = useState(1);
+  const spellcheckEnabled = useSpellcheckEnabled();
 
   const zoomBy = useCallback((direction) => {
     setZoom((prev) => stepZoom(prev, direction));
@@ -131,7 +134,7 @@ export default function TipTapEditorView({
       editorProps: {
         attributes: {
           class: 'tiptap',
-          spellcheck: 'true',
+          spellcheck: spellcheckEnabled ? 'true' : 'false',
         },
         handleDrop: (view, event) => {
           const file = pickTiptapMediaFile(event.dataTransfer?.files);
@@ -150,8 +153,21 @@ export default function TipTapEditorView({
           return true;
         },
         handlePaste: (view, event) => {
-          const file = pickTiptapMediaFile(event.clipboardData?.files);
-          if (!file || readOnly) return false;
+          if (readOnly) return false;
+          const clipboard = event.clipboardData;
+          if (!clipboard) return false;
+
+          // OneNote/Word copy a screenshot file *and* HTML. Prefer the HTML so
+          // the paste stays editable instead of becoming a single image.
+          if (clipboardHasEditableHtml(clipboard)) {
+            const html = clipboard.getData('text/html') || '';
+            event.preventDefault();
+            insertHtmlIntoView(view, html);
+            return true;
+          }
+
+          const file = pickTiptapMediaFile(clipboard.files);
+          if (!file) return false;
           event.preventDefault();
           uploadFile(file)
             .then((url) => {
@@ -179,6 +195,12 @@ export default function TipTapEditorView({
   useEffect(() => {
     if (editor) onReady?.(editor);
   }, [editor, onReady]);
+
+  useEffect(() => {
+    const dom = editor?.view?.dom;
+    if (!dom) return;
+    dom.setAttribute('spellcheck', spellcheckEnabled ? 'true' : 'false');
+  }, [editor, spellcheckEnabled]);
 
   useEffect(() => {
     if (!editor) return;

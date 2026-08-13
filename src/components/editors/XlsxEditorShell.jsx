@@ -148,11 +148,9 @@ export default function XlsxEditorShell({
       const sheets = editorHandle.getSheets();
       const base64 = buildSpreadsheetBase64(sheets, { bookType });
       await workspace.writeBinary(base64);
-      // commit() (via archiveCurrentVersion) snapshots whatever is *currently* on disk — both the
-      // xlsx file and its `.fortune.json` sidecar — as the new history entry, so the sidecar must
-      // not be overwritten with this save's content until after it returns.
-      await workspace.commit();
+      // Sidecar must be on disk before commit() archives the current document (xlsx + sidecar).
       await writeFortuneSidecar(relativePath, sheets);
+      await workspace.commit();
       const statInfo = await window.nas4usb.fs.stat(relativePath);
       const nextDiskRevision = statInfo?.modifiedAt ?? '';
       setDiskRevision(nextDiskRevision);

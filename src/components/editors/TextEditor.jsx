@@ -16,6 +16,7 @@ import {
   openFindPanel,
   openGotoLineOnce,
 } from '../../lib/text/codeMirrorSetup.js';
+import { useSpellcheckEnabled } from '../../hooks/useSpellcheckEnabled.js';
 
 /**
  * @typedef {'edit' | 'split' | 'preview'} TextEditorViewMode
@@ -51,6 +52,7 @@ export default function TextEditor({
   const langCompartment = useRef(new Compartment());
   const whitespaceCompartment = useRef(new Compartment());
   const themeCompartment = useRef(new Compartment());
+  const spellcheckCompartment = useRef(new Compartment());
 
   const [text, setText] = useState(initialText);
   const [wordWrap, setWordWrap] = useState(true);
@@ -65,6 +67,7 @@ export default function TextEditor({
   const [languageLabel, setLanguageLabel] = useState(() =>
     getLanguageLabel({ fileName, isMarkdown }),
   );
+  const spellcheckEnabled = useSpellcheckEnabled();
 
   onSaveRef.current = onSave;
   onReadyRef.current = onReady;
@@ -95,6 +98,11 @@ export default function TextEditor({
           tabCompartment.current.of([EditorState.tabSize.of(2), indentUnit.of('  ')]),
           whitespaceCompartment.current.of(highlightTrailingWhitespace()),
           themeCompartment.current.of([]),
+          spellcheckCompartment.current.of(
+            EditorView.contentAttributes.of({
+              spellcheck: spellcheckEnabled ? 'true' : 'false',
+            }),
+          ),
           readOnlyCompartment.current.of([
             EditorState.readOnly.of(true),
             EditorView.editable.of(false),
@@ -178,6 +186,18 @@ export default function TextEditor({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional one-time CodeMirror mount
   }, []);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.dispatch({
+      effects: spellcheckCompartment.current.reconfigure(
+        EditorView.contentAttributes.of({
+          spellcheck: spellcheckEnabled ? 'true' : 'false',
+        }),
+      ),
+    });
+  }, [spellcheckEnabled]);
 
   useEffect(() => {
     const view = viewRef.current;

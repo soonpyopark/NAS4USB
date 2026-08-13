@@ -2,15 +2,13 @@ import { useCallback, useState } from 'react';
 import { AppModal, AppModalActions, AppModalButton } from '../common/AppModal.jsx';
 import { EDITOR_CORES } from '../../../shared/editorCores.js';
 
-/** Vite production build strips this branch (배포 빌드에 업데이트 UI 미포함). */
-const IS_DEV_BUILD = import.meta.env.DEV;
-
-export default function EditorUpdateButton() {
+/**
+ * @param {{ variant?: 'button' | 'icon' }} [props]
+ */
+export default function EditorUpdateButton({ variant = 'button' }) {
   const [loadingStatus, setLoadingStatus] = useState(false);
-  const [updating, setUpdating] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const [updateMessage, setUpdateMessage] = useState('');
   /** @type {[Record<string, { id: string, label: string, version: string, availableVersion: string, updateAvailable?: boolean }> | null, Function]} */
   const [coreStatus, setCoreStatus] = useState(null);
 
@@ -29,7 +27,6 @@ export default function EditorUpdateButton() {
     setLoadingStatus(true);
     setCoreStatus(null);
     setErrorMessage('');
-    setUpdateMessage('');
 
     try {
       await refreshStatus();
@@ -42,75 +39,52 @@ export default function EditorUpdateButton() {
     }
   }, [refreshStatus]);
 
-  const handleDevUpdate = useCallback(async () => {
-    if (!IS_DEV_BUILD) return;
-    setUpdating(true);
-    setErrorMessage('');
-    setUpdateMessage('');
-
-    try {
-      if (!window.nas4usb?.editors?.update) {
-        throw new Error(
-          '에디터 업데이트 API를 사용할 수 없습니다. npm run dev를 다시 실행해 주세요.',
-        );
-      }
-      const result = await window.nas4usb.editors.update();
-      await refreshStatus();
-
-      const lines = (result?.results ?? []).map((item) => {
-        const mark = item.success ? 'OK' : 'FAIL';
-        return `${mark} ${item.label}: ${item.message}`;
-      });
-      const summary = result?.success
-        ? '모든 에디터 코어 업데이트가 완료되었습니다. 반영을 위해 앱을 재시작해 주세요.'
-        : result?.partial
-          ? '일부 에디터 코어만 업데이트되었습니다. 앱을 재시작한 뒤 다시 확인해 주세요.'
-          : '에디터 코어 업데이트에 실패했습니다.';
-      setUpdateMessage([summary, ...lines].join('\n'));
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : '업데이트에 실패했습니다.');
-    } finally {
-      setUpdating(false);
-    }
-  }, [refreshStatus]);
-
   const cores = coreStatus
     ? EDITOR_CORES.map((core) => coreStatus[core.id]).filter(Boolean)
     : [];
-  const hasUpdate = cores.some((item) => item.updateAvailable);
 
   return (
     <>
       <button
         type="button"
-        className="inline-flex h-7 shrink-0 items-center rounded-md border border-slate-600 bg-slate-800 px-2.5 text-[10pt] font-medium leading-none text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-700 disabled:cursor-wait disabled:opacity-50"
+        className={
+          variant === 'icon'
+            ? 'relative flex min-w-0 flex-1 items-center justify-center rounded-md py-2.5 text-slate-300 transition-colors hover:bg-nas-sidebarHover hover:text-white disabled:cursor-wait disabled:opacity-50'
+            : 'inline-flex h-7 shrink-0 items-center rounded-md border border-slate-600 bg-slate-800 px-2.5 text-[10pt] font-medium leading-none text-slate-200 transition-colors hover:border-slate-500 hover:bg-slate-700 disabled:cursor-wait disabled:opacity-50'
+        }
         onClick={openVersionDialog}
-        disabled={loadingStatus || updating}
-        title="HWPX · TipTap · WB4S · FortuneSheet · Comic Reader 코어 버전 확인"
+        disabled={loadingStatus}
+        title="에디터 버전 확인"
+        aria-label={loadingStatus ? '버전 확인 중' : '에디터 버전 확인'}
       >
-        {loadingStatus ? '버전 확인…' : '에디터 버전 확인'}
+        {variant === 'icon' ? (
+          <svg
+            className={`h-5 w-5${loadingStatus ? ' animate-spin' : ''}`}
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path d="M12 5V2L8 6l4 4V7c2.76 0 5 2.24 5 5a5 5 0 0 1-8.66 3.46l-1.42 1.42A7 7 0 0 0 19 12c0-3.87-3.13-7-7-7zm-5 .54A7 7 0 0 0 5 12c0 3.87 3.13 7 7 7v3l4-4-4-4v3c-2.76 0-5-2.24-5-5 0-1.16.4-2.23 1.07-3.08L7 7.54z" />
+          </svg>
+        ) : loadingStatus ? (
+          '버전 확인…'
+        ) : (
+          '에디터 버전 확인'
+        )}
       </button>
 
       <AppModal
         open={dialogOpen}
         wide
         className="modal-dialog--editors"
-        onClose={() => {
-          if (updating) return;
-          setDialogOpen(false);
-        }}
+        onClose={() => setDialogOpen(false)}
         title="에디터 버전 확인"
       >
         {errorMessage ? (
           <p className="modal-body !mb-4 whitespace-pre-wrap text-sm text-red-700">{errorMessage}</p>
         ) : (
           <div className="modal-body space-y-3 !mb-4 !text-[#323130]">
-            <p className="text-sm text-slate-600">
-              현재 앱에 포함된 에디터 코어 버전입니다.
-              {IS_DEV_BUILD
-                ? ' 개발 모드에서는 아래 「개발용 업데이트」로 프로젝트 폴더의 코어를 갱신할 수 있습니다. 포터블 exe 반영은 별도 빌드가 필요합니다.'
-                : ' 포터블 exe에 반영하려면 `update_all.bat build` 또는 `npm run build:dist:exe`로 다시 빌드해 주세요.'}
-            </p>
+            <p className="text-sm text-slate-600">현재 앱에 포함된 에디터 코어 버전입니다.</p>
 
             <div className="overflow-hidden rounded border border-slate-200">
               <table className="w-full text-left text-xs">
@@ -139,34 +113,11 @@ export default function EditorUpdateButton() {
                 </tbody>
               </table>
             </div>
-
-            {updateMessage ? (
-              <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded border border-slate-200 bg-slate-50 p-2 text-[11px] text-slate-700">
-                {updateMessage}
-              </pre>
-            ) : null}
           </div>
         )}
 
         <AppModalActions>
-          {IS_DEV_BUILD ? (
-            <AppModalButton
-              variant="primary"
-              disabled={updating || Boolean(errorMessage)}
-              onClick={() => void handleDevUpdate()}
-            >
-              {updating
-                ? '업데이트 중…'
-                : hasUpdate
-                  ? '개발용 업데이트'
-                  : '개발용 업데이트 (강제)'}
-            </AppModalButton>
-          ) : null}
-          <AppModalButton
-            variant={IS_DEV_BUILD ? 'secondary' : 'primary'}
-            disabled={updating}
-            onClick={() => setDialogOpen(false)}
-          >
+          <AppModalButton variant="primary" onClick={() => setDialogOpen(false)}>
             확인
           </AppModalButton>
         </AppModalActions>

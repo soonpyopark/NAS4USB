@@ -83,13 +83,12 @@ export async function commitWorkspace(sessionId, dataRoot) {
   void dataRoot;
   const session = getSession(sessionId);
   const destination = resolvePortablePath(session.relativePath);
-  // Archive whatever is currently on disk before it gets overwritten, so it becomes
-  // a restorable "이력" entry (no-op for unsupported extensions or first-time saves).
-  await archiveCurrentVersion(session.relativePath).catch(() => {});
   const { ensureParentDir } = await import('./fsService.js');
   await ensureParentDir(destination);
   await fs.copyFile(session.workingPath, destination);
   session.dirty = false;
+  // Snapshot the just-written live document (「백업생성」). No-op for unsupported extensions.
+  await archiveCurrentVersion(session.relativePath).catch(() => {});
   return { relativePath: session.relativePath };
 }
 

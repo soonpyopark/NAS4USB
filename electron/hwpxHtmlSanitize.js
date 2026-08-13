@@ -21,6 +21,9 @@ export function sanitizeTiptapHtmlForHwpx(html) {
   }
 
   out = unwrapTableWrappers(out);
+  // Keep <mark>/<span> — pandoc emits Span; nas4usb_pandoc_hwpx maps background to HWPX shadeColor.
+  // Unwrap block-level tags pypandoc-hwpx still drops (BlockQuote, etc.).
+  out = unwrapDroppedHwpxTags(out);
 
   out = out
     .replace(/<input\b[^>]*\btype=["']file["'][^>]*>/gi, '')
@@ -50,6 +53,31 @@ function unwrapTableWrappers(html) {
       if (tableMatch) return tableMatch[0];
       return match.replace(/^<div\b[^>]*>/i, '').replace(/<\/div>\s*$/i, '');
     });
+    if (!changed) break;
+  }
+  return out;
+}
+
+/**
+ * Strip tags whose pandoc AST types pypandoc-hwpx does not emit (content kept).
+ * Leave `<mark>` / `<span>` — those become Span and are mapped to HWPX shadeColor.
+ * @param {string} html
+ * @returns {string}
+ */
+function unwrapDroppedHwpxTags(html) {
+  let out = html;
+  const tags = ['blockquote', 'article', 'section', 'font', 's', 'strike', 'del', 'q'];
+  for (let pass = 0; pass < 16; pass += 1) {
+    let changed = false;
+    for (const tag of tags) {
+      const open = new RegExp(`<${tag}\\b[^>]*>`, 'gi');
+      const close = new RegExp(`</${tag}\\s*>`, 'gi');
+      const next = out.replace(open, '').replace(close, '');
+      if (next !== out) {
+        out = next;
+        changed = true;
+      }
+    }
     if (!changed) break;
   }
   return out;

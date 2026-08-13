@@ -346,6 +346,10 @@ export function createHttpNas4usbClient() {
       },
     },
 
+    spellcheck: {
+      setEnabled: () => {},
+    },
+
     members: {
       list: () => apiFetch('/members'),
       export: () => apiFetch('/members/export'),
