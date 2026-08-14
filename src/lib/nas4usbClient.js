@@ -215,6 +215,15 @@ export function createHttpNas4usbClient() {
           },
           180000,
         ),
+      importOnenote: (payload) =>
+        apiFetch(
+          '/tiptap/importOnenote',
+          {
+            method: 'POST',
+            body: JSON.stringify(payload ?? {}),
+          },
+          180000,
+        ),
     },
 
     auth: {

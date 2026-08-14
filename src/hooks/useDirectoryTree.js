@@ -2,7 +2,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { resolveTreeReloadPaths } from '../lib/fsInvalidatePaths.js';
 import { sortEntries } from '../lib/fsPaths.js';
 import { readDirWithRetry } from '../lib/readDirWithRetry.js';
-import { filterTrashFromEntries, isFsNotFoundError } from '../lib/trashPaths.js';
+import {
+  filterTrashFromEntries,
+  isFsNotADirectoryError,
+  isFsNotFoundError,
+} from '../lib/trashPaths.js';
 import { filterTiptapAssetSidecarFromEntries } from '../../shared/tiptapAssetPaths.js';
 import { filterFortuneSidecarFromEntries } from '../../shared/fortuneSheetSidecar.js';
 import { filterPdfViewerSidecarFromEntries } from '../../shared/pdfViewerSidecar.js';
@@ -30,7 +34,7 @@ export function useDirectoryTree(currentPath) {
       setChildrenMap((prev) => ({ ...prev, [relativePath]: sorted }));
       return sorted;
     } catch (err) {
-      if (isFsNotFoundError(err)) {
+      if (isFsNotFoundError(err) || isFsNotADirectoryError(err)) {
         setChildrenMap((prev) => {
           const next = { ...prev };
           delete next[relativePath];
@@ -102,7 +106,7 @@ export function useDirectoryTree(currentPath) {
             ),
           ];
         } catch (err) {
-          if (isFsNotFoundError(err)) return [path, null];
+          if (isFsNotFoundError(err) || isFsNotADirectoryError(err)) return [path, null];
           return [path, undefined];
         }
       }),

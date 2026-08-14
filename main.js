@@ -1092,6 +1092,11 @@ ipcMain.handle('tiptap:exportHwpx', async (_event, payload = {}) => {
   });
 });
 
+ipcMain.handle('tiptap:importOnenote', async (_event, payload = {}) => {
+  const { convertOnenoteBase64 } = await import('./electron/onenoteImportService.js');
+  return convertOnenoteBase64(payload.base64 ?? '', payload.fileName ?? 'section.one');
+});
+
 ipcMain.handle('editors:update', async (event) => {
   if (!isDev) {
     throw new Error('에디터 업데이트는 개발 모드에서만 사용할 수 있습니다.');

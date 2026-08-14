@@ -228,8 +228,17 @@ export default function FileExplorer({
 
     try {
       setTransfer({ kind: 'upload', current: 0, total: files.length, fileName: files[0]?.name });
-      await uploadFiles(files, { onProgress: reportTransferProgress('upload') });
+      const uploaded = await uploadFiles(files, { onProgress: reportTransferProgress('upload') });
       await refreshAll();
+      if (uploaded?.openPath) {
+        const name = uploaded.openPath.split('/').pop() || uploaded.openPath;
+        onOpenFile({
+          relativePath: uploaded.openPath,
+          name,
+          extension: 'tiptap',
+          isDirectory: false,
+        });
+      }
     } catch (err) {
       nativeAlert(err instanceof Error ? err.message : '파일 업로드에 실패했습니다.');
     } finally {
@@ -298,10 +307,19 @@ export default function FileExplorer({
     if (transfer) return;
     try {
       setTransfer({ kind: 'upload', current: 0, total: files.length, fileName: files[0]?.name });
-      await uploadFilesAtPath(uploadTargetPathRef.current, files, {
+      const uploaded = await uploadFilesAtPath(uploadTargetPathRef.current, files, {
         onProgress: reportTransferProgress('upload'),
       });
       await refreshAll();
+      if (uploaded?.openPath) {
+        const name = uploaded.openPath.split('/').pop() || uploaded.openPath;
+        onOpenFile({
+          relativePath: uploaded.openPath,
+          name,
+          extension: 'tiptap',
+          isDirectory: false,
+        });
+      }
     } catch (err) {
       nativeAlert(err instanceof Error ? err.message : '파일 업로드에 실패했습니다.');
     } finally {

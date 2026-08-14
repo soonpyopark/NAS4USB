@@ -2,6 +2,8 @@ import { joinRelativePath, readFileAsBase64, resolveUniqueName, validateFolderNa
 import { isTrashPath } from './trashPaths.js';
 import { buildNewFileContent, resolveNewFileName } from './files/newFileFactory.js';
 import { convertHwpBase64ToHwpx, isHwpFileName, toHwpxFileName } from '@nas4usb/rhwp/hwpConvert.js';
+import { isOnenoteFileName } from './onenote/fileNames.js';
+import { importOnenoteToFolder } from './onenote/importOnenoteToFolder.js';
 
 /**
  * @param {string} targetPath
@@ -60,6 +62,8 @@ export async function uploadFilesAtPath(targetPath, files, options = {}) {
   assertWritablePath(targetPath);
   const list = Array.isArray(files) ? files : [];
   const total = list.length;
+  /** @type {string | null} */
+  let openPath = null;
 
   for (let index = 0; index < list.length; index += 1) {
     const file = list[index];
@@ -68,6 +72,21 @@ export async function uploadFilesAtPath(targetPath, files, options = {}) {
       total,
       fileName: file.name,
     });
+
+    if (isOnenoteFileName(file.name)) {
+      const oneBase64 = await readFileAsBase64(file);
+      const siblings = await readSiblingNames(targetPath);
+      if (!siblings.includes(file.name)) {
+        await window.nas4usb.fs.writeFile(joinRelativePath(targetPath, file.name), oneBase64);
+      }
+      const imported = await importOnenoteToFolder(
+        targetPath,
+        { name: file.name, base64: oneBase64 },
+        { keepOriginal: false },
+      );
+      if (imported?.firstFilePath && !openPath) openPath = imported.firstFilePath;
+      continue;
+    }
 
     let base64 = await readFileAsBase64(file);
     let targetName = file.name;
@@ -79,4 +98,6 @@ export async function uploadFilesAtPath(targetPath, files, options = {}) {
 
     await window.nas4usb.fs.writeFile(joinRelativePath(targetPath, targetName), base64);
   }
+
+  return { openPath };
 }

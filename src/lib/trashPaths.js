@@ -42,6 +42,14 @@ export function isFsNotFoundError(error) {
   return error.message.includes('ENOENT') || error.message.includes('찾을 수 없');
 }
 
+/** A stale path that now points at a file — treat like a missing folder. */
+/** @param {unknown} error */
+export function isFsNotADirectoryError(error) {
+  if (!(error instanceof Error)) return false;
+  if ('code' in error && error.code === 'ENOTDIR') return true;
+  return error.message.includes('ENOTDIR');
+}
+
 /**
  * @param {import('../types/nas4usb.d.ts').FsEntry[]} entries
  * @param {string} currentPath

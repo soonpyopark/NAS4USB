@@ -12,6 +12,7 @@ import { exportFileName } from '../browserDownload.js';
 import { encodeTextBase64 } from '../text/textIO.js';
 import { saveFileToPickedFolder } from '../saveToFolder.js';
 import tiptapEditorCss from '../../styles/tiptap-editor.css?raw';
+import printPaginationCss from '../../styles/print-pagination.css?raw';
 
 async function loadTipTapEditorView() {
   const mod = await import('../../components/editors/TipTapEditorView.jsx');
@@ -20,7 +21,7 @@ async function loadTipTapEditorView() {
 
 /** Page chrome + hide editor UI so the exported file matches the editing canvas. */
 const BASE_CSS = `
-  @page { size: A4; margin: 16mm; }
+  @page { size: A3; margin: 16mm; }
   html, body { margin: 0; padding: 0; background: #ffffff; }
   body {
     padding: 16px;
@@ -28,7 +29,7 @@ const BASE_CSS = `
   }
   .tiptap-export-page {
     box-sizing: border-box;
-    max-width: 210mm;
+    max-width: 297mm;
     width: 100%;
     margin: 0 auto;
   }
@@ -42,11 +43,13 @@ const BASE_CSS = `
   .tiptap-export-page .tiptap-toolbar,
   .tiptap-export-page .tiptap-bubble-menu,
   .tiptap-export-page .tiptap-floating-menu,
-  .tiptap-export-page .tiptap-toc-panel { display: none !important; }
+  .tiptap-export-page .tiptap-toc-panel,
+  .tiptap-export-page .tiptap-search-bar { display: none !important; }
   @media print {
     body { padding: 0; }
     .tiptap-export-page { max-width: none; }
   }
+  ${printPaginationCss}
 `;
 
 /** @param {HTMLElement} container */

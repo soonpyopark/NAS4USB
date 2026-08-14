@@ -11,13 +11,14 @@ import {
   normalizeTiptapAssetUrls,
 } from './assetUrls.js';
 import { guessMimeFromFileName } from '../../../shared/mediaTypes.js';
+import printPaginationCss from '../../styles/print-pagination.css?raw';
 
 /**
  * Document CSS tuned to blank.hwpx / Hangul defaults (not TipTap editor chrome).
  * HWP char height 1000 ≈ 10pt; page margins ≈ 25mm L/R, ~15–17mm T/B.
  */
 export const TIPTAP_DOCUMENT_EXPORT_CSS = `
-  @page { size: A4; margin: 15mm 25mm 17mm 25mm; }
+  @page { size: A3; margin: 15mm 25mm 17mm 25mm; }
   html, body {
     margin: 0;
     padding: 0;
@@ -32,7 +33,7 @@ export const TIPTAP_DOCUMENT_EXPORT_CSS = `
   }
   .tiptap-doc-export {
     box-sizing: border-box;
-    max-width: 210mm;
+    max-width: 297mm;
     width: 100%;
     margin: 0 auto;
   }
@@ -67,7 +68,7 @@ export const TIPTAP_DOCUMENT_EXPORT_CSS = `
     line-height: 1.4;
   }
   .tiptap-doc-export p {
-    margin: 0.35em 0;
+    margin: 0.18em 0;
   }
   .tiptap-doc-export ul,
   .tiptap-doc-export ol {
@@ -117,6 +118,18 @@ export const TIPTAP_DOCUMENT_EXPORT_CSS = `
     font-weight: 600;
     background: #f9fafb;
   }
+  .tiptap-doc-export td table,
+  .tiptap-doc-export th table {
+    margin: 0.2em 0;
+    table-layout: auto;
+  }
+  .tiptap-doc-export td table td,
+  .tiptap-doc-export td table th,
+  .tiptap-doc-export th table td,
+  .tiptap-doc-export th table th {
+    padding: 0.25em 0.4em;
+    border-color: #e5e7eb;
+  }
   .tiptap-doc-export hr {
     border: 0;
     border-top: 1px solid #000;
@@ -126,6 +139,7 @@ export const TIPTAP_DOCUMENT_EXPORT_CSS = `
     body { padding: 0; }
     .tiptap-doc-export { max-width: none; }
   }
+  ${printPaginationCss}
 `;
 
 /** @param {string} value */

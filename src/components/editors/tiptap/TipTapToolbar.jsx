@@ -31,6 +31,7 @@ import {
   IconListTodo,
   IconQuote,
   IconRedo,
+  IconSearch,
   IconStrike,
   IconSubscript,
   IconSuperscript,
@@ -73,6 +74,8 @@ const LINE_HEIGHTS = [
  *   readOnly?: boolean,
  *   tocOpen?: boolean,
  *   onToggleToc?: () => void,
+ *   searchOpen?: boolean,
+ *   onToggleSearch?: () => void,
  *   emojiOpenRequest?: number,
  *   onUploadImage?: () => void,
  *   onUploadVideo?: () => void,
@@ -89,6 +92,8 @@ export default function TipTapToolbar({
   readOnly = false,
   tocOpen = false,
   onToggleToc,
+  searchOpen = false,
+  onToggleSearch,
   emojiOpenRequest = 0,
   onUploadImage,
   onUploadVideo,
@@ -476,6 +481,14 @@ export default function TipTapToolbar({
               editor.chain().focus().insertTable({ rows, cols, withHeaderRow: true }).run();
             }}
           />
+          <ToolbarButton
+            title="본문 검색 (Ctrl+F)"
+            active={searchOpen}
+            disabled={false}
+            onClick={() => onToggleSearch?.()}
+          >
+            <IconSearch />
+          </ToolbarButton>
           <ToolbarButton
             title="목차 패널"
             active={tocOpen}

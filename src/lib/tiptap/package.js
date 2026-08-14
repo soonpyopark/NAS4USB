@@ -2,6 +2,7 @@ import JSZip from 'jszip';
 import { base64ToBytes, bytesToBase64 } from '../bytes.js';
 import { joinRelativePath } from '../fsPaths.js';
 import { createEmptyTiptapDoc, isTiptapDoc } from './document.js';
+import { normalizeTiptapTextMarks } from './textMarks.js';
 import {
   getTiptapAssetsDir,
   normalizeAssetPath,
@@ -60,7 +61,9 @@ async function unpackTiptapPackage(bytes) {
   }
 
   const document = JSON.parse(await documentFile.async('string'));
-  const content = isTiptapDoc(document?.content) ? document.content : createEmptyTiptapDoc();
+  const content = normalizeTiptapTextMarks(
+    isTiptapDoc(document?.content) ? document.content : createEmptyTiptapDoc(),
+  );
 
   /** @type {{ path: string, base64: string }[]} */
   const embeddedAssets = [];
@@ -98,7 +101,7 @@ async function packTiptapPackage(input) {
   const exportedAt = input.exportedAt ?? new Date().toISOString();
 
   zip.file(MANIFEST_PATH, JSON.stringify(createManifest(input.title, exportedAt), null, 2));
-  zip.file(DOCUMENT_PATH, createDocumentJson(input.content));
+  zip.file(DOCUMENT_PATH, createDocumentJson(normalizeTiptapTextMarks(input.content)));
 
   for (const asset of input.assets) {
     zip.file(`${ASSETS_PREFIX}${asset.fileName}`, base64ToBytes(asset.base64), { binary: true });
@@ -144,6 +147,26 @@ export async function createEmptyTiptapPackageBase64(title = 'NoName') {
     title,
     content: createEmptyTiptapDoc(),
     assets: [],
+  });
+  return bytesToBase64(bytes);
+}
+
+/**
+ * Pack TipTap JSON + embedded assets into a `.tiptap` ZIP (base64).
+ *
+ * @param {{
+ *   title: string,
+ *   content: import('@tiptap/core').JSONContent,
+ *   assets?: { fileName: string, base64: string }[],
+ *   exportedAt?: string,
+ * }} input
+ */
+export async function packTiptapContentBase64(input) {
+  const bytes = await packTiptapPackage({
+    title: input.title,
+    exportedAt: input.exportedAt,
+    content: input.content,
+    assets: Array.isArray(input.assets) ? input.assets : [],
   });
   return bytesToBase64(bytes);
 }

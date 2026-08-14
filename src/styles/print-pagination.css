@@ -1,0 +1,70 @@
+/**
+ * Keep text, images, and tables from splitting through the middle of a
+ * printed page / "Save as PDF" page. Shared by the live editor and HTML exports.
+ *
+ * Tall tables may still span pages; individual rows stay together.
+ * Images taller than a page shrink to fit instead of being cropped.
+ */
+@media print {
+  .print-hide {
+    display: none !important;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    break-after: avoid;
+    page-break-after: avoid;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  p,
+  li,
+  dd,
+  dt {
+    orphans: 3;
+    widows: 3;
+  }
+
+  img,
+  svg,
+  video,
+  canvas,
+  figure,
+  .tiptap-image-wrap,
+  .tiptap-video-wrap,
+  .tiptap-audio-wrap {
+    break-inside: avoid;
+    page-break-inside: avoid;
+    max-width: 100% !important;
+    max-height: 360mm;
+    height: auto;
+    object-fit: contain;
+  }
+
+  pre,
+  blockquote,
+  .tiptap-code-block {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tfoot {
+    display: table-footer-group;
+  }
+
+  tr,
+  th,
+  td {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

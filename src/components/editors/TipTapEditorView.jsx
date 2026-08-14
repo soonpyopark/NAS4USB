@@ -5,7 +5,9 @@ import 'tippy.js/dist/tippy.css';
 import 'katex/dist/katex.min.css';
 import 'highlight.js/styles/github.css';
 import { createEmptyTiptapDoc } from '../../lib/tiptap/document.js';
+import { normalizeTiptapTextMarks } from '../../lib/tiptap/textMarks.js';
 import { createTiptapExtensions } from '../../lib/tiptap/extensions.js';
+import { createTiptapSearchExtension } from '../../lib/tiptap/searchExtension.js';
 import { createSlashCommandExtension } from '../../lib/tiptap/slashCommand.js';
 import {
   insertTiptapMedia,
@@ -13,6 +15,7 @@ import {
   pickTiptapMediaFile,
 } from '../../lib/tiptap/insertMedia.js';
 import { clipboardHasEditableHtml, insertHtmlIntoView } from '../../lib/tiptap/clipboardHtml.js';
+import { collectClipboardImageFiles } from '../../lib/tiptap/pasteImages.js';
 import { useSpellcheckEnabled } from '../../hooks/useSpellcheckEnabled.js';
 import {
   collectReferencedAssetPathsFromPmDoc,
@@ -24,8 +27,10 @@ import {
   createTiptapUploadFile,
 } from '../../lib/tiptap/uploadFile.js';
 import TipTapToolbar, { TipTapZoomControls } from './tiptap/TipTapToolbar.jsx';
+import TipTapSearchBar from './tiptap/TipTapSearchBar.jsx';
 import TipTapBubbleMenus from './tiptap/TipTapBubbleMenus.jsx';
 import TipTapTocPanel from './tiptap/TipTapTocPanel.jsx';
+import { IconSearch } from './tiptap/TipTapIcons.jsx';
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 2;
@@ -73,6 +78,10 @@ export default function TipTapEditorView({
   const fileInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   const scrollRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   const [tocOpen, setTocOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchFocusNonce, setSearchFocusNonce] = useState(0);
+  const searchOpenRef = useRef(searchOpen);
+  searchOpenRef.current = searchOpen;
   const [emojiOpenRequest, setEmojiOpenRequest] = useState(0);
   const [zoom, setZoom] = useState(1);
   const spellcheckEnabled = useSpellcheckEnabled();
@@ -111,6 +120,7 @@ export default function TipTapEditorView({
       includeImageNodeView: true,
       includeMediaNodeView: true,
     });
+    base.push(createTiptapSearchExtension());
     if (!readOnly) {
       base.push(
         createSlashCommandExtension({
@@ -128,13 +138,20 @@ export default function TipTapEditorView({
   const editor = useEditor(
     {
       extensions,
-      content: collabDoc ? undefined : (initialContent ?? createEmptyTiptapDoc()),
+      content: collabDoc
+        ? undefined
+        : normalizeTiptapTextMarks(initialContent ?? createEmptyTiptapDoc()),
       editable: !readOnly,
       immediatelyRender: false,
       editorProps: {
         attributes: {
           class: 'tiptap',
           spellcheck: spellcheckEnabled ? 'true' : 'false',
+        },
+        handleKeyDown: (_view, event) => {
+          if (!searchOpenRef.current) return false;
+          if (event.key === 'Enter' || event.key === 'Escape') return true;
+          return false;
         },
         handleDrop: (view, event) => {
           const file = pickTiptapMediaFile(event.dataTransfer?.files);
@@ -158,11 +175,16 @@ export default function TipTapEditorView({
           if (!clipboard) return false;
 
           // OneNote/Word copy a screenshot file *and* HTML. Prefer the HTML so
-          // the paste stays editable instead of becoming a single image.
+          // the paste stays editable, then upload images from the HTML / matching files.
           if (clipboardHasEditableHtml(clipboard)) {
             const html = clipboard.getData('text/html') || '';
             event.preventDefault();
-            insertHtmlIntoView(view, html);
+            insertHtmlIntoView(view, html, {
+              files: collectClipboardImageFiles(clipboard),
+              uploadFile,
+            }).catch((err) => {
+              window.alert(err instanceof Error ? err.message : '붙여넣기에 실패했습니다.');
+            });
             return true;
           }
 
@@ -217,6 +239,11 @@ export default function TipTapEditorView({
 
   useEffect(() => {
     const onKeyDown = (event) => {
+      if (event.key === 'Escape' && searchOpen) {
+        event.preventDefault();
+        setSearchOpen(false);
+        return;
+      }
       if (!(event.ctrlKey || event.metaKey)) return;
       const key = event.key;
       if (!readOnly && key.toLowerCase() === 's') {
@@ -237,12 +264,18 @@ export default function TipTapEditorView({
       if (key === '0') {
         event.preventDefault();
         resetZoom();
+        return;
+      }
+      if (key.toLowerCase() === 'f') {
+        event.preventDefault();
+        setSearchOpen(true);
+        setSearchFocusNonce((value) => value + 1);
       }
     };
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onSave, readOnly, resetZoom, zoomBy]);
+  }, [onSave, readOnly, resetZoom, searchOpen, zoomBy]);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -337,6 +370,11 @@ export default function TipTapEditorView({
           readOnly={readOnly}
           tocOpen={tocOpen}
           onToggleToc={() => setTocOpen((prev) => !prev)}
+          searchOpen={searchOpen}
+          onToggleSearch={() => {
+            setSearchOpen((prev) => !prev);
+            setSearchFocusNonce((value) => value + 1);
+          }}
           onUploadImage={openImagePicker}
           onUploadVideo={openVideoPicker}
           onUploadAudio={openAudioPicker}
@@ -349,6 +387,17 @@ export default function TipTapEditorView({
         />
       ) : (
         <div className="tiptap-toolbar tiptap-toolbar--zoom-only" role="toolbar" aria-label="보기 배율">
+          <button
+            type="button"
+            className={`tiptap-toolbar__btn${searchOpen ? ' is-active' : ''}`}
+            title="본문 검색 (Ctrl+F)"
+            onClick={() => {
+              setSearchOpen((prev) => !prev);
+              setSearchFocusNonce((value) => value + 1);
+            }}
+          >
+            <IconSearch />
+          </button>
           <TipTapZoomControls
             zoom={zoom}
             onZoomIn={() => zoomBy('in')}
@@ -357,6 +406,14 @@ export default function TipTapEditorView({
           />
         </div>
       )}
+
+      <TipTapSearchBar
+        editor={editor}
+        open={searchOpen}
+        readOnly={readOnly}
+        focusNonce={searchFocusNonce}
+        onClose={() => setSearchOpen(false)}
+      />
 
       <TipTapBubbleMenus editor={editor} readOnly={readOnly} />
 

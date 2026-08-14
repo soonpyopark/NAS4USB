@@ -418,6 +418,27 @@ function Nas4usbAppMain() {
     });
     if (!canOpen) return false;
 
+    if (entry.extension === 'one' || entry.extension === 'onepkg') {
+      try {
+        const { importOnenoteEntry } = await import('./lib/onenote/importOnenoteToFolder.js');
+        const imported = await importOnenoteEntry(entry);
+        if (!imported?.firstFilePath) return false;
+        const name = imported.firstFilePath.split('/').pop() || imported.firstFilePath;
+        setOpenEditor({
+          type: 'tiptap',
+          relativePath: imported.firstFilePath,
+          name,
+          extension: 'tiptap',
+          shareMode: resolveOpenShareMode(entry.mode),
+        });
+        notifyRemoteChange({ paths: [imported.folderPath, imported.firstFilePath] });
+        return true;
+      } catch (err) {
+        await nativeAlert(err instanceof Error ? err.message : '원노트 가져오기에 실패했습니다.');
+        return false;
+      }
+    }
+
     const viewerType = OPENABLE_EXTENSIONS[entry.extension];
     if (viewerType) {
       setOpenEditor({

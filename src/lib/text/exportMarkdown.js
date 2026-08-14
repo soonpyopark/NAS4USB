@@ -2,6 +2,7 @@ import { renderMarkdown } from './markdown.js';
 import { decodeTextBase64, encodeTextBase64 } from './textIO.js';
 import { exportFileName } from '../browserDownload.js';
 import { saveFileToPickedFolder } from '../saveToFolder.js';
+import printPaginationCss from '../../styles/print-pagination.css?raw';
 
 /**
  * @param {string} fileName
@@ -28,7 +29,7 @@ function escapeHtml(value) {
 }
 
 const MARKDOWN_EXPORT_CSS = `
-  @page { size: A4; margin: 16mm; }
+  @page { size: A3; margin: 16mm; }
   html, body { margin: 0; padding: 0; background: #fff; }
   body {
     padding: 16px;
@@ -38,7 +39,7 @@ const MARKDOWN_EXPORT_CSS = `
   }
   .markdown-export {
     box-sizing: border-box;
-    max-width: 210mm;
+    max-width: 297mm;
     width: 100%;
     margin: 0 auto;
   }
@@ -75,6 +76,19 @@ const MARKDOWN_EXPORT_CSS = `
   .markdown-export pre code { background: transparent; padding: 0; color: inherit; }
   .markdown-export a { color: #0369a1; }
   .markdown-export hr { border: 0; border-top: 1px solid #cbd5e1; margin: 1.25em 0; }
+  .markdown-export img { max-width: 100%; height: auto; margin: 0.75em 0; }
+  .markdown-export table { border-collapse: collapse; width: 100%; margin: 0.75em 0; }
+  .markdown-export th, .markdown-export td {
+    border: 1px solid #cbd5e1;
+    padding: 0.4em 0.6em;
+    vertical-align: top;
+  }
+  .markdown-export th { font-weight: 600; background: #f8fafc; }
+  @media print {
+    body { padding: 0; }
+    .markdown-export { max-width: none; }
+  }
+  ${printPaginationCss}
 `;
 
 /**

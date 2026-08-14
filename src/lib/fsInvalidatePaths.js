@@ -80,6 +80,8 @@ export function resolveTreeReloadPaths(changedPaths, currentPath, expandedPaths)
   const reload = new Set();
   const dirs = pathsToAffectedDirs(changedPaths);
 
+  // Only reload paths the tree already lists. A changed path is often a file
+  // (`…/page.tiptap`, `…/image.png`), and reading it as a directory fails.
   for (const dir of dirs) {
     for (const path of visible) {
       if (
@@ -88,7 +90,6 @@ export function resolveTreeReloadPaths(changedPaths, currentPath, expandedPaths)
         || (path !== '.' && dir.startsWith(`${path}/`))
       ) {
         reload.add(path);
-        reload.add(dir);
       }
     }
   }

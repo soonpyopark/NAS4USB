@@ -1,3 +1,5 @@
+@import './print-pagination.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -181,6 +183,24 @@
   .markdown-preview hr {
     @apply my-6 border-slate-200;
   }
+
+  .markdown-preview img {
+    @apply my-3 max-w-full;
+    height: auto;
+  }
+
+  .markdown-preview table {
+    @apply my-3 w-full border-collapse;
+  }
+
+  .markdown-preview th,
+  .markdown-preview td {
+    @apply border border-slate-300 px-2 py-1 align-top;
+  }
+
+  .markdown-preview th {
+    @apply bg-slate-50 font-semibold;
+  }
 }
 
 /* WhiteBoard4Share confirm dialog (전체 지우기 등) */
@@ -330,6 +350,17 @@
 .modal-btn:disabled {
   cursor: not-allowed;
   opacity: 0.6;
+}
+
+/* Icon-only header action: square target, label lives in the tooltip */
+.modal-btn--icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  width: 30px;
+  height: 30px;
+  padding: 0;
 }
 
 .modal-btn--primary {
@@ -772,4 +803,98 @@
 
 .nas4usb-videojs-host .vjs-control-bar {
   background: linear-gradient(transparent, rgba(0, 0, 0, 0.72));
+}
+
+/* In-app print / Save as PDF: unclip the editor and paginate the full document. */
+@media print {
+  @page {
+    size: A3;
+    margin: 16mm;
+  }
+
+  html,
+  body,
+  #root {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  body:has(.modal-dialog--editor) .nas-desktop-shell {
+    display: none !important;
+  }
+
+  .sidebar-panel,
+  .sidebar-resize-handle,
+  .nas-topbar,
+  .desktop-pane-tabs,
+  .modal-editor-header,
+  .tiptap-toolbar,
+  .tiptap-bubble-menu,
+  .tiptap-floating-menu,
+  .tiptap-toc-panel,
+  .tiptap-table-picker,
+  .tiptap-search-bar,
+  .collaboration-carets__caret,
+  .collaboration-carets__label {
+    display: none !important;
+  }
+
+  .modal-overlay,
+  .modal-overlay--embedded {
+    position: static !important;
+    inset: auto !important;
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: transparent !important;
+  }
+
+  .modal-dialog,
+  .modal-dialog--editor,
+  .modal-dialog--embedded {
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .modal-editor-body {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    flex: none !important;
+  }
+
+  body:has(.tiptap-editor-shell) .modal-editor-body .flex,
+  body:has(.tiptap-editor-shell) .modal-editor-body .min-h-0,
+  body:has(.markdown-preview) .modal-editor-body .flex,
+  body:has(.markdown-preview) .modal-editor-body .min-h-0,
+  body:has(.markdown-preview) .modal-editor-body .overflow-hidden,
+  body:has(.markdown-preview) .modal-editor-body .overflow-auto {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .markdown-preview {
+    overflow: visible !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
+  }
+
+  body:has(.markdown-preview) .cm-editor {
+    display: none !important;
+  }
 }

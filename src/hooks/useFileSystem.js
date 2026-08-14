@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { joinRelativePath, resolveUniqueName, validateFolderName } from '../lib/fsPaths.js';
 import { readDirWithRetry } from '../lib/readDirWithRetry.js';
-import { filterTrashFromEntries, isFsNotFoundError, isTrashPath } from '../lib/trashPaths.js';
+import {
+  filterTrashFromEntries,
+  isFsNotADirectoryError,
+  isFsNotFoundError,
+  isTrashPath,
+} from '../lib/trashPaths.js';
 import { isFavoritesPath } from '../lib/favoritesPaths.js';
 import { filterTiptapAssetSidecarFromEntries } from '../../shared/tiptapAssetPaths.js';
 import { filterFortuneSidecarFromEntries } from '../../shared/fortuneSheetSidecar.js';
@@ -33,7 +38,7 @@ export function useFileSystem(currentPath) {
         );
       }
     } catch (err) {
-      if (isFsNotFoundError(err)) {
+      if (isFsNotFoundError(err) || isFsNotADirectoryError(err)) {
         setEntries([]);
         setError(null);
       } else {
@@ -126,7 +131,7 @@ export function useFileSystem(currentPath) {
       if (isTrashPath(currentPath) || isFavoritesPath(currentPath)) {
         throw new Error('이 위치에는 파일을 추가할 수 없습니다.');
       }
-      await uploadFilesAtPath(currentPath, files, options);
+      return uploadFilesAtPath(currentPath, files, options);
     },
     [currentPath],
   );

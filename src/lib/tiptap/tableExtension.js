@@ -2,6 +2,25 @@ import { Table, TableCell, TableHeader, TableRow } from '@tiptap/extension-table
 import { columnResizing, tableEditing } from '@tiptap/pm/tables';
 
 /**
+ * OneNote uses `background: rgb(...)` shorthand; some DOMs leave
+ * `style.backgroundColor` empty until computed.
+ * @param {HTMLElement} element
+ */
+function parseCellBackground(element) {
+  const fromAttr = element.getAttribute('data-background-color');
+  if (fromAttr) return fromAttr;
+  if (element.style.backgroundColor) return element.style.backgroundColor;
+  if (element.style.background && !/url\(|gradient/i.test(element.style.background)) {
+    return element.style.background;
+  }
+  const style = element.getAttribute('style') || '';
+  const match = style.match(/(?:^|;)\s*background(?:-color)?\s*:\s*([^;]+)/i);
+  const value = match?.[1]?.trim();
+  if (value && !/url\(|gradient/i.test(value)) return value;
+  return null;
+}
+
+/**
  * TableCell / TableHeader with cell background + horizontal align.
  */
 export const TiptapTableCell = TableCell.extend({
@@ -10,8 +29,7 @@ export const TiptapTableCell = TableCell.extend({
       ...this.parent?.(),
       backgroundColor: {
         default: null,
-        parseHTML: (element) =>
-          element.getAttribute('data-background-color') || element.style.backgroundColor || null,
+        parseHTML: parseCellBackground,
         renderHTML: (attributes) => {
           if (!attributes.backgroundColor) return {};
           return {
@@ -30,8 +48,7 @@ export const TiptapTableHeader = TableHeader.extend({
       ...this.parent?.(),
       backgroundColor: {
         default: null,
-        parseHTML: (element) =>
-          element.getAttribute('data-background-color') || element.style.backgroundColor || null,
+        parseHTML: parseCellBackground,
         renderHTML: (attributes) => {
           if (!attributes.backgroundColor) return {};
           return {

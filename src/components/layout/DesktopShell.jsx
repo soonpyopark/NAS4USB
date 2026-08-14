@@ -113,7 +113,7 @@ export default function DesktopShell({
   });
 
   return (
-    <div className="flex h-full flex-col bg-slate-100">
+    <div className="nas-desktop-shell flex h-full flex-col bg-slate-100">
       <TopBar
         syncInfo={syncInfo}
         infoLoading={infoLoading}

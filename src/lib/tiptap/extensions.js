@@ -129,7 +129,10 @@ export function createTiptapExtensions(options = {}) {
     }),
     TextStyleKit.configure({
       backgroundColor: {},
-      color: {},
+      // OneNote / Word often color the whole paragraph, not a span.
+      color: {
+        types: ['textStyle', 'paragraph', 'heading'],
+      },
       fontFamily: {},
       fontSize: {},
       lineHeight: {},

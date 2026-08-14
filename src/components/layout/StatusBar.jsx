@@ -13,7 +13,7 @@ export default function StatusBar({ paths, syncInfo, currentPath }) {
       : 'LAN 주소 없음';
 
   return (
-    <footer className="flex h-7 shrink-0 items-center justify-between border-t border-nas-border bg-white px-4 text-xs text-nas-muted">
+    <footer className="print-hide flex h-7 shrink-0 items-center justify-between border-t border-nas-border bg-white px-4 text-xs text-nas-muted">
       <span className="truncate">
         {formatPath(currentPath)}
         {paths?.workspaceRoot && (

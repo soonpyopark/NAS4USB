@@ -215,9 +215,20 @@ export default function Sidebar({
     if (transfer) return;
     try {
       setTransfer({ kind: 'upload', current: 0, total: files.length, fileName: files[0]?.name });
-      await uploadFilesAtPath(targetPath, files, { onProgress: reportTransferProgress('upload') });
+      const uploaded = await uploadFilesAtPath(targetPath, files, {
+        onProgress: reportTransferProgress('upload'),
+      });
       await tree.expandPath(targetPath);
       await notifyChange();
+      if (uploaded?.openPath) {
+        const name = uploaded.openPath.split('/').pop() || uploaded.openPath;
+        onOpenFile({
+          relativePath: uploaded.openPath,
+          name,
+          extension: 'tiptap',
+          isDirectory: false,
+        });
+      }
     } catch (err) {
       nativeAlert(err instanceof Error ? err.message : '파일 업로드에 실패했습니다.');
     } finally {

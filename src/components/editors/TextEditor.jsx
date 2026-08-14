@@ -290,7 +290,7 @@ export default function TextEditor({
   return (
     <div className={`flex min-h-0 flex-1 flex-col ${darkTheme ? 'bg-slate-900' : 'bg-slate-100'}`}>
       <div
-        className={`flex flex-wrap items-center gap-2 border-b px-3 py-2 ${
+        className={`print-hide flex flex-wrap items-center gap-2 border-b px-3 py-2 ${
           darkTheme ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'
         }`}
       >
@@ -404,7 +404,7 @@ export default function TextEditor({
       </div>
 
       <div
-        className={`flex items-center justify-between border-t px-3 py-1.5 text-[11px] ${
+        className={`print-hide flex items-center justify-between border-t px-3 py-1.5 text-[11px] ${
           darkTheme
             ? 'border-slate-700 bg-slate-900 text-slate-400'
             : 'border-slate-200 bg-white text-slate-500'

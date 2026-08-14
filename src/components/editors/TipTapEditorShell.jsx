@@ -57,7 +57,11 @@ export default function TipTapEditorShell({
   const [collabUser, setCollabUser] = useState({ name: '사용자', color: '#2563eb' });
   const [showHistory, setShowHistory] = useState(false);
   const [exportingHtml, setExportingHtml] = useState(false);
+  const [importingHtml, setImportingHtml] = useState(false);
+  const [importingOnenote, setImportingOnenote] = useState(false);
   const [exportingHwpx, setExportingHwpx] = useState(false);
+  const htmlImportInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
+  const onenoteImportInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
 
   const editorRef = useRef(/** @type {import('@tiptap/core').Editor | null} */ (null));
   const diskRevisionRef = useRef('');
@@ -160,8 +164,14 @@ export default function TipTapEditorShell({
       await workspace.commit();
       try {
         const statInfo = await window.nas4usb.fs.stat(relativePath);
+        const nextDiskRevision = statInfo?.modifiedAt ?? '';
         if (doc) {
-          setTiptapDiskRevision(doc, statInfo?.modifiedAt ?? '');
+          setTiptapDiskRevision(doc, nextDiskRevision);
+          if (collaborationEnabled) {
+            seedTiptapRoomFromDisk(doc, documentJson, {
+              diskRevision: nextDiskRevision,
+            });
+          }
         }
       } catch {
         // optional
@@ -171,7 +181,7 @@ export default function TipTapEditorShell({
     } finally {
       setSaving(false);
     }
-  }, [doc, fileName, relativePath, shareReadOnly, workspace]);
+  }, [collaborationEnabled, doc, fileName, relativePath, shareReadOnly, workspace]);
 
   const handleRestoreHistory = useCallback(
     async (base64) => {
@@ -203,6 +213,132 @@ export default function TipTapEditorShell({
       await workspace.writeBinary(base64);
     },
     [collaborationEnabled, doc, relativePath, workspace],
+  );
+
+  const handleImportHtml = useCallback(() => {
+    if (exportingHtml || exportingHwpx || importingHtml || importingOnenote || !editorRef.current) {
+      return;
+    }
+    htmlImportInputRef.current?.click();
+  }, [exportingHtml, exportingHwpx, importingHtml, importingOnenote]);
+
+  const handleImportOnenote = useCallback(() => {
+    if (exportingHtml || exportingHwpx || importingHtml || importingOnenote || !editorRef.current) {
+      return;
+    }
+    onenoteImportInputRef.current?.click();
+  }, [exportingHtml, exportingHwpx, importingHtml, importingOnenote]);
+
+  const handleImportOnenotePicked = useCallback(
+    async (event) => {
+      const input = event.currentTarget;
+      const file = input.files?.[0];
+      input.value = '';
+      if (!file || !editorRef.current) return;
+
+      if (!editorRef.current.isEmpty) {
+        const { showAppChoice } = await import('../../lib/nativeDialog.js');
+        const choice = await showAppChoice({
+          title: '원노트 가져오기',
+          body: '현재 문서를 원노트의 첫 페이지로 바꿀까요? 나머지 페이지는 같은 폴더에 저장됩니다.',
+          primaryLabel: '가져오기',
+          cancelLabel: '취소',
+        });
+        if (choice !== 'primary') return;
+      }
+
+      setImportingOnenote(true);
+      setLoadError(null);
+      try {
+        const { readFileAsBase64, getParentPath, joinRelativePath, resolveUniqueName } = await import(
+          '../../lib/fsPaths.js'
+        );
+        const { importHtmlIntoEditor } = await import('../../lib/tiptap/importHtml.js');
+        const { createTiptapUploadFile } = await import('../../lib/tiptap/uploadFile.js');
+        const { packOnenotePageToTiptap, onenoteAssetsToFiles } = await import(
+          '../../lib/tiptap/importOnenote.js'
+        );
+
+        const { convertOnenoteFile } = await import('../../lib/onenote/convertOnenote.js');
+        const base64 = await readFileAsBase64(file);
+        const converted = await convertOnenoteFile({ base64, fileName: file.name });
+        const pages = converted?.pages;
+        if (!Array.isArray(pages) || pages.length === 0) {
+          throw new Error('원노트에서 페이지를 찾지 못했습니다.');
+        }
+
+        const uploadFile = createTiptapUploadFile(relativePath);
+        const first = pages[0];
+        let html = first.html || '';
+        const files = onenoteAssetsToFiles(first.assets || []);
+        for (let i = 0; i < (first.assets || []).length; i += 1) {
+          const asset = first.assets[i];
+          const uploaded = files[i];
+          if (!asset?.originalSrc || !uploaded) continue;
+          try {
+            const url = await uploadFile(uploaded);
+            html = html.split(asset.originalSrc).join(url);
+          } catch {
+            // skip broken asset
+          }
+        }
+        await importHtmlIntoEditor(editorRef.current, html, { uploadFile });
+
+        const parent = getParentPath(relativePath);
+        let existingNames = [];
+        try {
+          existingNames = (await window.nas4usb.fs.readDir(parent)).map((entry) => entry.name);
+        } catch {
+          existingNames = [];
+        }
+        for (let index = 1; index < pages.length; index += 1) {
+          const packed = await packOnenotePageToTiptap(pages[index], index);
+          const name = resolveUniqueName(existingNames, packed.fileName);
+          existingNames.push(name);
+          await window.nas4usb.fs.writeFile(joinRelativePath(parent, name), packed.base64);
+        }
+      } catch (err) {
+        setLoadError(err instanceof Error ? err.message : '원노트 가져오기에 실패했습니다.');
+      } finally {
+        setImportingOnenote(false);
+      }
+    },
+    [relativePath],
+  );
+
+  const handleImportHtmlPicked = useCallback(
+    async (event) => {
+      const input = event.currentTarget;
+      const file = input.files?.[0];
+      input.value = '';
+      if (!file || !editorRef.current) return;
+
+      if (!editorRef.current.isEmpty) {
+        const { showAppChoice } = await import('../../lib/nativeDialog.js');
+        const choice = await showAppChoice({
+          title: 'HTML 가져오기',
+          body: '현재 문서 내용을 선택한 HTML로 바꿀까요?',
+          primaryLabel: '바꾸기',
+          cancelLabel: '취소',
+        });
+        if (choice !== 'primary') return;
+      }
+
+      setImportingHtml(true);
+      setLoadError(null);
+      try {
+        const { importHtmlIntoEditor } = await import('../../lib/tiptap/importHtml.js');
+        const { createTiptapUploadFile } = await import('../../lib/tiptap/uploadFile.js');
+        await importHtmlIntoEditor(editorRef.current, file, {
+          uploadFile: createTiptapUploadFile(relativePath),
+        });
+      } catch (err) {
+        setLoadError(err instanceof Error ? err.message : 'HTML 가져오기에 실패했습니다.');
+      } finally {
+        setImportingHtml(false);
+      }
+    },
+    [relativePath],
   );
 
   const handleExportHtml = useCallback(async () => {
@@ -290,6 +426,10 @@ export default function TipTapEditorShell({
         onShowHistory={() => setShowHistory(true)}
         onExportHtml={isLoading || shareReadOnly ? undefined : handleExportHtml}
         exportingHtml={exportingHtml}
+        onImportHtml={isLoading || shareReadOnly ? undefined : handleImportHtml}
+        importingHtml={importingHtml}
+        onImportOnenote={isLoading || shareReadOnly ? undefined : handleImportOnenote}
+        importingOnenote={importingOnenote}
         onExportHwpx={isLoading || shareReadOnly ? undefined : handleExportHwpx}
         exportingHwpx={exportingHwpx}
         onSave={handleSave}
@@ -311,8 +451,8 @@ export default function TipTapEditorShell({
                 ? 'TipTap · 재연결 중… Y.js 동기화 후 편집 가능'
                 : 'TipTap · Y.js 동기화 후 편집 가능 · LAN 실시간 협업'
               : collaborationEnabled
-                ? "TipTap · 전체 서식 툴바 · '/' 블록 · 표/이미지 · 원격 커서 · Ctrl+S 저장"
-                : "TipTap · 전체 서식 툴바 · '/' 블록 · 표/이미지 · Ctrl+S 저장"}
+                ? "TipTap · 전체 서식 툴바 · '/' 블록 · 표/이미지 · 원격 커서 · Ctrl+F 검색 · Ctrl+S 저장"
+                : "TipTap · 전체 서식 툴바 · '/' 블록 · 표/이미지 · Ctrl+F 검색 · Ctrl+S 저장"}
         </div>
 
         <div className="relative flex min-h-0 flex-1 flex-col">
@@ -346,6 +486,21 @@ export default function TipTapEditorShell({
           )}
         </div>
       </EditorModal>
+
+      <input
+        ref={htmlImportInputRef}
+        type="file"
+        accept=".html,.htm,text/html"
+        hidden
+        onChange={handleImportHtmlPicked}
+      />
+      <input
+        ref={onenoteImportInputRef}
+        type="file"
+        accept=".one,.onepkg"
+        hidden
+        onChange={handleImportOnenotePicked}
+      />
 
       <HistoryModal
         open={showHistory}

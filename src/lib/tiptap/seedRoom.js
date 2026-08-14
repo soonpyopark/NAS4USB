@@ -3,6 +3,7 @@ import { prosemirrorJSONToYXmlFragment, yXmlFragmentToProseMirrorRootNode } from
 import { TIPTAP_FRAGMENT } from './constants.js';
 import { createEmptyTiptapDoc, isTiptapDoc } from './document.js';
 import { createTiptapExtensions } from './extensions.js';
+import { collectTiptapColorKeys, normalizeTiptapTextMarks } from './textMarks.js';
 
 export { TIPTAP_FRAGMENT } from './constants.js';
 const SEED_ORIGIN = 'tiptap-seed';
@@ -70,6 +71,33 @@ function collectNodeTypes(node, into = new Set()) {
  * @param {import('@tiptap/core').JSONContent} diskJson
  * @param {import('yjs').XmlFragment} fragment
  */
+/**
+ * True when disk JSON has text/highlight colors the live Yjs room dropped.
+ * Same class of bug as missing tables: backup has the marks, the room does not.
+ *
+ * @param {import('@tiptap/core').Schema} schema
+ * @param {import('@tiptap/core').JSONContent} diskJson
+ * @param {import('yjs').XmlFragment} fragment
+ */
+function fragmentMissingDiskMarks(schema, diskJson, fragment) {
+  const diskColors = collectTiptapColorKeys(diskJson);
+  if (diskColors.size === 0) return false;
+  if (fragment.length === 0) return true;
+
+  try {
+    const liveJson = yXmlFragmentToProseMirrorRootNode(fragment, schema).toJSON();
+    const liveColors = collectTiptapColorKeys(liveJson);
+    return [...diskColors].some((key) => !liveColors.has(key));
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * @param {import('@tiptap/core').Schema} schema
+ * @param {import('@tiptap/core').JSONContent} diskJson
+ * @param {import('yjs').XmlFragment} fragment
+ */
 function fragmentMissingDiskNodes(schema, diskJson, fragment) {
   const diskTypes = collectNodeTypes(diskJson);
   const needed = [...IMPORTANT_NODE_TYPES].filter((type) => diskTypes.has(type));
@@ -111,14 +139,17 @@ export function seedTiptapRoomFromDisk(ydoc, content, { diskRevision = '', force
   const fragment = ydoc.getXmlFragment(TIPTAP_FRAGMENT);
   const preferDisk = force || shouldPreferDiskContent(meta, diskRevision);
   const fragmentEmpty = fragment.length === 0;
-  const docJson = isTiptapDoc(content) ? content : createEmptyTiptapDoc();
+  const docJson = normalizeTiptapTextMarks(isTiptapDoc(content) ? content : createEmptyTiptapDoc());
   const schema = createSeedSchema();
 
   let shouldSeed = preferDisk || fragmentEmpty;
   if (!shouldSeed) {
     if (!meta.get(`${TIPTAP_FRAGMENT}:seeded`)) {
       shouldSeed = true;
-    } else if (fragmentMissingDiskNodes(schema, docJson, fragment)) {
+    } else if (
+      fragmentMissingDiskNodes(schema, docJson, fragment) ||
+      fragmentMissingDiskMarks(schema, docJson, fragment)
+    ) {
       shouldSeed = true;
     }
   }

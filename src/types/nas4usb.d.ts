@@ -80,6 +80,7 @@ window.nas4usb = {
   },
   tiptap: {
     exportHwpx: (payload) => {},
+    importOnenote: (payload) => {},
   },
   auth: {
     login: ({ id, password, rememberMe }) => {},

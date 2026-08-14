@@ -900,6 +900,14 @@ export async function handleHttpApiRequest(req, res) {
       return true;
     }
 
+    if (method === 'POST' && url.pathname === '/api/tiptap/importOnenote') {
+      const body = await readJsonBody(req);
+      const { convertOnenoteBase64 } = await import('./onenoteImportService.js');
+      const result = await convertOnenoteBase64(body.base64 ?? '', body.fileName ?? 'section.one');
+      sendJson(res, 200, result);
+      return true;
+    }
+
     if (method === 'POST' && url.pathname === '/api/tiptap/exportHwpx') {
       // Host converts TipTap HTML → HWPX (requires prepare:hwpx-export on the server machine).
       const body = await readJsonBody(req);

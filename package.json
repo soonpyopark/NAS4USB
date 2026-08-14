@@ -66,6 +66,7 @@
     "@fortune-sheet/react": "^1.0.4",
     "@rhwp/core": "^0.8.4",
     "@rhwp/editor": "^0.8.4",
+    "@tedyang2003/onenote-converter-wasm": "^1.0.1",
     "@tiptap/core": "^3.30.0",
     "@tiptap/extension-bubble-menu": "^3.30.0",
     "@tiptap/extension-character-count": "^3.30.0",
@@ -156,7 +157,8 @@
     "asarUnpack": [
       "**/node_modules/7zip-bin/**",
       "**/node_modules/7zip-min/**",
-      "**/node_modules/7zip-min/node_modules/7zip-bin/**"
+      "**/node_modules/7zip-min/node_modules/7zip-bin/**",
+      "**/node_modules/@tedyang2003/onenote-converter-wasm/**"
     ],
     "extraFiles": [
       {

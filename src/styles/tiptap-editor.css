@@ -27,15 +27,15 @@
 }
 
 .tiptap-editor-shell .tiptap {
-  /* A4 page width — aligns editing surface with print / PDF export */
+  /* A3 page width — aligns editing surface with print / PDF export */
   box-sizing: border-box;
-  max-width: 210mm;
+  max-width: 297mm;
   width: 100%;
   margin: 0 auto;
   padding: 18mm 16mm 40mm;
   outline: none;
   font-size: 1rem;
-  line-height: 1.7;
+  line-height: 1.6;
   color: #1a1a1a;
 }
 
@@ -98,7 +98,7 @@
 }
 
 .tiptap-editor-shell .tiptap p {
-  margin: 0.35rem 0;
+  margin: 0.18rem 0;
 }
 
 .tiptap-editor-shell .tiptap p[style*='text-align: center'],
@@ -178,14 +178,14 @@
 
 .tiptap-editor-shell .tableWrapper {
   overflow-x: auto;
-  margin: 0.75rem 0;
+  margin: 0.35rem 0;
 }
 
 .tiptap-editor-shell .tiptap table,
 .tiptap-editor-shell .tiptap-table {
   border-collapse: collapse;
   width: 100%;
-  margin: 0.75rem 0;
+  margin: 0.35rem 0;
   table-layout: fixed;
   overflow: hidden;
 }
@@ -206,6 +206,28 @@
 .tiptap-editor-shell .tiptap-table th {
   background: #f9fafb;
   font-weight: 600;
+}
+
+/* Nested tables act as filled boxes inside a cell — keep them compact */
+.tiptap-editor-shell .tiptap td .tableWrapper,
+.tiptap-editor-shell .tiptap th .tableWrapper {
+  overflow-x: visible;
+  margin: 0.2rem 0;
+}
+
+.tiptap-editor-shell .tiptap td table,
+.tiptap-editor-shell .tiptap th table {
+  margin: 0.2rem 0;
+  table-layout: auto;
+}
+
+.tiptap-editor-shell .tiptap td table td,
+.tiptap-editor-shell .tiptap td table th,
+.tiptap-editor-shell .tiptap th table td,
+.tiptap-editor-shell .tiptap th table th {
+  min-width: 0;
+  padding: 0.25rem 0.4rem;
+  border-color: #e5e7eb;
 }
 
 .tiptap-editor-shell .tiptap table .selectedCell,
@@ -724,6 +746,57 @@
   padding-block: 6px;
 }
 
+.tiptap-search-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f8fafc;
+}
+
+.tiptap-search-bar__input {
+  min-width: 10rem;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+  background: #fff;
+}
+
+.tiptap-search-bar__input--replace {
+  min-width: 8rem;
+}
+
+.tiptap-search-bar__count {
+  min-width: 3.5rem;
+  font-size: 12px;
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+
+.tiptap-search-bar__case {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #475569;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.tiptap .tiptap-search-hit {
+  background: #fde68a;
+  border-radius: 2px;
+}
+
+.tiptap .tiptap-search-hit--active {
+  background: #f59e0b;
+  box-shadow: 0 0 0 1px #d97706;
+}
+
 .tiptap-toolbar__hint {
   opacity: 0.9;
 }
@@ -1072,4 +1145,58 @@
   top: -1.4em;
   user-select: none;
   white-space: nowrap;
+}
+
+@media print {
+  .tiptap-editor-shell,
+  .tiptap-editor-shell__body,
+  .tiptap-editor-shell__scroll,
+  .tiptap-editor-shell__zoom {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    flex: none !important;
+  }
+
+  .tiptap-editor-shell__zoom {
+    zoom: 1 !important;
+    transform: none !important;
+  }
+
+  .tiptap-editor-shell .tiptap {
+    max-width: none;
+    padding: 0;
+  }
+
+  .tiptap-editor-shell .tableWrapper,
+  .tiptap-editor-shell .tiptap table,
+  .tiptap-editor-shell .tiptap-table {
+    overflow: visible !important;
+  }
+
+  .tiptap-editor-shell .tiptap-image,
+  .tiptap-editor-shell .tiptap-image-wrap img,
+  .tiptap-editor-shell .tiptap img {
+    max-width: 100%;
+    max-height: 360mm;
+    height: auto;
+    object-fit: contain;
+  }
+
+  .tiptap-toolbar,
+  .tiptap-bubble-menu,
+  .tiptap-floating-menu,
+  .tiptap-toc-panel,
+  .tiptap-table-picker,
+  .tiptap-search-bar {
+    display: none !important;
+  }
+
+  .tiptap-search-hit,
+  .tiptap-search-hit--active {
+    background: transparent !important;
+    box-shadow: none !important;
+  }
 }
