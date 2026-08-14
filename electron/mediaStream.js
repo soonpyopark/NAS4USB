@@ -95,17 +95,23 @@ export function rewriteHlsPlaylist(playlistText, requestUrl) {
     if (value) base.searchParams.set(key, value);
   }
 
-  return playlistText
-    .split(/\r?\n/)
-    .map((line) => {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('#')) return line;
-      const name = trimmed.split('?')[0].split(/[/\\]/).pop() || '';
-      if (!HLS_ASSET_NAME.test(name) || name === 'index.m3u8') return line;
-      base.searchParams.set('hls', name);
-      return `${base.pathname}?${base.searchParams.toString()}`;
-    })
-    .join('\n');
+  const lines = playlistText.split(/\r?\n/).map((line) => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) return line;
+    const name = trimmed.split('?')[0].split(/[/\\]/).pop() || '';
+    if (!HLS_ASSET_NAME.test(name) || name === 'index.m3u8') return line;
+    base.searchParams.set('hls', name);
+    return `${base.pathname}?${base.searchParams.toString()}`;
+  });
+
+  if (!lines.some((line) => line.startsWith('#EXT-X-START:'))) {
+    const insertAt = lines.findIndex((line) => line.startsWith('#EXTM3U'));
+    const startTag = '#EXT-X-START:TIME-OFFSET=0,PRECISE=YES';
+    if (insertAt >= 0) lines.splice(insertAt + 1, 0, startTag);
+    else lines.unshift(startTag);
+  }
+
+  return lines.join('\n');
 }
 
 /**

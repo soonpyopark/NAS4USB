@@ -20,9 +20,13 @@ export function attachHlsPlayback(video, url, handlers = {}) {
     enableWorker: false,
     lowLatencyMode: false,
     startPosition: 0,
+    // EVENT playlists look "live" while FFmpeg appends. A finite
+    // liveMaxLatencyDurationCount seeks forward to the transcode edge.
+    liveSyncMode: 'buffered',
     liveSyncDurationCount: 3,
-    liveMaxLatencyDurationCount: 12,
-    liveDurationInfinity: true,
+    liveMaxLatencyDurationCount: Number.POSITIVE_INFINITY,
+    liveDurationInfinity: false,
+    maxLiveSyncPlaybackRate: 1,
     maxBufferLength: 30,
     maxMaxBufferLength: 60,
     backBufferLength: 120,
