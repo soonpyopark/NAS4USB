@@ -2,6 +2,7 @@ import { AppModal, AppModalActions, AppModalButton } from '../common/AppModal.js
 
 export default function ViewerModal({
   title,
+  titleSuffix,
   subtitle,
   readOnly = false,
   actions,
@@ -14,7 +15,12 @@ export default function ViewerModal({
     <AppModal open editor embedded={fullscreen} onClose={allowClose ? onClose : undefined}>
       <header className="modal-editor-header">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-[#323130]">{title}</p>
+          <p className="flex min-w-0 items-baseline text-sm font-semibold text-[#323130]">
+            <span className="truncate">{title}</span>
+            {titleSuffix ? (
+              <span className="ml-1 shrink-0 font-normal text-[#605e5c]">{titleSuffix}</span>
+            ) : null}
+          </p>
           {readOnly && <p className="truncate text-xs font-bold text-red-600">읽기전용</p>}
           {subtitle && <p className="truncate text-xs text-[#605e5c]">{subtitle}</p>}
         </div>

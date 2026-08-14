@@ -90,7 +90,7 @@ const HLS_ASSET_NAME = /^(index\.m3u8|seg\d{5}\.ts)$/;
 export function rewriteHlsPlaylist(playlistText, requestUrl) {
   const base = new URL(requestUrl.pathname, 'http://127.0.0.1');
   base.searchParams.set('path', requestUrl.searchParams.get('path') ?? '');
-  for (const key of ['share', 'token']) {
+  for (const key of ['share', 'token', 'start']) {
     const value = requestUrl.searchParams.get(key);
     if (value) base.searchParams.set(key, value);
   }
@@ -104,13 +104,6 @@ export function rewriteHlsPlaylist(playlistText, requestUrl) {
     return `${base.pathname}?${base.searchParams.toString()}`;
   });
 
-  if (!lines.some((line) => line.startsWith('#EXT-X-START:'))) {
-    const insertAt = lines.findIndex((line) => line.startsWith('#EXTM3U'));
-    const startTag = '#EXT-X-START:TIME-OFFSET=0,PRECISE=YES';
-    if (insertAt >= 0) lines.splice(insertAt + 1, 0, startTag);
-    else lines.unshift(startTag);
-  }
-
   return lines.join('\n');
 }
 
@@ -123,30 +116,32 @@ export function rewriteHlsPlaylist(playlistText, requestUrl) {
  */
 export async function streamHlsAsset(req, res, absolutePath, contentType, options = {}) {
   const isPlaylist = contentType.includes('mpegurl');
-  if (!isPlaylist) {
-    await streamAbsoluteFile(req, res, absolutePath, contentType);
-    return;
-  }
-
+  const maxAttempts = isPlaylist ? 150 : 80;
   let text = '';
-  for (let attempt = 0; attempt < 8; attempt += 1) {
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     try {
-      text = await fs.promises.readFile(absolutePath, 'utf8');
-      if (text.includes('#EXTM3U') && (text.endsWith('\n') || text.includes('#EXT-X-ENDLIST'))) {
-        break;
-      }
-    } catch (err) {
-      const busy =
-        err && typeof err === 'object' && 'code' in err && (err.code === 'EBUSY' || err.code === 'EPERM');
-      if (!busy && attempt === 0) {
-        if (err && typeof err === 'object' && 'code' in err && err.code === 'ENOENT') {
-          res.writeHead(404);
-          res.end();
+      if (isPlaylist) {
+        text = await fs.promises.readFile(absolutePath, 'utf8');
+        if (text.includes('#EXTM3U') && (text.endsWith('\n') || text.includes('#EXT-X-ENDLIST'))) {
+          break;
+        }
+      } else {
+        const stat = await fs.promises.stat(absolutePath);
+        if (stat.isFile() && stat.size >= 8 * 1024) {
+          await streamAbsoluteFile(req, res, absolutePath, contentType);
           return;
         }
       }
+    } catch {
+      // playlist/segment not written yet — keep waiting while FFmpeg starts
     }
-    await sleep(50);
+    await sleep(100);
+  }
+
+  if (!isPlaylist) {
+    await streamAbsoluteFile(req, res, absolutePath, contentType);
+    return;
   }
 
   if (!text.includes('#EXTM3U')) {

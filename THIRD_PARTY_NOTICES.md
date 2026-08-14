@@ -5,7 +5,7 @@ NAS4USB itself is licensed under the **MIT License**
 NAS4USB uses or ships with. Each component remains under its own license.
 
 Versions below reflect the dependency tree at the time this file was last
-updated (NAS4USB **1.0.5**). Exact resolved versions are in `package-lock.json`.
+updated (NAS4USB **1.0.6**). Exact resolved versions are in `package-lock.json`.
 
 ---
 
@@ -23,9 +23,12 @@ updated (NAS4USB **1.0.5**). Exact resolved versions are in `package-lock.json`.
 | ProseMirror (via TipTap / `@tiptap/pm`) | — | MIT | https://prosemirror.net |
 | CodeMirror 6 | 6.x | MIT | https://github.com/codemirror/dev |
 | FortuneSheet (`@fortune-sheet/react`) | 1.0.4 | MIT | https://github.com/ruilisi/fortune-sheet |
-| rhwp (`@rhwp/core`, `@rhwp/editor`) | 0.8.2 | MIT | https://github.com/edwardkim/rhwp |
+| rhwp (`@rhwp/core`, `@rhwp/editor`) | 0.8.4 | MIT | https://github.com/edwardkim/rhwp |
 | WhiteBoard4Share | 1.0.6 | AGPL-3.0-only | https://github.com/soonpyopark/WhiteBoard4Share |
 | PDF.js (`pdfjs-dist`) | 6.x | Apache-2.0 | https://github.com/mozilla/pdf.js |
+| Video.js | 8.24.x | Apache-2.0 | https://github.com/videojs/video.js |
+| hls.js | 1.7.x | Apache-2.0 | https://github.com/video-dev/hls.js |
+| FFmpeg (not bundled) | user-registered | LGPL / GPL | https://ffmpeg.org — path set in 설정 → 일반 |
 | epub.js (`epubjs`) | 0.3.x | BSD-2-Clause | https://github.com/futurepress/epub.js |
 | 7zip-min / 7zip-bin | 1.x | MIT / LGPL (7-Zip) | comic archive extract (`rar`/`cbr`/`7z`) |
 | Yomikiru (inspiration only) | — | MIT | https://github.com/mienaiyami/yomikiru — format/UX reference; not vendored |
@@ -78,6 +81,10 @@ to recipients of the binary distribution
 | `@tiptap/*` (core, react, starter-kit, extensions, …) | MIT (most packages); see each package for details |
 | `@tiptap/y-tiptap` | MIT |
 | `jszip` | MIT OR GPL-3.0-or-later |
+| `hls.js` | Apache-2.0 |
+| `video.js` | Apache-2.0 |
+| `pdf-lib` | MIT |
+| `pdfjs-dist` | Apache-2.0 |
 | `epubjs` | BSD-2-Clause |
 | `7zip-min` | MIT |
 | `katex` | MIT |
@@ -129,3 +136,5 @@ but used by the app):
 - When shipping HWPX export tools, also keep Pandoc’s GPL terms and the
   pypandoc-hwpx / pypandoc / Pillow notices available (see
   `tools/hwpx-export/`).
+- FFmpeg is **not** shipped with NAS4USB. Users may register their own
+  binary in settings. That binary remains under FFmpeg’s LGPL/GPL terms.

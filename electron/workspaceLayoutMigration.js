@@ -171,7 +171,7 @@ export async function ensureSharePrivateUnderWorkspaceRoot() {
   const shareExistedBefore = await isDirectory(sharePath);
 
   /** Names that do not count as user content inside share/. */
-  const shareSystemNames = new Set(['__trash', '.tmp', 'Thumbs.db', 'desktop.ini']);
+  const shareSystemNames = new Set(['__trash', '.tmp', '.nas4usb', 'Thumbs.db', 'desktop.ini']);
 
   /** @type {string[]} */
   let shareUserEntriesBefore = [];
@@ -194,6 +194,7 @@ export async function ensureSharePrivateUnderWorkspaceRoot() {
       LEGACY_HOMES_DISK_DIR,
       HOMES_FOLDER,
       LEGACY_HOMES_FOLDER,
+      '.nas4usb',
     ]);
     let moved = 0;
     for (const entry of entries) {

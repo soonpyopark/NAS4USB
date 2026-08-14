@@ -403,6 +403,11 @@ export async function handleHttpApiRequest(req, res) {
       const hlsName = url.searchParams.get('hls');
       try {
         if (hlsName) {
+          const hlsStart = Number(url.searchParams.get('start'));
+          void ensureVideoPreview(relativePath, getPortableRoot(), {
+            waitMs: 0,
+            startSeconds: Number.isFinite(hlsStart) ? hlsStart : 0,
+          }).catch(() => {});
           const asset = await resolveVideoPreviewHlsFile(relativePath, hlsName);
           await streamHlsAsset(req, res, asset.absolutePath, asset.contentType, {
             rewritePlaylist:
@@ -416,9 +421,11 @@ export async function handleHttpApiRequest(req, res) {
           return true;
         }
 
+        const startSeconds = Number(url.searchParams.get('start'));
         const preview = await ensureVideoPreview(relativePath, getPortableRoot(), {
           force,
           waitForFull,
+          startSeconds: Number.isFinite(startSeconds) ? startSeconds : 0,
         });
         if (prepare) {
           sendJson(res, 200, {
@@ -428,6 +435,9 @@ export async function handleHttpApiRequest(req, res) {
             stage: preview.stage,
             fullReady: Boolean(preview.fullReady),
             protocol: preview.protocol || 'native',
+            durationSeconds: preview.durationSeconds ?? null,
+            startSeconds: preview.startSeconds ?? 0,
+            availableSeconds: preview.availableSeconds ?? null,
           });
           return true;
         }

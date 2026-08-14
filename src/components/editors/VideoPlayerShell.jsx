@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import 'video.js/dist/video-js.css';
 import ViewerModal from './ViewerModal.jsx';
 import { useMediaStream } from '../../hooks/useMediaStream.js';
 import { useVideoSeriesQueue } from '../../hooks/useVideoSeriesQueue.js';
 import { attachHlsPlayback } from '../../lib/media/hlsPlayer.js';
 import { getVideoMimeType } from '../../lib/media/mediaTypes.js';
-import { loadSiblingSubtitleTracks } from '../../lib/media/subtitles.js';
+import { loadSiblingSubtitleTracks, shiftWebVttCues, vttToTrackUrl } from '../../lib/media/subtitles.js';
+import { mountVideoJsPlayer } from '../../lib/media/videoJsPlayer.js';
 
 const PLAY_NEXT_STORAGE_KEY = 'nas4usb.videoPlayer.playNextInSeries';
 
@@ -37,21 +39,29 @@ export default function VideoPlayerShell({
   onOpenSibling,
 }) {
   const mimeType = getVideoMimeType(extension);
+  const hostRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   const videoRef = useRef(/** @type {HTMLVideoElement | null} */ (null));
+  const playerRef = useRef(/** @type {import('video.js').VideoJsPlayer | null} */ (null));
+  const durationRef = useRef(/** @type {number | null} */ (null));
+  const startSecondsRef = useRef(0);
+  const seekToRef = useRef(/** @type {(seconds: number) => unknown} */ (() => {}));
   const {
     streamUrl,
     loadError,
     loading,
-    bufferedPercent,
     mediaHandlers,
-    previewNote,
     usingFfmpegPreview,
     isStreamingPreview,
     playerKind,
     setLoadError,
     setLoading,
     setPreparing,
+    durationSeconds,
+    startSeconds,
+    seekTo,
   } = useMediaStream(relativePath, { preferFfmpegPreview: true, mediaRef: videoRef });
+  /** @type {[{ path: string, ext: string, label: string, vtt: string }[], Function]} */
+  const [subtitleSources, setSubtitleSources] = useState([]);
   /** @type {[{ path: string, ext: string, label: string, src: string }[], Function]} */
   const [subtitleTracks, setSubtitleTracks] = useState([]);
   const [subtitleNote, setSubtitleNote] = useState('');
@@ -64,6 +74,10 @@ export default function VideoPlayerShell({
     Boolean(onOpenSibling),
   );
   const hasSeries = seriesTotal > 1;
+
+  durationRef.current = durationSeconds;
+  startSecondsRef.current = startSeconds;
+  seekToRef.current = seekTo;
 
   const togglePlayNext = useCallback((event) => {
     const enabled = event.target.checked;
@@ -83,23 +97,17 @@ export default function VideoPlayerShell({
 
   useEffect(() => {
     let cancelled = false;
-    /** @type {string[]} */
-    const blobUrls = [];
-
+    setSubtitleSources([]);
     setSubtitleTracks([]);
     setSubtitleNote('');
 
     (async () => {
       try {
         const tracks = await loadSiblingSubtitleTracks(relativePath);
-        if (cancelled) {
-          for (const track of tracks) URL.revokeObjectURL(track.src);
-          return;
-        }
-        blobUrls.push(...tracks.map((track) => track.src));
-        setSubtitleTracks(tracks);
+        if (cancelled) return;
+        setSubtitleSources(tracks);
         if (tracks.length > 0) {
-          setSubtitleNote(tracks.map((track) => `.${track.ext}`).join(' · '));
+          setSubtitleNote(tracks.map((track) => track.label || `.${track.ext}`).join(' · '));
         }
       } catch {
         if (!cancelled) setSubtitleNote('');
@@ -108,42 +116,107 @@ export default function VideoPlayerShell({
 
     return () => {
       cancelled = true;
-      for (const url of blobUrls) URL.revokeObjectURL(url);
     };
   }, [relativePath]);
 
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video || playerKind !== 'hls' || !streamUrl) return undefined;
-    setStalled(false);
-    return attachHlsPlayback(video, streamUrl, {
-      onReady: () => {
-        setLoading(false);
-        setPreparing(false);
-      },
-      onFatalError: () => {
-        setLoadError('호환 변환 영상을 재생할 수 없습니다.');
-        setLoading(false);
-        setPreparing(false);
-      },
+    /** @type {string[]} */
+    const urls = [];
+    const tracks = subtitleSources.map((track) => {
+      const src = vttToTrackUrl(shiftWebVttCues(track.vtt, startSeconds));
+      urls.push(src);
+      return { path: track.path, ext: track.ext, label: track.label, src };
     });
-    // setters from useState are stable
-  }, [playerKind, relativePath, streamUrl]);
+    setSubtitleTracks(tracks);
+    return () => {
+      for (const url of urls) URL.revokeObjectURL(url);
+    };
+  }, [subtitleSources, startSeconds]);
 
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video || subtitleTracks.length === 0) return undefined;
+    const host = hostRef.current;
+    if (!host || !streamUrl) return undefined;
 
-    const showTracks = () => {
-      const list = video.textTracks;
-      for (let i = 0; i < list.length; i += 1) {
-        list[i].mode = i === 0 ? 'showing' : 'hidden';
-      }
+    const mounted = mountVideoJsPlayer(host, {
+      durationRef,
+      startSecondsRef,
+      seekToRef,
+    });
+    videoRef.current = mounted.video;
+    playerRef.current = mounted.player;
+    setStalled(false);
+
+    const video = mounted.video;
+    const onWaiting = () => setStalled(true);
+    const onPlaying = () => setStalled(false);
+    video.addEventListener('loadedmetadata', mediaHandlers.onLoadedMetadata);
+    video.addEventListener('canplay', mediaHandlers.onCanPlay);
+    video.addEventListener('progress', mediaHandlers.onProgress);
+    video.addEventListener('error', mediaHandlers.onError);
+    video.addEventListener('waiting', onWaiting);
+    video.addEventListener('playing', onPlaying);
+    video.addEventListener('ended', handleEnded);
+
+    if (playerKind !== 'hls') {
+      mounted.player.src({ src: streamUrl, type: mimeType });
+    }
+
+    const detachHls =
+      playerKind === 'hls'
+        ? attachHlsPlayback(video, streamUrl, {
+            onReady: () => {
+              setLoading(false);
+              setPreparing(false);
+              mounted.player.trigger('durationchange');
+            },
+            onFatalError: () => {
+              setLoadError('호환 변환 영상을 재생할 수 없습니다.');
+              setLoading(false);
+              setPreparing(false);
+            },
+          })
+        : undefined;
+
+    return () => {
+      detachHls?.();
+      video.removeEventListener('loadedmetadata', mediaHandlers.onLoadedMetadata);
+      video.removeEventListener('canplay', mediaHandlers.onCanPlay);
+      video.removeEventListener('progress', mediaHandlers.onProgress);
+      video.removeEventListener('error', mediaHandlers.onError);
+      video.removeEventListener('waiting', onWaiting);
+      video.removeEventListener('playing', onPlaying);
+      video.removeEventListener('ended', handleEnded);
+      mounted.dispose();
+      videoRef.current = null;
+      playerRef.current = null;
     };
+  }, [handleEnded, mimeType, playerKind, relativePath, streamUrl]);
 
-    showTracks();
-    video.addEventListener('loadedmetadata', showTracks);
-    return () => video.removeEventListener('loadedmetadata', showTracks);
+  useEffect(() => {
+    playerRef.current?.trigger('durationchange');
+  }, [durationSeconds, startSeconds]);
+
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!player) return undefined;
+
+    const existing = player.remoteTextTracks();
+    for (let i = existing.length - 1; i >= 0; i -= 1) {
+      player.removeRemoteTextTrack(existing[i]);
+    }
+    subtitleTracks.forEach((track, index) => {
+      player.addRemoteTextTrack(
+        {
+          kind: 'subtitles',
+          src: track.src,
+          srclang: 'ko',
+          label: track.label,
+          default: index === 0,
+        },
+        false,
+      );
+    });
+    return undefined;
   }, [subtitleTracks, streamUrl]);
 
   const statusBits = [
@@ -169,6 +242,7 @@ export default function VideoPlayerShell({
   return (
     <ViewerModal
       title={fileName}
+      titleSuffix={loading || isStreamingPreview || stalled ? '(변환하며 재생중...)' : ''}
       subtitle={statusBits.join(' · ')}
       actions={actions}
       onClose={onClose}
@@ -180,51 +254,9 @@ export default function VideoPlayerShell({
       )}
 
       <div className="flex min-h-0 flex-1 flex-col bg-black">
-        <div className="flex min-h-0 flex-1 items-center justify-center p-4">
-          {streamUrl ? (
-            <video
-              key={playerKind === 'hls' ? `hls:${relativePath}` : streamUrl}
-              ref={videoRef}
-              controls
-              autoPlay
-              playsInline
-              crossOrigin="anonymous"
-              className="max-h-full max-w-full rounded-md"
-              src={playerKind === 'hls' ? undefined : streamUrl}
-              {...mediaHandlers}
-              onWaiting={() => setStalled(true)}
-              onPlaying={() => setStalled(false)}
-              onEnded={handleEnded}
-            >
-              {subtitleTracks.map((track, index) => (
-                <track
-                  key={`${track.path}-${track.src}`}
-                  kind="subtitles"
-                  srcLang="ko"
-                  label={track.label}
-                  src={track.src}
-                  default={index === 0}
-                />
-              ))}
-              이 브라우저는 해당 영상 형식을 지원하지 않습니다.
-            </video>
-          ) : null}
+        <div className="nas4usb-videojs-host min-h-0 flex-1">
+          {streamUrl ? <div ref={hostRef} className="h-full w-full" /> : null}
         </div>
-        {loading || isStreamingPreview || stalled ? (
-          <p className="shrink-0 border-t border-slate-800 px-4 py-2 text-center text-sm text-slate-300">
-            {loading
-              ? usingFfmpegPreview || previewNote
-                ? bufferedPercent > 0
-                  ? `호환 변환 버퍼링 중… ${bufferedPercent}%`
-                  : '변환하며 재생 준비 중…'
-                : bufferedPercent > 0
-                  ? `버퍼링 중… ${bufferedPercent}%`
-                  : '영상 준비 중…'
-              : stalled && isStreamingPreview
-                ? '변환 속도를 따라잡는 중…'
-                : '변환하며 재생 중…'}
-          </p>
-        ) : null}
       </div>
     </ViewerModal>
   );

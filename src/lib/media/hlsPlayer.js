@@ -31,9 +31,12 @@ export function attachHlsPlayback(video, url, handlers = {}) {
     maxMaxBufferLength: 60,
     backBufferLength: 120,
     progressive: true,
-    manifestLoadingTimeOut: 120_000,
-    levelLoadingTimeOut: 120_000,
-    fragLoadingTimeOut: 120_000,
+    manifestLoadingTimeOut: 30_000,
+    manifestLoadingMaxRetry: 40,
+    manifestLoadingRetryDelay: 400,
+    levelLoadingTimeOut: 30_000,
+    levelLoadingMaxRetry: 20,
+    fragLoadingTimeOut: 90_000,
   });
 
   let destroyed = false;

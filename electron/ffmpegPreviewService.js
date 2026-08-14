@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import { getTempPath, resolvePortablePath } from './appContext.js';
+import { getWorkspaceRoot, resolvePortablePath } from './appContext.js';
 import { getAppSettings } from './settingsService.js';
 
 /** Chromium-friendly audio codecs (lowercase, without trailing dots). */
@@ -41,6 +41,9 @@ const HLS_SEGMENT_NAME = /^seg\d{5}\.ts$/;
  *   outPath: string,
  *   finished: Promise<void>,
  *   done: boolean,
+ *   aborted: boolean,
+ *   startSeconds: number,
+ *   child: import('node:child_process').ChildProcess | null,
  *   error: Error | null,
  * }} LiveTranscodeJob
  */
@@ -192,14 +195,18 @@ async function probeMedia(absolutePath, ffmpegPath) {
       ffprobe,
       [
         '-v',
-        'quiet',
+        'error',
+        '-probesize',
+        '2000000',
+        '-analyzeduration',
+        '2000000',
         '-print_format',
         'json',
         '-show_streams',
         '-show_format',
         absolutePath,
       ],
-      { timeoutMs: 60_000 },
+      { timeoutMs: 8_000 },
     );
     if (result.code === 0) {
       try {
@@ -210,16 +217,27 @@ async function probeMedia(absolutePath, ffmpegPath) {
     }
   }
 
-  // Fallback: ffmpeg -i prints stream info to stderr.
-  const result = await runProcess(ffmpegPath, ['-hide_banner', '-i', absolutePath], {
-    timeoutMs: 60_000,
-  });
+  // Fallback: ffmpeg -i prints stream info to stderr. Keep this short so
+  // a cloud/USB source cannot block the first frame for a minute.
+  const result = await runProcess(
+    ffmpegPath,
+    ['-hide_banner', '-probesize', '2000000', '-analyzeduration', '2000000', '-i', absolutePath],
+    { timeoutMs: 8_000 },
+  );
   const text = `${result.stderr}\n${result.stdout}`;
   /** @type {{ streams: Array<{ codec_type?: string, codec_name?: string, index?: number, pix_fmt?: string }>, format?: { format_name?: string } }} */
   const probe = { streams: [], format: {} };
   const fmtMatch = text.match(/Input #\d+,\s*([^\r\n]+?),\s*from\s+'/i);
   if (fmtMatch) {
     probe.format = { format_name: fmtMatch[1].trim() };
+  }
+  const durationMatch = text.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/);
+  if (durationMatch) {
+    probe.format = {
+      ...probe.format,
+      duration:
+        Number(durationMatch[1]) * 3600 + Number(durationMatch[2]) * 60 + Number(durationMatch[3]),
+    };
   }
   for (const line of text.split(/\r?\n/)) {
     const match = line.match(/Stream #(\d+):(\d+).*?:\s*(Video|Audio):\s*([a-zA-Z0-9_]+)(?:[^(\n]*?\(([^)]+)\))?/i);
@@ -296,6 +314,7 @@ function analyzeProbe(probe, relativePath) {
     audioSafe,
     containerOk,
     pixOk,
+    videoPlayOk,
     videoIndex,
     audioIndex,
     needsRemux: !containerOk || !videoPlayOk || !audioSafe || !pixOk,
@@ -311,7 +330,7 @@ function cacheDirPath(relativePath, stat) {
     .createHash('sha1')
     .update(`${relativePath}|${stat.mtimeMs}|${stat.size}|${CACHE_VERSION}`)
     .digest('hex');
-  return path.join(getTempPath(), 'nas4usb', 'video-preview', key);
+  return path.join(getWorkspaceRoot(), '.nas4usb', 'video-preview', key);
 }
 
 export function isAllowedHlsFileName(name) {
@@ -355,6 +374,23 @@ function sleep(ms) {
 /**
  * @param {ReturnType<typeof analyzeProbe>} analysis
  */
+function defaultRemuxAnalysis() {
+  return {
+    videoCodec: 'h264',
+    audioCodecs: ['aac'],
+    hasAudio: true,
+    videoCopyOk: true,
+    audioCopyOk: false,
+    audioSafe: true,
+    containerOk: false,
+    pixOk: true,
+    videoPlayOk: true,
+    videoIndex: null,
+    audioIndex: null,
+    needsRemux: true,
+  };
+}
+
 function mapStreamArgs(analysis) {
   const videoMap = analysis.videoIndex != null ? `0:${analysis.videoIndex}` : '0:V:0';
   if (!analysis.hasAudio) return ['-map', videoMap];
@@ -407,7 +443,37 @@ function remuxReason(analysis) {
   return 'audio-remuxed';
 }
 
-function previewResult(absolutePath, remuxed, reason, stage, fullReady, protocol = 'native') {
+function probeDurationSeconds(probe) {
+  const value = Number(probe?.format?.duration);
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function playlistAvailableSeconds(text) {
+  let total = 0;
+  const matches = String(text || '').matchAll(/#EXTINF:([\d.]+)/g);
+  for (const match of matches) {
+    total += Number(match[1]) || 0;
+  }
+  return total;
+}
+
+async function writePreviewMeta(dir, meta) {
+  await fs.writeFile(path.join(dir, 'meta.json'), JSON.stringify(meta), 'utf8');
+}
+
+async function readPreviewMeta(dir) {
+  try {
+    const raw = JSON.parse(await fs.readFile(path.join(dir, 'meta.json'), 'utf8'));
+    return {
+      durationSeconds: Number(raw?.durationSeconds) > 0 ? Number(raw.durationSeconds) : null,
+      startSeconds: Number(raw?.startSeconds) > 0 ? Number(raw.startSeconds) : 0,
+    };
+  } catch {
+    return { durationSeconds: null, startSeconds: 0 };
+  }
+}
+
+function previewResult(absolutePath, remuxed, reason, stage, fullReady, protocol = 'native', extra = {}) {
   const hls = protocol === 'hls';
   return {
     absolutePath,
@@ -421,6 +487,9 @@ function previewResult(absolutePath, remuxed, reason, stage, fullReady, protocol
     stage,
     fullReady,
     protocol,
+    durationSeconds: extra.durationSeconds ?? null,
+    startSeconds: extra.startSeconds ?? 0,
+    availableSeconds: extra.availableSeconds ?? null,
   };
 }
 
@@ -453,8 +522,8 @@ async function hasPlayableSegment(dir) {
  * @param {string} dir
  * @param {() => Error | null} getError
  */
-async function waitUntilHlsPlayable(dir, getError) {
-  const deadline = Date.now() + 90_000;
+async function waitUntilHlsPlayable(dir, getError, timeoutMs = 12_000) {
+  const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const error = getError();
     if (error) throw error;
@@ -471,7 +540,6 @@ async function waitUntilHlsPlayable(dir, getError) {
     }
     await sleep(80);
   }
-  throw new Error('호환 변환을 시작하는 데 시간이 너무 오래 걸립니다.');
 }
 
 /**
@@ -482,14 +550,16 @@ async function waitUntilHlsPlayable(dir, getError) {
  * @param {ReturnType<typeof analyzeProbe>} analysis
  * @param {boolean} reencode
  */
-function spawnHlsTranscode(ffmpegPath, sourceAbsolute, outDir, analysis, reencode) {
+function spawnHlsTranscode(ffmpegPath, sourceAbsolute, outDir, analysis, reencode, startSeconds = 0, resume = false) {
   const { videoArgs, audioArgs } = codecArgs(analysis, reencode);
+  const seekArgs = startSeconds > 0.5 ? ['-ss', String(startSeconds)] : [];
   const args = [
     '-hide_banner',
     '-nostdin',
     '-y',
     '-fflags',
-    '+genpts',
+    '+genpts+discardcorrupt',
+    ...seekArgs,
     '-i',
     sourceAbsolute,
     ...mapStreamArgs(analysis),
@@ -509,12 +579,14 @@ function spawnHlsTranscode(ffmpegPath, sourceAbsolute, outDir, analysis, reencod
     'hls',
     '-hls_time',
     '2',
+    '-hls_init_time',
+    '1',
     '-hls_list_size',
     '0',
     '-hls_playlist_type',
     'event',
     '-hls_flags',
-    'independent_segments+temp_file',
+    resume ? 'independent_segments+temp_file+append_list' : 'independent_segments+temp_file',
     '-hls_segment_filename',
     'seg%05d.ts',
     HLS_PLAYLIST,
@@ -546,30 +618,93 @@ function spawnHlsTranscode(ffmpegPath, sourceAbsolute, outDir, analysis, reencod
  * @param {string} outPath
  * @param {ReturnType<typeof analyzeProbe>} analysis
  */
-function startLiveTranscode(ffmpegPath, sourceAbsolute, outDir, analysis) {
+async function abortJob(job) {
+  if (!job || job.aborted) return;
+  job.aborted = true;
+  try {
+    job.child?.kill();
+  } catch {
+    // ignore
+  }
+  await job.finished.catch(() => {});
+}
+
+/**
+ * @param {string} ffmpegPath
+ * @param {string} sourceAbsolute
+ * @param {string} outDir
+ * @param {ReturnType<typeof analyzeProbe>} analysis
+ * @param {{ startSeconds?: number, durationSeconds?: number | null, replace?: boolean }} [options]
+ */
+function startLiveTranscode(ffmpegPath, sourceAbsolute, outDir, analysis, options = {}) {
+  const startSeconds = Number(options.startSeconds) > 0.5 ? Number(options.startSeconds) : 0;
+  const resume = Boolean(options.resume) && !options.replace;
   const existing = liveJobs.get(outDir);
-  if (existing && !existing.done) return existing;
+  if (
+    existing &&
+    !existing.done &&
+    !options.replace &&
+    Math.abs((existing.startSeconds || 0) - startSeconds) < 1
+  ) {
+    return existing;
+  }
 
   /** @type {LiveTranscodeJob} */
   const job = {
     outPath: outDir,
     done: false,
+    aborted: false,
+    startSeconds,
+    child: null,
     error: null,
     finished: Promise.resolve(),
   };
   liveJobs.set(outDir, job);
 
   job.finished = (async () => {
-    await fs.rm(outDir, { recursive: true, force: true }).catch(() => {});
+    if (existing && existing !== job && !existing.done) {
+      await abortJob(existing);
+    }
+    if (!resume) {
+      await fs.rm(outDir, { recursive: true, force: true }).catch(() => {});
+    }
     await fs.mkdir(outDir, { recursive: true });
-    let session = spawnHlsTranscode(ffmpegPath, sourceAbsolute, outDir, analysis, false);
+    await writePreviewMeta(outDir, {
+      durationSeconds: options.durationSeconds ?? null,
+      startSeconds,
+    });
+    let session = spawnHlsTranscode(
+      ffmpegPath,
+      sourceAbsolute,
+      outDir,
+      analysis,
+      false,
+      startSeconds,
+      resume,
+    );
+    job.child = session.child;
     let code = await session.closed;
+    if (job.aborted) return;
     if (code !== 0 && (analysis.videoCopyOk || analysis.audioCopyOk) && !(await hasPlayableSegment(outDir))) {
       await fs.rm(outDir, { recursive: true, force: true }).catch(() => {});
       await fs.mkdir(outDir, { recursive: true });
-      session = spawnHlsTranscode(ffmpegPath, sourceAbsolute, outDir, analysis, true);
+      await writePreviewMeta(outDir, {
+        durationSeconds: options.durationSeconds ?? null,
+        startSeconds,
+      });
+      session = spawnHlsTranscode(
+        ffmpegPath,
+        sourceAbsolute,
+        outDir,
+        analysis,
+        true,
+        startSeconds,
+        false,
+      );
+      job.child = session.child;
       code = await session.closed;
     }
+    if (job.aborted) return;
     if (code !== 0) {
       if (await hasPlayableSegment(outDir)) return;
       await fs.rm(outDir, { recursive: true, force: true }).catch(() => {});
@@ -609,12 +744,24 @@ export async function getVideoPreviewStatus(relativePath) {
   const growing = isVideoPreviewGrowing(dir);
   const complete = await cachedHlsComplete(dir);
   const playable = complete || (await hasPlayableSegment(dir));
+  const meta = await readPreviewMeta(dir);
+  let availableSeconds = null;
+  try {
+    availableSeconds = playlistAvailableSeconds(await readPlaylistText(dir));
+  } catch {
+    availableSeconds = playable ? 0 : null;
+  }
+  const job = liveJobs.get(dir);
+  const startSeconds = job?.startSeconds || meta.startSeconds || 0;
   return {
     ok: true,
     remuxed: playable,
     stage: complete ? 'full' : growing || playable ? 'streaming' : 'source',
     fullReady: complete,
     protocol: playable || growing ? 'hls' : 'native',
+    durationSeconds: meta.durationSeconds,
+    startSeconds,
+    availableSeconds,
   };
 }
 
@@ -628,16 +775,20 @@ export async function getVideoPreviewStatus(relativePath) {
 export async function ensureVideoPreview(relativePath, portableRoot, options = {}) {
   const force = Boolean(options.force);
   const waitForFull = Boolean(options.waitForFull) || force;
+  const startSeconds = Number(options.startSeconds) > 0.5 ? Number(options.startSeconds) : 0;
   const sourceAbsolute = resolvePortablePath(relativePath);
-  const lockKey = `${sourceAbsolute}|${force ? 'force' : 'auto'}|${waitForFull ? 'full' : 'live'}`;
+  const lockKey = `${sourceAbsolute}|${force ? 'force' : 'auto'}|${waitForFull ? 'full' : 'live'}|ss${Math.floor(startSeconds)}`;
   const pending = inflightPreviews.get(lockKey);
   if (pending) return pending;
 
-  const promise = ensureVideoPreviewUnlocked(relativePath, portableRoot, { force, waitForFull }).finally(
-    () => {
-      inflightPreviews.delete(lockKey);
-    },
-  );
+  const promise = ensureVideoPreviewUnlocked(relativePath, portableRoot, {
+    force,
+    waitForFull,
+    startSeconds,
+    waitMs: options.waitMs,
+  }).finally(() => {
+    inflightPreviews.delete(lockKey);
+  });
   inflightPreviews.set(lockKey, promise);
   return promise;
 }
@@ -651,44 +802,92 @@ async function ensureVideoPreviewUnlocked(relativePath, portableRoot, options) {
   const ffmpegPath = await getConfiguredFfmpegPath(portableRoot);
   const sourceAbsolute = resolvePortablePath(relativePath);
   const stat = await fs.stat(sourceAbsolute);
+  const startSeconds = Number(options.startSeconds) > 0.5 ? Number(options.startSeconds) : 0;
+  const outDir = cacheDirPath(relativePath, { mtimeMs: stat.mtimeMs, size: stat.size });
 
   if (!ffmpegPath) {
     return previewResult(sourceAbsolute, false, 'ffmpeg-not-configured', 'source', true, 'native');
   }
 
-  const probe = await probeMedia(sourceAbsolute, ffmpegPath);
-  const analysis = analyzeProbe(probe, relativePath);
+  await fs.mkdir(outDir, { recursive: true });
+  const growing = isVideoPreviewGrowing(outDir);
+  const complete = await cachedHlsComplete(outDir);
+  const playable = complete || (await hasPlayableSegment(outDir));
+  const meta = await readPreviewMeta(outDir);
 
-  if (!analysis.needsRemux && !options.force) {
-    return previewResult(sourceAbsolute, false, 'already-compatible', 'source', true, 'native');
+  if (!options.force && startSeconds < 0.5 && (playable || growing)) {
+    let availableSeconds = 0;
+    try {
+      availableSeconds = playlistAvailableSeconds(await readPlaylistText(outDir));
+    } catch {
+      availableSeconds = 0;
+    }
+    if (!complete && !growing) {
+      startLiveTranscode(ffmpegPath, sourceAbsolute, outDir, defaultRemuxAnalysis(), {
+        startSeconds: 0,
+        durationSeconds: meta.durationSeconds,
+        resume: true,
+      });
+    }
+    return previewResult(outDir, true, complete ? 'cache-hit' : 'cache-partial', complete ? 'full' : 'streaming', complete, 'hls', {
+      durationSeconds: meta.durationSeconds,
+      startSeconds: 0,
+      availableSeconds,
+    });
   }
 
-  const outDir = cacheDirPath(relativePath, { mtimeMs: stat.mtimeMs, size: stat.size });
-  await fs.mkdir(outDir, { recursive: true });
-  const reason = remuxReason(analysis);
-
-  if (options.force && !isVideoPreviewGrowing(outDir)) {
+  if (options.force && !growing) {
     await fs.rm(outDir, { recursive: true, force: true }).catch(() => {});
     await fs.mkdir(outDir, { recursive: true });
   }
 
-  if (!options.force && (await cachedHlsComplete(outDir)) && !isVideoPreviewGrowing(outDir)) {
-    return previewResult(outDir, true, 'cache-hit', 'full', true, 'hls');
-  }
+  const job = startLiveTranscode(ffmpegPath, sourceAbsolute, outDir, defaultRemuxAnalysis(), {
+    startSeconds,
+    durationSeconds: meta.durationSeconds,
+    replace: startSeconds > 0.5 || Boolean(options.force),
+  });
 
-  const job = startLiveTranscode(ffmpegPath, sourceAbsolute, outDir, analysis);
+  void probeMedia(sourceAbsolute, ffmpegPath)
+    .then(async (probe) => {
+      const durationSeconds = probeDurationSeconds(probe);
+      if (!(durationSeconds > 0)) return;
+      const current = await readPreviewMeta(outDir);
+      await writePreviewMeta(outDir, {
+        durationSeconds,
+        startSeconds: current.startSeconds || startSeconds,
+      });
+    })
+    .catch(() => {});
+
   if (options.waitForFull) {
     await job.finished;
     if (job.error) throw job.error;
-    return previewResult(outDir, true, reason, 'full', true, 'hls');
+    return previewResult(outDir, true, 'container-remuxed', 'full', true, 'hls', {
+      durationSeconds: meta.durationSeconds,
+      startSeconds,
+    });
   }
 
-  await waitUntilHlsPlayable(outDir, () => job.error);
-  if (job.done) {
-    if (job.error) throw job.error;
-    return previewResult(outDir, true, reason, 'full', true, 'hls');
+  const waitMs = Number.isFinite(Number(options.waitMs)) ? Number(options.waitMs) : 2_000;
+  if (waitMs > 0) {
+    await waitUntilHlsPlayable(outDir, () => job.error, waitMs);
   }
-  return previewResult(outDir, true, reason, 'streaming', false, 'hls');
+  if (job.error) throw job.error;
+  if (job.done && !(await hasPlayableSegment(outDir))) {
+    throw job.error || new Error('호환 변환에 실패했습니다.');
+  }
+  let availableSeconds = 0;
+  try {
+    availableSeconds = playlistAvailableSeconds(await readPlaylistText(outDir));
+  } catch {
+    availableSeconds = 0;
+  }
+  const ready = await cachedHlsComplete(outDir);
+  return previewResult(outDir, true, 'container-remuxed', ready ? 'full' : 'streaming', ready, 'hls', {
+    durationSeconds: meta.durationSeconds,
+    startSeconds,
+    availableSeconds,
+  });
 }
 
 /**

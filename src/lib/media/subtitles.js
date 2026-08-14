@@ -3,14 +3,146 @@ import { base64ToBytes } from '../bytes.js';
 
 /** @typedef {{ path: string, ext: 'srt' | 'smi' | 'vtt', label: string }} SubtitleCandidate */
 
+const SUBTITLE_EXTS = new Set(['vtt', 'srt', 'smi']);
+
+/** Trailing tokens that are language / flag tags, not part of the title. */
+const SUBTITLE_TAG_ALIASES = {
+  en: 'English',
+  eng: 'English',
+  english: 'English',
+  ko: '한국어',
+  kor: '한국어',
+  kr: '한국어',
+  korean: '한국어',
+  hangul: '한국어',
+  영어: 'English',
+  한글: '한국어',
+  한국어: '한국어',
+  ja: '日本語',
+  jp: '日本語',
+  jpn: '日本語',
+  japanese: '日本語',
+  일본어: '日本語',
+  zh: '中文',
+  chi: '中文',
+  chinese: '中文',
+  cn: '中文',
+  tw: '中文',
+  chs: '中文',
+  cht: '中文',
+  중국어: '中文',
+  es: 'Español',
+  spa: 'Español',
+  spanish: 'Español',
+  fr: 'Français',
+  fre: 'Français',
+  fra: 'Français',
+  french: 'Français',
+  de: 'Deutsch',
+  ger: 'Deutsch',
+  deu: 'Deutsch',
+  german: 'Deutsch',
+  pt: 'Português',
+  por: 'Português',
+  portuguese: 'Português',
+  ru: 'Русский',
+  rus: 'Русский',
+  russian: 'Русский',
+  it: 'Italiano',
+  ita: 'Italiano',
+  italian: 'Italiano',
+  th: 'ไทย',
+  tha: 'ไทย',
+  thai: 'ไทย',
+  vi: 'Tiếng Việt',
+  vie: 'Tiếng Việt',
+  vietnamese: 'Tiếng Việt',
+  sdh: 'SDH',
+  cc: 'CC',
+  forced: 'Forced',
+  default: 'Default',
+  utf8: 'UTF-8',
+  'utf-8': 'UTF-8',
+  자막: '자막',
+};
+
 /**
+ * @param {string} fileName
+ */
+export function fileStem(fileName) {
+  const name = String(fileName || '');
+  const index = name.lastIndexOf('.');
+  return index > 0 ? name.slice(0, index) : name;
+}
+
+/**
+ * @param {string | null | undefined} extension
+ */
+function isSubtitleExtension(extension) {
+  return SUBTITLE_EXTS.has(String(extension || '').toLowerCase());
+}
+
+/**
+ * @param {string} stem
+ */
+function stripTrailingSubtitleTags(stem) {
+  let current = String(stem || '').trim();
+  while (current) {
+    const match = current.match(/^(.*?)[.\s_-]+([^\s._-]+)$/);
+    if (!match) break;
+    const tag = match[2].toLowerCase();
+    if (!Object.prototype.hasOwnProperty.call(SUBTITLE_TAG_ALIASES, tag)) break;
+    current = match[1].trim();
+  }
+  return current;
+}
+
+/**
+ * @param {string} videoStem
+ * @param {string} subtitleStem
+ */
+export function scoreSubtitleStemMatch(videoStem, subtitleStem) {
+  const video = String(videoStem || '').trim().toLowerCase();
+  const subtitle = String(subtitleStem || '').trim().toLowerCase();
+  if (!video || !subtitle) return 0;
+  if (video === subtitle) return 100;
+
+  const videoCore = stripTrailingSubtitleTags(video);
+  const subtitleCore = stripTrailingSubtitleTags(subtitle);
+  if (videoCore && subtitleCore && videoCore === subtitleCore) return 80;
+
+  if (subtitle.startsWith(video) && /[.\s_-]/.test(subtitle.charAt(video.length))) {
+    return 50 + Math.min(40, video.length);
+  }
+  if (video.startsWith(subtitle) && /[.\s_-]/.test(video.charAt(subtitle.length))) {
+    return 40;
+  }
+  return 0;
+}
+
+/**
+ * @param {string} subtitleStem
+ * @param {string} videoStem
+ * @param {string} ext
+ */
+function subtitleTrackLabel(subtitleStem, videoStem, ext) {
+  const extra = String(subtitleStem || '').slice(String(videoStem || '').length).replace(/^[.\s_-]+/, '');
+  const token = extra.split(/[.\s_-]/).find(Boolean) || String(subtitleStem || '').split(/[.\s_-]/).pop() || '';
+  const pretty = SUBTITLE_TAG_ALIASES[token.toLowerCase()];
+  if (pretty) return pretty;
+  if (extra) return extra;
+  return ext.toUpperCase();
+}
+
+/**
+ * Exact-name candidates (`movie.srt` for `movie.mp4`).
  * @param {string} videoRelativePath
  * @returns {SubtitleCandidate[]}
  */
 export function listSiblingSubtitleCandidates(videoRelativePath) {
   const parent = getParentPath(videoRelativePath);
   const fileName = String(videoRelativePath || '').split('/').pop() || '';
-  const stem = fileName.includes('.') ? fileName.replace(/\.[^.]+$/, '') : fileName;
+  const stem = fileStem(fileName);
   if (!stem) return [];
 
   /** @type {Array<{ ext: 'srt' | 'smi' | 'vtt', label: string }>} */
@@ -37,6 +169,65 @@ function msToVttTimestamp(totalMs) {
   const seconds = Math.floor((ms % 60_000) / 1000);
   const millis = ms % 1000;
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(millis).padStart(3, '0')}`;
+}
+
+/**
+ * @param {string} value
+ */
+function vttClockToMs(value) {
+  const match = String(value)
+    .trim()
+    .match(/^(?:(\d+):)?(\d{1,2}):(\d{1,2})[.,](\d{1,3})$/);
+  if (!match) return Number.NaN;
+  const hours = match[1] != null ? Number(match[1]) : 0;
+  const minutes = Number(match[2]);
+  const seconds = Number(match[3]);
+  const millis = Number(String(match[4]).padEnd(3, '0').slice(0, 3));
+  return ((hours * 60 + minutes) * 60 + seconds) * 1000 + millis;
+}
+
+/**
+ * Shift cue times so they line up when playback starts at `offsetSeconds`
+ * (mid-file remux). Cues that end before the offset are dropped.
+ * @param {string} vtt
+ * @param {number} offsetSeconds
+ */
+export function shiftWebVttCues(vtt, offsetSeconds) {
+  const offsetMs = Math.round((Number(offsetSeconds) || 0) * 1000);
+  const text = String(vtt ?? '').replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  if (!offsetMs) return text.endsWith('\n') ? text : `${text}\n`;
+
+  const blocks = text.split(/\n\n+/);
+  /** @type {string[]} */
+  const out = [];
+  for (const block of blocks) {
+    const lines = block.split('\n');
+    const timeIdx = lines.findIndex((line) => /\s-->\s/.test(line));
+    if (timeIdx < 0) {
+      if (block.trim()) out.push(block);
+      continue;
+    }
+    const match = lines[timeIdx].match(
+      /^((?:\d+:)?\d{1,2}:\d{1,2}[.,]\d{1,3})\s+-->\s+((?:\d+:)?\d{1,2}:\d{1,2}[.,]\d{1,3})(.*)$/,
+    );
+    if (!match) {
+      out.push(block);
+      continue;
+    }
+    const startMs = vttClockToMs(match[1]) - offsetMs;
+    const endMs = vttClockToMs(match[2]) - offsetMs;
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= 0) continue;
+    lines[timeIdx] = `${msToVttTimestamp(Math.max(0, startMs))} --> ${msToVttTimestamp(endMs)}${match[3]}`;
+    out.push(lines.join('\n'));
+  }
+  return `${out.join('\n\n')}\n`;
+}
+
+/**
+ * @param {string} vtt
+ */
+export function vttToTrackUrl(vtt) {
+  return URL.createObjectURL(new Blob([vtt], { type: 'text/vtt' }));
 }
 
 /**
@@ -154,37 +345,98 @@ export function decodeSubtitleBytes(bytes, ext) {
 /**
  * @param {string} relativePath
  * @param {'srt' | 'smi' | 'vtt'} ext
- * @returns {Promise<string>} blob: URL for a text/vtt track
  */
-export async function loadSubtitleTrackUrl(relativePath, ext) {
+export async function loadSubtitleVtt(relativePath, ext) {
   const base64 = await window.nas4usb.fs.readFile(relativePath);
   const bytes = base64ToBytes(base64);
   const text = decodeSubtitleBytes(bytes, ext);
-  const vtt = subtitleTextToWebVtt(text, ext);
-  const blob = new Blob([vtt], { type: 'text/vtt' });
-  return URL.createObjectURL(blob);
+  return subtitleTextToWebVtt(text, ext);
+}
+
+/**
+ * @param {string} relativePath
+ * @param {'srt' | 'smi' | 'vtt'} ext
+ * @returns {Promise<string>} blob: URL for a text/vtt track
+ */
+export async function loadSubtitleTrackUrl(relativePath, ext) {
+  return vttToTrackUrl(await loadSubtitleVtt(relativePath, ext));
+}
+
+/**
+ * @param {string} videoRelativePath
+ * @param {import('../../types/nas4usb.d.ts').FsEntry[]} entries
+ */
+export function pickSiblingSubtitleEntries(videoRelativePath, entries) {
+  const videoName = String(videoRelativePath || '').split('/').pop() || '';
+  const videoStem = fileStem(videoName);
+  const list = Array.isArray(entries) ? entries : [];
+  const videoStems = list
+    .filter((entry) => !entry.isDirectory && !isSubtitleExtension(entry.extension))
+    .map((entry) => fileStem(entry.name).toLowerCase())
+    .filter(Boolean);
+
+  /** @type {Array<{ path: string, ext: 'srt' | 'smi' | 'vtt', label: string, score: number }>} */
+  const picked = [];
+  for (const entry of list) {
+    if (entry.isDirectory || !isSubtitleExtension(entry.extension)) continue;
+    const subStem = fileStem(entry.name);
+    const score = scoreSubtitleStemMatch(videoStem, subStem);
+    if (score <= 0) continue;
+    const claimedByCloserVideo = videoStems.some((otherStem) => {
+      if (otherStem === videoStem.toLowerCase()) return false;
+      return scoreSubtitleStemMatch(otherStem, subStem) > score;
+    });
+    if (claimedByCloserVideo) continue;
+    const ext = /** @type {'srt' | 'smi' | 'vtt'} */ (String(entry.extension).toLowerCase());
+    picked.push({
+      path: entry.relativePath,
+      ext,
+      label: subtitleTrackLabel(subStem, videoStem, ext),
+      score,
+    });
+  }
+
+  picked.sort((a, b) => b.score - a.score || a.path.localeCompare(b.path, 'ko'));
+  return picked;
 }
 
 /**
  * Resolve existing sibling subtitle files for a video path.
+ * Matches exact names and close variants (`a.mp4` + `a.english.srt`).
  * @param {string} videoRelativePath
- * @returns {Promise<Array<{ path: string, ext: 'srt' | 'smi' | 'vtt', label: string, src: string }>>}
+ * @returns {Promise<Array<{ path: string, ext: 'srt' | 'smi' | 'vtt', label: string, vtt: string }>>}
  */
 export async function loadSiblingSubtitleTracks(videoRelativePath) {
-  const candidates = listSiblingSubtitleCandidates(videoRelativePath);
-  /** @type {Array<{ path: string, ext: 'srt' | 'smi' | 'vtt', label: string, src: string }>} */
+  /** @type {Array<{ path: string, ext: 'srt' | 'smi' | 'vtt', label: string }>} */
+  let candidates = [];
+  try {
+    const parent = getParentPath(videoRelativePath);
+    const entries = await window.nas4usb.fs.readDir(parent);
+    candidates = pickSiblingSubtitleEntries(videoRelativePath, Array.isArray(entries) ? entries : []);
+  } catch {
+    candidates = listSiblingSubtitleCandidates(videoRelativePath);
+  }
+
+  if (candidates.length === 0) {
+    candidates = listSiblingSubtitleCandidates(videoRelativePath);
+  }
+
+  /** @type {Array<{ path: string, ext: 'srt' | 'smi' | 'vtt', label: string, vtt: string }>} */
   const tracks = [];
+  const seen = new Set();
 
   for (const candidate of candidates) {
+    if (seen.has(candidate.path)) continue;
+    seen.add(candidate.path);
     try {
       const stat = await window.nas4usb.fs.stat(candidate.path);
       if (!stat || stat.isDirectory) continue;
-      const src = await loadSubtitleTrackUrl(candidate.path, candidate.ext);
+      const vtt = await loadSubtitleVtt(candidate.path, candidate.ext);
       tracks.push({
         path: candidate.path,
         ext: candidate.ext,
         label: candidate.label,
-        src,
+        vtt,
       });
     } catch {
       // missing sibling — ignore

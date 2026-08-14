@@ -26,7 +26,7 @@ async function fetchFfmpegAvailable() {
 
 /**
  * @param {string} relativePath
- * @param {{ force?: boolean, waitForFull?: boolean, statusOnly?: boolean }} [options]
+ * @param {{ force?: boolean, waitForFull?: boolean, statusOnly?: boolean, startSeconds?: number }} [options]
  */
 async function prepareVideoPreview(relativePath, options = {}) {
   const url = new URL(buildMediaStreamUrl(relativePath, { preview: true }), window.location.origin);
@@ -34,6 +34,7 @@ async function prepareVideoPreview(relativePath, options = {}) {
   if (options.force) url.searchParams.set('force', '1');
   if (options.waitForFull) url.searchParams.set('full', '1');
   if (options.statusOnly) url.searchParams.set('status', '1');
+  if (Number(options.startSeconds) > 0.5) url.searchParams.set('start', String(options.startSeconds));
   const headers = {};
   const adminToken = getStoredAdminToken();
   if (adminToken) headers['X-Admin-Token'] = adminToken;
@@ -67,7 +68,11 @@ export function useMediaStream(relativePath, options = {}) {
   const [previewStage, setPreviewStage] = useState(
     /** @type {'source' | 'streaming' | 'full'} */ ('source'),
   );
+  const [durationSeconds, setDurationSeconds] = useState(/** @type {number | null} */ (null));
+  const [availableSeconds, setAvailableSeconds] = useState(0);
+  const [startSeconds, setStartSeconds] = useState(0);
   const retriedRef = useRef(false);
+  const seekingRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -81,6 +86,10 @@ export function useMediaStream(relativePath, options = {}) {
     setBlockStream(false);
     setPlayerKind('file');
     setPreviewStage('source');
+    setDurationSeconds(null);
+    setAvailableSeconds(0);
+    setStartSeconds(0);
+    seekingRef.current = false;
 
     if (!preferFfmpegPreview) {
       setUsePreview(false);
@@ -103,7 +112,12 @@ export function useMediaStream(relativePath, options = {}) {
         return;
       }
 
-      setPreviewNote('FFmpeg 호환 변환을 사용합니다.');
+      setPreviewNote('변환하며 재생합니다. 아래 막대로 중간부터 이동할 수 있습니다.');
+      setUsePreview(true);
+      setPlayerKind('hls');
+      setPreviewStage('streaming');
+      setFfmpegChecked(true);
+      setPreparing(false);
       try {
         const data = await prepareVideoPreview(relativePath);
         if (cancelled) return;
@@ -113,8 +127,13 @@ export function useMediaStream(relativePath, options = {}) {
         setPreviewStage(stage);
         setPlayerKind(hls ? 'hls' : 'file');
         setUsePreview(true);
+        if (Number(data.durationSeconds) > 0) setDurationSeconds(Number(data.durationSeconds));
+        if (Number.isFinite(Number(data.availableSeconds))) {
+          setAvailableSeconds(Number(data.availableSeconds));
+        }
+        setStartSeconds(Number(data.startSeconds) > 0 ? Number(data.startSeconds) : 0);
         if (hls && !data.fullReady) {
-          setPreviewNote('변환하며 재생합니다.');
+          setPreviewNote('변환하며 재생합니다. 아래 막대로 중간부터 이동할 수 있습니다.');
         }
       } catch (error) {
         if (cancelled) return;
@@ -138,8 +157,19 @@ export function useMediaStream(relativePath, options = {}) {
 
     async function pollFull() {
       try {
-        const data = await prepareVideoPreview(relativePath, { statusOnly: true });
-        if (cancelled || data.fullReady !== true) return;
+        const data = await prepareVideoPreview(relativePath, {
+          statusOnly: true,
+          startSeconds,
+        });
+        if (cancelled) return;
+        if (Number(data.durationSeconds) > 0) setDurationSeconds(Number(data.durationSeconds));
+        if (Number.isFinite(Number(data.availableSeconds))) {
+          setAvailableSeconds(Number(data.availableSeconds));
+        }
+        if (!seekingRef.current && Number.isFinite(Number(data.startSeconds))) {
+          setStartSeconds(Number(data.startSeconds) > 0 ? Number(data.startSeconds) : 0);
+        }
+        if (data.fullReady !== true) return;
         setPreviewStage('full');
         setPreviewNote('');
       } catch {
@@ -155,7 +185,7 @@ export function useMediaStream(relativePath, options = {}) {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [relativePath, usePreview, playerKind, previewStage]);
+  }, [relativePath, usePreview, playerKind, previewStage, startSeconds]);
 
   const streamUrl = useMemo(() => {
     if (!ffmpegChecked || blockStream) return '';
@@ -164,9 +194,19 @@ export function useMediaStream(relativePath, options = {}) {
     const extra = new URLSearchParams();
     if (forcePreview) extra.set('force', '1');
     if (playerKind === 'hls') extra.set('hls', 'index.m3u8');
+    if (startSeconds > 0.5) extra.set('start', String(Math.floor(startSeconds)));
     extra.set('n', String(previewNonce));
     return `${url}&${extra.toString()}`;
-  }, [relativePath, usePreview, forcePreview, previewNonce, ffmpegChecked, blockStream, playerKind]);
+  }, [
+    relativePath,
+    usePreview,
+    forcePreview,
+    previewNonce,
+    ffmpegChecked,
+    blockStream,
+    playerKind,
+    startSeconds,
+  ]);
 
   const isStreamingPreview = usePreview && playerKind === 'hls' && previewStage === 'streaming';
 
@@ -230,9 +270,61 @@ export function useMediaStream(relativePath, options = {}) {
     previewNote,
     usingFfmpegPreview: usePreview,
     isStreamingPreview,
+    previewStage,
     playerKind,
     setLoadError,
     setLoading,
     setPreparing,
+    durationSeconds,
+    availableSeconds,
+    startSeconds,
+    seekTo: async (seconds) => {
+      const target = Math.max(0, Number(seconds) || 0);
+      const media = mediaRef?.current;
+      const duration = durationSeconds || 0;
+      const clamped = duration > 0 ? Math.min(duration, target) : target;
+      const origin = startSeconds > 0.5 ? startSeconds : 0;
+      let localReady = Math.max(0, Number(availableSeconds) || 0);
+      if (media instanceof HTMLMediaElement) {
+        if (Number.isFinite(media.duration) && media.duration > 0) {
+          localReady = Math.max(localReady, media.duration);
+        }
+        if (media.buffered.length > 0) {
+          localReady = Math.max(localReady, media.buffered.end(media.buffered.length - 1));
+        }
+      }
+      const convertedEnd = origin + localReady + 2.5;
+
+      if (
+        media instanceof HTMLMediaElement &&
+        clamped >= origin - 0.25 &&
+        clamped <= convertedEnd
+      ) {
+        media.currentTime = Math.max(0, clamped - origin);
+        return;
+      }
+
+      if (seekingRef.current) return;
+      seekingRef.current = true;
+      setPreparing(true);
+      setLoadError(null);
+      try {
+        const data = await prepareVideoPreview(relativePath, { startSeconds: clamped });
+        setStartSeconds(Number(data.startSeconds) > 0 ? Number(data.startSeconds) : clamped);
+        if (Number(data.durationSeconds) > 0) setDurationSeconds(Number(data.durationSeconds));
+        if (Number.isFinite(Number(data.availableSeconds))) {
+          setAvailableSeconds(Number(data.availableSeconds));
+        }
+        const stage = data.stage === 'full' ? 'full' : 'streaming';
+        setPreviewStage(stage);
+        setPreviewNonce((value) => value + 1);
+        setPreviewNote('선택한 위치부터 변환하며 재생합니다.');
+      } catch (error) {
+        setLoadError(error instanceof Error ? error.message : '해당 위치부터 변환하지 못했습니다.');
+      } finally {
+        seekingRef.current = false;
+        setPreparing(false);
+      }
+    },
   };
 }

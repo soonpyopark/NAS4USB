@@ -2,7 +2,7 @@
 export const DEFAULT_SYNC_PORT = 3009;
 
 /** Application display version. */
-export const APP_VERSION = '1.0.5';
+export const APP_VERSION = '1.0.6';
 
 /**
  * Package build id (YYMMDD_HHMMSS) — matches MSI/portable filename suffix.

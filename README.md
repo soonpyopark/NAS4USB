@@ -4,13 +4,14 @@
 
 # NAS4USB
 
-USB(또는 단일 폴더)만으로 **오프라인 LAN NAS**와 **실시간 공동 편집**을 제공하는 Windows/macOS Electron 앱입니다. (v1.0.5)
+USB(또는 단일 폴더)만으로 **오프라인 LAN NAS**와 **실시간 공동 편집**을 제공하는 Windows/macOS Electron 앱입니다. (v1.0.6)
 
 - **Electron + Vite + React** — 로컬 파일 탐색기 UI
 - **Y.js** — HWPX·XLSX·화이트보드·TipTap 실시간 동기화 (기본 포트 `3009`)
 - **에디터 코어** — rhwp(HWPX), FortuneSheet(XLSX), WhiteBoard4Share(.wb4s), TipTap(.tiptap)
 - **PDF 미리보기** — PDF.js 기반 연속 스크롤 · 썸네일 · 보기(줌) · 형광펜/밑줄([저장] 시 원본 기록) · Excel 내보내기
 - **만화·소설 리더** — 이미지 / CBZ·CBR·ZIP·RAR·7Z / EPUB (Yomikiru 지원 형식에 맞춘 네이티브 셸; PDF는 기존 뷰어 유지)
+- **동영상 미리보기** — Video.js 플레이어 · FFmpeg HLS 호환 변환(변환하며 재생) · 전체 길이 시크 · 옆 파일 자막
 
 > **용도:** USB 이동·교실/회의실 LAN 협업. 인터넷 없이 동작하도록 설계되었습니다.
 
@@ -30,6 +31,7 @@ USB(또는 단일 폴더)만으로 **오프라인 LAN NAS**와 **실시간 공�
 | 화이트보드 | `.wb4s` — WhiteBoard4Share 엔진 |
 | PDF 미리보기 | 썸네일 · 너비/높이/페이지 맞춤 · 2쪽 보기 · 검색 · 형광펜/밑줄 · 엑셀 내보내기 |
 | 만화·소설 리더 | 이미지 · cbz/cbr/zip/rar/7z · epub (세로/LTR/RTL/두 쪽) |
+| 동영상 미리보기 | Video.js · 등록한 FFmpeg로 HLS 변환하며 재생 · 중간 이동 · `.srt`/`.vtt`/`.smi` 자막 |
 | 파일 접근 제어 | 비공개·열람제한·공유 링크 (총괄관리자) |
 | 회원 개인폴더 | 활성 회원 홈 자동 생성 · 삭제 시 정리 · 고아 폴더 prune |
 | 휴지통 | 총괄관리자 전용 |
@@ -44,6 +46,7 @@ USB(또는 단일 폴더)만으로 **오프라인 LAN NAS**와 **실시간 공�
 | 개인폴더 | `{DATA_ROOT}/private/<회원ID>` | 회원별 홈 · LAN 협업 |
 | 외부 폴더 | 환경설정에서 지정한 절대 경로 | Google Drive·다른 드라이브 등 · 편집 가능 · **LAN 협업 없음** |
 | (설정) | `DATA_ROOT` / 설정 `dataRoot` | 부모 루트. 미설정 시 프로그램 폴더 |
+| (캐시) | `{DATA_ROOT}/.nas4usb/video-preview/` | 동영상 HLS 변환 캐시. 기본 폴더를 바꾸면 새 루트 하위에 쌓임 |
 
 구버전에서 공유 루트가 `data`·`공유폴더`이거나 개인이 `개인폴더`인 경우, 실행 시 `share`/`private` 레이아웃으로 이전합니다.
 
@@ -55,6 +58,14 @@ USB(또는 단일 폴더)만으로 **오프라인 LAN NAS**와 **실시간 공�
 - **압축:** `zip`/`cbz`는 JSZip, `rar`/`cbr`/`7z`는 서버(7-Zip) 추출
 - 이미지만 레거시 뷰어로 되돌리려면 소프트 복원 — [`docs/RESTORE-pre-yomikiru-reader.md`](docs/RESTORE-pre-yomikiru-reader.md)
 - UI 영감: [Yomikiru](https://github.com/mienaiyami/yomikiru) (MIT, 포크 아님)
+
+### 동영상 미리보기 (요약)
+
+- **플레이어:** [Video.js](https://videojs.com/) 셸 (시크 · 배속 · 자막 · PiP · 전체화면 · 단축키)
+- **호환 변환:** 설정에 등록한 FFmpeg로 H.264/AAC HLS(EVENT) 변환. 첫 조각이 나오는 즉시 재생
+- **중간 이동:** 전체 길이 막대에서 변환된 구간은 바로 이동, 그 뒤는 해당 시각부터 다시 변환. 자막 시간도 같이 맞춤
+- **자막:** 같은 폴더의 `.srt` / `.vtt` / `.smi` (`영상.english.srt` 등)
+- **캐시:** `{DATA_ROOT}/.nas4usb/video-preview/` (탐색기에는 숨김). FFmpeg는 번들하지 않음
 
 ---
 
@@ -214,8 +225,9 @@ NAS4USB/
 ├── main.js                 Electron 진입점
 ├── electron/               메인 프로세스 (서버, IPC, 파일 API, 워크스페이스)
 ├── src/                    React UI (Vite root)
-│   ├── components/editors/ ComicReaderShell · PdfViewerShell 등 뷰어·에디터
+│   ├── components/editors/ ComicReaderShell · PdfViewerShell · VideoPlayerShell 등
 │   ├── lib/comicReader/    만화·PDF·압축·EPUB 페이지 해석
+│   ├── lib/media/          Video.js · HLS · 자막 · 스트림 URL
 │   └── lib/pdf/            (레거시) PDF.js 로드·검색·형광펜/선택·뷰어 사이드카
 ├── docs/                   복원 체크포인트 등
 ├── shared/                 공유 상수·경로(공유폴더/개인폴더 ↔ share/private)
@@ -248,6 +260,7 @@ NAS4USB/
 | TipTap | `@tiptap/react`, `@tiptap/starter-kit` 등 | MIT |
 | Markdown / TXT | CodeMirror 6 | MIT |
 | 만화·소설 리더 | `ComicReaderShell` + `epubjs` / JSZip / 7zip-min | BSD-2-Clause / MIT |
+| 동영상 미리보기 | Video.js + hls.js · 사용자 등록 FFmpeg | Apache-2.0 (플레이어) / LGPL·GPL (FFmpeg, 미번들) |
 | PDF 미리보기 | `pdfjs-dist` (PDF.js) — `src/lib/pdf/`, `PdfViewerShell` | Apache-2.0 |
 | 실시간 동기화 | `yjs`, `y-websocket` | MIT |
 | TipTap·MD → HWPX | Pandoc 3.10.1 + pypandoc-hwpx + pypandoc + Pillow (`tools/hwpx-export`) | GPL-2.0-or-later / MIT / MIT-CMU |
@@ -274,7 +287,7 @@ Electron/Chromium 및 npm 패키지 등 서드파티는 각 라이선스를 따�
 | UI | React, Vite, Tailwind CSS | MIT |
 | 협업 | Yjs, y-websocket | MIT |
 | 문서 편집 | TipTap, CodeMirror, rhwp, FortuneSheet, WhiteBoard4Share | MIT / AGPL-3.0-only |
-| 문서/미디어 | PDF.js, SheetJS (`xlsx`), JSZip, KaTeX | Apache-2.0 / MIT 등 |
+| 문서/미디어 | PDF.js, Video.js, hls.js, SheetJS (`xlsx`), JSZip, KaTeX | Apache-2.0 / MIT 등 |
 | HWPX 변환 | [Pandoc](https://github.com/jgm/pandoc), [pypandoc-hwpx](https://github.com/msjang/pypandoc-hwpx), pypandoc, Pillow | GPL-2.0-or-later / MIT / MIT-CMU |
 
 자세한 표와 직접 의존성 목록은 `THIRD_PARTY_NOTICES.md`와 `LICENSE` 하단 **Third-Party Components**를 참고하세요.

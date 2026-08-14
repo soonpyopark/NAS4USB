@@ -1,6 +1,6 @@
 {
   "name": "@nas4usb/xlsx",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "private": true,
   "type": "module",
   "description": "Fortune Sheet adapter for NAS4USB xlsx/xls editing",
