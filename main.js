@@ -1,3 +1,4 @@
+import { installStdioPipeGuard } from './electron/stdioGuard.js';
 import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell, Tray } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -149,6 +150,8 @@ import {
   syncFileHistoryDelete,
   syncFileHistoryRename,
 } from './electron/fileHistoryService.js';
+
+installStdioPipeGuard();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = !app.isPackaged;
@@ -1089,6 +1092,18 @@ ipcMain.handle('tiptap:exportHwpx', async (_event, payload = {}) => {
     html: payload.html ?? '',
     fileName: payload.fileName ?? 'document.hwpx',
     assets: Array.isArray(payload.assets) ? payload.assets : [],
+  });
+});
+
+ipcMain.handle('pdf:fromHtml', async (_event, payload = {}) => {
+  const { convertHtmlToPdfBase64 } = await import('./electron/pdfExportService.js');
+  return convertHtmlToPdfBase64({
+    html: payload.html ?? '',
+    fileName: payload.fileName ?? 'document.pdf',
+    pageSize: payload.pageSize ?? 'A4',
+    landscape: Boolean(payload.landscape),
+    marginMm: payload.marginMm,
+    printBackground: payload.printBackground,
   });
 });
 

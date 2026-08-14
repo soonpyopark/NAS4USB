@@ -341,6 +341,14 @@
   margin: 0.75rem 0;
 }
 
+/* Sized box around the image so resize handles stay glued to its edges. */
+.tiptap-editor-shell .tiptap-image-frame {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  line-height: 0;
+}
+
 .tiptap-editor-shell .tiptap-image {
   max-width: 100%;
   height: auto;
@@ -351,6 +359,91 @@
 .tiptap-editor-shell .tiptap-image-wrap.is-selected .tiptap-image {
   outline: 2px solid #2563eb;
   outline-offset: 2px;
+}
+
+.tiptap-editor-shell .tiptap-image-handle {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #2563eb;
+  border-radius: 3px;
+  background: #ffffff;
+  touch-action: none;
+  z-index: 2;
+}
+
+.tiptap-editor-shell .tiptap-image-handle--nw {
+  top: -7px;
+  left: -7px;
+  cursor: nwse-resize;
+}
+
+.tiptap-editor-shell .tiptap-image-handle--ne {
+  top: -7px;
+  right: -7px;
+  cursor: nesw-resize;
+}
+
+.tiptap-editor-shell .tiptap-image-handle--sw {
+  bottom: -7px;
+  left: -7px;
+  cursor: nesw-resize;
+}
+
+.tiptap-editor-shell .tiptap-image-handle--se {
+  bottom: -7px;
+  right: -7px;
+  cursor: nwse-resize;
+}
+
+.tiptap-editor-shell .tiptap-image-size-badge {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(15, 23, 42, 0.78);
+  color: #ffffff;
+  font-size: 11px;
+  line-height: 1.5;
+  z-index: 3;
+}
+
+.tiptap-editor-shell .tiptap-image-toolbar {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #ffffff;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
+  line-height: 1.2;
+  z-index: 3;
+}
+
+.tiptap-editor-shell .tiptap-image-toolbar button {
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: transparent;
+  color: #334155;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.tiptap-editor-shell .tiptap-image-toolbar button:hover {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+@media print {
+  .tiptap-editor-shell .tiptap-image-handle,
+  .tiptap-editor-shell .tiptap-image-size-badge,
+  .tiptap-editor-shell .tiptap-image-toolbar {
+    display: none !important;
+  }
 }
 
 .tiptap-editor-shell .tiptap-video-wrap {

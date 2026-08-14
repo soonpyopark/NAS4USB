@@ -2,14 +2,12 @@ import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
-import Image from '@tiptap/extension-image';
 import Highlight from '@tiptap/extension-highlight';
 import TextAlign from '@tiptap/extension-text-align';
 import Typography from '@tiptap/extension-typography';
 import CharacterCount from '@tiptap/extension-character-count';
 import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
-import Underline from '@tiptap/extension-underline';
 import { TextStyleKit } from '@tiptap/extension-text-style';
 import Collaboration, { isChangeOrigin } from '@tiptap/extension-collaboration';
 import CollaborationCaret from '@tiptap/extension-collaboration-caret';
@@ -93,12 +91,10 @@ export function createTiptapExtensions(options = {}) {
     }),
     TaskList,
     TaskItem.configure({ nested: true }),
-    includeImageNodeView
-      ? createTiptapImageExtension({ resolveFileUrl })
-      : Image.configure({
-          allowBase64: false,
-          HTMLAttributes: { class: 'tiptap-image' },
-        }),
+    createTiptapImageExtension({
+      resolveFileUrl,
+      includeNodeView: includeImageNodeView,
+    }),
     createTiptapVideoExtension({
       resolveFileUrl,
       includeNodeView: includeMediaNodeView,
@@ -123,7 +119,6 @@ export function createTiptapExtensions(options = {}) {
       katexOptions: { throwOnError: false },
     }),
     Highlight.configure({ multicolor: true }),
-    Underline,
     TextAlign.configure({
       types: ['heading', 'paragraph'],
     }),

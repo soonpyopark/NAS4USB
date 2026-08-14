@@ -226,6 +226,18 @@ export function createHttpNas4usbClient() {
         ),
     },
 
+    pdf: {
+      fromHtml: (payload) =>
+        apiFetch(
+          '/pdf/fromHtml',
+          {
+            method: 'POST',
+            body: JSON.stringify(payload ?? {}),
+          },
+          180000,
+        ),
+    },
+
     auth: {
       login: ({ id, password, rememberMe }) =>
         apiFetch('/auth/login', {

@@ -3,20 +3,75 @@ import { ReactNodeViewRenderer } from '@tiptap/react';
 import TiptapImageView from '../../components/editors/tiptap/TiptapImageView.jsx';
 
 /**
- * Image node that resolves package `assets/` URLs through a host-provided resolver
- * (stream URL / blob) without rewriting the document JSON.
+ * Pixel size from an HTML attribute (`width="320"`) or a CSS length (`width: 320px`).
+ * Relative units (`%`, `em`, `auto`) stay unset so the image keeps its natural flow size.
  *
- * @param {{ resolveFileUrl?: (url: string) => Promise<string> }} [options]
+ * @param {string | number | null | undefined} value
+ * @returns {number | null}
+ */
+export function parseImagePixelSize(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'number') return Number.isFinite(value) && value > 0 ? Math.round(value) : null;
+
+  const trimmed = String(value).trim();
+  if (!trimmed) return null;
+  const match = /^(\d+(?:\.\d+)?)(px)?$/i.exec(trimmed);
+  if (!match) return null;
+  const size = Number.parseFloat(match[1]);
+  return Number.isFinite(size) && size > 0 ? Math.round(size) : null;
+}
+
+/**
+ * @param {HTMLElement} element
+ * @param {'width' | 'height'} dimension
+ */
+function readImageSize(element, dimension) {
+  return (
+    parseImagePixelSize(element.getAttribute(dimension)) ??
+    parseImagePixelSize(element.style?.[dimension])
+  );
+}
+
+/**
+ * Image node that resolves package `assets/` URLs through a host-provided resolver
+ * (stream URL / blob) without rewriting the document JSON, and keeps a manual size.
+ *
+ * @param {{
+ *   resolveFileUrl?: (url: string) => Promise<string>,
+ *   includeNodeView?: boolean,
+ * }} [options]
  */
 export function createTiptapImageExtension(options = {}) {
+  const { resolveFileUrl, includeNodeView = true } = options;
+
   return Image.extend({
     addOptions() {
       return {
         ...this.parent?.(),
-        resolveFileUrl: options.resolveFileUrl,
+        resolveFileUrl,
       };
     },
+
+    addAttributes() {
+      return {
+        ...this.parent?.(),
+        width: {
+          default: null,
+          parseHTML: (element) => readImageSize(element, 'width'),
+          renderHTML: (attributes) =>
+            attributes.width ? { width: attributes.width } : {},
+        },
+        height: {
+          default: null,
+          parseHTML: (element) => readImageSize(element, 'height'),
+          renderHTML: (attributes) =>
+            attributes.height ? { height: attributes.height } : {},
+        },
+      };
+    },
+
     addNodeView() {
+      if (!includeNodeView) return null;
       return ReactNodeViewRenderer(TiptapImageView);
     },
   }).configure({

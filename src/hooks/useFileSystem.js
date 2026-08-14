@@ -7,7 +7,7 @@ import {
   isFsNotFoundError,
   isTrashPath,
 } from '../lib/trashPaths.js';
-import { isFavoritesPath } from '../lib/favoritesPaths.js';
+import { favoritesViewKind, isFavoritesPath } from '../lib/favoritesPaths.js';
 import { filterTiptapAssetSidecarFromEntries } from '../../shared/tiptapAssetPaths.js';
 import { filterFortuneSidecarFromEntries } from '../../shared/fortuneSheetSidecar.js';
 import { filterPdfViewerSidecarFromEntries } from '../../shared/pdfViewerSidecar.js';
@@ -26,7 +26,15 @@ export function useFileSystem(currentPath) {
     try {
       if (isFavoritesPath(currentPath)) {
         const result = await window.nas4usb.favorites.listEntries();
-        setEntries(Array.isArray(result) ? result : []);
+        const all = Array.isArray(result) ? result : [];
+        const kind = favoritesViewKind(currentPath);
+        setEntries(
+          kind === 'folders'
+            ? all.filter((entry) => entry.isDirectory)
+            : kind === 'files'
+              ? all.filter((entry) => !entry.isDirectory)
+              : all,
+        );
       } else {
         const result = await readDirWithRetry(currentPath);
         setEntries(

@@ -9,7 +9,7 @@ export const APP_VERSION = '1.0.6';
  * Refreshed by `build:release` / `build:msi` / `build:dist:exe` for update checks
  * when the GitHub tag version is unchanged (same-version republish).
  */
-export const APP_BUILD_STAMP = '260814_131432';
+export const APP_BUILD_STAMP = '260814_215517';
 
 /** Application display name. */
 export const APP_NAME = 'NAS4USB';
@@ -52,6 +52,10 @@ export const TRASH_FOLDER = '__trash';
 /** Virtual folder path for the favorites document list in the explorer. */
 export const FAVORITES_FOLDER = '__favorites';
 
+/** Favorites split views. Subpaths so every favorites guard keeps working. */
+export const FAVORITES_FILES_FOLDER = `${FAVORITES_FOLDER}/__files`;
+export const FAVORITES_FOLDERS_FOLDER = `${FAVORITES_FOLDER}/__folders`;
+
 /** Virtual prefix for admin-mounted external folders (no LAN collab). */
 export const EXTERNAL_FOLDER = '외부폴더';
 
@@ -65,6 +69,20 @@ export function isTrashRelativePath(relativePath) {
 export function isFavoritesRelativePath(relativePath) {
   const normalized = String(relativePath ?? '').replace(/\\/g, '/');
   return normalized === FAVORITES_FOLDER || normalized.startsWith(`${FAVORITES_FOLDER}/`);
+}
+
+/**
+ * Which favorites list a path shows: everything, files only, or folders only.
+ *
+ * @param {string} relativePath
+ * @returns {'all' | 'files' | 'folders' | null}
+ */
+export function favoritesViewKind(relativePath) {
+  const normalized = String(relativePath ?? '').replace(/\\/g, '/');
+  if (normalized === FAVORITES_FILES_FOLDER) return 'files';
+  if (normalized === FAVORITES_FOLDERS_FOLDER) return 'folders';
+  if (isFavoritesRelativePath(normalized)) return 'all';
+  return null;
 }
 
 export const TRASH_ACCESS_DENIED_MESSAGE = '휴지통은 총괄관리자만 접근할 수 있습니다.';

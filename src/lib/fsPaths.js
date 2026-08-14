@@ -59,7 +59,11 @@ export function validateEntryName(name) {
   return { ok: true, name: sanitized };
 }
 
-export { splitEntryExtension, validateRenameEntryName } from '../../shared/entryNames.js';
+export {
+  joinEntryExtension,
+  splitEntryExtension,
+  validateRenameEntryName,
+} from '../../shared/entryNames.js';
 export { resolveUniqueName } from '../../shared/uniqueName.js';
 
 /**

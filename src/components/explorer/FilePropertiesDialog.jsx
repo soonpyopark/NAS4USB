@@ -28,6 +28,7 @@ function formatDate(iso) {
  *     isShareEditable?: boolean,
  *     isFavorite?: boolean,
  *   } | null,
+ *   isFavorite?: boolean,
  *   isAdminLoggedIn?: boolean,
  *   accessSaving?: boolean,
  *   onChangePrivate?: (checked: boolean) => void,
@@ -42,6 +43,7 @@ export default function FilePropertiesDialog({
   entry,
   statInfo,
   fileStatus,
+  isFavorite = false,
   isAdminLoggedIn = false,
   accessSaving = false,
   onChangePrivate,
@@ -64,6 +66,7 @@ export default function FilePropertiesDialog({
         }
       : null);
   const showAccessOptions = Boolean(entry && !entry.isDirectory);
+  const showFolderFavorite = Boolean(entry?.isDirectory);
 
   return (
     <AppModal open={Boolean(entry)} onClose={onClose} title="속성">
@@ -146,6 +149,25 @@ export default function FilePropertiesDialog({
               {!canEditAccessOptions && (
                 <p className="modal-access-hint">비공개·열람제한·공유·즐겨찾기는 총괄관리자만 변경할 수 있습니다.</p>
               )}
+            </div>
+          )}
+
+          {showFolderFavorite && (
+            <div className="modal-access-options">
+              <label className={`modal-access-option${canEditAccessOptions ? '' : ' modal-access-option--readonly'}`}>
+                <input
+                  type="checkbox"
+                  checked={Boolean(isFavorite)}
+                  disabled={accessSaving || !canEditAccessOptions}
+                  onChange={(event) => onChangeFavorite?.(event.target.checked)}
+                />
+                <span>즐겨찾기 추가</span>
+              </label>
+              <p className="modal-access-hint">
+                {canEditAccessOptions
+                  ? '즐겨찾기한 폴더는 왼쪽 아래 폴더 즐겨찾기에서 바로 열 수 있습니다.'
+                  : '즐겨찾기는 총괄관리자만 변경할 수 있습니다.'}
+              </p>
             </div>
           )}
 

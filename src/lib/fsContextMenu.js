@@ -40,6 +40,8 @@ function openFileMenuLabel(entry) {
  *   canDownload?: boolean,
  *   onExportHtml?: () => void,
  *   canExportHtml?: boolean,
+ *   onToggleFavorite?: (favorited: boolean) => void,
+ *   isFavorite?: boolean,
  *   canEditOpen?: boolean,
  *   isAdminLoggedIn?: boolean,
  *   canWrite?: boolean,
@@ -67,6 +69,8 @@ export function buildEntryContextMenuItems({
   canDownload = false,
   onExportHtml,
   canExportHtml = false,
+  onToggleFavorite,
+  isFavorite = false,
   canEditOpen = true,
   isAdminLoggedIn = true,
   canWrite = true,
@@ -214,6 +218,16 @@ export function buildEntryContextMenuItems({
               onClick: () => onPermanentDelete?.(),
             },
           ]),
+    ...(onToggleFavorite && isAdminLoggedIn
+      ? [
+          {
+            id: 'favorite',
+            label: isFavorite ? '즐겨찾기 해제' : '즐겨찾기 추가',
+            disabled: targetCount !== 1 || externalMountRoot,
+            onClick: () => onToggleFavorite(!isFavorite),
+          },
+        ]
+      : []),
     {
       id: 'properties',
       label: '속성',

@@ -27,6 +27,13 @@
     @apply h-full w-full overflow-hidden;
   }
 
+  /* Tablets/phones: `100%` resolves to the large viewport, so the bottom of the
+     shell disappears behind the collapsing browser toolbar. */
+  body,
+  #root {
+    height: 100dvh;
+  }
+
   body {
     @apply bg-nas-surface text-slate-800;
   }
@@ -213,6 +220,10 @@
   justify-content: center;
   background: rgba(0, 0, 0, 0.32);
   padding: 1rem;
+  /* Tablet/phone browsers keep `inset: 0` at the *large* viewport, so the
+     collapsing toolbars hide the bottom of a dialog. Pin to the visible height. */
+  height: 100%;
+  height: 100dvh;
 }
 
 /* Alerts/confirms must sit above EditorModal/ViewerModal (same base z-index,
@@ -225,6 +236,8 @@
   position: relative;
   width: 100%;
   max-width: 420px;
+  max-height: 100%;
+  overflow-y: auto;
   background: #ffffff;
   border-radius: 4px;
   padding: 1.5rem 1.75rem;
@@ -272,13 +285,15 @@
   padding-right: 2rem;
 }
 
+/* Fill the overlay instead of measuring the viewport again: the overlay already
+   accounts for its own padding and for mobile browser chrome. */
 .modal-dialog--editor,
 .modal-dialog.modal-dialog--editor {
   display: flex;
-  width: calc(100vw - 2rem);
-  max-width: calc(100vw - 2rem);
-  max-height: calc(100vh - 2rem);
-  height: calc(100vh - 2rem);
+  width: 100%;
+  max-width: 100%;
+  height: 100%;
+  max-height: 100%;
   flex-direction: column;
   overflow: hidden;
   padding: 0;
@@ -418,8 +433,11 @@
 
 .modal-editor-header__actions {
   order: 3;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   margin-left: auto;
+  /* Narrow tablets: let the icon row break instead of running off the header. */
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 @container (max-width: 720px) {

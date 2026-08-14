@@ -6,8 +6,20 @@ import * as fsService from './fsService.js';
 const FAVORITES_FILE = '.nas4usb-favorites.json';
 
 /**
- * @typedef {{ favorites: Record<string, boolean> }} FavoritesStore
+ * Values carry the entry kind so the UI can split folder and file favorites
+ * without stat-ing every path. Legacy stores hold `true`, which means a file.
+ *
+ * @typedef {'file' | 'folder'} FavoriteKind
+ * @typedef {{ favorites: Record<string, FavoriteKind | boolean> }} FavoritesStore
  */
+
+/**
+ * @param {FavoriteKind | boolean | undefined} value
+ * @returns {FavoriteKind}
+ */
+function favoriteKind(value) {
+  return value === 'folder' ? 'folder' : 'file';
+}
 
 /**
  * @param {string} portableRoot
@@ -59,10 +71,7 @@ export async function setFavorite(relativePath, favorited, portableRoot = getPor
 
   if (favorited) {
     const stat = await fsService.statPath(normalizedPath);
-    if (stat.isDirectory) {
-      throw new Error('폴더는 즐겨찾기에 추가할 수 없습니다.');
-    }
-    store.favorites[normalizedPath] = true;
+    store.favorites[normalizedPath] = stat.isDirectory ? 'folder' : 'file';
   } else {
     delete store.favorites[normalizedPath];
   }
@@ -84,16 +93,16 @@ export async function listFavoriteEntries(portableRoot = getPortableRoot()) {
   for (const relativePath of paths) {
     try {
       const stat = await fsService.statPath(relativePath);
-      if (stat.isDirectory) {
-        delete store.favorites[relativePath];
+      const kind = stat.isDirectory ? 'folder' : 'file';
+      if (favoriteKind(store.favorites[relativePath]) !== kind) {
+        store.favorites[relativePath] = kind;
         changed = true;
-        continue;
       }
 
       entries.push({
         name: stat.name,
         relativePath: stat.relativePath,
-        isDirectory: false,
+        isDirectory: stat.isDirectory,
         size: stat.size,
         modifiedAt: stat.modifiedAt,
         extension: stat.extension,
@@ -108,7 +117,10 @@ export async function listFavoriteEntries(portableRoot = getPortableRoot()) {
     await saveStore(portableRoot, store);
   }
 
-  entries.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+  entries.sort((a, b) => {
+    if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+    return a.name.localeCompare(b.name, 'ko');
+  });
   return entries;
 }
 
@@ -121,10 +133,11 @@ export async function syncFavoritesRename(fromRelative, toRelative, portableRoot
   const fromPath = String(fromRelative ?? '').replace(/\\/g, '/');
   const toPath = String(toRelative ?? '').replace(/\\/g, '/');
   const store = await loadStore(portableRoot);
-  if (!store.favorites[fromPath]) return;
+  const kind = store.favorites[fromPath];
+  if (!kind) return;
 
   delete store.favorites[fromPath];
-  store.favorites[toPath] = true;
+  store.favorites[toPath] = favoriteKind(kind);
   await saveStore(portableRoot, store);
 }
 

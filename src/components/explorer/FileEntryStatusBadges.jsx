@@ -127,6 +127,9 @@ export default function FileEntryStatusBadges({
   const status = entry.isDirectory
     ? null
     : resolveFileEntryStatus(entry.relativePath, accessMap, shareMap, favoritesMap);
+  const showFavorite = entry.isDirectory
+    ? Boolean(favoritesMap[entry.relativePath])
+    : Boolean(status?.isFavorite);
 
   const openProperties = () => onPropertiesClick?.(entry);
 
@@ -134,11 +137,11 @@ export default function FileEntryStatusBadges({
     <span
       className={STATUS_SLOT_CLASS}
       style={{ width: `${FILE_STATUS_SLOT_WIDTH}px` }}
-      aria-label={status ? '파일 상태' : undefined}
+      aria-label={status || showFavorite ? '파일 상태' : undefined}
       onClick={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}
     >
-      {status?.isFavorite && <FavoriteBadge onClick={openProperties} />}
+      {showFavorite && <FavoriteBadge onClick={openProperties} />}
       {status?.isPrivate && <VisibilityBadge onClick={openProperties} />}
       {status?.isViewRestricted && <ViewRestrictionBadge onClick={openProperties} />}
       {status?.isShareViewOnly && (

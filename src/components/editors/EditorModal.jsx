@@ -4,6 +4,7 @@ import {
   IconClose,
   IconExportHtml,
   IconExportHwpx,
+  IconExportPdf,
   IconHistory,
   IconImportHtml,
   IconImportOnenote,
@@ -89,9 +90,12 @@ export default function EditorModal({
   importingOnenote = false,
   onExportHwpx,
   exportingHwpx = false,
+  onExportPdf,
+  exportingPdf = false,
   children,
 }) {
-  const transferBusy = exportingHtml || exportingHwpx || importingHtml || importingOnenote;
+  const transferBusy =
+    exportingHtml || exportingHwpx || exportingPdf || importingHtml || importingOnenote;
 
   return (
     <AppModal open editor embedded={fullscreen} onClose={allowClose ? onClose : undefined}>
@@ -109,17 +113,6 @@ export default function EditorModal({
         />
 
         <AppModalActions className="modal-editor-header__actions !mb-0 shrink-0">
-          {onExportHwpx && (
-            <HeaderIconButton
-              label="HWPX로 내보내기"
-              busyLabel="내보내는 중…"
-              busy={exportingHwpx}
-              onClick={onExportHwpx}
-              disabled={transferBusy}
-            >
-              <IconExportHwpx />
-            </HeaderIconButton>
-          )}
           {onImportOnenote && (
             <HeaderIconButton
               label="원노트 가져오기"
@@ -151,6 +144,28 @@ export default function EditorModal({
               disabled={transferBusy}
             >
               <IconExportHtml />
+            </HeaderIconButton>
+          )}
+          {onExportHwpx && (
+            <HeaderIconButton
+              label="HWPX로 내보내기"
+              busyLabel="내보내는 중…"
+              busy={exportingHwpx}
+              onClick={onExportHwpx}
+              disabled={transferBusy}
+            >
+              <IconExportHwpx />
+            </HeaderIconButton>
+          )}
+          {onExportPdf && (
+            <HeaderIconButton
+              label="PDF로 내보내기"
+              busyLabel="내보내는 중…"
+              busy={exportingPdf}
+              onClick={onExportPdf}
+              disabled={transferBusy}
+            >
+              <IconExportPdf />
             </HeaderIconButton>
           )}
           {!hideHistory && (

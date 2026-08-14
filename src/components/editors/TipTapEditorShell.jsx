@@ -60,6 +60,7 @@ export default function TipTapEditorShell({
   const [importingHtml, setImportingHtml] = useState(false);
   const [importingOnenote, setImportingOnenote] = useState(false);
   const [exportingHwpx, setExportingHwpx] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const htmlImportInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   const onenoteImportInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
 
@@ -297,6 +298,10 @@ export default function TipTapEditorShell({
           existingNames.push(name);
           await window.nas4usb.fs.writeFile(joinRelativePath(parent, name), packed.base64);
         }
+
+        if (converted?.warnings?.length) {
+          setLoadError(converted.warnings.join('\n'));
+        }
       } catch (err) {
         setLoadError(err instanceof Error ? err.message : '원노트 가져오기에 실패했습니다.');
       } finally {
@@ -389,6 +394,30 @@ export default function TipTapEditorShell({
     }
   }, [exportingHtml, exportingHwpx, fileName, relativePath]);
 
+  const handleExportPdf = useCallback(async () => {
+    if (exportingHtml || exportingHwpx || exportingPdf || !editorRef.current) return;
+    setExportingPdf(true);
+    setLoadError(null);
+    try {
+      const { exportLiveTiptapContentAsPdf } = await import('../../lib/tiptap/exportPdf.js');
+      const saved = await exportLiveTiptapContentAsPdf(
+        relativePath,
+        fileName,
+        editorRef.current,
+      );
+      if (!saved) return;
+      const { showAppAlert } = await import('../../lib/nativeDialog.js');
+      await showAppAlert({
+        title: 'PDF로 내보내기',
+        body: `내보냈습니다.\n${saved.absolutePath ?? saved.fileName}`,
+      });
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'PDF로 내보내기에 실패했습니다.');
+    } finally {
+      setExportingPdf(false);
+    }
+  }, [exportingHtml, exportingHwpx, exportingPdf, fileName, relativePath]);
+
   const handleClose = useCallback(async () => {
     if (closingRef.current) return;
     closingRef.current = true;
@@ -432,6 +461,8 @@ export default function TipTapEditorShell({
         importingOnenote={importingOnenote}
         onExportHwpx={isLoading || shareReadOnly ? undefined : handleExportHwpx}
         exportingHwpx={exportingHwpx}
+        onExportPdf={isLoading || shareReadOnly ? undefined : handleExportPdf}
+        exportingPdf={exportingPdf}
         onSave={handleSave}
         onClose={handleClose}
         allowClose={allowClose}

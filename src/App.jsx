@@ -423,6 +423,9 @@ function Nas4usbAppMain() {
         const { importOnenoteEntry } = await import('./lib/onenote/importOnenoteToFolder.js');
         const imported = await importOnenoteEntry(entry);
         if (!imported?.firstFilePath) return false;
+        if (imported.warnings?.length) {
+          await nativeAlert(`원노트 가져오기를 마쳤습니다.\n\n${imported.warnings.join('\n')}`);
+        }
         const name = imported.firstFilePath.split('/').pop() || imported.firstFilePath;
         setOpenEditor({
           type: 'tiptap',

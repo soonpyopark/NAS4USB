@@ -908,6 +908,22 @@ export async function handleHttpApiRequest(req, res) {
       return true;
     }
 
+    if (method === 'POST' && url.pathname === '/api/pdf/fromHtml') {
+      // Host renders the export HTML with Chromium so LAN clients get the same PDF.
+      const body = await readJsonBody(req);
+      const { convertHtmlToPdfBase64 } = await import('./pdfExportService.js');
+      const result = await convertHtmlToPdfBase64({
+        html: body.html ?? '',
+        fileName: body.fileName ?? 'document.pdf',
+        pageSize: body.pageSize ?? 'A4',
+        landscape: Boolean(body.landscape),
+        marginMm: body.marginMm,
+        printBackground: body.printBackground,
+      });
+      sendJson(res, 200, result);
+      return true;
+    }
+
     if (method === 'POST' && url.pathname === '/api/tiptap/exportHwpx') {
       // Host converts TipTap HTML → HWPX (requires prepare:hwpx-export on the server machine).
       const body = await readJsonBody(req);

@@ -37,10 +37,21 @@ export function useFavorites() {
     [refreshFavoritesMap],
   );
 
-  const favoritesCount = useMemo(
-    () => Object.keys(favoritesMap).filter((path) => favoritesMap[path]).length,
-    [favoritesMap],
-  );
+  // Stored values are 'folder' / 'file' ('true' in legacy stores means a file).
+  const { favoritesCount, folderFavoritesCount, fileFavoritesCount } = useMemo(() => {
+    let folders = 0;
+    let files = 0;
+    for (const value of Object.values(favoritesMap)) {
+      if (!value) continue;
+      if (value === 'folder') folders += 1;
+      else files += 1;
+    }
+    return {
+      favoritesCount: folders + files,
+      folderFavoritesCount: folders,
+      fileFavoritesCount: files,
+    };
+  }, [favoritesMap]);
 
   const isFavorite = useCallback(
     (relativePath) => Boolean(favoritesMap[relativePath]),
@@ -50,6 +61,8 @@ export function useFavorites() {
   return {
     favoritesMap,
     favoritesCount,
+    folderFavoritesCount,
+    fileFavoritesCount,
     loading,
     refreshFavoritesMap,
     setFavorite,

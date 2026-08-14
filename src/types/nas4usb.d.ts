@@ -82,6 +82,9 @@ window.nas4usb = {
     exportHwpx: (payload) => {},
     importOnenote: (payload) => {},
   },
+  pdf: {
+    fromHtml: (payload) => {},
+  },
   auth: {
     login: ({ id, password, rememberMe }) => {},
     showDefaultAdminHint: () => {},

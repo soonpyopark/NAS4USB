@@ -152,6 +152,22 @@ export async function exportMarkdownFileAsHtml(relativePath, fileName) {
 }
 
 /**
+ * Markdown → standalone HTML → PDF (printed by the host's Chromium).
+ *
+ * @param {string} fileName
+ * @param {string} markdown
+ * @returns {Promise<import('../saveToFolder.js').SaveResult | null>}
+ */
+export async function exportMarkdownTextAsPdf(fileName, markdown) {
+  const title = getMarkdownFileStem(fileName);
+  const { exportHtmlDocumentAsPdf } = await import('../pdf/exportHtmlAsPdf.js');
+  return exportHtmlDocumentAsPdf({
+    html: markdownToStandaloneHtml(markdown, title),
+    title,
+  });
+}
+
+/**
  * Markdown → HTML → HWPX (pandoc AST → pypandoc-hwpx).
  *
  * @param {string} fileName

@@ -7,6 +7,7 @@ import {
   isFsNotADirectoryError,
   isFsNotFoundError,
 } from '../lib/trashPaths.js';
+import { isFavoritesPath } from '../lib/favoritesPaths.js';
 import { filterTiptapAssetSidecarFromEntries } from '../../shared/tiptapAssetPaths.js';
 import { filterFortuneSidecarFromEntries } from '../../shared/fortuneSheetSidecar.js';
 import { filterPdfViewerSidecarFromEntries } from '../../shared/pdfViewerSidecar.js';
@@ -21,6 +22,12 @@ export function useDirectoryTree(currentPath) {
   const [treeVersion, setTreeVersion] = useState(0);
 
   const loadChildren = useCallback(async (relativePath) => {
+    // Favorites views are virtual: readDir would only retry into an error.
+    if (isFavoritesPath(relativePath)) {
+      setChildrenMap((prev) => ({ ...prev, [relativePath]: [] }));
+      return [];
+    }
+
     setLoadingPaths((prev) => new Set(prev).add(relativePath));
     try {
       const entries = await readDirWithRetry(relativePath);
@@ -89,7 +96,9 @@ export function useDirectoryTree(currentPath) {
     const pathsToReload = options?.paths?.length
       ? resolveTreeReloadPaths(options.paths, currentPath, expandedPaths)
       : ['.', currentPath, ...Array.from(expandedPaths)];
-    const uniquePaths = [...new Set(pathsToReload.filter(Boolean))];
+    const uniquePaths = [...new Set(pathsToReload.filter(Boolean))].filter(
+      (path) => !isFavoritesPath(path),
+    );
 
     const nextEntries = await Promise.all(
       uniquePaths.map(async (path) => {

@@ -47,6 +47,7 @@ export default function TextEditorShell({
   const [showHistory, setShowHistory] = useState(false);
   const [exportingHtml, setExportingHtml] = useState(false);
   const [exportingHwpx, setExportingHwpx] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
   const unbindRef = useRef(null);
   const initialTextRef = useRef('');
   const diskRevisionRef = useRef('');
@@ -185,6 +186,27 @@ export default function TextEditorShell({
     }
   }, [exportingHtml, exportingHwpx, fileName, isMarkdown, shareReadOnly]);
 
+  const handleExportPdf = useCallback(async () => {
+    if (!isMarkdown || exportingHtml || exportingHwpx || exportingPdf || shareReadOnly) return;
+    if (!editorHandleRef.current) return;
+    setExportingPdf(true);
+    setLoadError(null);
+    try {
+      const { exportMarkdownTextAsPdf } = await import('../../lib/text/exportMarkdown.js');
+      const saved = await exportMarkdownTextAsPdf(fileName, editorHandleRef.current.getText());
+      if (!saved) return;
+      const { showAppAlert } = await import('../../lib/nativeDialog.js');
+      await showAppAlert({
+        title: 'PDF로 내보내기',
+        body: `내보냈습니다.\n${saved.absolutePath ?? saved.fileName}`,
+      });
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'PDF로 내보내기에 실패했습니다.');
+    } finally {
+      setExportingPdf(false);
+    }
+  }, [exportingHtml, exportingHwpx, exportingPdf, fileName, isMarkdown, shareReadOnly]);
+
   const handleClose = async () => {
     unbindRef.current?.();
     await workspace.close();
@@ -237,6 +259,10 @@ export default function TextEditorShell({
           isMarkdown && !isLoading && !shareReadOnly ? handleExportHwpx : undefined
         }
         exportingHwpx={exportingHwpx}
+        onExportPdf={
+          isMarkdown && !isLoading && !shareReadOnly ? handleExportPdf : undefined
+        }
+        exportingPdf={exportingPdf}
         onSave={handleSave}
         onClose={handleClose}
         allowClose={allowClose}

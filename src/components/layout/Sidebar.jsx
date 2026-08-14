@@ -51,7 +51,12 @@ import { downloadFileEntries } from '../../lib/downloadEntries.js';
 import { moveEntries } from '../../lib/moveEntries.js';
 import { TRASH_ACCESS_DENIED_MESSAGE } from '../../../shared/constants.js';
 import { isTrashPath, isTrashSubfolder, SHARED_FOLDER, TRASH_FOLDER } from '../../lib/trashPaths.js';
-import { FAVORITES_FOLDER, isFavoritesPath } from '../../lib/favoritesPaths.js';
+import {
+  FAVORITES_FILES_FOLDER,
+  FAVORITES_FOLDERS_FOLDER,
+  favoritesViewKind,
+  isFavoritesPath,
+} from '../../lib/favoritesPaths.js';
 import {
   canWriteAtPath,
   effectivePermissionsForPath,
@@ -93,7 +98,14 @@ export default function Sidebar({
   const { hasClipboard, copyEntries, cutEntries, pasteEntries } = useFileClipboard();
   const { shareMap, refreshShareMap } = useShareLinks();
   const { accessMap, refreshAccessMap, setFileAccess } = useFileAccess();
-  const { favoritesMap, favoritesCount, refreshFavoritesMap, setFavorite } = useFavorites();
+  const {
+    favoritesMap,
+    folderFavoritesCount,
+    fileFavoritesCount,
+    refreshFavoritesMap,
+    setFavorite,
+    isFavorite,
+  } = useFavorites();
   const { isAdminLoggedIn, adminId } = useAdminAuthContext();
   const { openLogin } = useLoginDialog();
   const { effectivePermissions } = useGuestPermissions();
@@ -102,6 +114,7 @@ export default function Sidebar({
   const showViewAccessDenied = !canViewContent && !isAdminLoggedIn;
   const isInTrashView = isTrashPath(currentPath);
   const isInFavoritesView = isFavoritesPath(currentPath);
+  const favoritesView = favoritesViewKind(currentPath);
   const canWrite = isInTrashView
     ? globalWrite || isAdminLoggedIn
     : canWriteAtPath(currentPath, adminId, isAdminLoggedIn, globalWrite);
@@ -604,6 +617,16 @@ export default function Sidebar({
     }
   };
 
+  const handleToggleFavorite = async (entry, favorited) => {
+    if (!entry) return;
+    try {
+      await setFavorite(entry.relativePath, favorited);
+      await notifyChange();
+    } catch (err) {
+      nativeAlert(err instanceof Error ? err.message : '즐겨찾기 설정 변경에 실패했습니다.');
+    }
+  };
+
   const handleShareLinkRevoke = async () => {
     if (!shareLinkDialog?.entry) return;
     await revokeShareLinkForEntry({ entry: shareLinkDialog.entry, refreshShareMap });
@@ -682,6 +705,8 @@ export default function Sidebar({
             (isTiptapDocumentRelativePath(contextTarget.relativePath) ||
               /\.md$/i.test(contextTarget.relativePath)),
         ),
+        onToggleFavorite: (favorited) => handleToggleFavorite(contextTarget, favorited),
+        isFavorite: Boolean(contextTarget && isFavorite(contextTarget.relativePath)),
         canEditOpen: contextTarget
           ? canOpenFileForEdit(
               contextTarget.relativePath,
@@ -791,11 +816,39 @@ export default function Sidebar({
         <div className="flex items-stretch gap-1">
           <button
             type="button"
-            title="즐겨찾기"
-            aria-label={favoritesCount > 0 ? `즐겨찾기 ${favoritesCount}개` : '즐겨찾기'}
-            onClick={() => onNavigate(FAVORITES_FOLDER)}
+            title="폴더 즐겨찾기"
+            aria-label={
+              folderFavoritesCount > 0
+                ? `폴더 즐겨찾기 ${folderFavoritesCount}개`
+                : '폴더 즐겨찾기'
+            }
+            onClick={() => onNavigate(FAVORITES_FOLDERS_FOLDER)}
             className={`relative flex min-w-0 flex-1 items-center justify-center rounded-md py-2.5 transition-colors ${
-              mainView !== 'settings' && isInFavoritesView
+              mainView !== 'settings' && favoritesView === 'folders'
+                ? 'bg-nas-accent text-white'
+                : 'text-slate-300 hover:bg-nas-sidebarHover hover:text-white'
+            }`}
+          >
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h3.2l1.8 2h7A1.5 1.5 0 0 1 19 7.5V11h-2V8h-7.3L7.9 6H6v12h5v2H5.5A1.5 1.5 0 0 1 4 18.5Z" />
+              <path d="M17.5 12l1.55 3.14 3.45.5-2.5 2.44.59 3.45-3.09-1.63-3.09 1.63.59-3.45-2.5-2.44 3.45-.5Z" />
+            </svg>
+            {folderFavoritesCount > 0 && (
+              <span className="absolute right-1 top-1 min-w-[1rem] rounded-full bg-slate-600 px-1 text-center text-[10px] leading-4 text-slate-100">
+                {folderFavoritesCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            type="button"
+            title="파일 즐겨찾기"
+            aria-label={
+              fileFavoritesCount > 0 ? `파일 즐겨찾기 ${fileFavoritesCount}개` : '파일 즐겨찾기'
+            }
+            onClick={() => onNavigate(FAVORITES_FILES_FOLDER)}
+            className={`relative flex min-w-0 flex-1 items-center justify-center rounded-md py-2.5 transition-colors ${
+              mainView !== 'settings' && (favoritesView === 'files' || favoritesView === 'all')
                 ? 'bg-nas-accent text-white'
                 : 'text-slate-300 hover:bg-nas-sidebarHover hover:text-white'
             }`}
@@ -803,9 +856,9 @@ export default function Sidebar({
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
               <path d="M12 2.25l2.52 5.11 5.64.82-4.08 3.98.96 5.62L12 15.9l-5.04 2.88.96-5.62-4.08-3.98 5.64-.82L12 2.25z" />
             </svg>
-            {favoritesCount > 0 && (
+            {fileFavoritesCount > 0 && (
               <span className="absolute right-1 top-1 min-w-[1rem] rounded-full bg-slate-600 px-1 text-center text-[10px] leading-4 text-slate-100">
-                {favoritesCount}
+                {fileFavoritesCount}
               </span>
             )}
           </button>
@@ -905,6 +958,7 @@ export default function Sidebar({
           entry={propertiesEntry}
           statInfo={propertiesStat}
           fileStatus={propertiesEntryStatus}
+          isFavorite={isFavorite(propertiesEntry.relativePath)}
           isAdminLoggedIn={isAdminLoggedIn}
           accessSaving={propertiesSaving}
           onChangePrivate={handlePropertiesPrivateChange}

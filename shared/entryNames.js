@@ -1,5 +1,8 @@
 const INVALID_ENTRY_NAME_PATTERN = /[<>:"/\\|?*\u0000-\u001f]/g;
 
+/** `.tiptap`, `.PNG`, `.tar` … — not `.)` or `. 31.` from a date inside the name. */
+const EXTENSION_PATTERN = /^\.[A-Za-z0-9][A-Za-z0-9_-]{0,15}$/;
+
 /**
  * @param {string} name
  * @returns {{ stem: string, extension: string }}
@@ -10,10 +13,29 @@ export function splitEntryExtension(name) {
   if (index <= 0) {
     return { stem: normalized, extension: '' };
   }
+
+  const extension = normalized.slice(index);
+  if (!EXTENSION_PATTERN.test(extension)) {
+    return { stem: normalized, extension: '' };
+  }
+
   return {
     stem: normalized.slice(0, index),
-    extension: normalized.slice(index),
+    extension,
   };
+}
+
+/**
+ * Puts a locked extension back on a user-typed stem, without doubling it up.
+ *
+ * @param {string} stem
+ * @param {string} extension
+ */
+export function joinEntryExtension(stem, extension) {
+  const trimmedStem = String(stem ?? '').trim();
+  if (!extension) return trimmedStem;
+  if (trimmedStem.toLowerCase().endsWith(String(extension).toLowerCase())) return trimmedStem;
+  return `${trimmedStem}${extension}`;
 }
 
 /**

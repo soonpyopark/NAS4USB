@@ -1,6 +1,12 @@
-import { FAVORITES_FOLDER, isFavoritesRelativePath } from '../../shared/constants.js';
+import {
+  FAVORITES_FILES_FOLDER,
+  FAVORITES_FOLDER,
+  FAVORITES_FOLDERS_FOLDER,
+  favoritesViewKind,
+  isFavoritesRelativePath,
+} from '../../shared/constants.js';
 
-export { FAVORITES_FOLDER };
+export { FAVORITES_FOLDER, FAVORITES_FILES_FOLDER, FAVORITES_FOLDERS_FOLDER, favoritesViewKind };
 
 /**
  * @param {string} relativePath

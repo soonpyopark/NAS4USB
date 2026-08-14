@@ -61,6 +61,10 @@ contextBridge.exposeInMainWorld('nas4usb', {
     importOnenote: (payload) => ipcRenderer.invoke('tiptap:importOnenote', payload ?? {}),
   },
 
+  pdf: {
+    fromHtml: (payload) => ipcRenderer.invoke('pdf:fromHtml', payload ?? {}),
+  },
+
   auth: {
     login: ({ id, password, rememberMe }) =>
       ipcRenderer.invoke('auth:login', { id, password, rememberMe }),

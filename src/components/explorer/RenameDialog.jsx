@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { splitEntryExtension, validateRenameEntryName } from '../../lib/fsPaths.js';
+import {
+  joinEntryExtension,
+  splitEntryExtension,
+  validateRenameEntryName,
+} from '../../lib/fsPaths.js';
 import { AppModal, AppModalActions, AppModalBody, AppModalButton } from '../common/AppModal.jsx';
 
 /**
@@ -41,7 +45,9 @@ export default function RenameDialog({ open, entry, onClose, onConfirm }) {
     event.preventDefault();
     if (!entry) return;
 
-    const validation = validateRenameEntryName(name, entry.name, entry.isDirectory);
+    // The input holds the stem only; the locked extension lives in the suffix chip.
+    const nextName = entry.isDirectory ? name : joinEntryExtension(name, extension);
+    const validation = validateRenameEntryName(nextName, entry.name, entry.isDirectory);
     if (!validation.ok) {
       setError(validation.error);
       return;

@@ -27,6 +27,8 @@ export default function FileExplorerToolbar({
   onClearSelection,
   onProperties,
   canShowProperties = false,
+  onImportOnenote,
+  importingOnenote = false,
   isInTrashView = false,
   isInFavoritesView = false,
   onEmptyTrash,
@@ -137,6 +139,20 @@ export default function FileExplorerToolbar({
         >
           속성
         </button>
+        {showWriteActions && onImportOnenote && (
+          <>
+            <span className="mx-1 hidden h-4 w-px bg-nas-border sm:inline" />
+            <button
+              type="button"
+              className="nas-btn-ghost"
+              disabled={importingOnenote}
+              onClick={onImportOnenote}
+              title="원노트(.one/.onepkg) 파일을 현재 폴더에 폴더+TipTap 페이지로 가져옵니다"
+            >
+              {importingOnenote ? '가져오는 중…' : '원노트 가져오기'}
+            </button>
+          </>
+        )}
         <span className="mx-1 hidden h-4 w-px bg-nas-border sm:inline" />
         <select
           value={sortField}

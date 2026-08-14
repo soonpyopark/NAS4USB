@@ -41,7 +41,7 @@ import { moveEntries } from '../../lib/moveEntries.js';
 import { uploadFilesAtPath } from '../../lib/fsWriteActions.js';
 import { isTrashPath, isTrashSubfolder, SHARED_FOLDER, TRASH_FOLDER } from '../../lib/trashPaths.js';
 import { isTiptapDocumentRelativePath } from '../../../shared/tiptapAssetPaths.js';
-import { FAVORITES_FOLDER, isFavoritesPath } from '../../lib/favoritesPaths.js';
+import { favoritesViewKind, isFavoritesPath } from '../../lib/favoritesPaths.js';
 import { guardOpenFileEntry } from '../../lib/openFileGuard.js';
 import { nativeAlert } from '../../lib/nativeDialog.js';
 import { useTrash } from '../../hooks/useTrash.js';
@@ -113,7 +113,7 @@ export default function FileExplorer({
   const { hasClipboard, copyEntries, cutEntries, pasteEntries } = useFileClipboard();
   const { shareMap, refreshShareMap } = useShareLinks();
   const { accessMap, refreshAccessMap, setFileAccess } = useFileAccess();
-  const { favoritesMap, refreshFavoritesMap, setFavorite } = useFavorites();
+  const { favoritesMap, refreshFavoritesMap, setFavorite, isFavorite } = useFavorites();
   const { isAdminLoggedIn, adminId } = useAdminAuthContext();
   const { openLogin } = useLoginDialog();
   const { effectivePermissions } = useGuestPermissions();
@@ -125,6 +125,7 @@ export default function FileExplorer({
   const showViewAccessDenied = !canViewContent && !homeViewBypass;
   const isInTrashView = isTrashPath(currentPath);
   const isInFavoritesView = isFavoritesPath(currentPath);
+  const favoritesView = favoritesViewKind(currentPath);
   const canWrite = isInTrashView
     ? globalWrite || isAdminLoggedIn
     : canWriteAtPath(currentPath, adminId, isAdminLoggedIn, globalWrite);
@@ -147,10 +148,12 @@ export default function FileExplorer({
   const [renameEntry, setRenameEntry] = useState(null);
   const [propertiesSaving, setPropertiesSaving] = useState(false);
   const [lastSelectedPath, setLastSelectedPath] = useState(null);
+  const [importingOnenote, setImportingOnenote] = useState(false);
   /** @type {[null | { kind: 'upload' | 'download', current: number, total: number, fileName?: string }, Function]} */
   const [transfer, setTransfer] = useState(null);
 
   const uploadInputRef = useRef(null);
+  const onenoteInputRef = useRef(null);
   const uploadTargetPathRef = useRef('.');
   const containerRef = useRef(null);
   const keyHandlersRef = useRef({});
@@ -298,6 +301,51 @@ export default function FileExplorer({
 
   const handleUploadClick = () => {
     triggerUpload(currentPath);
+  };
+
+  const handleImportOnenoteClick = () => {
+    if (isInTrashView || isInFavoritesView || !canWrite || importingOnenote) return;
+    onenoteInputRef.current?.click();
+  };
+
+  const handleOnenoteInput = async (event) => {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = '';
+    if (!files.length || importingOnenote) return;
+
+    setImportingOnenote(true);
+    try {
+      const { importOnenoteToFolder } = await import('../../lib/onenote/importOnenoteToFolder.js');
+      /** @type {string[]} */
+      const changedPaths = [];
+      /** @type {string[]} */
+      const warnings = [];
+      /** @type {string | null} */
+      let openPath = null;
+      for (const file of files) {
+        const imported = await importOnenoteToFolder(currentPath, file, { keepOriginal: false });
+        if (!imported) continue;
+        changedPaths.push(imported.folderPath);
+        warnings.push(...(imported.warnings ?? []));
+        if (!openPath) openPath = imported.firstFilePath;
+      }
+      await refreshAll(changedPaths);
+      if (warnings.length) {
+        await nativeAlert(`원노트 가져오기를 마쳤습니다.\n\n${warnings.join('\n')}`);
+      }
+      if (openPath) {
+        onOpenFile({
+          relativePath: openPath,
+          name: openPath.split('/').pop() || openPath,
+          extension: 'tiptap',
+          isDirectory: false,
+        });
+      }
+    } catch (err) {
+      nativeAlert(err instanceof Error ? err.message : '원노트 가져오기에 실패했습니다.');
+    } finally {
+      setImportingOnenote(false);
+    }
   };
 
   const handleUploadInput = async (event) => {
@@ -777,6 +825,16 @@ export default function FileExplorer({
     }
   };
 
+  const handleToggleFavorite = async (entry, favorited) => {
+    if (!entry) return;
+    try {
+      await setFavorite(entry.relativePath, favorited);
+      await refreshAll();
+    } catch (err) {
+      nativeAlert(err instanceof Error ? err.message : '즐겨찾기 설정 변경에 실패했습니다.');
+    }
+  };
+
   const handleSelect = (entry, event) => {
     if (event.shiftKey && lastSelectedPath) {
       selectRange(lastSelectedPath, entry.relativePath);
@@ -843,6 +901,8 @@ export default function FileExplorer({
           !contextTargets[0].isDirectory &&
           (isTiptapDocumentRelativePath(contextTargets[0].relativePath) ||
             /\.md$/i.test(contextTargets[0].relativePath)),
+        onToggleFavorite: (favorited) => handleToggleFavorite(contextTarget, favorited),
+        isFavorite: Boolean(contextTarget && isFavorite(contextTarget.relativePath)),
         canEditOpen: contextTarget
           ? canOpenFileForEdit(
               contextTarget.relativePath,
@@ -1048,6 +1108,8 @@ export default function FileExplorer({
         onClearSelection={clearSelection}
         onProperties={() => handleShowProperties()}
         canShowProperties={selectedEntries.length === 1}
+        onImportOnenote={handleImportOnenoteClick}
+        importingOnenote={importingOnenote}
         isAdminLoggedIn={isAdminLoggedIn}
         canWrite={canWrite}
         canEmptyTrash={globalWrite}
@@ -1065,11 +1127,21 @@ export default function FileExplorer({
 
       {isInFavoritesView && (
         <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
-          즐겨찾기 · 등록한 문서를 한곳에서 열어볼 수 있습니다. 속성에서 즐겨찾기를 설정하세요.
+          {favoritesView === 'folders'
+            ? '폴더 즐겨찾기 · 등록한 폴더로 바로 이동할 수 있습니다. 폴더를 우클릭해 즐겨찾기 추가 또는 속성에서 설정하세요.'
+            : '파일 즐겨찾기 · 등록한 문서를 한곳에서 열어볼 수 있습니다. 파일을 우클릭해 즐겨찾기 추가 또는 속성에서 설정하세요.'}
         </div>
       )}
 
       <input ref={uploadInputRef} type="file" multiple hidden onChange={handleUploadInput} />
+      <input
+        ref={onenoteInputRef}
+        type="file"
+        accept=".one,.onepkg"
+        multiple
+        hidden
+        onChange={handleOnenoteInput}
+      />
 
       {error && (
         <div className="mx-4 mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -1113,6 +1185,7 @@ export default function FileExplorer({
           entry={propertiesEntry}
           statInfo={propertiesStat}
           fileStatus={propertiesEntryStatus}
+          isFavorite={isFavorite(propertiesEntry.relativePath)}
           isAdminLoggedIn={isAdminLoggedIn}
           accessSaving={propertiesSaving}
           onChangePrivate={handlePropertiesPrivateChange}

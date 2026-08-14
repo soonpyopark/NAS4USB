@@ -138,9 +138,149 @@ async function collectRelativeAssets(htmlPath, html) {
   return assets;
 }
 
+/**
+ * @param {unknown} error
+ */
+function converterErrorText(error) {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  return message.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * A `.onepkg` keeps importing after a broken section and reports the failures at
+ * the end, e.g. `1 section(s) failed to import: Error on file 비밀.one: …`.
+ *
+ * @param {string} text
+ */
+function failedSectionNames(text) {
+  /** @type {Set<string>} */
+  const names = new Set();
+  for (const match of text.matchAll(/Error on file\s+(.+?):\s/g)) {
+    const name = match[1]?.trim();
+    if (name) names.add(name);
+  }
+  return [...names];
+}
+
+/**
+ * A Rust panic only reaches JS as `unreachable`; the real cause goes to the
+ * console, e.g. `panicked at …file_node.rs:173:17:` / `assertion failed: …`.
+ *
+ * @param {string[]} logLines
+ */
+function panicDetail(logLines) {
+  const text = logLines.join('\n');
+  const match = text.match(/panicked at [^\n]*\n\s*([^\n]+)/);
+  return match?.[1]?.trim() ?? '';
+}
+
+/**
+ * @param {string[]} logLines
+ */
+function unknownNodeTypes(logLines) {
+  /** @type {Set<string>} */
+  const types = new Set();
+  for (const match of logLines.join('\n').matchAll(/Unknown node type:\s*(0x[0-9a-f]+)/gi)) {
+    types.add(match[1].toLowerCase());
+  }
+  return [...types];
+}
+
+/**
+ * @param {string} text
+ * @param {string} [panicNote]
+ */
+function converterReason(text, panicNote = '') {
+  // Drop the `Location: renderer\src\lib.rs:…` tail the WASM build appends.
+  const detail = text.split(/\s*Location:\s*/)[0].trim();
+  if (!detail || /unreachable/i.test(detail)) {
+    return panicNote ? `변환기 내부 오류: ${panicNote}` : '변환기가 처리하지 못하는 구조입니다';
+  }
+  const cause = detail.match(/Malformed[\s\S]*$/i)?.[0] ?? detail;
+  return cause.replace(/^Error:\s*/i, '').slice(0, 200).trim();
+}
+
+/**
+ * @param {unknown} error
+ * @param {string[]} [logLines]
+ */
+function skippedSectionsWarning(error, logLines = []) {
+  const text = converterErrorText(error);
+  const names = failedSectionNames(text);
+  const reason = converterReason(text, panicDetail(logLines));
+  if (names.length === 0) {
+    return `원노트의 일부 내용을 변환하지 못해 건너뛰었습니다. (${reason})`;
+  }
+  const label = names.map((name) => `'${name}'`).join(', ');
+  return `${label} 섹션을 변환하지 못해 건너뛰었습니다. (${reason})`;
+}
+
+/**
+ * @param {unknown} error
+ * @param {string[]} [logLines]
+ */
+function converterFailureMessage(error, logLines = []) {
+  const text = converterErrorText(error);
+  const names = failedSectionNames(text);
+  const target = names.length ? `${names.map((name) => `'${name}'`).join(', ')} 섹션을` : '이 파일을';
+  const unknown = unknownNodeTypes(logLines);
+  return [
+    `원노트 변환기가 ${target} 읽지 못했습니다. (${converterReason(text, panicDetail(logLines))})`,
+    unknown.length ? `변환기가 모르는 데이터 구조: ${unknown.join(', ')}` : '',
+    '원노트 앱에서 해당 섹션의 페이지를 새 섹션으로 복사해 저장한 뒤 다시 시도하거나, 페이지를 복사해 편집기에 붙여넣어 주세요.',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+/**
+ * The converter logs its progress, warnings and panic reason to the console, so
+ * mirror those lines while it runs to explain failures afterwards.
+ *
+ * @param {() => void} run
+ * @returns {string[]}
+ */
+function captureConverterLogs(run) {
+  /** @type {string[]} */
+  const lines = [];
+  const original = { log: console.log, warn: console.warn, error: console.error };
+  /** @param {'log' | 'warn' | 'error'} level */
+  const record =
+    (level) =>
+    (...args) => {
+      lines.push(args.map((arg) => (typeof arg === 'string' ? arg : String(arg))).join(' '));
+      original[level](...args);
+    };
+
+  console.log = record('log');
+  console.warn = record('warn');
+  console.error = record('error');
+  try {
+    run();
+  } finally {
+    Object.assign(console, original);
+  }
+  return lines;
+}
+
+const CONVERTER_PACKAGE = '@tedyang2003/onenote-converter-wasm';
+
+/**
+ * The WASM build instantiates one shared module on `require`, and a Rust panic
+ * leaves that instance poisoned — every later conversion then traps with
+ * `unreachable` until the app restarts. Drop the cached module so each import
+ * runs on a fresh instance.
+ */
 function loadConverter() {
   try {
-    return require('@tedyang2003/onenote-converter-wasm');
+    const entryId = require.resolve(CONVERTER_PACKAGE);
+    const packageDir = path.dirname(entryId);
+    const prefix = process.platform === 'win32' ? packageDir.toLowerCase() : packageDir;
+    for (const cachedId of Object.keys(require.cache)) {
+      const compare = process.platform === 'win32' ? cachedId.toLowerCase() : cachedId;
+      if (compare.startsWith(prefix)) delete require.cache[cachedId];
+    }
+    return require(CONVERTER_PACKAGE);
   } catch (err) {
     throw new Error(
       `원노트 변환기를 불러오지 못했습니다. ${err instanceof Error ? err.message : String(err)}`,
@@ -153,7 +293,7 @@ function loadConverter() {
  *
  * @param {string} base64
  * @param {string} [fileName]
- * @returns {Promise<{ pages: { title: string, html: string, assets: { fileName: string, base64: string, originalSrc: string }[] }[] }>}
+ * @returns {Promise<{ pages: { title: string, html: string, assets: { fileName: string, base64: string, originalSrc: string }[] }[], warnings: string[] }>}
  */
 export async function convertOnenoteBase64(base64, fileName = 'section.one') {
   if (!base64) throw new Error('원노트 파일이 비어 있습니다.');
@@ -170,10 +310,21 @@ export async function convertOnenoteBase64(base64, fileName = 'section.one') {
     await fs.writeFile(inputPath, Buffer.from(base64, 'base64'));
 
     const { oneNoteConverter } = loadConverter();
-    oneNoteConverter(inputPath, outputDir, inputDir);
+    /** @type {unknown} */
+    let converterError = null;
+    const logLines = captureConverterLogs(() => {
+      try {
+        oneNoteConverter(inputPath, outputDir, inputDir);
+      } catch (err) {
+        // Sections that already converted stay on disk, so keep whatever the
+        // converter managed to write and decide once the output is known.
+        converterError = err;
+      }
+    });
 
     const htmlFiles = await collectHtmlFiles(outputDir);
     if (htmlFiles.length === 0) {
+      if (converterError) throw new Error(converterFailureMessage(converterError, logLines));
       throw new Error('원노트에서 페이지를 찾지 못했습니다. 데스크톱 원노트의 .one / .onepkg 파일인지 확인하세요.');
     }
 
@@ -194,6 +345,7 @@ export async function convertOnenoteBase64(base64, fileName = 'section.one') {
     });
 
     if (selected.length === 0) {
+      if (converterError) throw new Error(converterFailureMessage(converterError, logLines));
       throw new Error('원노트에서 페이지를 찾지 못했습니다. 데스크톱 원노트의 .one / .onepkg 파일인지 확인하세요.');
     }
 
@@ -208,7 +360,10 @@ export async function convertOnenoteBase64(base64, fileName = 'section.one') {
       pages.push({ title, html: item.html, assets });
     }
 
-    return { pages };
+    return {
+      pages,
+      warnings: converterError ? [skippedSectionsWarning(converterError, logLines)] : [],
+    };
   } finally {
     await fs.rm(workDir, { recursive: true, force: true }).catch(() => {});
   }

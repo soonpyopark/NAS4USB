@@ -156,6 +156,24 @@ export async function exportLiveTiptapContentAsHtml(relativePath, fileName, edit
 }
 
 /**
+ * Same WYSIWYG HTML as the HTML export, returned instead of saved.
+ * Used by the PDF export, which prints this document with Chromium.
+ *
+ * @param {string} relativePath
+ * @param {string} fileName
+ * @param {import('@tiptap/core').Editor | import('@tiptap/core').JSONContent} editorOrContent
+ * @returns {Promise<{ title: string, html: string }>}
+ */
+export async function buildLiveTiptapExportHtml(relativePath, fileName, editorOrContent) {
+  const embeddedAssets = await loadLiveEmbeddedAssets(relativePath);
+  const content = resolveContentJson(editorOrContent);
+  if (!content) {
+    throw new Error('내보낼 TipTap 문서가 없습니다.');
+  }
+  return buildTiptapExportHtml({ relativePath, fileName, content, embeddedAssets });
+}
+
+/**
  * Off-screen TipTap render + tiptap-editor.css → standalone HTML matching the editor.
  *
  * @param {{

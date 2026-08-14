@@ -58,7 +58,7 @@ async function uniqueFolderName(targetPath, desiredName) {
  *   originalBase64?: string,
  *   confirmExisting?: boolean,
  * }} [options]
- * @returns {Promise<{ folderPath: string, firstFilePath: string, fileCount: number } | null>}
+ * @returns {Promise<{ folderPath: string, firstFilePath: string, fileCount: number, warnings: string[] } | null>}
  */
 export async function importOnenoteToFolder(targetPath, fileOrPayload, options = {}) {
   const fileName = fileOrPayload.name || 'section.one';
@@ -81,7 +81,7 @@ export async function importOnenoteToFolder(targetPath, fileOrPayload, options =
       cancelLabel: '취소',
     });
     if (choice === 'secondary' && existingFirst) {
-      return { folderPath, firstFilePath: existingFirst, fileCount: 0 };
+      return { folderPath, firstFilePath: existingFirst, fileCount: 0, warnings: [] };
     }
     if (choice !== 'primary') return null;
   }
@@ -129,7 +129,12 @@ export async function importOnenoteToFolder(targetPath, fileOrPayload, options =
   }
 
   if (!firstFilePath) throw new Error('변환된 TipTap 파일을 만들지 못했습니다.');
-  return { folderPath: writeFolderPath, firstFilePath, fileCount: packed.length };
+  return {
+    folderPath: writeFolderPath,
+    firstFilePath,
+    fileCount: packed.length,
+    warnings: Array.isArray(converted?.warnings) ? converted.warnings : [],
+  };
 }
 
 /**
