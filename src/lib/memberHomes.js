@@ -3,30 +3,26 @@ import { isExternalFolderContainerPath } from '../../shared/externalFolders.js';
 import {
   HOMES_DISK_DIR,
   HOMES_FOLDER,
-  displayHomeEntryName,
+  collapseOwnHomeRootPath,
+  folderDisplayDepth,
   isHomesContainerPath,
   isMemberHomeRootPath,
   isOwnMemberHomePath,
   isUnderHomesFolder,
   memberHomeRelativePath,
   normalizeRelativePath,
-  resolveHomePathAccess,
-  sanitizeLoginIdForHomeFolder,
 } from '../../shared/memberHomes.js';
+import { getParentPath } from './fsPaths.js';
 
 export {
   HOMES_DISK_DIR,
   HOMES_FOLDER,
-  SHARED_FOLDER,
-  displayHomeEntryName,
+  collapseOwnHomeRootPath,
+  folderDisplayDepth,
   isHomesContainerPath,
   isMemberHomeRootPath,
   isOwnMemberHomePath,
-  isUnderHomesFolder,
   memberHomeRelativePath,
-  normalizeRelativePath,
-  resolveHomePathAccess,
-  sanitizeLoginIdForHomeFolder,
 };
 
 /**
@@ -50,15 +46,28 @@ export function effectivePermissionsForPath(relativePath, loginId, isLoggedIn, p
 }
 
 /**
- * @param {string} currentPath
+ * @param {string} relativePath
  * @param {string | null | undefined} loginId
- * @param {boolean} isLoggedIn
- * @param {boolean} globalWrite
  */
+export function visibleParentPath(relativePath, loginId) {
+  return collapseOwnHomeRootPath(getParentPath(relativePath), loginId);
+}
+
+/**
+ * Toolbar 「백업 일괄 제거」 — 공유폴더 / 개인폴더 trees only.
+ * @param {string} currentPath
+ */
+export function canClearFolderBackups(currentPath) {
+  const path = normalizeRelativePath(currentPath);
+  if (!path || path === '.') return false;
+  if (path === SHARED_FOLDER || path.startsWith(`${SHARED_FOLDER}/`)) return true;
+  return isUnderHomesFolder(path);
+}
+
 export function canWriteAtPath(currentPath, loginId, isLoggedIn, globalWrite) {
   const path = normalizeRelativePath(currentPath);
   if (!path || path === '.') return false;
-  if (isHomesContainerPath(path)) return false;
+  if (isHomesContainerPath(path)) return Boolean(isLoggedIn && loginId);
   if (isExternalFolderContainerPath(path)) return false;
   if (isLoggedIn && loginId && isOwnMemberHomePath(path, loginId)) return true;
   if (path === SHARED_FOLDER || path.startsWith(`${SHARED_FOLDER}/`)) {

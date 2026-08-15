@@ -18,15 +18,32 @@ export function collectSearchMatches(doc, query, caseSensitive) {
   const results = [];
 
   doc.descendants((node, pos) => {
-    if (!node.isTextblock) return;
-    const hay = caseSensitive ? node.textContent : node.textContent.toLowerCase();
-    let offset = 0;
-    while (offset < hay.length) {
-      const index = hay.indexOf(lookFor, offset);
+    if (!node.isTextblock) return true;
+
+    // Map every character to its document position: inline atoms (hard breaks,
+    // images, math) take up space without contributing text, so plain
+    // `textContent` offsets would highlight — and replace — the wrong range.
+    let text = '';
+    /** @type {number[]} */
+    const positions = [];
+    node.forEach((child, offset) => {
+      if (!child.isText) return;
+      const value = child.text ?? '';
+      for (let index = 0; index < value.length; index += 1) {
+        text += value[index];
+        positions.push(pos + 1 + offset + index);
+      }
+    });
+
+    const hay = caseSensitive ? text : text.toLowerCase();
+    let cursor = 0;
+    while (cursor < hay.length) {
+      const index = hay.indexOf(lookFor, cursor);
       if (index < 0) break;
-      const from = pos + 1 + index;
-      results.push({ from, to: from + needle.length });
-      offset = index + Math.max(1, needle.length);
+      const from = positions[index];
+      const last = positions[index + needle.length - 1];
+      if (from != null && last != null) results.push({ from, to: last + 1 });
+      cursor = index + Math.max(1, needle.length);
     }
     return false;
   });

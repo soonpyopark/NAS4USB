@@ -12,6 +12,7 @@ import { getMemberAccessPermissionsByLoginId } from './membersService.js';
 import { normalizeWebServerMode, normalizeWebServerPort } from '../shared/webServerConfig.js';
 import { DEFAULT_ACCENT_COLOR, normalizeAccentColor } from '../shared/theme.js';
 import { normalizeExternalFolders } from '../shared/externalFolders.js';
+import { normalizeVideoPreviewCacheMaxBytes } from '../shared/videoPreviewCache.js';
 
 const SETTINGS_FILE = '.nas4usb-settings.json';
 
@@ -29,6 +30,7 @@ const SETTINGS_FILE = '.nas4usb-settings.json';
  *   dataRoot: string | null,
  *   externalFolders: import('../shared/externalFolders.js').ExternalFolderMount[],
  *   ffmpegPath: string | null,
+ *   videoPreviewCacheMaxBytes: number,
  *   useLegacyImagePdfViewers: boolean,
  *   spellcheckEnabled: boolean,
  * }} AppSettings
@@ -92,6 +94,7 @@ function emptySettings() {
     dataRoot: null,
     externalFolders: [],
     ffmpegPath: null,
+    videoPreviewCacheMaxBytes: normalizeVideoPreviewCacheMaxBytes(undefined),
     useLegacyImagePdfViewers: false,
     spellcheckEnabled: false,
   };
@@ -133,6 +136,7 @@ async function loadStore(portableRoot) {
       dataRoot: normalizeConfiguredDataRoot(parsed?.dataRoot),
       externalFolders: normalizeExternalFolders(parsed?.externalFolders),
       ffmpegPath: normalizeConfiguredFfmpegPath(parsed?.ffmpegPath),
+      videoPreviewCacheMaxBytes: normalizeVideoPreviewCacheMaxBytes(parsed?.videoPreviewCacheMaxBytes),
       useLegacyImagePdfViewers: normalizeUseLegacyImagePdfViewers(parsed?.useLegacyImagePdfViewers),
       spellcheckEnabled: normalizeSpellcheckEnabled(parsed?.spellcheckEnabled),
     };
@@ -290,6 +294,11 @@ export async function updateAppSettings(patch, portableRoot = getPortableRoot())
   }
   if (patch && 'ffmpegPath' in patch) {
     settings.ffmpegPath = normalizeConfiguredFfmpegPath(patch.ffmpegPath);
+  }
+  if (patch && 'videoPreviewCacheMaxBytes' in patch) {
+    settings.videoPreviewCacheMaxBytes = normalizeVideoPreviewCacheMaxBytes(
+      patch.videoPreviewCacheMaxBytes,
+    );
   }
   if (patch && 'useLegacyImagePdfViewers' in patch) {
     settings.useLegacyImagePdfViewers = normalizeUseLegacyImagePdfViewers(

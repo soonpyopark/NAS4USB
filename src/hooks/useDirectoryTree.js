@@ -13,6 +13,13 @@ import { filterFortuneSidecarFromEntries } from '../../shared/fortuneSheetSideca
 import { filterPdfViewerSidecarFromEntries } from '../../shared/pdfViewerSidecar.js';
 
 /**
+ * @param {import('../types/nas4usb.d.ts').FsEntry[]} entries
+ */
+function foldersOnly(entries) {
+  return entries.filter((entry) => entry.isDirectory);
+}
+
+/**
  * @param {string} currentPath
  */
 export function useDirectoryTree(currentPath) {
@@ -31,10 +38,12 @@ export function useDirectoryTree(currentPath) {
     setLoadingPaths((prev) => new Set(prev).add(relativePath));
     try {
       const entries = await readDirWithRetry(relativePath);
-      const sorted = filterPdfViewerSidecarFromEntries(
-        filterFortuneSidecarFromEntries(
-          filterTiptapAssetSidecarFromEntries(
-            filterTrashFromEntries(sortEntries(entries, 'name', 'asc'), relativePath),
+      const sorted = foldersOnly(
+        filterPdfViewerSidecarFromEntries(
+          filterFortuneSidecarFromEntries(
+            filterTiptapAssetSidecarFromEntries(
+              filterTrashFromEntries(sortEntries(entries, 'name', 'asc'), relativePath),
+            ),
           ),
         ),
       );
@@ -106,10 +115,12 @@ export function useDirectoryTree(currentPath) {
           const entries = await readDirWithRetry(path);
           return [
             path,
-            filterPdfViewerSidecarFromEntries(
-              filterFortuneSidecarFromEntries(
-                filterTiptapAssetSidecarFromEntries(
-                  filterTrashFromEntries(sortEntries(entries, 'name', 'asc'), path),
+            foldersOnly(
+              filterPdfViewerSidecarFromEntries(
+                filterFortuneSidecarFromEntries(
+                  filterTiptapAssetSidecarFromEntries(
+                    filterTrashFromEntries(sortEntries(entries, 'name', 'asc'), path),
+                  ),
                 ),
               ),
             ),

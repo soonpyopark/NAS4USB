@@ -1,3 +1,4 @@
+import { folderDisplayDepth } from '../../lib/memberHomes.js';
 import {
   isAudioExtension,
   isHtmlExtension,
@@ -8,6 +9,12 @@ import {
 
 const ICON_COLORS = {
   folder: 'text-amber-500',
+  folderLevel1: '!text-red-500',
+  folderLevel2: '!text-amber-500',
+  folderLevel3: '!text-sky-400',
+  folderLevel4: '!text-lime-300',
+  folderLevel5: '!text-yellow-300',
+  folderLevel6: '!text-fuchsia-600',
   hwpx: 'text-blue-600',
   wb4s: 'text-orange-500',
   tiptap: 'text-red-400',
@@ -85,6 +92,25 @@ function WhiteboardSvg({ className }) {
       <path d="M4 4h16v12H4V4zm2 2v8h12V6H6zm-1 14h14v2H5v-2z" />
     </svg>
   );
+}
+
+const FOLDER_LEVEL_CYCLE = [
+  ICON_COLORS.folderLevel1,
+  ICON_COLORS.folderLevel2,
+  ICON_COLORS.folderLevel3,
+  ICON_COLORS.folderLevel4,
+  ICON_COLORS.folderLevel5,
+  ICON_COLORS.folderLevel6,
+];
+
+/**
+ * Workspace folder tint cycles: 빨강 → 호박 → 연한 파랑 → 멜론 → 레몬 → 자주.
+ * @param {{ isDirectory?: boolean, relativePath?: string } | null | undefined} entry
+ */
+export function folderIconTintClass(entry) {
+  if (!entry?.isDirectory) return '';
+  const depth = Math.max(1, folderDisplayDepth(entry.relativePath));
+  return FOLDER_LEVEL_CYCLE[(depth - 1) % FOLDER_LEVEL_CYCLE.length];
 }
 
 export default function FileIcon({ entry, className = 'h-5 w-5' }) {

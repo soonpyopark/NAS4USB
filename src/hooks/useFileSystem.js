@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { joinRelativePath, resolveUniqueName, validateFolderName } from '../lib/fsPaths.js';
 import { readDirWithRetry } from '../lib/readDirWithRetry.js';
 import {
@@ -18,9 +18,12 @@ export function useFileSystem(currentPath) {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const loadedPathRef = useRef(/** @type {string | null} */ (null));
 
   const refresh = useCallback(async () => {
-    setLoading(true);
+    if (loadedPathRef.current !== currentPath) {
+      setLoading(true);
+    }
     setError(null);
 
     try {
@@ -54,6 +57,7 @@ export function useFileSystem(currentPath) {
         setError(null);
       }
     } finally {
+      loadedPathRef.current = currentPath;
       setLoading(false);
     }
   }, [currentPath]);

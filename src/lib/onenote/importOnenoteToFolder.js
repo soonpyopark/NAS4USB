@@ -98,6 +98,7 @@ export async function importOnenoteToFolder(targetPath, fileOrPayload, options =
   }
 
   const { packOnenotePagesToTiptap } = await import('../tiptap/importOnenote.js');
+  const { parseTiptapFileBase64, syncEmbeddedAssetsToSidecar } = await import('../tiptap/package.js');
   const packed = await packOnenotePagesToTiptap(pages);
   const writeFolderName = existingFolder ? folderName : await uniqueFolderName(targetPath, folderName);
   const writeFolderPath = joinRelativePath(targetPath, writeFolderName);
@@ -117,6 +118,12 @@ export async function importOnenoteToFolder(targetPath, fileOrPayload, options =
     existingNames.push(name);
     const relativePath = joinRelativePath(writeFolderPath, name);
     await window.nas4usb.fs.writeFile(relativePath, page.base64);
+    try {
+      const parsed = await parseTiptapFileBase64(page.base64);
+      await syncEmbeddedAssetsToSidecar(relativePath, parsed.embeddedAssets);
+    } catch {
+      // ZIP 안에 첨부만 있어도 열 때 다시 풀어집니다.
+    }
     if (!firstFilePath) firstFilePath = relativePath;
   }
 

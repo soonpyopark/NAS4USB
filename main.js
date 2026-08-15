@@ -87,7 +87,9 @@ import {
   pathExistsWithAccessFilter,
   readDirWithAccessFilter,
   readFileBase64WithAccessFilter,
+  resolveHomeScopedWritePath,
   statPathWithAccessFilter,
+  assertCanClearFileHistoryTree,
 } from './electron/fileAccessGuard.js';
 import { filterFileAccessMap, canViewFileEntry } from './shared/fileAccessVisibility.js';
 import {
@@ -142,6 +144,7 @@ import { closeComicArchive, openComicArchive } from './electron/comicArchive.js'
 import { syncTiptapAssetRename } from './electron/tiptapAssetService.js';
 import { notifyFsChanged } from './electron/fsNotifyService.js';
 import {
+  clearFileHistoryUnder,
   deleteFileHistoryEntry,
   listFileHistory,
   readFileHistoryBase64,
@@ -888,9 +891,11 @@ ipcMain.handle('fs:readDir', async (event, relativePath = '.') =>
 );
 
 ipcMain.handle('fs:mkdir', async (event, relativePath) => {
-  await assertCanEditFile(relativePath, getAccessAuthFromEvent(event), getShareTokenFromEvent(event));
-  const result = await fsService.mkdir(relativePath);
-  notifyFsChanged(relativePath);
+  const auth = getAccessAuthFromEvent(event);
+  const target = resolveHomeScopedWritePath(relativePath, auth);
+  await assertCanEditFile(target, auth, getShareTokenFromEvent(event));
+  const result = await fsService.mkdir(target);
+  notifyFsChanged(target);
   return result;
 });
 
@@ -944,41 +949,45 @@ ipcMain.handle('fs:readFile', async (event, relativePath) =>
 );
 
 ipcMain.handle('fs:writeFile', async (event, relativePath, base64 = '') => {
-  await assertCanEditFile(relativePath, getAccessAuthFromEvent(event), getShareTokenFromEvent(event));
-  const result = await fsService.writeFileBase64(relativePath, base64);
-  notifyFsChanged(relativePath);
+  const auth = getAccessAuthFromEvent(event);
+  const target = resolveHomeScopedWritePath(relativePath, auth);
+  await assertCanEditFile(target, auth, getShareTokenFromEvent(event));
+  const result = await fsService.writeFileBase64(target, base64);
+  notifyFsChanged(target);
   return result;
 });
 
 ipcMain.handle('fs:copy', async (event, fromRelative, toRelative) => {
   const auth = getAccessAuthFromEvent(event);
   const shareToken = getShareTokenFromEvent(event);
-  assertHomeSystemPathMutable(toRelative, 'mutate');
+  const dest = resolveHomeScopedWritePath(toRelative, auth);
+  assertHomeSystemPathMutable(dest, 'mutate');
   await assertCanAccessFile(fromRelative, auth, shareToken);
-  await assertCanEditFile(toRelative, auth, shareToken);
-  const result = await fsService.copyPath(fromRelative, toRelative);
-  await syncFortuneSidecarCopy(fromRelative, toRelative);
-  await syncPdfViewerSidecarCopy(fromRelative, toRelative);
-  notifyFsChanged([fromRelative, toRelative]);
+  await assertCanEditFile(dest, auth, shareToken);
+  const result = await fsService.copyPath(fromRelative, dest);
+  await syncFortuneSidecarCopy(fromRelative, dest);
+  await syncPdfViewerSidecarCopy(fromRelative, dest);
+  notifyFsChanged([fromRelative, dest]);
   return result;
 });
 
 ipcMain.handle('fs:move', async (event, fromRelative, toRelative) => {
   const auth = getAccessAuthFromEvent(event);
   const shareToken = getShareTokenFromEvent(event);
+  const dest = resolveHomeScopedWritePath(toRelative, auth);
   assertHomeSystemPathMutable(fromRelative, 'rename-source');
-  assertHomeSystemPathMutable(toRelative, 'mutate');
+  assertHomeSystemPathMutable(dest, 'mutate');
   await assertCanEditFile(fromRelative, auth, shareToken);
-  await assertCanEditFile(toRelative, auth, shareToken);
-  await syncSharePathRename(fromRelative, toRelative, getPortableRoot());
-  await syncFileAccessRename(fromRelative, toRelative, getPortableRoot());
-  await syncFavoritesRename(fromRelative, toRelative, getPortableRoot());
-  await syncFortuneSidecarRename(fromRelative, toRelative);
-  await syncPdfViewerSidecarRename(fromRelative, toRelative);
-  await syncTiptapAssetRename(fromRelative, toRelative);
-  await syncFileHistoryRename(fromRelative, toRelative, getPortableRoot());
-  const result = await fsService.movePath(fromRelative, toRelative);
-  notifyFsChanged([fromRelative, toRelative]);
+  await assertCanEditFile(dest, auth, shareToken);
+  await syncSharePathRename(fromRelative, dest, getPortableRoot());
+  await syncFileAccessRename(fromRelative, dest, getPortableRoot());
+  await syncFavoritesRename(fromRelative, dest, getPortableRoot());
+  await syncFortuneSidecarRename(fromRelative, dest);
+  await syncPdfViewerSidecarRename(fromRelative, dest);
+  await syncTiptapAssetRename(fromRelative, dest);
+  await syncFileHistoryRename(fromRelative, dest, getPortableRoot());
+  const result = await fsService.movePath(fromRelative, dest);
+  notifyFsChanged([fromRelative, dest]);
   return result;
 });
 
@@ -1048,7 +1057,11 @@ ipcMain.handle('workspace:rename', async (event, sessionId, newRelativePath) => 
   return result;
 });
 
-ipcMain.handle('workspace:close', async (_event, sessionId) => closeWorkspace(sessionId));
+ipcMain.handle('workspace:close', async (_event, sessionId) => {
+  const result = await closeWorkspace(sessionId);
+  if (result.persisted && result.relativePath) notifyFsChanged(result.relativePath);
+  return result;
+});
 
 ipcMain.handle('history:list', async (event, relativePath, shareToken) => {
   const token = shareToken || getShareTokenFromEvent(event);
@@ -1081,6 +1094,16 @@ ipcMain.handle('history:restore', async (event, relativePath, entryId, shareToke
   await assertCanEditFile(relativePath, getAccessAuthFromEvent(event), token);
   const result = await restoreFileHistoryEntry(relativePath, entryId, getDataRoot(), getPortableRoot());
   notifyFsChanged(relativePath);
+  return result;
+});
+
+ipcMain.handle('history:clearTree', async (event, relativePath) => {
+  const target = await assertCanClearFileHistoryTree(
+    relativePath,
+    getAccessAuthFromEvent(event),
+  );
+  const result = await clearFileHistoryUnder(target, getPortableRoot());
+  notifyFsChanged(target);
   return result;
 });
 
@@ -1289,6 +1312,10 @@ ipcMain.handle('settings:update', async (event, patch = {}) => {
   if (patch && 'spellcheckEnabled' in patch) {
     setSessionSpellCheckerEnabled(result.spellcheckEnabled);
   }
+  if (patch && 'videoPreviewCacheMaxBytes' in patch) {
+    const { pruneVideoPreviewCache } = await import('./electron/ffmpegPreviewService.js');
+    await pruneVideoPreviewCache(getPortableRoot()).catch(() => {});
+  }
   notifyFsChanged();
   return result;
 });
@@ -1443,6 +1470,28 @@ if (gotSingleInstanceLock) {
       await ensureAllMemberHomes(exeRoot);
     } catch (err) {
       console.warn('[data] ensure member homes failed:', err);
+    }
+
+    try {
+      const { pruneOrphanPdfViewerSidecarsInWorkspace } = await import(
+        './electron/pdfViewerSidecarService.js'
+      );
+      const pruned = await pruneOrphanPdfViewerSidecarsInWorkspace();
+      if (pruned.deleted.length) {
+        console.log(`[pdf] removed ${pruned.deleted.length} orphan viewer sidecar(s)`);
+      }
+    } catch (err) {
+      console.warn('[pdf] orphan viewer sidecar prune failed:', err);
+    }
+
+    try {
+      const { pruneVideoPreviewCache } = await import('./electron/ffmpegPreviewService.js');
+      const pruned = await pruneVideoPreviewCache();
+      if (pruned.deleted.length) {
+        console.log(`[video] pruned ${pruned.deleted.length} preview cache folder(s)`);
+      }
+    } catch (err) {
+      console.warn('[video] preview cache prune failed:', err);
     }
 
     try {

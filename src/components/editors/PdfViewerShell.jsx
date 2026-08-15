@@ -102,6 +102,7 @@ export default function PdfViewerShell({
   onClose,
   allowClose = true,
   fullscreen = false,
+  raised = false,
 }) {
   const mimeType = getPdfMimeType(extension);
   const [documentEpoch, setDocumentEpoch] = useState(0);
@@ -2344,6 +2345,7 @@ export default function PdfViewerShell({
       onClose={onClose}
       allowClose={allowClose}
       fullscreen={fullscreen}
+      raised={raised}
       actions={
         <AppModalButton
           onClick={() => void handleSaveToFile()}

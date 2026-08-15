@@ -5,7 +5,7 @@ import {
   FORTUNE_SIDECAR_VERSION,
   getFortuneSidecarPath,
 } from '../../../shared/fortuneSheetSidecar.js';
-import { parseSpreadsheetBase64 } from './xlsxIO.js';
+import { getSpreadsheetKind, parseSpreadsheetBase64 } from './xlsxIO.js';
 
 /**
  * @param {import('@fortune-sheet/core').Sheet[]} sheets
@@ -80,7 +80,9 @@ export async function loadSpreadsheetDocument(spreadsheetRelativePath, xlsxBase6
     // fall back to xlsx
   }
 
-  const parsed = await parseSpreadsheetBase64(xlsxBase64);
+  const parsed = await parseSpreadsheetBase64(xlsxBase64, {
+    kind: getSpreadsheetKind(spreadsheetRelativePath),
+  });
   return { ...parsed, source: 'xlsx' };
 }
 

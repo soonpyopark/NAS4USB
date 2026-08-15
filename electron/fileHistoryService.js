@@ -4,6 +4,7 @@ import path from 'node:path';
 import { getDataRoot, getPortableRoot, resolvePortablePath } from './appContext.js';
 import { purgeYjsRoomForPath } from './yjsRoom.js';
 import { getFortuneSidecarPath } from '../shared/fortuneSheetSidecar.js';
+import { toCanonicalWorkspacePath } from '../shared/workspacePaths.js';
 
 /** Root for revision-history storage, kept outside the data root so it never shows up in the file explorer. */
 const HISTORY_ROOT = '.nas4usb/file-history';
@@ -42,7 +43,7 @@ function getExtension(relativePath) {
 /**
  * @param {string} relativePath
  */
-export function isFileHistorySupported(relativePath) {
+function isFileHistorySupported(relativePath) {
   return SUPPORTED_EXTENSIONS.has(getExtension(relativePath));
 }
 
@@ -66,6 +67,28 @@ function sidecarSnapshotPath(dir, entryId) {
  */
 function encodeHistoryKey(relativePath) {
   return Buffer.from(normalizePath(relativePath), 'utf8').toString('base64url');
+}
+
+/**
+ * @param {string} dirName
+ */
+function decodeHistoryKey(dirName) {
+  try {
+    return Buffer.from(String(dirName ?? ''), 'base64url').toString('utf8');
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * @param {string} filePath
+ * @param {string} prefix
+ */
+function isHistoryPathUnderPrefix(filePath, prefix) {
+  const key = toCanonicalWorkspacePath(normalizePath(filePath));
+  const pre = toCanonicalWorkspacePath(normalizePath(prefix));
+  if (!key || !pre || key === '.' || pre === '.') return false;
+  return key === pre || key.startsWith(`${pre}/`);
 }
 
 /**
@@ -373,4 +396,43 @@ export async function syncFileHistoryMoveTree(
 export async function syncFileHistoryDelete(relativePath, portableRoot = getPortableRoot()) {
   const dir = historyDir(portableRoot, normalizePath(relativePath));
   await fs.rm(dir, { recursive: true, force: true });
+}
+
+/**
+ * Permanently remove every file-history directory whose key is the folder
+ * itself or a descendant. Live documents are not touched.
+ * @param {string} relativePath
+ * @param {string} [portableRoot]
+ * @returns {Promise<{ ok: true, clearedFiles: number, clearedEntries: number }>}
+ */
+export async function clearFileHistoryUnder(relativePath, portableRoot = getPortableRoot()) {
+  const prefix = normalizePath(relativePath);
+  if (!prefix || prefix === '.') {
+    throw new Error('경로가 올바르지 않습니다.');
+  }
+
+  const root = path.join(portableRoot, HISTORY_ROOT);
+  let dirs;
+  try {
+    dirs = await fs.readdir(root, { withFileTypes: true });
+  } catch {
+    return { ok: true, clearedFiles: 0, clearedEntries: 0 };
+  }
+
+  let clearedFiles = 0;
+  let clearedEntries = 0;
+
+  for (const entry of dirs) {
+    if (!entry.isDirectory()) continue;
+    const filePath = decodeHistoryKey(entry.name);
+    if (!filePath || !isHistoryPathUnderPrefix(filePath, prefix)) continue;
+
+    const dir = path.join(root, entry.name);
+    const manifest = await loadHistoryManifest(dir);
+    clearedEntries += manifest.entries.length;
+    await fs.rm(dir, { recursive: true, force: true });
+    clearedFiles += 1;
+  }
+
+  return { ok: true, clearedFiles, clearedEntries };
 }

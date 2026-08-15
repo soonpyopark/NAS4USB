@@ -6,7 +6,7 @@ import ErrorBoundary from '../common/ErrorBoundary.jsx';
 import { AppModalButton } from '../common/AppModal.jsx';
 import { getShareTokenFromUrl } from '../../lib/shareAccess.js';
 import { base64ToBytes } from '../../lib/bytes.js';
-import { parseSpreadsheetBase64 } from '../../lib/xlsx/xlsxIO.js';
+import { getSpreadsheetKind, parseSpreadsheetBase64 } from '../../lib/xlsx/xlsxIO.js';
 import { decodeTextBase64 } from '../../lib/text/textIO.js';
 import { parseTiptapFileBase64 } from '../../lib/tiptap/package.js';
 import {
@@ -56,7 +56,11 @@ export default function HistoryPreviewModal({
   const blobUrlsRef = useRef([]);
 
   const normalizedExtension = String(extension ?? '').toLowerCase();
-  const isSpreadsheet = normalizedExtension === 'xlsx' || normalizedExtension === 'xls';
+  const isSpreadsheet =
+    normalizedExtension === 'xlsx' ||
+    normalizedExtension === 'xls' ||
+    normalizedExtension === 'csv' ||
+    normalizedExtension === 'tsv';
   const isText = normalizedExtension === 'txt' || normalizedExtension === 'md';
 
   // Read-only preview (unlike the editor windows), so Esc-to-close is safe — there is no
@@ -92,7 +96,7 @@ export default function HistoryPreviewModal({
         const base64 = await window.nas4usb.history.read(relativePath, entryId, getShareTokenFromUrl());
         if (cancelled) return;
 
-        if (normalizedExtension === 'xlsx' || normalizedExtension === 'xls') {
+        if (isSpreadsheet) {
           // Inserted images live only in the `.fortune.json` sidecar, never in the plain XLSX
           // bytes (see fileHistoryService.js) — prefer the archived sidecar snapshot when this
           // entry has one so images actually show up in the preview.
@@ -103,7 +107,9 @@ export default function HistoryPreviewModal({
           if (Array.isArray(sidecarSheets) && sidecarSheets.length > 0) {
             setSheets(sidecarSheets);
           } else {
-            const parsed = await parseSpreadsheetBase64(base64);
+            const parsed = await parseSpreadsheetBase64(base64, {
+              kind: getSpreadsheetKind(`.${normalizedExtension}`),
+            });
             if (cancelled) return;
             setSheets(parsed.sheets);
           }

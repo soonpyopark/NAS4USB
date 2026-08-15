@@ -161,15 +161,15 @@ export default function TipTapToolbar({
         <ToolbarGroup>
           <ToolbarButton
             title="실행 취소 (Ctrl+Z)"
-            disabled={disabled || !editor.can().undo()}
-            onClick={() => editor.chain().focus().undo().run()}
+            disabled={disabled || typeof editor.commands.undo !== 'function' || !editor.can().undo()}
+            onClick={() => editor.commands.undo?.()}
           >
             <IconUndo />
           </ToolbarButton>
           <ToolbarButton
             title="다시 실행 (Ctrl+Shift+Z)"
-            disabled={disabled || !editor.can().redo()}
-            onClick={() => editor.chain().focus().redo().run()}
+            disabled={disabled || typeof editor.commands.redo !== 'function' || !editor.can().redo()}
+            onClick={() => editor.commands.redo?.()}
           >
             <IconRedo />
           </ToolbarButton>

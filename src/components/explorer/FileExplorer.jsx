@@ -58,11 +58,14 @@ import ViewAccessDeniedPanel from '../common/ViewAccessDeniedPanel.jsx';
 import { canOpenFileForEdit, VIEW_OPEN_DENIED_MESSAGE, GUEST_READ_DENIED_MESSAGE } from '../../lib/fileEditAccess.js';
 import { useGuestPermissions } from '../../hooks/useGuestPermissions.js';
 import {
+  canClearFolderBackups,
   canWriteAtPath,
   effectivePermissionsForPath,
+  HOMES_FOLDER,
   isHomesContainerPath,
   isMemberHomeRootPath,
   isOwnMemberHomePath,
+  visibleParentPath,
 } from '../../lib/memberHomes.js';
 import { isProtectedSharedSystemPath } from '../../../shared/workspacePaths.js';
 import { isExternalMountRootPath, isExternalFolderContainerPath } from '../../../shared/externalFolders.js';
@@ -149,6 +152,7 @@ export default function FileExplorer({
   const [propertiesSaving, setPropertiesSaving] = useState(false);
   const [lastSelectedPath, setLastSelectedPath] = useState(null);
   const [importingOnenote, setImportingOnenote] = useState(false);
+  const [clearingFolderBackups, setClearingFolderBackups] = useState(false);
   /** @type {[null | { kind: 'upload' | 'download', current: number, total: number, fileName?: string }, Function]} */
   const [transfer, setTransfer] = useState(null);
 
@@ -267,7 +271,7 @@ export default function FileExplorer({
   };
 
   const handleNavigateUp = () => {
-    onNavigate(getParentPath(currentPath));
+    onNavigate(visibleParentPath(currentPath, adminId));
   };
 
   const handleCreateFolder = () => {
@@ -306,6 +310,59 @@ export default function FileExplorer({
   const handleImportOnenoteClick = () => {
     if (isInTrashView || isInFavoritesView || !canWrite || importingOnenote) return;
     onenoteInputRef.current?.click();
+  };
+
+  const handleClearFolderBackups = async () => {
+    if (
+      isInTrashView ||
+      isInFavoritesView ||
+      !canWrite ||
+      !canClearFolderBackups(currentPath) ||
+      clearingFolderBackups
+    ) {
+      return;
+    }
+
+    const folderLabel = isHomesContainerPath(currentPath) || isMemberHomeRootPath(currentPath)
+      ? HOMES_FOLDER
+      : currentPath === SHARED_FOLDER
+        ? SHARED_FOLDER
+        : currentPath.split('/').pop() || currentPath;
+
+    const confirmed = await appConfirm({
+      title: '백업 일괄 제거',
+      body: `"${folderLabel}" 폴더와 그 하위 폴더·파일의 백업(이력)을 모두 삭제할까요?\n\n원본 파일은 그대로 두고 백업만 제거됩니다. 이 작업은 되돌릴 수 없습니다.`,
+      confirmLabel: '백업 일괄 제거',
+      confirmVariant: 'danger',
+    });
+    if (!confirmed) return;
+
+    setClearingFolderBackups(true);
+    try {
+      const result = await window.nas4usb.history.clearTree(currentPath);
+      const files = Number(result?.clearedFiles) || 0;
+      const entriesCount = Number(result?.clearedEntries) || 0;
+      if (files === 0) {
+        await appAlert({
+          title: '백업 일괄 제거',
+          body: '제거할 백업이 없습니다.',
+        });
+        return;
+      }
+      await appAlert({
+        title: '백업 일괄 제거',
+        body: `파일 ${files}개의 백업을 제거했습니다.${
+          entriesCount > 0 ? ` (이력 ${entriesCount}개)` : ''
+        }`,
+      });
+    } catch (err) {
+      await appAlert({
+        title: '백업 일괄 제거 실패',
+        body: err instanceof Error ? err.message : '백업을 제거하지 못했습니다.',
+      });
+    } finally {
+      setClearingFolderBackups(false);
+    }
   };
 
   const handleOnenoteInput = async (event) => {
@@ -1023,7 +1080,7 @@ export default function FileExplorer({
         />
         <label
           className="flex shrink-0 cursor-pointer items-center gap-1.5 text-[10pt] text-nas-muted"
-          title="현재 폴더의 문서 내용까지 검색합니다 (txt·md·hwpx·docx·xlsx·pdf 등). 외부폴더는 본문 검색에서 제외됩니다."
+          title="현재 폴더의 문서 내용까지 검색합니다 (txt·md·tiptap·hwpx·docx·xlsx·pdf 등). 외부폴더는 본문 검색에서 제외됩니다."
         >
           <input
             type="checkbox"
@@ -1110,6 +1167,10 @@ export default function FileExplorer({
         canShowProperties={selectedEntries.length === 1}
         onImportOnenote={handleImportOnenoteClick}
         importingOnenote={importingOnenote}
+        onClearFolderBackups={
+          canClearFolderBackups(currentPath) ? handleClearFolderBackups : undefined
+        }
+        clearingFolderBackups={clearingFolderBackups}
         isAdminLoggedIn={isAdminLoggedIn}
         canWrite={canWrite}
         canEmptyTrash={globalWrite}

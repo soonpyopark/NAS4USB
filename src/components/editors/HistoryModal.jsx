@@ -42,7 +42,10 @@ export default function HistoryModal({ open, onClose, relativePath, fileName, ex
   const [error, setError] = useState(null);
   const [busyEntryId, setBusyEntryId] = useState(null);
   const [previewEntryId, setPreviewEntryId] = useState(null);
-  const [confirmAction, setConfirmAction] = useState(/** @type {{ type: 'delete' | 'restore', entryId: string } | null} */ (null));
+  const [confirmAction, setConfirmAction] = useState(
+    /** @type {{ type: 'delete' | 'restore' | 'deleteAll', entryId?: string } | null} */ (null),
+  );
+  const busy = busyEntryId != null;
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -78,6 +81,29 @@ export default function HistoryModal({ open, onClose, relativePath, fileName, ex
     }
   };
 
+  const handleDeleteAll = async () => {
+    const targets = entries.map((entry) => entry.id);
+    if (!targets.length) {
+      setConfirmAction(null);
+      return;
+    }
+    setBusyEntryId('all');
+    setError(null);
+    try {
+      for (const entryId of targets) {
+        await window.nas4usb.history.deleteEntry(relativePath, entryId, getShareTokenFromUrl());
+      }
+      setEntries([]);
+      setPreviewEntryId(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '이력 일괄 삭제에 실패했습니다.');
+      await reload();
+    } finally {
+      setBusyEntryId(null);
+      setConfirmAction(null);
+    }
+  };
+
   const handleRestore = async (entryId) => {
     setBusyEntryId(entryId);
     setError(null);
@@ -104,6 +130,16 @@ export default function HistoryModal({ open, onClose, relativePath, fileName, ex
         wide
         showCloseButton
         className="modal-dialog--history"
+        headerActions={
+          <button
+            type="button"
+            className="nas-btn-ghost text-red-600"
+            disabled={busy || loading || entries.length === 0}
+            onClick={() => setConfirmAction({ type: 'deleteAll' })}
+          >
+            일괄삭제
+          </button>
+        }
       >
         {error && <p className="modal-body text-sm text-red-600">{error}</p>}
 
@@ -114,19 +150,31 @@ export default function HistoryModal({ open, onClose, relativePath, fileName, ex
         ) : (
           <div className="modal-body flex flex-col gap-2">
             {entries.map((entry, index) => (
-              <button
+              <div
                 key={entry.id}
-                type="button"
-                disabled={busyEntryId === entry.id}
-                onClick={() => setPreviewEntryId(entry.id)}
-                className="flex flex-nowrap items-center justify-between gap-3 rounded-md border border-slate-200 px-3 py-2 text-left transition-colors hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                className="flex flex-nowrap items-center gap-2 rounded-md border border-slate-200 px-3 py-2 transition-colors hover:border-slate-300 hover:bg-slate-50"
               >
-                <p className="min-w-0 shrink whitespace-nowrap text-sm font-medium text-[#323130]">
-                  {index === 0 ? '최신 이력' : `이력 ${entries.length - index}`} · {formatTimestamp(entry.createdAt)}
-                  {' · '}
-                  {formatSize(entry.size)}
-                </p>
-              </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setPreviewEntryId(entry.id)}
+                  className="min-w-0 flex-1 text-left disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <p className="min-w-0 whitespace-nowrap text-sm font-medium text-[#323130]">
+                    {index === 0 ? '최신 이력' : `이력 ${entries.length - index}`} · {formatTimestamp(entry.createdAt)}
+                    {' · '}
+                    {formatSize(entry.size)}
+                  </p>
+                </button>
+                <button
+                  type="button"
+                  className="nas-btn-ghost shrink-0 text-red-600"
+                  disabled={busy}
+                  onClick={() => setConfirmAction({ type: 'delete', entryId: entry.id })}
+                >
+                  삭제
+                </button>
+              </div>
             ))}
           </div>
         )}
@@ -146,19 +194,35 @@ export default function HistoryModal({ open, onClose, relativePath, fileName, ex
 
       <AppConfirmDialog
         open={confirmAction != null}
-        title={confirmAction?.type === 'restore' ? '이력 복원' : '이력 삭제'}
+        title={
+          confirmAction?.type === 'restore'
+            ? '이력 복원'
+            : confirmAction?.type === 'deleteAll'
+              ? '백업 일괄삭제'
+              : '이력 삭제'
+        }
         body={
           confirmAction?.type === 'restore'
             ? '선택한 이력으로 현재 문서를 대체합니다. 현재 내용은 저장하지 않으면 사라지며, 되돌릴 수 없습니다. 계속하시겠습니까?'
-            : '선택한 이력을 삭제합니다. 이 작업은 되돌릴 수 없습니다. 계속하시겠습니까?'
+            : confirmAction?.type === 'deleteAll'
+              ? `이 파일의 백업 내역 ${entries.length}개를 모두 삭제할까요?\n\n원본 파일은 그대로 두고 백업만 제거됩니다. 이 작업은 되돌릴 수 없습니다.`
+              : '선택한 이력을 삭제합니다. 이 작업은 되돌릴 수 없습니다. 계속하시겠습니까?'
         }
-        confirmLabel={confirmAction?.type === 'restore' ? '복원' : '삭제'}
+        confirmLabel={
+          confirmAction?.type === 'restore'
+            ? '복원'
+            : confirmAction?.type === 'deleteAll'
+              ? '일괄삭제'
+              : '삭제'
+        }
         confirmVariant={confirmAction?.type === 'restore' ? 'primary' : 'danger'}
         onConfirm={() => {
           if (!confirmAction) return;
           if (confirmAction.type === 'restore') {
             handleRestore(confirmAction.entryId);
-          } else {
+          } else if (confirmAction.type === 'deleteAll') {
+            handleDeleteAll();
+          } else if (confirmAction.entryId) {
             handleDelete(confirmAction.entryId);
           }
         }}

@@ -12,6 +12,7 @@ const MIME_TO_EXTENSION = {
   'video/ogg': 'ogv',
   'video/quicktime': 'mov',
   'video/x-matroska': 'mkv',
+  'video/mp2t': 'ts',
   'audio/mpeg': 'mp3',
   'audio/mp3': 'mp3',
   'audio/wav': 'wav',

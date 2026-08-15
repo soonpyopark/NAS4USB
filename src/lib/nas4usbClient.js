@@ -351,6 +351,11 @@ export function createHttpNas4usbClient() {
           method: 'POST',
           body: JSON.stringify({ path: relativePath, entryId }),
         }),
+      clearTree: (relativePath) =>
+        apiFetch('/history/clearTree', {
+          method: 'POST',
+          body: JSON.stringify({ path: relativePath }),
+        }),
     },
 
     settings: {

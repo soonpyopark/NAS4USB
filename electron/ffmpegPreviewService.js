@@ -4,6 +4,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { getWorkspaceRoot, resolvePortablePath } from './appContext.js';
 import { getAppSettings } from './settingsService.js';
+import { normalizeVideoPreviewCacheMaxBytes } from '../shared/videoPreviewCache.js';
 
 /** Chromium-friendly audio codecs (lowercase, without trailing dots). */
 const SAFE_AUDIO_CODECS = new Set([
@@ -154,15 +155,16 @@ export async function getConfiguredFfmpegPath(portableRoot) {
  * @param {string} [portableRoot]
  */
 export async function getFfmpegStatus(portableRoot) {
+  const cache = await getVideoPreviewCacheStats(portableRoot);
   const settings = await getAppSettings(portableRoot);
   const configured = normalizeFfmpegPath(settings.ffmpegPath);
   if (!configured) {
-    return { configured: false, path: null, available: false, version: null };
+    return { configured: false, path: null, available: false, version: null, cache };
   }
   try {
     await fs.access(configured);
   } catch {
-    return { configured: true, path: configured, available: false, version: null };
+    return { configured: true, path: configured, available: false, version: null, cache };
   }
   const probed = await runProcess(configured, ['-version'], { timeoutMs: 8000 });
   const firstLine = String(probed.stdout || probed.stderr)
@@ -174,6 +176,7 @@ export async function getFfmpegStatus(portableRoot) {
     path: configured,
     available: probed.code === 0,
     version: firstLine || null,
+    cache,
   };
 }
 
@@ -265,16 +268,17 @@ function isAttachedPic(stream) {
 }
 
 /**
- * Chromium plays MP4/WebM/Ogg in <video>; MKV/AVI/MOV need an MP4 remux even when codecs look fine.
+ * Chromium plays MP4/WebM/Ogg in <video>; MKV/AVI/MOV/TS need an MP4 remux even when codecs look fine.
  * @param {string} relativePath
  * @param {string} [formatName]
  */
 function isChromiumNativeContainer(relativePath, formatName) {
   const ext = path.extname(relativePath).slice(1).toLowerCase();
-  if (ext === 'mkv' || ext === 'avi' || ext === 'mov') return false;
+  if (ext === 'mkv' || ext === 'avi' || ext === 'mov' || ext === 'ts') return false;
   if (CHROMIUM_NATIVE_EXTS.has(ext)) return true;
   const names = String(formatName || '').toLowerCase();
   if (names.includes('matroska') || names.includes('avi') || names.includes('asf')) return false;
+  if (names.includes('mpegts')) return false;
   return names.includes('mp4') || names.includes('webm') || names.includes('ogg');
 }
 
@@ -330,7 +334,145 @@ function cacheDirPath(relativePath, stat) {
     .createHash('sha1')
     .update(`${relativePath}|${stat.mtimeMs}|${stat.size}|${CACHE_VERSION}`)
     .digest('hex');
-  return path.join(getWorkspaceRoot(), '.nas4usb', 'video-preview', key);
+  return path.join(getVideoPreviewCacheRoot(), key);
+}
+
+function getVideoPreviewCacheRoot() {
+  return path.join(getWorkspaceRoot(), '.nas4usb', 'video-preview');
+}
+
+/** @type {Promise<{ bytes: number, deleted: string[] }> | null} */
+let pruneInFlight = null;
+
+/**
+ * @param {string} dir
+ */
+async function directorySize(dir) {
+  let total = 0;
+  let entries;
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true });
+  } catch {
+    return 0;
+  }
+  for (const entry of entries) {
+    const absolute = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      total += await directorySize(absolute);
+      continue;
+    }
+    try {
+      total += (await fs.stat(absolute)).size;
+    } catch {
+      // skip
+    }
+  }
+  return total;
+}
+
+/**
+ * Mark a cache folder as recently used (LRU).
+ * @param {string} dir
+ */
+export async function touchVideoPreviewCache(dir) {
+  if (!dir) return;
+  const root = path.resolve(getVideoPreviewCacheRoot());
+  const resolved = path.resolve(dir);
+  if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) return;
+  const now = new Date();
+  await fs.utimes(resolved, now, now).catch(() => {});
+}
+
+/**
+ * @param {string} [portableRoot]
+ */
+export async function getVideoPreviewCacheStats(portableRoot) {
+  const settings = await getAppSettings(portableRoot);
+  const maxBytes = normalizeVideoPreviewCacheMaxBytes(settings.videoPreviewCacheMaxBytes);
+  const root = getVideoPreviewCacheRoot();
+  let folderCount = 0;
+  let bytes = 0;
+  let entries;
+  try {
+    entries = await fs.readdir(root, { withFileTypes: true });
+  } catch {
+    return { bytes: 0, folderCount: 0, maxBytes };
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    folderCount += 1;
+    bytes += await directorySize(path.join(root, entry.name));
+  }
+  return { bytes, folderCount, maxBytes };
+}
+
+/**
+ * Delete least-recently-used cache folders until usage is within the limit.
+ * Growing / in-progress transcodes are kept.
+ * @param {string} [portableRoot]
+ * @param {{ protectDirs?: Iterable<string> }} [options]
+ */
+export async function pruneVideoPreviewCache(portableRoot, options = {}) {
+  if (pruneInFlight) return pruneInFlight;
+  pruneInFlight = pruneVideoPreviewCacheUnlocked(portableRoot, options).finally(() => {
+    pruneInFlight = null;
+  });
+  return pruneInFlight;
+}
+
+/**
+ * @param {string} [portableRoot]
+ * @param {{ protectDirs?: Iterable<string> }} [options]
+ */
+async function pruneVideoPreviewCacheUnlocked(portableRoot, options = {}) {
+  const settings = await getAppSettings(portableRoot);
+  const maxBytes = normalizeVideoPreviewCacheMaxBytes(settings.videoPreviewCacheMaxBytes);
+  /** @type {string[]} */
+  const deleted = [];
+  if (maxBytes <= 0) {
+    const stats = await getVideoPreviewCacheStats(portableRoot);
+    return { bytes: stats.bytes, deleted };
+  }
+
+  const root = getVideoPreviewCacheRoot();
+  const protect = new Set(
+    [...(options.protectDirs ?? []), ...liveJobs.keys()].map((item) => path.resolve(item)),
+  );
+
+  let entries;
+  try {
+    entries = await fs.readdir(root, { withFileTypes: true });
+  } catch {
+    return { bytes: 0, deleted };
+  }
+
+  /** @type {{ dir: string, bytes: number, mtimeMs: number, protected: boolean }[]} */
+  const folders = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const dir = path.resolve(root, entry.name);
+    let stat;
+    try {
+      stat = await fs.stat(dir);
+    } catch {
+      continue;
+    }
+    const bytes = await directorySize(dir);
+    const locked = protect.has(dir) || isVideoPreviewGrowing(dir);
+    folders.push({ dir, bytes, mtimeMs: stat.mtimeMs, protected: locked });
+  }
+
+  folders.sort((a, b) => a.mtimeMs - b.mtimeMs);
+  let total = folders.reduce((sum, item) => sum + item.bytes, 0);
+  for (const folder of folders) {
+    if (total <= maxBytes) break;
+    if (folder.protected) continue;
+    await fs.rm(folder.dir, { recursive: true, force: true }).catch(() => {});
+    total -= folder.bytes;
+    deleted.push(folder.dir);
+  }
+
+  return { bytes: Math.max(0, total), deleted };
 }
 
 export function isAllowedHlsFileName(name) {
@@ -358,6 +500,7 @@ export async function resolveVideoPreviewHlsFile(relativePath, fileName) {
     error.statusCode = 400;
     throw error;
   }
+  void touchVideoPreviewCache(dir);
   return {
     dir,
     absolutePath,
@@ -786,9 +929,17 @@ export async function ensureVideoPreview(relativePath, portableRoot, options = {
     waitForFull,
     startSeconds,
     waitMs: options.waitMs,
-  }).finally(() => {
-    inflightPreviews.delete(lockKey);
-  });
+  })
+    .then(async (result) => {
+      if (result?.protocol === 'hls' && result.absolutePath) {
+        await touchVideoPreviewCache(result.absolutePath).catch(() => {});
+      }
+      void pruneVideoPreviewCache(portableRoot).catch(() => {});
+      return result;
+    })
+    .finally(() => {
+      inflightPreviews.delete(lockKey);
+    });
   inflightPreviews.set(lockKey, promise);
   return promise;
 }
@@ -898,5 +1049,6 @@ function guessSourceContentType(relativePath) {
   if (ext === 'webm') return 'video/webm';
   if (ext === 'ogv' || ext === 'ogg') return 'video/ogg';
   if (ext === 'mkv') return 'video/x-matroska';
+  if (ext === 'ts') return 'video/mp2t';
   return 'video/mp4';
 }

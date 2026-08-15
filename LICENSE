@@ -45,7 +45,6 @@ is below; the full inventory of direct npm dependencies is in THIRD_PARTY_NOTICE
 | FFmpeg (user-registered, not bundled) | LGPL / GPL | https://ffmpeg.org |
 | epub.js (epubjs) | BSD-2-Clause | https://github.com/futurepress/epub.js |
 | 7zip-min / 7zip-bin | MIT / LGPL | comic archive extract |
-| Yomikiru (inspiration only, not vendored) | MIT | https://github.com/mienaiyami/yomikiru |
 | Pandoc (bundled binary, HWPX export) | GPL-2.0-or-later | https://github.com/jgm/pandoc |
 | pypandoc-hwpx (vendored) | MIT | https://github.com/msjang/pypandoc-hwpx |
 | pypandoc | MIT | https://github.com/JessicaTegner/pypandoc |

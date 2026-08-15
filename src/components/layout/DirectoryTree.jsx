@@ -1,4 +1,14 @@
-import FileIcon from '../explorer/FileIcon.jsx';
+import { EXTERNAL_FOLDER, SHARED_FOLDER } from '../../../shared/constants.js';
+import { HOMES_FOLDER } from '../../../shared/memberHomes.js';
+import FileIcon, { folderIconTintClass } from '../explorer/FileIcon.jsx';
+
+function isRootExpandableFolder(relativePath) {
+  return (
+    relativePath === SHARED_FOLDER ||
+    relativePath === HOMES_FOLDER ||
+    relativePath === EXTERNAL_FOLDER
+  );
+}
 
 function Chevron({ expanded, loading }) {
   if (loading) {
@@ -64,7 +74,7 @@ function TreeNode({
         onClick={handleClick}
         onContextMenu={(event) => onContextMenu(event, entry)}
       >
-        {isFolder ? (
+        {isFolder && isRootExpandableFolder(entry.relativePath) ? (
           <span
             className="inline-flex h-4 w-4 shrink-0 items-center justify-center"
             onClick={(event) => {
@@ -79,7 +89,7 @@ function TreeNode({
         )}
         <FileIcon
           entry={entry}
-          className={`h-4 w-4 shrink-0 ${isActive ? '!text-white' : isTopLevel ? '!text-red-500' : ''}`}
+          className={`h-4 w-4 shrink-0 ${isActive ? '!text-white' : folderIconTintClass(entry)}`}
         />
         <span className={`truncate ${isTopLevel ? 'font-bold' : ''}`}>{entry.name}</span>
       </button>
@@ -101,14 +111,6 @@ function TreeNode({
               onContextMenu={onContextMenu}
             />
           ))}
-          {!isLoading && children.length === 0 && (
-            <p
-              className="py-1 text-[10pt] text-slate-500"
-              style={{ paddingLeft: `${(depth + 1) * 12 + 28}px` }}
-            >
-              비어 있음
-            </p>
-          )}
         </div>
       )}
     </div>
@@ -142,20 +144,24 @@ export default function DirectoryTree({
       ) : rootEntries.length === 0 ? (
         <p className="px-3 py-2 text-[10pt] text-slate-500">폴더가 없습니다</p>
       ) : (
-        rootEntries.map((entry) => (
-          <TreeNode
-            key={entry.relativePath}
-            entry={entry}
-            depth={0}
-            currentPath={currentPath}
-            expandedPaths={expandedPaths}
-            loadingPaths={loadingPaths}
-            childrenMap={childrenMap}
-            onToggleExpand={onToggleExpand}
-            onNavigate={onNavigate}
-            onOpenFile={onOpenFile}
-            onContextMenu={onContextMenu}
-          />
+        rootEntries.map((entry, index) => (
+          <div key={entry.relativePath}>
+            <TreeNode
+              entry={entry}
+              depth={0}
+              currentPath={currentPath}
+              expandedPaths={expandedPaths}
+              loadingPaths={loadingPaths}
+              childrenMap={childrenMap}
+              onToggleExpand={onToggleExpand}
+              onNavigate={onNavigate}
+              onOpenFile={onOpenFile}
+              onContextMenu={onContextMenu}
+            />
+            {index < rootEntries.length - 1 ? (
+              <div className="mx-3 my-1.5 h-px bg-slate-600" role="separator" />
+            ) : null}
+          </div>
         ))
       )}
     </div>

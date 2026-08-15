@@ -41,7 +41,9 @@ import {
   pathExistsWithAccessFilter,
   readDirWithAccessFilter,
   readFileBase64WithAccessFilter,
+  resolveHomeScopedWritePath,
   statPathWithAccessFilter,
+  assertCanClearFileHistoryTree,
 } from './fileAccessGuard.js';
 import { filterFileAccessMap, canViewFileEntry } from '../shared/fileAccessVisibility.js';
 import {
@@ -94,6 +96,7 @@ import {
   ensureVideoPreview,
   getFfmpegStatus,
   getVideoPreviewStatus,
+  pruneVideoPreviewCache,
   resolveVideoPreviewHlsFile,
 } from './ffmpegPreviewService.js';
 import {
@@ -104,6 +107,7 @@ import {
 import { getStreamContentType } from '../shared/mediaTypes.js';
 import { handleFsEventsRequest, notifyFsChanged, getFsRevisionPayload } from './fsNotifyService.js';
 import {
+  clearFileHistoryUnder,
   deleteFileHistoryEntry,
   listFileHistory,
   readFileHistoryBase64,
@@ -236,9 +240,11 @@ export async function handleHttpApiRequest(req, res) {
 
     if (method === 'POST' && url.pathname === '/api/fs/mkdir') {
       const body = await readJsonBody(req);
-      await assertCanEditFile(body.path ?? '', getAccessAuth(req), getShareTokenFromQuery(url));
-      const result = await fsService.mkdir(body.path);
-      notifyFsChanged(body.path);
+      const auth = getAccessAuth(req);
+      const target = resolveHomeScopedWritePath(body.path ?? '', auth);
+      await assertCanEditFile(target, auth, getShareTokenFromQuery(url));
+      const result = await fsService.mkdir(target);
+      notifyFsChanged(target);
       sendJson(res, 200, result);
       return true;
     }
@@ -314,9 +320,11 @@ export async function handleHttpApiRequest(req, res) {
 
     if (method === 'POST' && url.pathname === '/api/fs/writeFile') {
       const body = await readJsonBody(req);
-      await assertCanEditFile(body.path ?? '', getAccessAuth(req), getShareTokenFromQuery(url));
-      const result = await fsService.writeFileBase64(body.path, body.base64 ?? '');
-      notifyFsChanged(body.path);
+      const auth = getAccessAuth(req);
+      const target = resolveHomeScopedWritePath(body.path ?? '', auth);
+      await assertCanEditFile(target, auth, getShareTokenFromQuery(url));
+      const result = await fsService.writeFileBase64(target, body.base64 ?? '');
+      notifyFsChanged(target);
       sendJson(res, 200, result);
       return true;
     }
@@ -325,13 +333,14 @@ export async function handleHttpApiRequest(req, res) {
       const body = await readJsonBody(req);
       const auth = getAccessAuth(req);
       const shareToken = getShareTokenFromQuery(url);
-      assertHomeSystemPathMutable(body.to, 'mutate');
+      const dest = resolveHomeScopedWritePath(body.to ?? '', auth);
+      assertHomeSystemPathMutable(dest, 'mutate');
       await assertCanAccessFile(body.from ?? '', auth, shareToken);
-      await assertCanEditFile(body.to ?? '', auth, shareToken);
-      const result = await fsService.copyPath(body.from, body.to);
-      await syncFortuneSidecarCopy(body.from, body.to);
-      await syncPdfViewerSidecarCopy(body.from, body.to);
-      notifyFsChanged([body.from, body.to]);
+      await assertCanEditFile(dest, auth, shareToken);
+      const result = await fsService.copyPath(body.from, dest);
+      await syncFortuneSidecarCopy(body.from, dest);
+      await syncPdfViewerSidecarCopy(body.from, dest);
+      notifyFsChanged([body.from, dest]);
       sendJson(res, 200, result);
       return true;
     }
@@ -340,19 +349,20 @@ export async function handleHttpApiRequest(req, res) {
       const body = await readJsonBody(req);
       const auth = getAccessAuth(req);
       const shareToken = getShareTokenFromQuery(url);
+      const dest = resolveHomeScopedWritePath(body.to ?? '', auth);
       assertHomeSystemPathMutable(body.from, 'rename-source');
-      assertHomeSystemPathMutable(body.to, 'mutate');
+      assertHomeSystemPathMutable(dest, 'mutate');
       await assertCanEditFile(body.from ?? '', auth, shareToken);
-      await assertCanEditFile(body.to ?? '', auth, shareToken);
-      await syncSharePathRename(body.from, body.to, getPortableRoot());
-      await syncFileAccessRename(body.from, body.to, getPortableRoot());
-      await syncFavoritesRename(body.from, body.to, getPortableRoot());
-      await syncFortuneSidecarRename(body.from, body.to);
-      await syncPdfViewerSidecarRename(body.from, body.to);
-      await syncTiptapAssetRename(body.from, body.to);
-      await syncFileHistoryRename(body.from, body.to, getPortableRoot());
-      const result = await fsService.movePath(body.from, body.to);
-      notifyFsChanged([body.from, body.to]);
+      await assertCanEditFile(dest, auth, shareToken);
+      await syncSharePathRename(body.from, dest, getPortableRoot());
+      await syncFileAccessRename(body.from, dest, getPortableRoot());
+      await syncFavoritesRename(body.from, dest, getPortableRoot());
+      await syncFortuneSidecarRename(body.from, dest);
+      await syncPdfViewerSidecarRename(body.from, dest);
+      await syncTiptapAssetRename(body.from, dest);
+      await syncFileHistoryRename(body.from, dest, getPortableRoot());
+      const result = await fsService.movePath(body.from, dest);
+      notifyFsChanged([body.from, dest]);
       sendJson(res, 200, result);
       return true;
     }
@@ -568,7 +578,9 @@ export async function handleHttpApiRequest(req, res) {
 
     if (method === 'POST' && url.pathname === '/api/workspace/close') {
       const body = await readJsonBody(req);
-      sendJson(res, 200, await closeWorkspace(body.sessionId));
+      const result = await closeWorkspace(body.sessionId);
+      if (result.persisted && result.relativePath) notifyFsChanged(result.relativePath);
+      sendJson(res, 200, result);
       return true;
     }
 
@@ -844,6 +856,15 @@ export async function handleHttpApiRequest(req, res) {
       return true;
     }
 
+    if (method === 'POST' && url.pathname === '/api/history/clearTree') {
+      const body = await readJsonBody(req);
+      const target = await assertCanClearFileHistoryTree(body.path ?? '', getAccessAuth(req));
+      const result = await clearFileHistoryUnder(target, getPortableRoot());
+      notifyFsChanged(target);
+      sendJson(res, 200, result);
+      return true;
+    }
+
     if (method === 'GET' && url.pathname === '/api/settings') {
       assertSuperAdminAuthenticated(isSuperAdminAuthenticated(req));
       sendJson(res, 200, await getAppSettings(getPortableRoot()));
@@ -869,6 +890,9 @@ export async function handleHttpApiRequest(req, res) {
       }
       if (body && 'spellcheckEnabled' in body) {
         setSessionSpellCheckerEnabled(result.spellcheckEnabled);
+      }
+      if (body && 'videoPreviewCacheMaxBytes' in body) {
+        await pruneVideoPreviewCache(getPortableRoot()).catch(() => {});
       }
       notifyFsChanged();
       sendJson(res, 200, result);

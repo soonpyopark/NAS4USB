@@ -1,7 +1,4 @@
-/** Trailing episode number: ` 01`, `-02`, `_3`, `(4)`. */
-const TRAILING_EPISODE = /[\s._-]*\(?\d+\)?$/;
-/** `[S01.E01] 종이의 집 - 1화.English` */
-const BRACKET_SEASON_EPISODE = /^\[S(\d+)\.E(\d+)\]\s*(.*)$/i;
+import { compareNames } from '../fsPaths.js';
 
 /**
  * @param {string} fileName
@@ -13,53 +10,108 @@ export function fileStem(fileName) {
 }
 
 /**
- * Shared series key. Same-season `[S01.E01]` files group together; otherwise
- * trailing numbers (`파이터 01.mp4`) share the title prefix.
+ * Split a file name into text runs and the numbers between them.
+ * `귀멸의 칼날 1기 10화` → texts `["귀멸의 칼날 ", "기 ", "화"]`, numbers `[1, 10]`
+ *
  * @param {string} fileName
- * @returns {string | null}
+ * @returns {{ texts: string[], numbers: number[] }}
  */
-export function videoSeriesPrefix(fileName) {
+export function parseVideoNameTokens(fileName) {
   const stem = fileStem(fileName);
-  const seasonEpisode = stem.match(BRACKET_SEASON_EPISODE);
-  if (seasonEpisode) {
-    const title = String(seasonEpisode[3] || '')
-      .split(/\s+-\s+/)[0]
-      .trim();
-    if (!title) return `s${seasonEpisode[1]}`;
-    return `s${seasonEpisode[1]}:${title}`;
+  /** @type {string[]} */
+  const texts = [];
+  /** @type {number[]} */
+  const numbers = [];
+  const digit = /\d+/g;
+  let last = 0;
+  let match = digit.exec(stem);
+  while (match) {
+    texts.push(stem.slice(last, match.index).replace(/\s+/g, ' '));
+    numbers.push(Number.parseInt(match[0], 10));
+    last = match.index + match[0].length;
+    match = digit.exec(stem);
   }
-  const stripped = stem.replace(TRAILING_EPISODE, '').trim();
-  if (!stripped || stripped === stem) return null;
-  return stripped;
+  texts.push(stem.slice(last).replace(/\s+/g, ' '));
+  return { texts, numbers };
 }
 
 /**
- * @param {string} fileName
- * @param {string} prefix
+ * @param {{ texts: string[], numbers: number[] }} left
+ * @param {{ texts: string[], numbers: number[] }} right
  */
-export function isVideoInSeries(fileName, prefix) {
-  if (!prefix) return false;
-  return videoSeriesPrefix(fileName) === prefix;
+function sameNameShape(left, right) {
+  if (left.texts.length !== right.texts.length || left.numbers.length !== right.numbers.length) {
+    return false;
+  }
+  return left.texts.every((text, index) => compareNames(text, right.texts[index]) === 0);
 }
 
 /**
- * @param {string} fileName
+ * Numbers that stay put with the current file (season, resolution) vs numbers
+ * that change across the folder (episode). Tied slots keep the last one moving.
+ *
+ * @param {number[]} currentNumbers
+ * @param {number[][]} groupNumbers
+ * @returns {Set<number>}
  */
-export function videoSeriesEpisodeNumber(fileName) {
-  const stem = fileStem(fileName);
-  const seasonEpisode = stem.match(BRACKET_SEASON_EPISODE);
-  if (seasonEpisode) return Number.parseInt(seasonEpisode[2], 10);
-  const match = stem.match(/(\d+)\)?$/);
-  if (!match) return Number.POSITIVE_INFINITY;
-  return Number.parseInt(match[1], 10);
+function frozenNumberSlots(currentNumbers, groupNumbers) {
+  const slotCount = currentNumbers.length;
+  const sameCounts = currentNumbers.map(
+    (value, slot) => groupNumbers.filter((numbers) => numbers[slot] === value).length,
+  );
+  const maxSame = Math.max(...sameCounts);
+  /** @type {Set<number>} */
+  const frozen = new Set();
+  if (sameCounts.every((count) => count === maxSame)) {
+    if (maxSame === groupNumbers.length) return frozen;
+    for (let slot = 0; slot < slotCount - 1; slot += 1) frozen.add(slot);
+    return frozen;
+  }
+  for (let slot = 0; slot < slotCount; slot += 1) {
+    if (sameCounts[slot] === maxSame) frozen.add(slot);
+  }
+  return frozen;
 }
 
 /**
- * @param {import('../../types/nas4usb.d.ts').FsEntry} left
- * @param {import('../../types/nas4usb.d.ts').FsEntry} right
+ * Videos in `entries` that belong with `currentFileName`: same non-numeric
+ * name, matching the numbers that do not change in this folder.
+ *
+ * @param {import('../../types/nas4usb.d.ts').FsEntry[]} entries
+ * @param {string} currentFileName
+ * @returns {import('../../types/nas4usb.d.ts').FsEntry[]}
  */
-export function compareVideoSeriesEntries(left, right) {
-  const episodeDelta = videoSeriesEpisodeNumber(left.name) - videoSeriesEpisodeNumber(right.name);
-  if (episodeDelta !== 0) return episodeDelta;
-  return String(left.name).localeCompare(String(right.name), 'ko', { numeric: true });
+export function selectVideoSeries(entries, currentFileName) {
+  const parsed = (Array.isArray(entries) ? entries : []).map((entry) => ({
+    entry,
+    tokens: parseVideoNameTokens(entry.name),
+  }));
+  const current = parsed.find((item) => item.entry.name === currentFileName);
+  if (!current || current.tokens.numbers.length === 0) return [];
+
+  const sameShape = parsed.filter((item) => sameNameShape(item.tokens, current.tokens));
+  if (sameShape.length < 2) return [];
+
+  const frozen = frozenNumberSlots(
+    current.tokens.numbers,
+    sameShape.map((item) => item.tokens.numbers),
+  );
+  const series = sameShape.filter((item) =>
+    [...frozen].every((slot) => item.tokens.numbers[slot] === current.tokens.numbers[slot]),
+  );
+  if (series.length < 2) return [];
+
+  const sortSlots = current.tokens.numbers
+    .map((_, slot) => slot)
+    .filter((slot) => !frozen.has(slot));
+  if (!sortSlots.length) sortSlots.push(current.tokens.numbers.length - 1);
+
+  series.sort((left, right) => {
+    for (const slot of sortSlots) {
+      const delta = left.tokens.numbers[slot] - right.tokens.numbers[slot];
+      if (delta !== 0) return delta;
+    }
+    return compareNames(left.entry.name, right.entry.name);
+  });
+  return series.map((item) => item.entry);
 }

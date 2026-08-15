@@ -1,9 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ACCENT_COLOR_PRESETS, normalizeAccentColor } from '../../../shared/theme.js';
 import { useAppConfirm } from '../../hooks/useAppConfirm.jsx';
+import { openExternalUrl } from '../../lib/openExternal.js';
 import { isElectronRenderer } from '../../lib/runtime.js';
 import { applyAccentColor, currentAccentColor } from '../../lib/theme.js';
 import { applySpellcheckEnabled } from '../../lib/spellcheck.js';
+import {
+  DEFAULT_VIDEO_PREVIEW_CACHE_MAX_BYTES,
+  VIDEO_PREVIEW_CACHE_PRESETS,
+  formatByteSize,
+  normalizeVideoPreviewCacheMaxBytes,
+} from '../../../shared/videoPreviewCache.js';
 
 /**
  * @typedef {{
@@ -42,8 +49,11 @@ export default function GeneralSettingsPanel() {
   const [externalFolders, setExternalFolders] = useState([]);
   /** @type {[string | null, Function]} */
   const [ffmpegPath, setFfmpegPath] = useState(/** @type {string | null} */ (null));
-  /** @type {[{ available: boolean, version: string | null } | null, Function]} */
+  /** @type {[{ available: boolean, version: string | null, cache?: { bytes: number, folderCount: number, maxBytes: number } } | null, Function]} */
   const [ffmpegStatus, setFfmpegStatus] = useState(null);
+  const [videoPreviewCacheMaxBytes, setVideoPreviewCacheMaxBytes] = useState(
+    DEFAULT_VIDEO_PREVIEW_CACHE_MAX_BYTES,
+  );
   const [accent, setAccent] = useState(currentAccentColor);
   const [spellcheckEnabled, setSpellcheckEnabled] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -101,6 +111,9 @@ export default function GeneralSettingsPanel() {
           ? settings.ffmpegPath.trim()
           : null,
       );
+      setVideoPreviewCacheMaxBytes(
+        normalizeVideoPreviewCacheMaxBytes(settings?.videoPreviewCacheMaxBytes),
+      );
     } catch {
       setDataRoot(null);
     }
@@ -112,6 +125,14 @@ export default function GeneralSettingsPanel() {
         setFfmpegStatus({
           available: Boolean(status?.available),
           version: typeof status?.version === 'string' ? status.version : null,
+          cache:
+            status?.cache && typeof status.cache === 'object'
+              ? {
+                  bytes: Number(status.cache.bytes) || 0,
+                  folderCount: Number(status.cache.folderCount) || 0,
+                  maxBytes: normalizeVideoPreviewCacheMaxBytes(status.cache.maxBytes),
+                }
+              : undefined,
         });
       } else {
         setFfmpegStatus(null);
@@ -321,6 +342,14 @@ export default function GeneralSettingsPanel() {
       await window.nas4usb.settings.update({ ffmpegPath: null });
       setFfmpegPath(null);
       setFfmpegStatus(null);
+      await refresh();
+    });
+
+  const applyVideoPreviewCacheLimit = (nextBytes) =>
+    run(async () => {
+      const normalized = normalizeVideoPreviewCacheMaxBytes(nextBytes);
+      await window.nas4usb.settings.update({ videoPreviewCacheMaxBytes: normalized });
+      setVideoPreviewCacheMaxBytes(normalized);
       await refresh();
     });
 
@@ -585,6 +614,19 @@ export default function GeneralSettingsPanel() {
           않으며, 같은 폴더의 <code className="rounded bg-slate-100 px-1 text-[12px]">ffprobe.exe</code>가
           있으면 코덱 판별에 사용합니다.
         </p>
+        <p className="text-sm leading-relaxed text-slate-600">
+          Windows용 빌드:{' '}
+          <a
+            href="https://github.com/BtbN/FFmpeg-Builds/releases"
+            className="break-all text-sky-700 underline"
+            onClick={(event) => {
+              event.preventDefault();
+              void openExternalUrl('https://github.com/BtbN/FFmpeg-Builds/releases');
+            }}
+          >
+            https://github.com/BtbN/FFmpeg-Builds/releases
+          </a>
+        </p>
         {ffmpegPath ? (
           <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
             <p className="break-all font-mono text-xs text-slate-700">{ffmpegPath}</p>
@@ -621,6 +663,35 @@ export default function GeneralSettingsPanel() {
             ffmpeg.exe 등록…
           </button>
         )}
+        <div className="space-y-2 rounded-lg border border-slate-200 px-3 py-2">
+          <label className="block text-sm font-medium text-slate-700" htmlFor="video-preview-cache-limit">
+            비디오 캐시 최대 용량
+          </label>
+          <p className="text-xs leading-relaxed text-slate-500">
+            미리보기 변환 캐시가 한도를 넘으면 오래 쓰지 않은 폴더부터 지웁니다. 지금 재생·변환 중인
+            항목은 남깁니다.
+          </p>
+          <select
+            id="video-preview-cache-limit"
+            className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-700"
+            value={String(videoPreviewCacheMaxBytes)}
+            disabled={busy}
+            onChange={(event) => void applyVideoPreviewCacheLimit(Number(event.target.value))}
+          >
+            {VIDEO_PREVIEW_CACHE_PRESETS.map((preset) => (
+              <option key={preset.id} value={String(preset.bytes)}>
+                {preset.label}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-slate-500">
+            {ffmpegStatus?.cache
+              ? videoPreviewCacheMaxBytes > 0
+                ? `현재 사용량: ${formatByteSize(ffmpegStatus.cache.bytes)} / ${formatByteSize(videoPreviewCacheMaxBytes)} · 폴더 ${ffmpegStatus.cache.folderCount}개`
+                : `현재 사용량: ${formatByteSize(ffmpegStatus.cache.bytes)} · 제한 없음 · 폴더 ${ffmpegStatus.cache.folderCount}개`
+              : '사용량을 불러오는 중이거나 아직 캐시가 없습니다.'}
+          </p>
+        </div>
       </section>
 
       <section className="space-y-3">

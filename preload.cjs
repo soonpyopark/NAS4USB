@@ -114,6 +114,7 @@ contextBridge.exposeInMainWorld('nas4usb', {
       ipcRenderer.invoke('history:delete', relativePath, entryId, shareToken),
     restore: (relativePath, entryId, shareToken) =>
       ipcRenderer.invoke('history:restore', relativePath, entryId, shareToken),
+    clearTree: (relativePath) => ipcRenderer.invoke('history:clearTree', relativePath),
   },
 
   settings: {

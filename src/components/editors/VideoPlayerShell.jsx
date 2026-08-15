@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import 'video.js/dist/video-js.css';
+import { AppModalButton } from '../common/AppModal.jsx';
 import ViewerModal from './ViewerModal.jsx';
 import { useMediaStream } from '../../hooks/useMediaStream.js';
 import { useVideoSeriesQueue } from '../../hooks/useVideoSeriesQueue.js';
@@ -36,6 +37,7 @@ export default function VideoPlayerShell({
   onClose,
   allowClose = true,
   fullscreen = false,
+  raised = false,
   onOpenSibling,
 }) {
   const mimeType = getVideoMimeType(extension);
@@ -67,12 +69,12 @@ export default function VideoPlayerShell({
   const [subtitleNote, setSubtitleNote] = useState('');
   const [stalled, setStalled] = useState(false);
   const [playNextInSeries, setPlayNextInSeries] = useState(loadPlayNextPreference);
-  const { next: nextInSeries, index: seriesIndex, total: seriesTotal } = useVideoSeriesQueue(
-    relativePath,
-    fileName,
-    extension,
-    Boolean(onOpenSibling),
-  );
+  const {
+    prev: prevInSeries,
+    next: nextInSeries,
+    index: seriesIndex,
+    total: seriesTotal,
+  } = useVideoSeriesQueue(relativePath, fileName, extension, Boolean(onOpenSibling));
   const hasSeries = seriesTotal > 1;
 
   durationRef.current = durationSeconds;
@@ -89,11 +91,39 @@ export default function VideoPlayerShell({
     }
   }, []);
 
+  const openSeriesEntry = useCallback(
+    (entry) => {
+      if (!entry || !onOpenSibling) return;
+      void onOpenSibling(entry);
+    },
+    [onOpenSibling],
+  );
+
   const handleEnded = useCallback(() => {
     if (isStreamingPreview) return;
-    if (!playNextInSeries || !nextInSeries || !onOpenSibling) return;
-    void onOpenSibling(nextInSeries);
-  }, [isStreamingPreview, nextInSeries, onOpenSibling, playNextInSeries]);
+    if (!playNextInSeries || !nextInSeries) return;
+    openSeriesEntry(nextInSeries);
+  }, [isStreamingPreview, nextInSeries, openSeriesEntry, playNextInSeries]);
+
+  useEffect(() => {
+    if (!hasSeries) return undefined;
+    const onKeyDown = (event) => {
+      if (!event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return;
+      const target = event.target;
+      if (target instanceof HTMLElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) {
+        return;
+      }
+      if (event.key === 'ArrowLeft' && prevInSeries) {
+        event.preventDefault();
+        openSeriesEntry(prevInSeries);
+      } else if (event.key === 'ArrowRight' && nextInSeries) {
+        event.preventDefault();
+        openSeriesEntry(nextInSeries);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [hasSeries, nextInSeries, openSeriesEntry, prevInSeries]);
 
   useEffect(() => {
     let cancelled = false;
@@ -228,15 +258,31 @@ export default function VideoPlayerShell({
   ].filter(Boolean);
 
   const actions = hasSeries ? (
-    <label className="flex items-center gap-1.5 whitespace-nowrap text-xs text-[#323130]">
-      <input
-        type="checkbox"
-        className="rounded border-slate-300"
-        checked={playNextInSeries}
-        onChange={togglePlayNext}
-      />
-      연속 재생
-    </label>
+    <>
+      <label className="flex items-center gap-1.5 whitespace-nowrap text-xs text-[#323130]">
+        <input
+          type="checkbox"
+          className="rounded border-slate-300"
+          checked={playNextInSeries}
+          onChange={togglePlayNext}
+        />
+        연속 재생
+      </label>
+      <AppModalButton
+        disabled={!prevInSeries || loading}
+        title={prevInSeries ? `이전화: ${prevInSeries.name} (Shift+←)` : '이전화 없음'}
+        onClick={() => openSeriesEntry(prevInSeries)}
+      >
+        이전화
+      </AppModalButton>
+      <AppModalButton
+        disabled={!nextInSeries || loading}
+        title={nextInSeries ? `다음화: ${nextInSeries.name} (Shift+→)` : '다음화 없음'}
+        onClick={() => openSeriesEntry(nextInSeries)}
+      >
+        다음화
+      </AppModalButton>
+    </>
   ) : null;
 
   return (
@@ -248,6 +294,7 @@ export default function VideoPlayerShell({
       onClose={onClose}
       allowClose={allowClose}
       fullscreen={fullscreen}
+      raised={raised}
     >
       {loadError && (
         <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{loadError}</div>

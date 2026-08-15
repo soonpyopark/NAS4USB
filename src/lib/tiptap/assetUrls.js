@@ -33,6 +33,41 @@ export function packageAssetUrlToFileName(url) {
 }
 
 /**
+ * Link hrefs may use `assets/…` or the shorter `asset/…`.
+ * @param {string} href
+ * @param {string} [tiptapRelativePath]
+ * @returns {string | null}
+ */
+export function linkHrefToAssetFileName(href, tiptapRelativePath = '') {
+  if (!href || typeof href !== 'string') return null;
+  let raw = href.trim();
+  try {
+    raw = decodeURIComponent(raw);
+  } catch {
+    // keep raw
+  }
+  const normalized = normalizeAssetPath(raw).replace(/^\.\//, '');
+
+  if (tiptapRelativePath) {
+    const fromKnown = assetFileNameFromAnyUrl(normalized, tiptapRelativePath);
+    if (fromKnown) return fromKnown;
+  }
+
+  const lower = normalized.toLowerCase();
+  const prefix = lower.startsWith(TIPTAP_ASSET_URL_PREFIX)
+    ? TIPTAP_ASSET_URL_PREFIX
+    : lower.startsWith('asset/')
+      ? 'asset/'
+      : '';
+  if (!prefix) return null;
+  const fileName = normalized.slice(prefix.length);
+  if (!fileName || fileName.includes('/') || fileName.includes('\\') || fileName.includes('..')) {
+    return null;
+  }
+  return fileName;
+}
+
+/**
  * @param {string} url
  * @param {string} tiptapRelativePath
  * @returns {string | null}

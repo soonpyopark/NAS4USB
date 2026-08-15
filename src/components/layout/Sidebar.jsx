@@ -60,6 +60,7 @@ import {
 import {
   canWriteAtPath,
   effectivePermissionsForPath,
+  HOMES_FOLDER,
   isHomesContainerPath,
   isMemberHomeRootPath,
   memberHomeRelativePath,
@@ -123,8 +124,10 @@ export default function Sidebar({
   const canUseTrash = globalWrite || isAdminLoggedIn;
   const { count: trashCount, refresh: refreshTrash } = useTrash({ enabled: canUseTrash });
   const isInMyHomeView = Boolean(
-    myHomePath &&
-      (currentPath === myHomePath || String(currentPath).startsWith(`${myHomePath}/`)),
+    isAdminLoggedIn &&
+      (isHomesContainerPath(currentPath) ||
+        (myHomePath &&
+          (currentPath === myHomePath || String(currentPath).startsWith(`${myHomePath}/`)))),
   );
 
   const [contextMenu, setContextMenu] = useState(null);
@@ -868,7 +871,7 @@ export default function Sidebar({
               type="button"
               title="내 폴더"
               aria-label="내 폴더"
-              onClick={() => onNavigate(myHomePath)}
+              onClick={() => onNavigate(HOMES_FOLDER)}
               className={`relative flex min-w-0 flex-1 items-center justify-center rounded-md py-2.5 transition-colors ${
                 mainView !== 'settings' && isInMyHomeView
                   ? 'bg-nas-accent text-white'

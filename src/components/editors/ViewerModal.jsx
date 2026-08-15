@@ -9,10 +9,17 @@ export default function ViewerModal({
   onClose,
   allowClose = true,
   fullscreen = false,
+  raised = false,
   children,
 }) {
   return (
-    <AppModal open editor embedded={fullscreen} onClose={allowClose ? onClose : undefined}>
+    <AppModal
+      open
+      editor
+      embedded={fullscreen}
+      raised={raised}
+      onClose={allowClose ? onClose : undefined}
+    >
       <header className="modal-editor-header">
         <div className="min-w-0 flex-1">
           <p className="flex min-w-0 items-baseline text-sm font-semibold text-[#323130]">

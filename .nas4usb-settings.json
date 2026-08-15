@@ -41,5 +41,7 @@
     }
   ],
   "ffmpegPath": "D:\\My_Cursor\\(ffmpeg)\\ffmpeg.exe",
-  "useLegacyImagePdfViewers": false
+  "videoPreviewCacheMaxBytes": 5368709120,
+  "useLegacyImagePdfViewers": false,
+  "spellcheckEnabled": false
 }

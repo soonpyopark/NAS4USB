@@ -46,13 +46,15 @@ export default function TiptapFileView({ node, selected, extension }) {
     <NodeViewWrapper className={`tiptap-file-wrap${selected ? ' is-selected' : ''}`}>
       <a
         className="tiptap-file"
-        href={href || undefined}
+        data-type="file-attachment"
+        data-asset-src={src || undefined}
+        href={href || src || undefined}
         download={name}
         target="_blank"
         rel="noopener noreferrer"
+        title="클릭해서 열기 또는 다운로드"
         onClick={(event) => {
-          // Keep selection on the node; allow download via browser.
-          event.stopPropagation();
+          event.preventDefault();
         }}
       >
         <span className="tiptap-file__icon" aria-hidden="true">

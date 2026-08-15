@@ -14,11 +14,15 @@ import {
   filterEntriesByMemberHome,
   HOMES_DISK_DIR,
   HOMES_FOLDER,
+  isHomesContainerPath,
   isMemberHomeRootPath,
   isProtectedHomesSystemPath,
+  isUnderHomesFolder,
   LEGACY_HOMES_DISK_DIR,
   LEGACY_HOMES_FOLDER,
+  memberHomeRelativePath,
   resolveHomePathAccess,
+  rewritePathIntoOwnHome,
 } from '../shared/memberHomes.js';
 import {
   isProtectedSharedSystemPath,
@@ -45,6 +49,7 @@ import {
   getPdfPathForViewerSidecar,
   isPdfViewerSidecarRelativePath,
 } from '../shared/pdfViewerSidecar.js';
+import { pruneOrphanPdfViewerSidecars } from './pdfViewerSidecarService.js';
 import { getTiptapAssetSidecarPath } from '../shared/tiptapAssetPaths.js';
 
 const ACCESS_DENIED_MESSAGE = '이 파일에 접근할 권한이 없습니다.';
@@ -112,6 +117,49 @@ function homeAuthFrom(auth) {
     loginId: auth?.loginId ?? null,
     role: auth?.role ?? null,
   };
+}
+
+/**
+ * @param {string} relativePath
+ * @param {AccessAuth} auth
+ */
+export function resolveHomeScopedWritePath(relativePath, auth) {
+  const home = homeAuthFrom(auth);
+  const normalized = String(relativePath ?? '').replace(/\\/g, '/');
+  if (!home.isLoggedIn || !home.loginId) return normalized;
+  return rewritePathIntoOwnHome(normalized, home.loginId);
+}
+
+/**
+ * Bulk history wipe is allowed on 공유폴더 / 개인폴더 trees only.
+ * Does not use assertCanEditFile — that blocks the folder roots themselves.
+ * @param {string} relativePath
+ * @param {AccessAuth} auth
+ * @param {string} [portableRoot]
+ * @returns {Promise<string>} rewritten folder prefix to clear
+ */
+export async function assertCanClearFileHistoryTree(
+  relativePath,
+  auth,
+  portableRoot = getPortableRoot(),
+) {
+  const target = resolveHomeScopedWritePath(relativePath, auth);
+  const normalized = String(target ?? '').replace(/\\/g, '/');
+  const allowed =
+    normalized === SHARED_FOLDER ||
+    normalized.startsWith(`${SHARED_FOLDER}/`) ||
+    isUnderHomesFolder(normalized);
+
+  if (!allowed) {
+    throw new Error('공유폴더와 개인폴더에서만 백업을 일괄 제거할 수 있습니다.');
+  }
+  if (isHomesContainerPath(normalized)) {
+    throw new Error('개인폴더 백업을 지우려면 로그인이 필요합니다.');
+  }
+
+  await assertCanAccessFile(normalized, auth, null, portableRoot);
+  await assertCanWriteFs(auth, portableRoot, normalized);
+  return normalized;
 }
 
 /**
@@ -373,6 +421,31 @@ export async function readDirWithAccessFilter(
 
   if (normalizedPath && normalizedPath !== '.') {
     await assertCanAccessFile(normalizedPath, auth, null, portableRoot);
+  }
+
+  if (normalizedPath && normalizedPath !== '.') {
+    try {
+      await pruneOrphanPdfViewerSidecars(normalizedPath, { recursive: false });
+    } catch {
+      // listing must not fail because a sidecar could not be removed
+    }
+  }
+
+  if (isHomesContainerPath(normalizedPath)) {
+    const homePath = memberHomeRelativePath(home.loginId);
+    if (!homePath) return [];
+    const { ensureMemberHome } = await import('./memberHomeService.js');
+    await ensureMemberHome(home.loginId);
+    try {
+      await pruneOrphanPdfViewerSidecars(homePath, { recursive: false });
+    } catch {
+      // listing must not fail because a sidecar could not be removed
+    }
+    const homeEntries = await fsService.readDir(homePath);
+    return filterEntriesByMemberHome(homeEntries, home).map((entry) => ({
+      ...entry,
+      name: displayHomeEntryName(entry.name, entry.relativePath),
+    }));
   }
 
   const perms = await getEffectiveAccessPermissions(auth, portableRoot);

@@ -48,6 +48,7 @@ export default function ComicReaderShell({
   onClose,
   allowClose = true,
   fullscreen = false,
+  raised = false,
   onOpenSibling,
 }) {
   const isImageFile = isImageExtension(extension);
@@ -234,6 +235,7 @@ export default function ComicReaderShell({
       onClose={onClose}
       allowClose={allowClose}
       fullscreen={fullscreen}
+      raised={raised}
     >
       <div className="comic-reader-root">
         {isImageFile && onOpenSibling ? (

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { EXTERNAL_FOLDER, SHARED_FOLDER } from '../../../shared/constants.js';
 import { HOMES_FOLDER } from '../../../shared/memberHomes.js';
-import FileIcon from './FileIcon.jsx';
+import FileIcon, { folderIconTintClass } from './FileIcon.jsx';
 import FileEntryStatusBadges, { FILE_STATUS_SLOT_WIDTH } from './FileEntryStatusBadges.jsx';
 
 function formatSize(bytes) {
@@ -132,9 +132,7 @@ export default function FileList({
               </div>
               <FileIcon
                 entry={entry}
-                className={`h-12 w-12 ${
-                  isWorkspaceRootSystemFolder(entry.relativePath) ? '!text-red-500' : ''
-                }`}
+                className={`h-12 w-12 ${folderIconTintClass(entry)}`}
               />
               <span
                 className={`w-full truncate text-[10pt] text-slate-700 ${
@@ -171,13 +169,13 @@ export default function FileList({
                 className="h-4 w-4 rounded border-slate-300 text-nas-accent focus:ring-nas-accent"
               />
             </th>
+            <th className="px-4 py-2 font-medium">이름</th>
             <th
               className="px-1 py-2 font-medium"
               style={{ width: `${FILE_STATUS_SLOT_WIDTH}px` }}
             >
               상태
             </th>
-            <th className="px-4 py-2 font-medium">이름</th>
             <th className={`font-medium ${MODIFIED_DATE_COLUMN_CLASS}`}>수정일</th>
             <th className="hidden w-24 px-4 py-2 font-medium sm:table-cell">크기</th>
             <th className="hidden w-20 px-4 py-2 font-medium lg:table-cell">종류</th>
@@ -211,23 +209,11 @@ export default function FileList({
                     className="h-4 w-4 rounded border-slate-300 text-nas-accent focus:ring-nas-accent"
                   />
                 </td>
-                <td className="px-1 py-2" style={{ width: `${FILE_STATUS_SLOT_WIDTH}px` }}>
-                  <FileEntryStatusBadges
-                    entry={entry}
-                    accessMap={accessMap}
-                    shareMap={shareMap}
-                    favoritesMap={favoritesMap}
-                    onShareLinkClick={onShareLinkClick}
-                    onPropertiesClick={onPropertiesClick}
-                  />
-                </td>
                 <td className="max-w-0 px-4 py-2">
                   <div className="flex min-w-0 items-center gap-2 overflow-hidden">
                     <FileIcon
                       entry={entry}
-                      className={`h-5 w-5 shrink-0 ${
-                        isWorkspaceRootSystemFolder(entry.relativePath) ? '!text-red-500' : ''
-                      }`}
+                      className={`h-5 w-5 shrink-0 ${folderIconTintClass(entry)}`}
                     />
                     <span
                       className={`min-w-0 flex-1 truncate text-slate-700 ${
@@ -240,6 +226,16 @@ export default function FileList({
                       {entry.name}
                     </span>
                   </div>
+                </td>
+                <td className="px-1 py-2" style={{ width: `${FILE_STATUS_SLOT_WIDTH}px` }}>
+                  <FileEntryStatusBadges
+                    entry={entry}
+                    accessMap={accessMap}
+                    shareMap={shareMap}
+                    favoritesMap={favoritesMap}
+                    onShareLinkClick={onShareLinkClick}
+                    onPropertiesClick={onPropertiesClick}
+                  />
                 </td>
                 <td className={`text-nas-muted ${MODIFIED_DATE_COLUMN_CLASS}`} title={modifiedLabel}>
                   {modifiedLabel}

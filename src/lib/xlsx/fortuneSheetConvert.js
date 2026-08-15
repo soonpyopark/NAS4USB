@@ -144,7 +144,12 @@ function parseStyleIndexMapFromSheetXml(xml) {
 async function buildStyleIndexMaps(buffer, workbook) {
   /** @type {Map<string, Map<string, number>>} */
   const sheetStyleIndexMaps = new Map();
-  const zip = await JSZip.loadAsync(buffer);
+  let zip;
+  try {
+    zip = await JSZip.loadAsync(buffer);
+  } catch {
+    return { sheetStyleIndexMaps, borders: [] };
+  }
 
   for (let index = 0; index < workbook.SheetNames.length; index += 1) {
     const sheetName = workbook.SheetNames[index];
@@ -185,36 +190,36 @@ function resolveXlsxCellStyle(workbook, cell, address, styleIndexMap, borders) {
  * @param {import('xlsx-js-style').CellStyle | undefined} style
  */
 function extractFortuneStyleFromXlsx(style) {
+  if (!style || typeof style !== 'object') return {};
   const normalized = normalizeXlsxStyle(style);
-  if (!normalized) return {};
 
   /** @type {Record<string, string | number>} */
   const fortuneStyle = {};
 
-  const bg = xlsxRgbToFortuneColor(style.fill?.fgColor?.rgb ?? style.fgColor?.rgb);
+  const bg = xlsxRgbToFortuneColor(normalized.fill?.fgColor?.rgb ?? normalized.fgColor?.rgb);
   if (bg) fortuneStyle.bg = bg;
 
-  const fc = xlsxRgbToFortuneColor(style.font?.color?.rgb);
+  const fc = xlsxRgbToFortuneColor(normalized.font?.color?.rgb);
   if (fc) fortuneStyle.fc = fc;
 
-  if (style.font?.sz) fortuneStyle.fs = style.font.sz;
-  if (style.font?.bold) fortuneStyle.bl = 1;
-  if (style.font?.italic) fortuneStyle.it = 1;
-  if (style.font?.underline) fortuneStyle.un = 1;
-  if (style.font?.strike) fortuneStyle.cl = 1;
+  if (normalized.font?.sz) fortuneStyle.fs = normalized.font.sz;
+  if (normalized.font?.bold) fortuneStyle.bl = 1;
+  if (normalized.font?.italic) fortuneStyle.it = 1;
+  if (normalized.font?.underline) fortuneStyle.un = 1;
+  if (normalized.font?.strike) fortuneStyle.cl = 1;
 
-  if (style.alignment?.horizontal === 'center') fortuneStyle.ht = 0;
-  else if (style.alignment?.horizontal === 'left' || style.alignment?.horizontal === 'general') {
+  if (normalized.alignment?.horizontal === 'center') fortuneStyle.ht = 0;
+  else if (normalized.alignment?.horizontal === 'left' || normalized.alignment?.horizontal === 'general') {
     fortuneStyle.ht = 1;
-  } else if (style.alignment?.horizontal === 'right') {
+  } else if (normalized.alignment?.horizontal === 'right') {
     fortuneStyle.ht = 2;
   }
 
-  if (style.alignment?.vertical === 'center') fortuneStyle.vt = 0;
-  else if (style.alignment?.vertical === 'top') fortuneStyle.vt = 1;
-  else if (style.alignment?.vertical === 'bottom') fortuneStyle.vt = 2;
+  if (normalized.alignment?.vertical === 'center') fortuneStyle.vt = 0;
+  else if (normalized.alignment?.vertical === 'top') fortuneStyle.vt = 1;
+  else if (normalized.alignment?.vertical === 'bottom') fortuneStyle.vt = 2;
 
-  if (style.alignment?.wrapText) fortuneStyle.tb = '2';
+  if (normalized.alignment?.wrapText) fortuneStyle.tb = '2';
 
   return fortuneStyle;
 }
@@ -723,12 +728,24 @@ function xlsxSheetToFortuneSheet(sheet, name, id, order, isActive, workbook, sty
 
 /**
  * @param {ArrayBuffer | Uint8Array} buffer
- * @returns {Promise<import('@fortune-sheet/core').Sheet[]>}
  */
-export async function xlsxBufferToFortuneSheets(buffer) {
-  const workbook = XLSX.read(buffer, { type: 'array', cellStyles: true, cellNF: true });
-  const { sheetStyleIndexMaps, borders } = await buildStyleIndexMaps(buffer, workbook);
+function decodeSpreadsheetText(buffer) {
+  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+    return new TextDecoder('utf-8').decode(bytes.subarray(3));
+  }
+  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
+    return new TextDecoder('utf-16le').decode(bytes.subarray(2));
+  }
+  return new TextDecoder('utf-8').decode(bytes);
+}
 
+/**
+ * @param {import('xlsx-js-style').WorkBook} workbook
+ * @param {Map<string, Map<string, number>>} sheetStyleIndexMaps
+ * @param {Array<Record<string, { style: string, color?: { rgb: string } }>>} borders
+ */
+function workbookToFortuneSheets(workbook, sheetStyleIndexMaps, borders) {
   return workbook.SheetNames.map((name, index) =>
     xlsxSheetToFortuneSheet(
       workbook.Sheets[name] ?? {},
@@ -741,6 +758,26 @@ export async function xlsxBufferToFortuneSheets(buffer) {
       borders,
     ),
   );
+}
+
+/**
+ * @param {ArrayBuffer | Uint8Array} buffer
+ * @param {{ kind?: 'xlsx' | 'xls' | 'csv' | 'tsv' }} [options]
+ * @returns {Promise<import('@fortune-sheet/core').Sheet[]>}
+ */
+export async function xlsxBufferToFortuneSheets(buffer, options = {}) {
+  if (options.kind === 'csv' || options.kind === 'tsv') {
+    const workbook = XLSX.read(decodeSpreadsheetText(buffer), {
+      type: 'string',
+      FS: options.kind === 'tsv' ? '\t' : ',',
+      raw: false,
+    });
+    return workbookToFortuneSheets(workbook, new Map(), []);
+  }
+
+  const workbook = XLSX.read(buffer, { type: 'array', cellStyles: true, cellNF: true });
+  const { sheetStyleIndexMaps, borders } = await buildStyleIndexMaps(buffer, workbook);
+  return workbookToFortuneSheets(workbook, sheetStyleIndexMaps, borders);
 }
 
 /**
@@ -906,6 +943,18 @@ export function fortuneSheetsToXlsxBytes(sheets, { bookType = 'xlsx' } = {}) {
       cellStyles: true,
     }),
   );
+}
+
+/**
+ * @param {import('@fortune-sheet/core').Sheet[]} sheets
+ * @param {{ delimiter?: string }} [options]
+ */
+export function fortuneSheetsToDelimitedBytes(sheets, { delimiter = ',' } = {}) {
+  const sorted = [...(sheets ?? [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const sheet = sorted[0];
+  const worksheet = sheet ? fortuneSheetToXlsxWorksheet(sheet) : {};
+  const csv = XLSX.utils.sheet_to_csv(worksheet, { FS: delimiter });
+  return new TextEncoder().encode(`\uFEFF${csv}`);
 }
 
 /**

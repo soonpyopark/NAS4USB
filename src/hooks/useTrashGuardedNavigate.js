@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { SHARED_FOLDER } from '../../shared/constants.js';
 import { useGuestPermissions } from './useGuestPermissions.js';
 import { useAdminAuthContext } from '../context/AdminAuthContext.jsx';
+import { collapseOwnHomeRootPath } from '../lib/memberHomes.js';
 import { isTrashPath } from '../lib/trashPaths.js';
 
 /**
@@ -18,17 +19,18 @@ function normalizeNavPath(path) {
  */
 export function useTrashGuardedNavigate(initialPath = SHARED_FOLDER) {
   const { effectivePermissions } = useGuestPermissions();
-  const { isAdminLoggedIn } = useAdminAuthContext();
+  const { isAdminLoggedIn, adminId } = useAdminAuthContext();
   const canAccessTrash = Boolean(effectivePermissions.write) || isAdminLoggedIn;
   const [currentPath, setCurrentPath] = useState(() => normalizeNavPath(initialPath));
 
   const navigate = useCallback(
     (path) => {
-      const next = normalizeNavPath(path);
+      let next = normalizeNavPath(path);
       if (isTrashPath(next) && !canAccessTrash) return;
+      next = collapseOwnHomeRootPath(next, adminId);
       setCurrentPath(next);
     },
-    [canAccessTrash],
+    [adminId, canAccessTrash],
   );
 
   useEffect(() => {

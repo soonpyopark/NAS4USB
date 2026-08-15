@@ -356,6 +356,10 @@
   display: block;
 }
 
+.tiptap-editor-shell .tiptap-image.is-editable {
+  cursor: default;
+}
+
 .tiptap-editor-shell .tiptap-image-wrap.is-selected .tiptap-image {
   outline: 2px solid #2563eb;
   outline-offset: 2px;
@@ -1292,4 +1296,150 @@
     background: transparent !important;
     box-shadow: none !important;
   }
+}
+
+.tiptap-editor-shell .tiptap-image-missing {
+  display: block;
+  margin-top: 0.35rem;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.modal-dialog.tiptap-image-edit-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(96vw, 96dvw);
+  max-width: min(96vw, 96dvw);
+  height: min(92vh, 92dvh);
+  max-height: min(92vh, 92dvh);
+  overflow: hidden;
+  padding: 1.15rem 1.35rem 1.25rem;
+}
+
+.tiptap-image-edit-dialog .modal-header {
+  flex-shrink: 0;
+}
+
+.tiptap-image-edit-body.modal-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  margin-bottom: 0.75rem;
+}
+
+.tiptap-image-edit-dialog .modal-actions {
+  flex-shrink: 0;
+}
+
+.tiptap-image-edit-note,
+.tiptap-image-edit-tools,
+.tiptap-image-edit-error {
+  flex-shrink: 0;
+}
+
+.tiptap-image-edit-crop {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 6px;
+  background: #0f172a;
+}
+
+.tiptap-image-edit-fit {
+  position: absolute;
+  inset: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  container-type: size;
+}
+
+.tiptap-image-edit-frame {
+  position: relative;
+  line-height: 0;
+}
+
+.tiptap-image-edit-source {
+  display: block;
+  max-width: 100cqw;
+  max-height: 100cqh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  user-select: none;
+}
+
+.tiptap-image-edit-box {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid #60a5fa;
+  box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.55);
+  cursor: move;
+  touch-action: none;
+}
+
+.tiptap-image-edit-handle {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #2563eb;
+  border-radius: 2px;
+  background: #ffffff;
+  touch-action: none;
+}
+
+.tiptap-image-edit-handle--nw { top: -7px; left: -7px; }
+.tiptap-image-edit-handle--n { top: -7px; left: 50%; margin-left: -6px; }
+.tiptap-image-edit-handle--ne { top: -7px; right: -7px; }
+.tiptap-image-edit-handle--e { top: 50%; right: -7px; margin-top: -6px; }
+.tiptap-image-edit-handle--se { bottom: -7px; right: -7px; }
+.tiptap-image-edit-handle--s { bottom: -7px; left: 50%; margin-left: -6px; }
+.tiptap-image-edit-handle--sw { bottom: -7px; left: -7px; }
+.tiptap-image-edit-handle--w { top: 50%; left: -7px; margin-top: -6px; }
+
+.tiptap-image-edit-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.tiptap-image-edit-tools__group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.tiptap-image-edit-tools button {
+  padding: 4px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.tiptap-image-edit-tools button:hover,
+.tiptap-image-edit-tools button.is-active {
+  border-color: #93c5fd;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.tiptap-image-edit-note,
+.tiptap-image-edit-error {
+  margin: 0.5rem 0 0;
+  font-size: 12px;
+}
+
+.tiptap-image-edit-note {
+  color: #64748b;
+}
+
+.tiptap-image-edit-error {
+  color: #b91c1c;
 }

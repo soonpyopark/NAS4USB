@@ -95,8 +95,10 @@ export function useWorkspaceSession(relativePath) {
 
     try {
       await window.nas4usb.workspace.close(id);
-    } catch {
-      // Non-fatal after commit; server session may linger until restart.
+    } catch (err) {
+      sessionRef.current = id;
+      setSessionId(id);
+      throw err;
     } finally {
       closingRef.current = false;
     }

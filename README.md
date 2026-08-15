@@ -25,16 +25,17 @@ USB(또는 단일 폴더)만으로 **오프라인 LAN NAS**와 **실시간 공�
 | 워크스페이스 | UI **공유폴더** / **개인폴더** ↔ 디스크 `share` / `private` |
 | LAN 동기화 | Y.js WebSocket — 같은 방(room)에 접속한 클라이언트 간 CRDT 동기화 |
 | HWPX 편집 | rhwp-studio 기반 `.hwpx` 브라우저 에디터 |
-| TipTap 문서 | `.tiptap` — Notion-like TipTap 에디터 (ZIP+첨부, 슬래시 메뉴, 실시간 협업, HTML/HWPX 내보내기 · Pandoc + [pypandoc-hwpx](https://github.com/msjang/pypandoc-hwpx)) |
+| TipTap 문서 | `.tiptap` — Notion-like TipTap 에디터 (ZIP+첨부, 슬래시 메뉴, 실시간 협업, 원노트 가져오기, HTML/HWPX 내보내기 · Pandoc + [pypandoc-hwpx](https://github.com/msjang/pypandoc-hwpx)) |
 | Markdown / TXT | CodeMirror 편집 · MD 미리보기 · MD는 HTML/HWPX 내보내기 |
 | 스프레드시트 | FortuneSheet — `.xlsx` / `.xls` |
 | 화이트보드 | `.wb4s` — WhiteBoard4Share 엔진 |
 | PDF 미리보기 | 썸네일 · 너비/높이/페이지 맞춤 · 2쪽 보기 · 검색 · 형광펜/밑줄 · 엑셀 내보내기 |
 | 만화·소설 리더 | 이미지 · cbz/cbr/zip/rar/7z · epub (세로/LTR/RTL/두 쪽) |
-| 동영상 미리보기 | Video.js · 등록한 FFmpeg로 HLS 변환하며 재생 · 중간 이동 · `.srt`/`.vtt`/`.smi` 자막 |
+| 동영상 미리보기 | Video.js · 등록한 FFmpeg로 HLS 변환하며 재생 · 중간 이동 · `.srt`/`.vtt`/`.smi` 자막 · 캐시 용량 제한 |
+| 문서 백업 | HWPX·XLSX·TXT/MD·TipTap 저장 시 이력(최대 10개) · 미리보기·복원 · 항목/폴더 일괄 제거 |
 | 파일 접근 제어 | 비공개·열람제한·공유 링크 (총괄관리자) |
 | 회원 개인폴더 | 활성 회원 홈 자동 생성 · 삭제 시 정리 · 고아 폴더 prune |
-| 휴지통 | 총괄관리자 전용 |
+| 휴지통 | 로그인 회원은 본인 항목 · 비우기는 쓰기 권한 |
 | 게스트 UI | 열람 권한 없을 때 로그인 유도 / 관리자 문의 안내 |
 | 에디터 코어 업데이트 | `update_all.bat` — rhwp / wb4s / fortune-sheet / tiptap / comic-reader + npm 일괄 갱신 |
 
@@ -46,7 +47,8 @@ USB(또는 단일 폴더)만으로 **오프라인 LAN NAS**와 **실시간 공�
 | 개인폴더 | `{DATA_ROOT}/private/<회원ID>` | 회원별 홈 · LAN 협업 |
 | 외부 폴더 | 환경설정에서 지정한 절대 경로 | Google Drive·다른 드라이브 등 · 편집 가능 · **LAN 협업 없음** |
 | (설정) | `DATA_ROOT` / 설정 `dataRoot` | 부모 루트. 미설정 시 프로그램 폴더 |
-| (캐시) | `{DATA_ROOT}/.nas4usb/video-preview/` | 동영상 HLS 변환 캐시. 기본 폴더를 바꾸면 새 루트 하위에 쌓임 |
+| (캐시) | `{DATA_ROOT}/.nas4usb/video-preview/` | 동영상 HLS 변환 캐시. 설정에서 용량 제한(기본 2 GB) |
+| (백업) | `{상태 루트}/.nas4usb/file-history/` | 문서 이력(설정·회원과 같은 루트). 탐색기에는 숨김 |
 
 구버전에서 공유 루트가 `data`·`공유폴더`이거나 개인이 `개인폴더`인 경우, 실행 시 `share`/`private` 레이아웃으로 이전합니다.
 
@@ -65,7 +67,7 @@ USB(또는 단일 폴더)만으로 **오프라인 LAN NAS**와 **실시간 공�
 - **호환 변환:** 설정에 등록한 FFmpeg로 H.264/AAC HLS(EVENT) 변환. 첫 조각이 나오는 즉시 재생
 - **중간 이동:** 전체 길이 막대에서 변환된 구간은 바로 이동, 그 뒤는 해당 시각부터 다시 변환. 자막 시간도 같이 맞춤
 - **자막:** 같은 폴더의 `.srt` / `.vtt` / `.smi` (`영상.english.srt` 등)
-- **캐시:** `{DATA_ROOT}/.nas4usb/video-preview/` (탐색기에는 숨김). FFmpeg는 번들하지 않음
+- **캐시:** `{DATA_ROOT}/.nas4usb/video-preview/` (탐색기에는 숨김). 설정 → 일반에서 용량 제한(기본 2 GB, 제한 없음 가능). FFmpeg는 번들하지 않음
 
 ---
 
@@ -228,7 +230,7 @@ NAS4USB/
 │   ├── components/editors/ ComicReaderShell · PdfViewerShell · VideoPlayerShell 등
 │   ├── lib/comicReader/    만화·PDF·압축·EPUB 페이지 해석
 │   ├── lib/media/          Video.js · HLS · 자막 · 스트림 URL
-│   └── lib/pdf/            (레거시) PDF.js 로드·검색·형광펜/선택·뷰어 사이드카
+│   └── lib/pdf/            PDF.js 로드·검색·형광펜/선택·뷰어 사이드카
 ├── docs/                   복원 체크포인트 등
 ├── shared/                 공유 상수·경로(공유폴더/개인폴더 ↔ share/private)
 ├── lib/rhwp/               rhwp 어댑터 (파싱은 @rhwp/core WASM)

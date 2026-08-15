@@ -9,8 +9,9 @@ import { useWorkspaceSession } from '../../hooks/useWorkspaceSession.js';
 import { bindFortuneSheetEditor, setWorkbookSnapshot } from '../../sync/adapters/xlsxAdapter.js';
 import { bindFortuneSheetPresence } from '../../sync/adapters/xlsxPresenceAdapter.js';
 import { getLanWsEndpoints } from '../../sync/buildWsUrl.js';
-import { buildSpreadsheetBase64, parseSpreadsheetBase64 } from '../../lib/xlsx/xlsxIO.js';
+import { buildSpreadsheetBase64, getSpreadsheetKind, parseSpreadsheetBase64 } from '../../lib/xlsx/xlsxIO.js';
 import { loadSpreadsheetDocument, writeFortuneSidecar } from '../../lib/xlsx/fortuneSidecar.js';
+import { persistAndCloseEditor } from '../../lib/persistOnEditorClose.js';
 
 const FORTUNE_SHEET_VERSION = '1.0.4';
 
@@ -21,6 +22,7 @@ export default function XlsxEditorShell({
   onClose,
   allowClose = true,
   fullscreen = false,
+  raised = false,
   readOnly: shareReadOnly = false,
 }) {
   const workspace = useWorkspaceSession(relativePath);
@@ -40,7 +42,10 @@ export default function XlsxEditorShell({
   const unbindPresenceRef = useRef(null);
   const diskRevisionRef = useRef('');
   const crashCountRef = useRef(0);
+  const editorHandleRef = useRef(null);
+  const closingRef = useRef(false);
   diskRevisionRef.current = diskRevision;
+  editorHandleRef.current = editorHandle;
 
   // FortuneSheet occasionally throws while applying a remote collaboration op
   // (e.g. another peer adding a sheet). Rather than leaving a blank/white
@@ -139,37 +144,61 @@ export default function XlsxEditorShell({
     };
   }, [editorHandle, doc, initialSheets, provider]);
 
-  const handleSave = async () => {
-    if (shareReadOnly) return;
-    if (!workspace.ready || !editorHandle) return;
+  const persistLive = async ({ archive = true } = {}) => {
+    const handle = editorHandleRef.current;
+    if (shareReadOnly) return false;
+    if (!workspace.ready || !handle) return false;
     setSaving(true);
     try {
-      const bookType = fileName.toLowerCase().endsWith('.xls') ? 'biff8' : 'xlsx';
-      const sheets = editorHandle.getSheets();
+      const kind = getSpreadsheetKind(fileName);
+      const bookType = kind === 'xls' ? 'biff8' : kind;
+      const sheets = handle.getSheets();
       const base64 = buildSpreadsheetBase64(sheets, { bookType });
       await workspace.writeBinary(base64);
-      // Sidecar must be on disk before commit() archives the current document (xlsx + sidecar).
+      // Sidecar must be on disk before the live xlsx is replaced.
       await writeFortuneSidecar(relativePath, sheets);
-      await workspace.commit();
-      const statInfo = await window.nas4usb.fs.stat(relativePath);
-      const nextDiskRevision = statInfo?.modifiedAt ?? '';
-      setDiskRevision(nextDiskRevision);
-      if (doc) {
-        setWorkbookSnapshot(doc, sheets, { diskRevision: nextDiskRevision });
+      if (archive) {
+        await workspace.commit();
+        const statInfo = await window.nas4usb.fs.stat(relativePath);
+        const nextDiskRevision = statInfo?.modifiedAt ?? '';
+        setDiskRevision(nextDiskRevision);
+        if (doc) {
+          setWorkbookSnapshot(doc, sheets, { diskRevision: nextDiskRevision });
+        }
       }
+      return true;
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Save failed');
+      setLoadError(err instanceof Error ? err.message : '편집 내용을 저장하지 못했습니다.');
+      throw err;
     } finally {
       setSaving(false);
     }
   };
 
+  const handleSave = async () => {
+    try {
+      await persistLive({ archive: true });
+    } catch {
+      // error already shown
+    }
+  };
+
   const handleClose = async () => {
-    unbindRef.current?.();
-    unbindPresenceRef.current?.();
-    editorHandle?.destroy?.();
-    await workspace.close();
-    onClose();
+    const handle = editorHandleRef.current;
+    const canFlush = Boolean(!shareReadOnly && handle);
+    await persistAndCloseEditor({
+      closingRef,
+      persist: canFlush ? () => persistLive({ archive: false }) : undefined,
+      cleanup: () => {
+        unbindRef.current?.();
+        unbindPresenceRef.current?.();
+        unbindRef.current = null;
+        unbindPresenceRef.current = null;
+        handle?.destroy?.();
+      },
+      closeWorkspace: () => workspace.close(),
+      onClose,
+    });
   };
 
   // Restore already overwrote the file on disk (and archived the pre-restore state). The
@@ -228,6 +257,7 @@ export default function XlsxEditorShell({
         onClose={handleClose}
         allowClose={allowClose}
         fullscreen={fullscreen}
+        raised={raised}
       >
         {(workspace.error || loadError) && (
           <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
@@ -282,7 +312,7 @@ export default function XlsxEditorShell({
         onClose={() => setShowHistory(false)}
         relativePath={relativePath}
         fileName={fileName}
-        extension={fileName.toLowerCase().endsWith('.xls') ? 'xls' : 'xlsx'}
+        extension={getSpreadsheetKind(fileName)}
         onRestored={handleRestoreHistory}
       />
     </>

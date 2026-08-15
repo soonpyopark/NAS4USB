@@ -9,6 +9,7 @@ import { bindRhwpEditor } from '../../sync/adapters/rhwpAdapter.js';
 import { setTextDiskRevision } from '../../sync/adapters/textEditorAdapter.js';
 import { getLanWsEndpoints } from '../../sync/buildWsUrl.js';
 import { decodeTextBase64, encodeTextBase64 } from '../../lib/text/textIO.js';
+import { persistAndCloseEditor } from '../../lib/persistOnEditorClose.js';
 
 /**
  * @param {{
@@ -31,6 +32,7 @@ export default function TextEditorShell({
   onClose,
   allowClose = true,
   fullscreen = false,
+  raised = false,
   readOnly: shareReadOnly = false,
 }) {
   const isMarkdown = extension === 'md';
@@ -52,6 +54,7 @@ export default function TextEditorShell({
   const initialTextRef = useRef('');
   const diskRevisionRef = useRef('');
   const editorHandleRef = useRef(null);
+  const closingRef = useRef(false);
 
   useEffect(() => {
     editorHandleRef.current = editorHandle;
@@ -123,26 +126,41 @@ export default function TextEditorShell({
     setEditorHandle(editor);
   }, []);
 
-  const handleSave = useCallback(async () => {
-    if (shareReadOnly) return;
-    if (!workspace.ready || !editorHandleRef.current) return;
-    setSaving(true);
-    try {
-      const base64 = encodeTextBase64(editorHandleRef.current.getText());
-      await workspace.writeBinary(base64);
-      await workspace.commit();
+  const persistLive = useCallback(
+    async ({ archive = true } = {}) => {
+      if (shareReadOnly) return false;
+      if (!workspace.ready || !editorHandleRef.current) return false;
+      setSaving(true);
       try {
-        const statInfo = await window.nas4usb.fs.stat(relativePath);
-        setTextDiskRevision(doc, 'document', statInfo?.modifiedAt ?? '');
-      } catch {
-        // ignore optional revision update
+        const base64 = encodeTextBase64(editorHandleRef.current.getText());
+        await workspace.writeBinary(base64);
+        if (archive) {
+          await workspace.commit();
+          try {
+            const statInfo = await window.nas4usb.fs.stat(relativePath);
+            setTextDiskRevision(doc, 'document', statInfo?.modifiedAt ?? '');
+          } catch {
+            // ignore optional revision update
+          }
+        }
+        return true;
+      } catch (err) {
+        setLoadError(err instanceof Error ? err.message : '편집 내용을 저장하지 못했습니다.');
+        throw err;
+      } finally {
+        setSaving(false);
       }
-    } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Save failed');
-    } finally {
-      setSaving(false);
+    },
+    [doc, relativePath, shareReadOnly, workspace],
+  );
+
+  const handleSave = useCallback(async () => {
+    try {
+      await persistLive({ archive: true });
+    } catch {
+      // error already shown
     }
-  }, [doc, relativePath, shareReadOnly, workspace]);
+  }, [persistLive]);
 
   const handleExportHtml = useCallback(async () => {
     if (!isMarkdown || exportingHtml || exportingHwpx || shareReadOnly) return;
@@ -208,9 +226,17 @@ export default function TextEditorShell({
   }, [exportingHtml, exportingHwpx, exportingPdf, fileName, isMarkdown, shareReadOnly]);
 
   const handleClose = async () => {
-    unbindRef.current?.();
-    await workspace.close();
-    onClose();
+    const canFlush = Boolean(!shareReadOnly && editorHandleRef.current && ready);
+    await persistAndCloseEditor({
+      closingRef,
+      persist: canFlush ? () => persistLive({ archive: false }) : undefined,
+      cleanup: () => {
+        unbindRef.current?.();
+        unbindRef.current = null;
+      },
+      closeWorkspace: () => workspace.close(),
+      onClose,
+    });
   };
 
   // Restore already overwrote the file on disk (and archived the pre-restore state) —
@@ -267,6 +293,7 @@ export default function TextEditorShell({
         onClose={handleClose}
         allowClose={allowClose}
         fullscreen={fullscreen}
+        raised={raised}
       >
         {(workspace.error || loadError) && (
           <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">

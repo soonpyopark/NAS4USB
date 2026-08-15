@@ -17,11 +17,7 @@ import {
 import { clipboardHasEditableHtml, insertHtmlIntoView } from '../../lib/tiptap/clipboardHtml.js';
 import { collectClipboardImageFiles } from '../../lib/tiptap/pasteImages.js';
 import { useSpellcheckEnabled } from '../../hooks/useSpellcheckEnabled.js';
-import {
-  collectReferencedAssetPathsFromPmDoc,
-  cleanupUnreferencedTiptapAssets,
-  deleteTiptapAssetFiles,
-} from '../../lib/tiptap/assetCleanup.js';
+import { cleanupUnreferencedTiptapAssets } from '../../lib/tiptap/assetCleanup.js';
 import {
   createTiptapResolveFileUrl,
   createTiptapUploadFile,
@@ -31,6 +27,16 @@ import TipTapSearchBar from './tiptap/TipTapSearchBar.jsx';
 import TipTapBubbleMenus from './tiptap/TipTapBubbleMenus.jsx';
 import TipTapTocPanel from './tiptap/TipTapTocPanel.jsx';
 import { IconSearch } from './tiptap/TipTapIcons.jsx';
+import { openExternalUrl } from '../../lib/openExternal.js';
+import { getFileViewerType } from '../../lib/fileViewerType.js';
+import {
+  ensureTiptapAssetAvailable,
+  openTiptapAttachment,
+  resolveTiptapLinkClick,
+} from '../../lib/tiptap/openTiptapLink.js';
+import AttachmentEditorOverlay from './AttachmentEditorOverlay.jsx';
+import AudioPlayerShell from './AudioPlayerShell.jsx';
+import VideoPlayerShell from './VideoPlayerShell.jsx';
 
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 2;
@@ -61,6 +67,7 @@ function stepZoom(zoom, direction) {
  *   resolveFileUrl?: (url: string) => Promise<string>,
  *   onReady?: (editor: import('@tiptap/core').Editor) => void,
  *   onSave?: () => void,
+ *   syncInfo?: object | null,
  * }} props
  */
 export default function TipTapEditorView({
@@ -71,6 +78,7 @@ export default function TipTapEditorView({
   resolveFileUrl: resolveFileUrlProp,
   onReady,
   onSave,
+  syncInfo = null,
 }) {
   const imageInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   const videoInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
@@ -80,6 +88,16 @@ export default function TipTapEditorView({
   const [tocOpen, setTocOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchFocusNonce, setSearchFocusNonce] = useState(0);
+  const [assetPlayer, setAssetPlayer] = useState(
+    /** @type {{ kind: 'audio' | 'video', relativePath: string, fileName: string, extension: string } | null} */ (
+      null
+    ),
+  );
+  const [overlayEditor, setOverlayEditor] = useState(
+    /** @type {{ relativePath: string, fileName: string, extension: string, type: string } | null} */ (
+      null
+    ),
+  );
   const searchOpenRef = useRef(searchOpen);
   searchOpenRef.current = searchOpen;
   const [emojiOpenRequest, setEmojiOpenRequest] = useState(0);
@@ -117,6 +135,7 @@ export default function TipTapEditorView({
     const base = createTiptapExtensions({
       collaboration: collab,
       resolveFileUrl,
+      uploadFile: readOnly ? undefined : uploadFile,
       includeImageNodeView: true,
       includeMediaNodeView: true,
     });
@@ -133,7 +152,7 @@ export default function TipTapEditorView({
       );
     }
     return base;
-  }, [collabDoc, collabProvider, collabUserName, collabUserColor, readOnly, resolveFileUrl]);
+  }, [collabDoc, collabProvider, collabUserName, collabUserColor, readOnly, resolveFileUrl, uploadFile]);
 
   const editor = useEditor(
     {
@@ -291,46 +310,11 @@ export default function TipTapEditorView({
     return () => el.removeEventListener('wheel', onWheel);
   }, [zoomBy, editor]);
 
-  // When image/video/audio/file nodes are removed, delete sidecar files too.
+  // Keep replaced assets on disk while the editor is open so undo can restore
+  // a cropped image. Sweep leftovers only when the session ends.
   useEffect(() => {
     if (!editor || readOnly) return undefined;
-
-    let previous = collectReferencedAssetPathsFromPmDoc(editor.state.doc, relativePath);
-    /** @type {ReturnType<typeof setTimeout> | null} */
-    let timer = null;
-    /** @type {Set<string>} */
-    let pendingRemoval = new Set();
-
-    const flushRemovals = () => {
-      timer = null;
-      if (pendingRemoval.size === 0) return;
-      // Only delete files that are still unreferenced (undo may have restored them).
-      const stillMissing = [...pendingRemoval].filter((path) => !previous.has(path));
-      pendingRemoval = new Set();
-      if (stillMissing.length === 0) return;
-      deleteTiptapAssetFiles(stillMissing).catch(() => {});
-    };
-
-    const onUpdate = ({ transaction }) => {
-      if (!transaction.docChanged) return;
-      const next = collectReferencedAssetPathsFromPmDoc(editor.state.doc, relativePath);
-      for (const assetPath of previous) {
-        if (!next.has(assetPath)) pendingRemoval.add(assetPath);
-      }
-      // Re-inserted via undo: cancel pending delete.
-      for (const assetPath of next) {
-        pendingRemoval.delete(assetPath);
-      }
-      previous = next;
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(flushRemovals, 800);
-    };
-
-    editor.on('update', onUpdate);
     return () => {
-      editor.off('update', onUpdate);
-      if (timer) clearTimeout(timer);
-      // Flush: drop anything still unreferenced on unmount.
       cleanupUnreferencedTiptapAssets(relativePath, editor.getJSON()).catch(() => {});
     };
   }, [editor, readOnly, relativePath]);
@@ -346,6 +330,47 @@ export default function TipTapEditorView({
       window.alert(err instanceof Error ? err.message : '파일 업로드에 실패했습니다.');
     }
   };
+
+  const handleEditorClick = useCallback(
+    (event) => {
+      const anchor = event.target instanceof Element ? event.target.closest('a[href]') : null;
+      const href =
+        anchor?.getAttribute('data-asset-src')?.trim() ||
+        anchor?.getAttribute('href')?.trim() ||
+        '';
+      const target = resolveTiptapLinkClick(href, relativePath);
+      if (!target) return;
+      const isAttachment =
+        target.kind === 'file' ||
+        anchor?.getAttribute('data-type') === 'file-attachment' ||
+        anchor?.classList.contains('tiptap-file');
+      if (!readOnly && !isAttachment && !(event.ctrlKey || event.metaKey)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (target.kind === 'external') {
+        void openExternalUrl(target.url).catch(() => {});
+        return;
+      }
+      void ensureTiptapAssetAvailable(relativePath, target.fileName)
+        .then(async (resolvedPath) => {
+          const resolved = { ...target, relativePath: resolvedPath };
+          if (resolved.kind === 'audio' || resolved.kind === 'video') {
+            setAssetPlayer(resolved);
+            return;
+          }
+          const viewerType = getFileViewerType(resolved.extension);
+          if (viewerType && viewerType !== 'wb4s') {
+            setOverlayEditor({ ...resolved, type: viewerType });
+            return;
+          }
+          await openTiptapAttachment(resolved);
+        })
+        .catch((err) => {
+          window.alert(err instanceof Error ? err.message : '첨부 파일을 열 수 없습니다.');
+        });
+    },
+    [readOnly, relativePath],
+  );
 
   const openImagePicker = () => imageInputRef.current?.click();
   const openVideoPicker = () => videoInputRef.current?.click();
@@ -419,7 +444,7 @@ export default function TipTapEditorView({
 
       <div className="tiptap-editor-shell__body">
         <div className="tiptap-editor-shell__scroll" ref={scrollRef}>
-          <div className="tiptap-editor-shell__zoom" style={{ zoom }}>
+          <div className="tiptap-editor-shell__zoom" style={{ zoom }} onClick={handleEditorClick}>
             <EditorContent editor={editor} />
           </div>
         </div>
@@ -448,6 +473,33 @@ export default function TipTapEditorView({
         onChange={handleMediaPicked}
       />
       <input ref={fileInputRef} type="file" hidden onChange={handleMediaPicked} />
+
+      {assetPlayer?.kind === 'audio' ? (
+        <AudioPlayerShell
+          relativePath={assetPlayer.relativePath}
+          fileName={assetPlayer.fileName}
+          extension={assetPlayer.extension}
+          onClose={() => setAssetPlayer(null)}
+          raised
+        />
+      ) : null}
+      {assetPlayer?.kind === 'video' ? (
+        <VideoPlayerShell
+          relativePath={assetPlayer.relativePath}
+          fileName={assetPlayer.fileName}
+          extension={assetPlayer.extension}
+          onClose={() => setAssetPlayer(null)}
+          raised
+        />
+      ) : null}
+      {overlayEditor ? (
+        <AttachmentEditorOverlay
+          entry={overlayEditor}
+          syncInfo={syncInfo}
+          readOnly={readOnly}
+          onClose={() => setOverlayEditor(null)}
+        />
+      ) : null}
     </div>
   );
 }

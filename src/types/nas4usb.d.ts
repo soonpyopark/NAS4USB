@@ -117,6 +117,7 @@ window.nas4usb = {
     readSidecar: (relativePath, entryId, shareToken) => {},
     deleteEntry: (relativePath, entryId, shareToken) => {},
     restore: (relativePath, entryId, shareToken) => {},
+    clearTree: (relativePath) => {},
   },
   settings: {
     get: () => {},

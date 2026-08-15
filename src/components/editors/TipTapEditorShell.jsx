@@ -10,13 +10,13 @@ import { pickUserColor } from '../../lib/userColors.js';
 import { getTiptapFileStem } from '../../lib/tiptap/document.js';
 import { normalizeTiptapAssetUrls } from '../../lib/tiptap/assetUrls.js';
 import { seedTiptapRoomFromDisk, setTiptapDiskRevision } from '../../lib/tiptap/seedRoom.js';
-import { cleanupUnreferencedTiptapAssets } from '../../lib/tiptap/assetCleanup.js';
 import {
   packTiptapFileFromSidecar,
   parseTiptapFileBase64,
   removeTiptapAssetsSidecar,
   syncEmbeddedAssetsToSidecar,
 } from '../../lib/tiptap/package.js';
+import { persistAndCloseEditor } from '../../lib/persistOnEditorClose.js';
 
 const TipTapEditorView = lazy(() => import('./TipTapEditorView.jsx'));
 
@@ -39,6 +39,7 @@ export default function TipTapEditorShell({
   onClose,
   allowClose = true,
   fullscreen = false,
+  raised = false,
   readOnly: shareReadOnly = false,
 }) {
   const workspace = useWorkspaceSession(relativePath);
@@ -147,42 +148,56 @@ export default function TipTapEditorShell({
     editorRef.current = editor;
   }, []);
 
-  const handleSave = useCallback(async () => {
-    if (shareReadOnly) return;
-    if (!workspace.ready || !editorRef.current) return;
-    setSaving(true);
-    try {
-      const title = getTiptapFileStem(fileName);
-      const documentJson = editorRef.current.getJSON();
-      await cleanupUnreferencedTiptapAssets(relativePath, documentJson);
-      const base64 = await packTiptapFileFromSidecar({
-        title,
-        exportedAt: new Date().toISOString(),
-        content: documentJson,
-        tiptapRelativePath: relativePath,
-      });
-      await workspace.writeBinary(base64);
-      await workspace.commit();
+  const persistLive = useCallback(
+    async ({ archive = true } = {}) => {
+      if (shareReadOnly) return false;
+      if (!workspace.ready || !editorRef.current) return false;
+      setSaving(true);
       try {
-        const statInfo = await window.nas4usb.fs.stat(relativePath);
-        const nextDiskRevision = statInfo?.modifiedAt ?? '';
-        if (doc) {
-          setTiptapDiskRevision(doc, nextDiskRevision);
-          if (collaborationEnabled) {
-            seedTiptapRoomFromDisk(doc, documentJson, {
-              diskRevision: nextDiskRevision,
-            });
+        const title = getTiptapFileStem(fileName);
+        const documentJson = editorRef.current.getJSON();
+        const base64 = await packTiptapFileFromSidecar({
+          title,
+          exportedAt: new Date().toISOString(),
+          content: documentJson,
+          tiptapRelativePath: relativePath,
+        });
+        await workspace.writeBinary(base64);
+        if (archive) {
+          await workspace.commit();
+          try {
+            const statInfo = await window.nas4usb.fs.stat(relativePath);
+            const nextDiskRevision = statInfo?.modifiedAt ?? '';
+            if (doc) {
+              setTiptapDiskRevision(doc, nextDiskRevision);
+              if (collaborationEnabled) {
+                seedTiptapRoomFromDisk(doc, documentJson, {
+                  diskRevision: nextDiskRevision,
+                });
+              }
+            }
+          } catch {
+            // optional
           }
         }
-      } catch {
-        // optional
+        return true;
+      } catch (err) {
+        setLoadError(err instanceof Error ? err.message : '편집 내용을 저장하지 못했습니다.');
+        throw err;
+      } finally {
+        setSaving(false);
       }
-    } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Save failed');
-    } finally {
-      setSaving(false);
+    },
+    [collaborationEnabled, doc, fileName, relativePath, shareReadOnly, workspace],
+  );
+
+  const handleSave = useCallback(async () => {
+    try {
+      await persistLive({ archive: true });
+    } catch {
+      // error already shown
     }
-  }, [collaborationEnabled, doc, fileName, relativePath, shareReadOnly, workspace]);
+  }, [persistLive]);
 
   const handleRestoreHistory = useCallback(
     async (base64) => {
@@ -256,8 +271,11 @@ export default function TipTapEditorShell({
         );
         const { importHtmlIntoEditor } = await import('../../lib/tiptap/importHtml.js');
         const { createTiptapUploadFile } = await import('../../lib/tiptap/uploadFile.js');
-        const { packOnenotePageToTiptap, onenoteAssetsToFiles } = await import(
-          '../../lib/tiptap/importOnenote.js'
+        const { packOnenotePageToTiptap, onenoteAssetsToFiles, promoteOnenoteEmbeddedFiles } =
+          await import('../../lib/tiptap/importOnenote.js');
+        const { packageAssetUrlToFileName } = await import('../../lib/tiptap/assetUrls.js');
+        const { parseTiptapFileBase64, syncEmbeddedAssetsToSidecar } = await import(
+          '../../lib/tiptap/package.js'
         );
 
         const { convertOnenoteFile } = await import('../../lib/onenote/convertOnenote.js');
@@ -271,18 +289,26 @@ export default function TipTapEditorShell({
         const uploadFile = createTiptapUploadFile(relativePath);
         const first = pages[0];
         let html = first.html || '';
-        const files = onenoteAssetsToFiles(first.assets || []);
-        for (let i = 0; i < (first.assets || []).length; i += 1) {
-          const asset = first.assets[i];
+        const sourceAssets = first.assets || [];
+        const files = onenoteAssetsToFiles(sourceAssets);
+        /** @type {{ fileName: string, originalSrc?: string }[]} */
+        const rewrittenAssets = [];
+        for (let i = 0; i < sourceAssets.length; i += 1) {
+          const asset = sourceAssets[i];
           const uploaded = files[i];
-          if (!asset?.originalSrc || !uploaded) continue;
+          if (!asset || !uploaded) continue;
           try {
             const url = await uploadFile(uploaded);
-            html = html.split(asset.originalSrc).join(url);
+            if (asset.originalSrc) html = html.split(asset.originalSrc).join(url);
+            rewrittenAssets.push({
+              ...asset,
+              fileName: packageAssetUrlToFileName(url) || asset.fileName,
+            });
           } catch {
-            // skip broken asset
+            rewrittenAssets.push(asset);
           }
         }
+        html = promoteOnenoteEmbeddedFiles(html, rewrittenAssets);
         await importHtmlIntoEditor(editorRef.current, html, { uploadFile });
 
         const parent = getParentPath(relativePath);
@@ -296,7 +322,14 @@ export default function TipTapEditorShell({
           const packed = await packOnenotePageToTiptap(pages[index], index);
           const name = resolveUniqueName(existingNames, packed.fileName);
           existingNames.push(name);
-          await window.nas4usb.fs.writeFile(joinRelativePath(parent, name), packed.base64);
+          const pagePath = joinRelativePath(parent, name);
+          await window.nas4usb.fs.writeFile(pagePath, packed.base64);
+          try {
+            const parsed = await parseTiptapFileBase64(packed.base64);
+            await syncEmbeddedAssetsToSidecar(pagePath, parsed.embeddedAssets);
+          } catch {
+            // ZIP 안에 첨부만 있어도 열 때 다시 풀어집니다.
+          }
         }
 
         if (converted?.warnings?.length) {
@@ -419,17 +452,17 @@ export default function TipTapEditorShell({
   }, [exportingHtml, exportingHwpx, exportingPdf, fileName, relativePath]);
 
   const handleClose = useCallback(async () => {
-    if (closingRef.current) return;
-    closingRef.current = true;
-
-    try {
-      editorRef.current = null;
-      await workspace.close();
-      onClose();
-    } finally {
-      closingRef.current = false;
-    }
-  }, [onClose, workspace]);
+    const canFlush = Boolean(!shareReadOnly && editorRef.current && contentReady && roomReady);
+    await persistAndCloseEditor({
+      closingRef,
+      persist: canFlush ? () => persistLive({ archive: false }) : undefined,
+      cleanup: () => {
+        editorRef.current = null;
+      },
+      closeWorkspace: () => workspace.close(),
+      onClose,
+    });
+  }, [contentReady, onClose, persistLive, roomReady, shareReadOnly, workspace]);
 
   const peerCount = useAwarenessPeerCount(provider);
   const lanEndpoints = getLanWsEndpoints(syncInfo, roomId).join(' · ');
@@ -467,6 +500,7 @@ export default function TipTapEditorShell({
         onClose={handleClose}
         allowClose={allowClose}
         fullscreen={fullscreen}
+        raised={raised}
       >
         {(workspace.error || loadError) && (
           <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
@@ -512,6 +546,7 @@ export default function TipTapEditorShell({
                 readOnly={readOnly}
                 onReady={handleEditorReady}
                 onSave={handleSave}
+                syncInfo={syncInfo}
               />
             </Suspense>
           )}

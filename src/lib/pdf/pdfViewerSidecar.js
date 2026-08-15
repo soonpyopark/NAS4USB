@@ -238,6 +238,15 @@ export async function loadPdfViewerSidecar(pdfRelativePath) {
 export async function writePdfViewerSidecar(pdfRelativePath, state) {
   if (!pdfRelativePath || !window.nas4usb?.fs?.writeFile) return;
   const sidecarPath = getPdfViewerSidecarPath(pdfRelativePath);
+  try {
+    const exists = await window.nas4usb.fs.exists(pdfRelativePath);
+    if (!exists) {
+      await window.nas4usb.fs.delete(sidecarPath).catch(() => {});
+      return;
+    }
+  } catch {
+    return;
+  }
   const base64 = buildPdfViewerSidecarBase64(state);
   await window.nas4usb.fs.writeFile(sidecarPath, base64);
 }

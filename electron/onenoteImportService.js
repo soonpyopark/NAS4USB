@@ -90,6 +90,74 @@ async function collectHtmlFiles(dir) {
   return found;
 }
 
+const REMOTE_OR_INLINE_SRC = /^(https?:|data:|blob:|cid:|#|mailto:|javascript:)/i;
+const SKIP_ASSET_EXT = /\.(css|js|map)$/i;
+
+/**
+ * @param {string} value
+ */
+function decodeAssetSrc(value) {
+  const stripped = String(value ?? '')
+    .replace(/&amp;/g, '&')
+    .split(/[?#]/)[0];
+  try {
+    return decodeURIComponent(stripped);
+  } catch {
+    return stripped;
+  }
+}
+
+/**
+ * @param {string} dir
+ * @param {string} originalSrc
+ * @returns {Promise<{ absolute: string, bytes: Buffer } | null>}
+ */
+async function readRelativeAsset(dir, originalSrc) {
+  const decoded = decodeAssetSrc(originalSrc);
+  const raw = String(originalSrc ?? '')
+    .replace(/&amp;/g, '&')
+    .split(/[?#]/)[0];
+  const names = [...new Set([path.basename(decoded), path.basename(raw)].filter(Boolean))];
+  const candidates = [];
+  for (const name of names) {
+    candidates.push(
+      path.resolve(dir, decoded),
+      path.resolve(dir, raw),
+      path.join(dir, name),
+      path.join(dir, 'assets', name),
+      path.join(dir, 'asset', name),
+      path.join(dir, 'files', name),
+      path.join(dir, 'media', name),
+    );
+  }
+  const tried = new Set();
+  for (const absolute of candidates) {
+    if (tried.has(absolute)) continue;
+    tried.add(absolute);
+    try {
+      const bytes = await fs.readFile(absolute);
+      if (bytes.length > 0) return { absolute, bytes };
+    } catch {
+      // try the next location
+    }
+  }
+  return null;
+}
+
+/**
+ * @param {string} preferred
+ * @param {Set<string>} usedNames
+ */
+function uniqueAssetName(preferred, usedNames) {
+  let fileName = preferred || 'attachment.bin';
+  if (!usedNames.has(fileName)) return fileName;
+  const ext = path.extname(fileName);
+  const stem = path.basename(fileName, ext);
+  let n = 2;
+  while (usedNames.has(`${stem}-${n}${ext}`)) n += 1;
+  return `${stem}-${n}${ext}`;
+}
+
 /**
  * @param {string} htmlPath
  * @param {string} html
@@ -100,42 +168,64 @@ async function collectRelativeAssets(htmlPath, html) {
   const assets = [];
   const seen = new Set();
   const usedNames = new Set();
+  /** @type {string[]} */
+  const missing = [];
 
-  const matches = String(html ?? '').matchAll(/\b(?:src|href)\s*=\s*["']([^"']+)["']/gi);
+  const matches = String(html ?? '').matchAll(/\b(?:src|href|data)\s*=\s*["']([^"']+)["']/gi);
   for (const match of matches) {
     const originalSrc = match[1]?.trim();
     if (!originalSrc) continue;
-    if (/^(https?:|data:|blob:|cid:|assets\/|#|mailto:)/i.test(originalSrc)) continue;
+    if (REMOTE_OR_INLINE_SRC.test(originalSrc)) continue;
+    const lookName = path.basename(decodeAssetSrc(originalSrc));
+    if (SKIP_ASSET_EXT.test(lookName)) continue;
 
-    const decoded = originalSrc.replace(/&amp;/g, '&');
-    const absolute = path.resolve(dir, decoded.split(/[?#]/)[0]);
-    if (seen.has(absolute)) continue;
-    seen.add(absolute);
-
-    let bytes;
-    try {
-      bytes = await fs.readFile(absolute);
-    } catch {
+    const found = await readRelativeAsset(dir, originalSrc);
+    if (!found) {
+      if (lookName && /\.[a-z0-9]{2,8}$/i.test(lookName)) missing.push(lookName);
       continue;
     }
+    if (seen.has(found.absolute)) continue;
+    seen.add(found.absolute);
 
-    let fileName = path.basename(absolute) || `asset-${assets.length + 1}.bin`;
-    if (usedNames.has(fileName)) {
-      const ext = path.extname(fileName);
-      const stem = path.basename(fileName, ext);
-      let n = 2;
-      while (usedNames.has(`${stem}-${n}${ext}`)) n += 1;
-      fileName = `${stem}-${n}${ext}`;
-    }
+    const fileName = uniqueAssetName(path.basename(found.absolute), usedNames);
     usedNames.add(fileName);
     assets.push({
       fileName,
-      base64: bytes.toString('base64'),
+      base64: found.bytes.toString('base64'),
       originalSrc,
     });
   }
 
-  return assets;
+  let entries = [];
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true });
+  } catch {
+    entries = [];
+  }
+  const htmlCount = entries.filter((entry) => entry.isFile() && /\.html?$/i.test(entry.name)).length;
+  for (const entry of entries) {
+    if (!entry.isFile() || /\.html?$/i.test(entry.name) || SKIP_ASSET_EXT.test(entry.name)) continue;
+    const full = path.join(dir, entry.name);
+    if (seen.has(full)) continue;
+    if (htmlCount > 1 && !String(html ?? '').includes(entry.name)) continue;
+    let bytes;
+    try {
+      bytes = await fs.readFile(full);
+    } catch {
+      continue;
+    }
+    if (!bytes.length) continue;
+    seen.add(full);
+    const fileName = uniqueAssetName(entry.name, usedNames);
+    usedNames.add(fileName);
+    assets.push({
+      fileName,
+      base64: bytes.toString('base64'),
+      originalSrc: entry.name,
+    });
+  }
+
+  return { assets, missing: [...new Set(missing)] };
 }
 
 /**
@@ -351,18 +441,30 @@ export async function convertOnenoteBase64(base64, fileName = 'section.one') {
 
     /** @type {{ title: string, html: string, assets: { fileName: string, base64: string, originalSrc: string }[] }[]} */
     const pages = [];
+    /** @type {string[]} */
+    const missingNames = [];
     for (const item of selected) {
       const title =
         titleFromHtml(item.html) ||
         path.basename(item.htmlPath, path.extname(item.htmlPath)) ||
         `페이지 ${pages.length + 1}`;
-      const assets = await collectRelativeAssets(item.htmlPath, item.html);
+      const { assets, missing } = await collectRelativeAssets(item.htmlPath, item.html);
+      missingNames.push(...missing);
       pages.push({ title, html: item.html, assets });
+    }
+
+    const warnings = [];
+    if (converterError) warnings.push(skippedSectionsWarning(converterError, logLines));
+    const uniqueMissing = [...new Set(missingNames)];
+    if (uniqueMissing.length) {
+      warnings.push(
+        `페이지에 연결된 일부 삽입 파일을 찾지 못했습니다: ${uniqueMissing.join(', ')}`,
+      );
     }
 
     return {
       pages,
-      warnings: converterError ? [skippedSectionsWarning(converterError, logLines)] : [],
+      warnings,
     };
   } finally {
     await fs.rm(workDir, { recursive: true, force: true }).catch(() => {});

@@ -32,80 +32,8 @@ import { resolveUnknownFileOpenAction } from './lib/unknownFileOpen.js';
 import { syncInfoForPath } from './lib/externalFoldersUi.js';
 import { nativeAlert } from './lib/nativeDialog.js';
 import { shouldUseLegacyImagePdfViewers, setLegacyViewerSettingsFlag } from './lib/comicReader/legacyViewerFlag.js';
-import {
-  ARCHIVE_EXTENSIONS,
-  AUDIO_EXTENSIONS,
-  EPUB_EXTENSIONS,
-  HTML_EXTENSIONS,
-  IMAGE_EXTENSIONS,
-  isImageExtension,
-  PDF_EXTENSIONS,
-  VIDEO_EXTENSIONS,
-} from './lib/media/mediaTypes.js';
-
-/** Code / config files opened in the CodeMirror text editor (syntax highlight by ext). */
-const CODE_TEXT_EXTENSIONS = [
-  'js',
-  'mjs',
-  'cjs',
-  'jsx',
-  'ts',
-  'tsx',
-  'json',
-  'jsonc',
-  'css',
-  'scss',
-  'less',
-  'xml',
-  'py',
-  'rb',
-  'go',
-  'rs',
-  'java',
-  'kt',
-  'kts',
-  'c',
-  'h',
-  'cpp',
-  'cc',
-  'cxx',
-  'hpp',
-  'hh',
-  'cs',
-  'php',
-  'swift',
-  'sh',
-  'bash',
-  'zsh',
-  'ps1',
-  'yml',
-  'yaml',
-  'toml',
-  'ini',
-  'sql',
-  'graphql',
-  'vue',
-  'svelte',
-  'mdx',
-];
-
-const OPENABLE_EXTENSIONS = {
-  hwpx: 'hwpx',
-  wb4s: 'wb4s',
-  xlsx: 'xlsx',
-  xls: 'xlsx',
-  txt: 'text',
-  md: 'text',
-  tiptap: 'tiptap',
-  ...Object.fromEntries(CODE_TEXT_EXTENSIONS.map((ext) => [ext, 'text'])),
-  ...Object.fromEntries(AUDIO_EXTENSIONS.map((ext) => [ext, 'audio'])),
-  ...Object.fromEntries(VIDEO_EXTENSIONS.map((ext) => [ext, 'video'])),
-  ...Object.fromEntries(IMAGE_EXTENSIONS.map((ext) => [ext, 'reader'])),
-  ...Object.fromEntries(PDF_EXTENSIONS.map((ext) => [ext, 'pdf'])),
-  ...Object.fromEntries(ARCHIVE_EXTENSIONS.map((ext) => [ext, 'reader'])),
-  ...Object.fromEntries(EPUB_EXTENSIONS.map((ext) => [ext, 'reader'])),
-  ...Object.fromEntries(HTML_EXTENSIONS.map((ext) => [ext, 'html'])),
-};
+import { isImageExtension } from './lib/media/mediaTypes.js';
+import { getFileViewerType } from './lib/fileViewerType.js';
 
 /**
  * @param {{
@@ -442,7 +370,7 @@ function Nas4usbAppMain() {
       }
     }
 
-    const viewerType = OPENABLE_EXTENSIONS[entry.extension];
+    const viewerType = getFileViewerType(entry.extension);
     if (viewerType) {
       setOpenEditor({
         type: viewerType,

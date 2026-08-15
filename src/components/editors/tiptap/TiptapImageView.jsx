@@ -1,5 +1,6 @@
 import { NodeViewWrapper } from '@tiptap/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import TiptapImageEditModal from './TiptapImageEditModal.jsx';
 
 const MIN_WIDTH = 48;
 const CORNERS = [
@@ -23,7 +24,10 @@ function clamp(value, min, max) {
  *   selected: boolean,
  *   editor: import('@tiptap/core').Editor,
  *   updateAttributes: (attrs: Record<string, unknown>) => void,
- *   extension: { options: { resolveFileUrl?: (url: string) => Promise<string> } },
+ *   extension: { options: {
+ *     resolveFileUrl?: (url: string) => Promise<string>,
+ *     uploadFile?: (file: File) => Promise<string>,
+ *   } },
  * }} props
  */
 export default function TiptapImageView({
@@ -37,10 +41,14 @@ export default function TiptapImageView({
   const width = node.attrs.width ?? null;
   const [displaySrc, setDisplaySrc] = useState(src);
   const [previewWidth, setPreviewWidth] = useState(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [broken, setBroken] = useState(false);
   const wrapRef = useRef(null);
   const imgRef = useRef(null);
   const pendingSizeRef = useRef(null);
   const editable = editor?.isEditable !== false;
+  const uploadFile = extension.options.uploadFile;
+  const canEditPixels = editable && typeof uploadFile === 'function';
   const showControls = editable && selected;
   const renderedWidth = previewWidth ?? width;
 
@@ -52,6 +60,7 @@ export default function TiptapImageView({
       return undefined;
     }
 
+    setBroken(false);
     resolve(src).then((url) => {
       if (!cancelled) setDisplaySrc(url || src);
     });
@@ -128,6 +137,25 @@ export default function TiptapImageView({
     updateAttributes({ width: null, height: null });
   }, [updateAttributes]);
 
+  const openEditor = useCallback(
+    (event) => {
+      if (!canEditPixels) return;
+      event.preventDefault();
+      event.stopPropagation();
+      setEditOpen(true);
+    },
+    [canEditPixels],
+  );
+
+  const applyEditedFile = useCallback(
+    async (file) => {
+      if (!uploadFile) return;
+      const nextSrc = await uploadFile(file);
+      updateAttributes({ src: nextSrc, width: null, height: null });
+    },
+    [updateAttributes, uploadFile],
+  );
+
   return (
     <NodeViewWrapper
       ref={wrapRef}
@@ -140,13 +168,24 @@ export default function TiptapImageView({
         {/* eslint-disable-next-line jsx-a11y/alt-text -- alt from attrs */}
         <img
           ref={imgRef}
-          className="tiptap-image"
+          className={`tiptap-image${canEditPixels ? ' is-editable' : ''}`}
           src={displaySrc}
           alt={node.attrs.alt || ''}
-          title={node.attrs.title || undefined}
+          title={
+            canEditPixels
+              ? '더블클릭하여 자르기·회전'
+              : node.attrs.title || undefined
+          }
           style={renderedWidth ? { width: '100%' } : undefined}
           draggable={false}
+          onDoubleClick={openEditor}
+          onError={() => setBroken(true)}
         />
+        {broken && (
+          <span className="tiptap-image-missing" contentEditable={false}>
+            이미지를 불러오지 못했습니다.
+          </span>
+        )}
 
         {showControls &&
           CORNERS.map((corner) => (
@@ -174,6 +213,16 @@ export default function TiptapImageView({
                 {percent}%
               </button>
             ))}
+            {canEditPixels && (
+              <button
+                type="button"
+                title="자르기·회전"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={openEditor}
+              >
+                자르기
+              </button>
+            )}
             <button
               type="button"
               title="원래 크기"
@@ -185,6 +234,15 @@ export default function TiptapImageView({
           </span>
         )}
       </span>
+      {canEditPixels && (
+        <TiptapImageEditModal
+          open={editOpen}
+          imageSrc={displaySrc}
+          sourceName={src}
+          onClose={() => setEditOpen(false)}
+          onApply={applyEditedFile}
+        />
+      )}
     </NodeViewWrapper>
   );
 }

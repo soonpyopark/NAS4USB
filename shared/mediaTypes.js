@@ -11,7 +11,11 @@ export const AUDIO_MIME_TYPES = {
   weba: 'audio/webm',
 };
 
-/** @type {Record<string, string>} */
+/**
+ * `.ts` is an MPEG transport stream (video), not TypeScript — Chromium cannot
+ * demux it, so it plays through the FFmpeg remux path like MKV/AVI.
+ * @type {Record<string, string>}
+ */
 export const VIDEO_MIME_TYPES = {
   mp4: 'video/mp4',
   webm: 'video/webm',
@@ -20,6 +24,7 @@ export const VIDEO_MIME_TYPES = {
   mkv: 'video/x-matroska',
   m4v: 'video/mp4',
   avi: 'video/x-msvideo',
+  ts: 'video/mp2t',
 };
 
 /** @type {Record<string, string>} */

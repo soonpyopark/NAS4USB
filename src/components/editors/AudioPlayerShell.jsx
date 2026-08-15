@@ -5,7 +5,15 @@ import { getAudioMimeType } from '../../lib/media/mediaTypes.js';
 /**
  * @param {{ relativePath: string, fileName: string, extension: string, onClose: () => void }} props
  */
-export default function AudioPlayerShell({ relativePath, fileName, extension, onClose, allowClose = true, fullscreen = false }) {
+export default function AudioPlayerShell({
+  relativePath,
+  fileName,
+  extension,
+  onClose,
+  allowClose = true,
+  fullscreen = false,
+  raised = false,
+}) {
   const mimeType = getAudioMimeType(extension);
   const { streamUrl, loadError, loading, bufferedPercent, mediaHandlers } = useMediaStream(relativePath);
 
@@ -16,6 +24,7 @@ export default function AudioPlayerShell({ relativePath, fileName, extension, on
       onClose={onClose}
       allowClose={allowClose}
       fullscreen={fullscreen}
+      raised={raised}
     >
       {loadError && (
         <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{loadError}</div>

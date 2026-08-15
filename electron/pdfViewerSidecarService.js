@@ -141,4 +141,84 @@ export async function syncPdfViewerSidecarDelete(relativePath) {
   }
 }
 
+/**
+ * Remove `*.pdf.viewer.json` files whose companion PDF is gone
+ * (deleted/renamed outside the app, or saved after the PDF disappeared).
+ *
+ * @param {string} relativePath folder to scan
+ * @param {{ recursive?: boolean }} [options]
+ * @returns {Promise<{ deleted: string[] }>}
+ */
+export async function pruneOrphanPdfViewerSidecars(relativePath, options = {}) {
+  const recursive = Boolean(options.recursive);
+  const normalized = normalizeRelativePath(relativePath);
+  /** @type {string[]} */
+  const deleted = [];
+
+  let absolute;
+  try {
+    absolute = resolvePortablePath(normalized);
+  } catch {
+    return { deleted };
+  }
+
+  /**
+   * @param {string} absDir
+   * @param {string} relDir
+   */
+  async function visit(absDir, relDir) {
+    let entries;
+    try {
+      entries = await fs.readdir(absDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      const rel = relDir === '.' ? entry.name : `${relDir}/${entry.name}`;
+      const abs = path.join(absDir, entry.name);
+
+      if (entry.isDirectory()) {
+        if (recursive && !entry.name.startsWith('.')) await visit(abs, rel);
+        continue;
+      }
+
+      if (!isPdfViewerSidecarRelativePath(rel)) continue;
+      const pdfPath = getPdfPathForViewerSidecar(rel);
+      if (!pdfPath || (await fsService.pathExists(pdfPath))) continue;
+
+      await fsService.deletePath(rel).catch(() => {});
+      deleted.push(rel);
+    }
+  }
+
+  let stat;
+  try {
+    stat = await fs.stat(absolute);
+  } catch {
+    return { deleted };
+  }
+  if (!stat.isDirectory()) return { deleted };
+
+  await visit(absolute, normalized);
+  return { deleted };
+}
+
+/**
+ * Startup sweep of share + personal folders.
+ * @returns {Promise<{ deleted: string[] }>}
+ */
+export async function pruneOrphanPdfViewerSidecarsInWorkspace() {
+  const { SHARED_FOLDER } = await import('../shared/constants.js');
+  const { HOMES_FOLDER } = await import('../shared/memberHomes.js');
+  const deleted = [];
+  for (const root of [SHARED_FOLDER, HOMES_FOLDER]) {
+    const result = await pruneOrphanPdfViewerSidecars(root, { recursive: true }).catch(() => ({
+      deleted: [],
+    }));
+    deleted.push(...result.deleted);
+  }
+  return { deleted };
+}
+
 export { isPdfViewerSidecarRelativePath };

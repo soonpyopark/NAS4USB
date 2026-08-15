@@ -3,6 +3,24 @@ import ko from 'video.js/dist/lang/ko.json';
 
 videojs.addLanguage('ko', ko);
 
+const SkipBackward = videojs.getComponent('SkipBackward');
+const SkipForward = videojs.getComponent('SkipForward');
+
+class SkipBackward5 extends SkipBackward {
+  getSkipBackwardTime() {
+    return 5;
+  }
+}
+
+class SkipForward5 extends SkipForward {
+  getSkipForwardTime() {
+    return 5;
+  }
+}
+
+videojs.registerComponent('SkipBackward5', SkipBackward5);
+videojs.registerComponent('SkipForward5', SkipForward5);
+
 /**
  * @param {import('video.js').VideoJsPlayer} player
  * @param {{
@@ -43,6 +61,100 @@ function patchTimelineClock(player, clock) {
   };
 }
 
+const CLICK_ZONE_SPLIT = 1 / 3;
+const CLICK_DELAY_MS = 280;
+const DOUBLE_TAP_MS = 320;
+const DOUBLE_TAP_PX = 48;
+const UI_CHROME_SELECTOR =
+  '.vjs-control-bar, .vjs-modal-dialog, .vjs-menu, .vjs-big-play-button, .vjs-text-track-settings';
+
+/**
+ * @param {Event} event
+ * @returns {{ x: number, y: number } | null}
+ */
+function clientPoint(event) {
+  if (Number.isFinite(event.clientX) && Number.isFinite(event.clientY)) {
+    return { x: event.clientX, y: event.clientY };
+  }
+  const touch = event.changedTouches?.[0];
+  if (touch && Number.isFinite(touch.clientX) && Number.isFinite(touch.clientY)) {
+    return { x: touch.clientX, y: touch.clientY };
+  }
+  return null;
+}
+
+/**
+ * @param {import('video.js').VideoJsPlayer} player
+ * @param {number} x
+ * @param {number} y
+ * @returns {'left' | 'center' | 'right'}
+ */
+function clickZone(player, x, y) {
+  const el = player.el();
+  if (!el || !Number.isFinite(x)) return 'center';
+  const rect = el.getBoundingClientRect();
+  if (rect.width <= 0) return 'center';
+  const ratio = (x - rect.left) / rect.width;
+  if (ratio < CLICK_ZONE_SPLIT) return 'left';
+  if (ratio > 1 - CLICK_ZONE_SPLIT) return 'right';
+  return 'center';
+}
+
+/**
+ * @param {Event} event
+ */
+function isPlayerChrome(event) {
+  const target = event.target;
+  return target instanceof Element && Boolean(target.closest(UI_CHROME_SELECTOR));
+}
+
+/**
+ * @param {import('video.js').VideoJsPlayer} player
+ * @param {number} seconds
+ */
+function skipBySeconds(player, seconds) {
+  const current = Number(player.currentTime()) || 0;
+  const duration = Number(player.duration());
+  const next = current + seconds;
+  if (seconds < 0) {
+    player.currentTime(Math.max(0, next));
+    return;
+  }
+  const end = Number.isFinite(duration) && duration > 0 ? duration : next;
+  player.currentTime(Math.min(end, next));
+}
+
+/**
+ * @param {import('video.js').VideoJsPlayer} player
+ */
+function togglePlayPause(player) {
+  if (player.paused()) {
+    player.play();
+    return;
+  }
+  player.pause();
+}
+
+/**
+ * @param {import('video.js').VideoJsPlayer} player
+ * @param {'left' | 'center' | 'right'} zone
+ */
+function handleDoubleTap(player, zone) {
+  if (zone === 'left') {
+    skipBySeconds(player, -5);
+    return;
+  }
+  if (zone === 'right') {
+    skipBySeconds(player, 5);
+    return;
+  }
+  if (player.isFullscreen()) {
+    player.exitFullscreen();
+    return;
+  }
+  player.requestFullscreen();
+}
+
 /**
  * Mount Video.js on a host element. HLS/native src attach to the inner video.
  *
@@ -59,6 +171,47 @@ export function mountVideoJsPlayer(host, clock) {
   video.playsInline = true;
   video.crossOrigin = 'anonymous';
   host.replaceChildren(video);
+
+  let pendingClick = 0;
+  /** @type {{ time: number, x: number, y: number } | null} */
+  let lastTap = null;
+  let handledByPointer = false;
+  const cancelPendingClick = () => {
+    if (!pendingClick) return;
+    window.clearTimeout(pendingClick);
+    pendingClick = 0;
+  };
+
+  /**
+   * @param {Event} event
+   */
+  const handleSurfaceTap = (event) => {
+    if (isPlayerChrome(event)) return;
+    const point = clientPoint(event);
+    if (!point) return;
+    const now = Date.now();
+    const zone = clickZone(player, point.x, point.y);
+    const isDouble =
+      lastTap &&
+      now - lastTap.time <= DOUBLE_TAP_MS &&
+      Math.abs(point.x - lastTap.x) <= DOUBLE_TAP_PX &&
+      Math.abs(point.y - lastTap.y) <= DOUBLE_TAP_PX;
+
+    if (isDouble) {
+      cancelPendingClick();
+      lastTap = null;
+      handleDoubleTap(player, zone);
+      return;
+    }
+
+    lastTap = { time: now, x: point.x, y: point.y };
+    if (zone !== 'center') return;
+    cancelPendingClick();
+    pendingClick = window.setTimeout(() => {
+      pendingClick = 0;
+      togglePlayPause(player);
+    }, CLICK_DELAY_MS);
+  };
 
   const player = videojs(video, {
     controls: true,
@@ -77,17 +230,13 @@ export function mountVideoJsPlayer(host, clock) {
     },
     enableSmoothSeeking: true,
     disablePictureInPicture: false,
-    skipButtons: {
-      backward: 10,
-      forward: 10,
-    },
     spatialNavigation: {
       enabled: true,
       horizontalSeek: true,
     },
     userActions: {
-      click: true,
-      doubleClick: true,
+      click: false,
+      doubleClick: false,
       hotkeys: true,
     },
     html5: {
@@ -97,36 +246,98 @@ export function mountVideoJsPlayer(host, clock) {
       nativeTextTracks: true,
     },
     controlBar: {
-      playToggle: true,
-      skipBackward: true,
-      skipForward: true,
       volumePanel: { inline: false },
-      currentTimeDisplay: true,
-      timeDivider: true,
-      durationDisplay: true,
-      progressControl: true,
-      liveDisplay: true,
-      seekToLive: true,
-      remainingTimeDisplay: true,
-      playbackRateMenuButton: true,
-      chaptersButton: true,
-      descriptionsButton: true,
-      subsCapsButton: true,
-      audioTrackButton: true,
-      pictureInPictureToggle: true,
-      fullscreenToggle: true,
+      skipButtons: {
+        backward: 10,
+        forward: 10,
+      },
+      children: [
+        'playToggle',
+        'SkipBackward5',
+        'SkipForward5',
+        'skipBackward',
+        'skipForward',
+        'volumePanel',
+        'currentTimeDisplay',
+        'timeDivider',
+        'durationDisplay',
+        'progressControl',
+        'liveDisplay',
+        'seekToLive',
+        'remainingTimeDisplay',
+        'playbackRateMenuButton',
+        'chaptersButton',
+        'descriptionsButton',
+        'subsCapsButton',
+        'audioTrackButton',
+        'pictureInPictureToggle',
+        'fullscreenToggle',
+      ],
     },
   });
 
   patchTimelineClock(player, clock);
+
+  /** @type {HTMLElement | null} */
+  let surfaceEl = null;
+  /** @type {{ x: number, y: number } | null} */
+  let pointerStart = null;
+
+  const onPointerDown = (event) => {
+    if (event.isPrimary === false) return;
+    pointerStart = { x: event.clientX, y: event.clientY };
+  };
+
+  const onPointerUp = (event) => {
+    if (event.isPrimary === false) return;
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    const start = pointerStart;
+    pointerStart = null;
+    if (
+      start &&
+      (Math.abs(event.clientX - start.x) > DOUBLE_TAP_PX || Math.abs(event.clientY - start.y) > DOUBLE_TAP_PX)
+    ) {
+      return;
+    }
+    handledByPointer = true;
+    window.setTimeout(() => {
+      handledByPointer = false;
+    }, 0);
+    handleSurfaceTap(event);
+  };
+
+  const onPointerCancel = () => {
+    pointerStart = null;
+  };
+
+  const onTouchEnd = (event) => {
+    if (handledByPointer) return;
+    if (event.touches && event.touches.length > 0) return;
+    handleSurfaceTap(event);
+  };
+
   player.ready(() => {
     player.trigger('durationchange');
+    surfaceEl = player.el();
+    if (!surfaceEl) return;
+    surfaceEl.addEventListener('pointerdown', onPointerDown);
+    surfaceEl.addEventListener('pointerup', onPointerUp);
+    surfaceEl.addEventListener('pointercancel', onPointerCancel);
+    surfaceEl.addEventListener('touchend', onTouchEnd);
   });
 
   return {
     player,
     video,
     dispose: () => {
+      cancelPendingClick();
+      if (surfaceEl) {
+        surfaceEl.removeEventListener('pointerdown', onPointerDown);
+        surfaceEl.removeEventListener('pointerup', onPointerUp);
+        surfaceEl.removeEventListener('pointercancel', onPointerCancel);
+        surfaceEl.removeEventListener('touchend', onTouchEnd);
+        surfaceEl = null;
+      }
       try {
         player.dispose();
       } catch {

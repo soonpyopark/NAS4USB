@@ -168,9 +168,8 @@ export function resolveHomePathAccess(relativePath, auth) {
     return 'pass';
   }
 
-  const { isLoggedIn, loginId, isSuperAdmin } = resolveHomeAuth(auth);
+  const { isLoggedIn, loginId } = resolveHomeAuth(auth);
   if (!isLoggedIn) return 'deny';
-  if (isSuperAdmin) return 'allow';
 
   if (isHomesContainerPath(normalized)) return 'allow';
 
@@ -183,15 +182,72 @@ export function resolveHomePathAccess(relativePath, auth) {
  * @param {HomeAccessAuth} auth
  */
 export function filterEntriesByMemberHome(entries, auth) {
-  const { isLoggedIn, loginId, isSuperAdmin } = resolveHomeAuth(auth);
+  const { isLoggedIn, loginId } = resolveHomeAuth(auth);
   return entries.filter((entry) => {
     const path = normalizeRelativePath(entry.relativePath);
     if (!isUnderHomesFolder(path)) return true;
     if (!isLoggedIn) return false;
-    if (isSuperAdmin) return true;
     if (isHomesContainerPath(path)) return true;
+    if (isMemberHomeRootPath(path)) return false;
     return isOwnMemberHomePath(path, loginId);
   });
+}
+
+/**
+ * Writes aimed at `개인폴더` (or a non-own first segment) go into the caller's home.
+ * Do not use this for read/access checks.
+ * @param {string} relativePath
+ * @param {string | null | undefined} loginId
+ */
+export function rewritePathIntoOwnHome(relativePath, loginId) {
+  const normalized = normalizeRelativePath(relativePath);
+  const home = memberHomeRelativePath(loginId);
+  if (!home || !normalized) return normalized;
+
+  const prefixes = [HOMES_FOLDER, LEGACY_HOMES_FOLDER, HOMES_DISK_DIR, LEGACY_HOMES_DISK_DIR];
+  for (const prefix of prefixes) {
+    if (normalized === prefix) return home;
+    if (!normalized.startsWith(`${prefix}/`)) continue;
+    const rest = normalized.slice(prefix.length + 1);
+    const mine = sanitizeLoginIdForHomeFolder(loginId);
+    const first = rest.split('/')[0] || '';
+    if (first && mine && first.toLowerCase() === mine.toLowerCase()) {
+      return `${HOMES_FOLDER}/${rest}`;
+    }
+    return `${home}/${rest}`;
+  }
+  return normalized;
+}
+
+/**
+ * Hide the loginId folder in the explorer: `개인폴더/admin` → `개인폴더`.
+ * @param {string} relativePath
+ * @param {string | null | undefined} loginId
+ */
+export function collapseOwnHomeRootPath(relativePath, loginId) {
+  const normalized = normalizeRelativePath(relativePath);
+  if (isMemberHomeRootPath(normalized) && isOwnMemberHomePath(normalized, loginId)) {
+    return HOMES_FOLDER;
+  }
+  return normalized || '.';
+}
+
+/**
+ * Folder-icon depth after hiding the member home segment.
+ * `개인폴더/admin/기획` displays as 2nd level under 개인폴더.
+ * @param {string | null | undefined} relativePath
+ */
+export function folderDisplayDepth(relativePath) {
+  const parts = normalizeRelativePath(relativePath).split('/').filter(Boolean);
+  if (parts.length === 0) return 0;
+  const root = parts[0];
+  const hidesOwner =
+    root === HOMES_FOLDER ||
+    root === LEGACY_HOMES_FOLDER ||
+    root === HOMES_DISK_DIR ||
+    root === LEGACY_HOMES_DISK_DIR;
+  if (hidesOwner && parts.length >= 2) return parts.length - 1;
+  return parts.length;
 }
 
 /**

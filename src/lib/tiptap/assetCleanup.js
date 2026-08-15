@@ -2,6 +2,7 @@ import { joinRelativePath } from '../fsPaths.js';
 import {
   assetFileNameFromAnyUrl,
   getTiptapAssetsDir,
+  linkHrefToAssetFileName,
   normalizeAssetPath,
 } from './assetUrls.js';
 
@@ -32,12 +33,26 @@ export function collectReferencedAssetPaths(doc, tiptapRelativePath) {
       }
     }
 
-    // Also accept href on file links if ever present.
     const href = node.attrs?.href;
-    if (typeof href === 'string' && node.type === 'fileAttachment') {
-      const fileName = assetFileNameFromAnyUrl(href, tiptapRelativePath);
+    if (typeof href === 'string') {
+      const fileName =
+        assetFileNameFromAnyUrl(href, tiptapRelativePath) ||
+        linkHrefToAssetFileName(href, tiptapRelativePath);
       if (fileName) {
         referenced.add(normalizeAssetPath(joinRelativePath(assetsDir, fileName)));
+      }
+    }
+
+    if (Array.isArray(node.marks)) {
+      for (const mark of node.marks) {
+        const markHref = mark?.attrs?.href;
+        if (typeof markHref !== 'string') continue;
+        const fileName =
+          assetFileNameFromAnyUrl(markHref, tiptapRelativePath) ||
+          linkHrefToAssetFileName(markHref, tiptapRelativePath);
+        if (fileName) {
+          referenced.add(normalizeAssetPath(joinRelativePath(assetsDir, fileName)));
+        }
       }
     }
 
@@ -62,12 +77,24 @@ export function collectReferencedAssetPathsFromPmDoc(doc, tiptapRelativePath) {
   const assetsDir = getTiptapAssetsDir(tiptapRelativePath);
 
   doc.descendants((node) => {
-    if (!MEDIA_NODE_TYPES.has(node.type.name)) return true;
-    const src = node.attrs?.src;
-    if (typeof src !== 'string') return true;
-    const fileName = assetFileNameFromAnyUrl(src, tiptapRelativePath);
-    if (fileName) {
-      referenced.add(normalizeAssetPath(joinRelativePath(assetsDir, fileName)));
+    if (MEDIA_NODE_TYPES.has(node.type.name)) {
+      const src = node.attrs?.src;
+      if (typeof src === 'string') {
+        const fileName = assetFileNameFromAnyUrl(src, tiptapRelativePath);
+        if (fileName) {
+          referenced.add(normalizeAssetPath(joinRelativePath(assetsDir, fileName)));
+        }
+      }
+    }
+    for (const mark of node.marks ?? []) {
+      const href = mark.attrs?.href;
+      if (typeof href !== 'string') continue;
+      const fileName =
+        assetFileNameFromAnyUrl(href, tiptapRelativePath) ||
+        linkHrefToAssetFileName(href, tiptapRelativePath);
+      if (fileName) {
+        referenced.add(normalizeAssetPath(joinRelativePath(assetsDir, fileName)));
+      }
     }
     return true;
   });

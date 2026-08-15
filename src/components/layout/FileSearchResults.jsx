@@ -1,9 +1,12 @@
-import FileIcon from '../explorer/FileIcon.jsx';
+import FileIcon, { folderIconTintClass } from '../explorer/FileIcon.jsx';
 import { getParentPath } from '../../lib/fsPaths.js';
+import { HOMES_FOLDER, isMemberHomeRootPath } from '../../lib/memberHomes.js';
 
 function formatParentPath(relativePath) {
   const parent = getParentPath(relativePath);
-  return parent === '.' ? '워크스페이스' : parent.replace(/\\/g, '/');
+  if (parent === '.') return '워크스페이스';
+  if (isMemberHomeRootPath(parent)) return HOMES_FOLDER;
+  return parent.replace(/\\/g, '/');
 }
 
 export default function FileSearchResults({
@@ -59,7 +62,12 @@ export default function FileSearchResults({
             }}
             onContextMenu={(event) => onContextMenu(event, entry)}
           >
-            <FileIcon entry={entry} className={`mt-0.5 h-4 w-4 shrink-0 ${isActive ? 'text-white' : ''}`} />
+            <FileIcon
+              entry={entry}
+              className={`mt-0.5 h-4 w-4 shrink-0 ${
+                isActive ? '!text-white' : folderIconTintClass(entry)
+              }`}
+            />
             <span className="min-w-0 flex-1">
               <span className="block truncate font-medium">{entry.name}</span>
               <span className={`block truncate text-[10pt] ${isActive ? 'text-white/75' : 'text-slate-500'}`}>

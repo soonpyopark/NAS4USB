@@ -29,6 +29,8 @@ export default function FileExplorerToolbar({
   canShowProperties = false,
   onImportOnenote,
   importingOnenote = false,
+  onClearFolderBackups,
+  clearingFolderBackups = false,
   isInTrashView = false,
   isInFavoritesView = false,
   onEmptyTrash,
@@ -152,6 +154,17 @@ export default function FileExplorerToolbar({
               {importingOnenote ? '가져오는 중…' : '원노트 가져오기'}
             </button>
           </>
+        )}
+        {showWriteActions && onClearFolderBackups && (
+          <button
+            type="button"
+            className="nas-btn-ghost text-red-600"
+            disabled={clearingFolderBackups}
+            onClick={onClearFolderBackups}
+            title="이 폴더와 하위 폴더·파일의 백업(이력)을 모두 제거합니다. 원본 파일은 그대로 둡니다."
+          >
+            {clearingFolderBackups ? '제거 중…' : '백업 일괄 제거'}
+          </button>
         )}
         <span className="mx-1 hidden h-4 w-px bg-nas-border sm:inline" />
         <select

@@ -44,6 +44,7 @@ const lowlight = createLowlight(common);
  *   } | null,
  *   placeholder?: string,
  *   resolveFileUrl?: (url: string) => Promise<string>,
+ *   uploadFile?: (file: File) => Promise<string>,
  *   includeImageNodeView?: boolean,
  *   includeMediaNodeView?: boolean,
  *   enableSuggestionUi?: boolean,
@@ -55,6 +56,7 @@ export function createTiptapExtensions(options = {}) {
     collaboration = null,
     placeholder = "명령을 입력하려면 '/' 를 누르세요…",
     resolveFileUrl,
+    uploadFile,
     includeImageNodeView = true,
     includeMediaNodeView = includeImageNodeView,
     enableSuggestionUi = true,
@@ -75,6 +77,7 @@ export function createTiptapExtensions(options = {}) {
           class: 'tiptap-link',
           rel: 'noopener noreferrer',
           target: '_blank',
+          title: '열기 · 편집 중에는 Ctrl(⌘)+클릭 (웹은 브라우저, 첨부는 편집기·다운로드)',
         },
       },
       // Replaced by CodeBlockLowlight for syntax highlighting.
@@ -93,6 +96,7 @@ export function createTiptapExtensions(options = {}) {
     TaskItem.configure({ nested: true }),
     createTiptapImageExtension({
       resolveFileUrl,
+      uploadFile,
       includeNodeView: includeImageNodeView,
     }),
     createTiptapVideoExtension({

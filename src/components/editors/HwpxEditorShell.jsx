@@ -8,6 +8,7 @@ import { bindRhwpEditor } from '../../sync/adapters/rhwpAdapter.js';
 import { setTextDiskRevision } from '../../sync/adapters/textEditorAdapter.js';
 import { getLanWsEndpoints } from '../../sync/buildWsUrl.js';
 import { loadRhwpModule } from '../../lib/rhwp/loadRhwp.js';
+import { persistAndCloseEditor } from '../../lib/persistOnEditorClose.js';
 
 const RHWP_VERSION = '0.8.4';
 const MOUNT_TIMEOUT_MS = 200_000;
@@ -19,6 +20,7 @@ export default function HwpxEditorShell({
   onClose,
   allowClose = true,
   fullscreen = false,
+  raised = false,
   readOnly: shareReadOnly = false,
 }) {
   const workspace = useWorkspaceSession(relativePath);
@@ -37,6 +39,8 @@ export default function HwpxEditorShell({
   const unbindRef = useRef(null);
   const hwpxBase64Ref = useRef('');
   const diskRevisionRef = useRef('');
+  const editorHandleRef = useRef(null);
+  const closingRef = useRef(false);
 
   useEffect(() => {
     if (!workspace.ready) return undefined;
@@ -170,6 +174,10 @@ export default function HwpxEditorShell({
   }, [contentReady, fileName, relativePath]);
 
   useEffect(() => {
+    editorHandleRef.current = editorHandle;
+  }, [editorHandle]);
+
+  useEffect(() => {
     if (!editorReady || !doc || !editorHandle) return undefined;
 
     unbindRef.current?.();
@@ -190,34 +198,55 @@ export default function HwpxEditorShell({
     };
   }, [editorReady, doc, editorHandle, provider, shareReadOnly]);
 
-  const handleSave = async () => {
-    if (shareReadOnly) return;
-    if (!workspace.ready || !editorHandle) return;
+  const persistLive = async ({ archive = true } = {}) => {
+    const handle = editorHandleRef.current;
+    if (shareReadOnly) return false;
+    if (!workspace.ready || !handle) return false;
     setSaving(true);
     try {
-      const base64 = editorHandle.exportHwpxBase64
-        ? await editorHandle.exportHwpxBase64()
-        : editorHandle.getHwpxBase64?.() ?? hwpxBase64Ref.current;
+      const base64 = handle.exportHwpxBase64
+        ? await handle.exportHwpxBase64()
+        : handle.getHwpxBase64?.() ?? hwpxBase64Ref.current;
       await workspace.writeBinary(base64);
-      await workspace.commit();
       hwpxBase64Ref.current = base64;
-      try {
-        const statInfo = await window.nas4usb.fs.stat(relativePath);
-        setTextDiskRevision(doc, 'documentBase64', statInfo?.modifiedAt ?? '');
-      } catch {
-        // ignore optional revision update
+      if (archive) {
+        await workspace.commit();
+        try {
+          const statInfo = await window.nas4usb.fs.stat(relativePath);
+          setTextDiskRevision(doc, 'documentBase64', statInfo?.modifiedAt ?? '');
+        } catch {
+          // ignore optional revision update
+        }
       }
+      return true;
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Save failed');
+      setLoadError(err instanceof Error ? err.message : '편집 내용을 저장하지 못했습니다.');
+      throw err;
     } finally {
       setSaving(false);
     }
   };
 
+  const handleSave = async () => {
+    try {
+      await persistLive({ archive: true });
+    } catch {
+      // error already shown
+    }
+  };
+
   const handleClose = async () => {
-    unbindRef.current?.();
-    await workspace.close();
-    onClose();
+    const canFlush = Boolean(!shareReadOnly && editorHandleRef.current && editorReady);
+    await persistAndCloseEditor({
+      closingRef,
+      persist: canFlush ? () => persistLive({ archive: false }) : undefined,
+      cleanup: () => {
+        unbindRef.current?.();
+        unbindRef.current = null;
+      },
+      closeWorkspace: () => workspace.close(),
+      onClose,
+    });
   };
 
   // Restore already overwrote the file on disk (and archived the pre-restore state) —
@@ -258,6 +287,7 @@ export default function HwpxEditorShell({
         onClose={handleClose}
         allowClose={allowClose}
         fullscreen={fullscreen}
+        raised={raised}
       >
         {(workspace.error || loadError) && (
           <div className="border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">

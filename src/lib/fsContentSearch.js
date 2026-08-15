@@ -8,7 +8,7 @@ const PLAIN_TEXT_EXTENSIONS = new Set([
   'txt', 'md', 'markdown', 'log', 'csv', 'tsv',
   'json', 'xml', 'yml', 'yaml', 'ini', 'cfg', 'conf', 'env',
   'html', 'htm', 'css', 'scss',
-  'js', 'jsx', 'mjs', 'cjs', 'ts', 'tsx',
+  'js', 'jsx', 'mjs', 'cjs', 'tsx',
   'py', 'java', 'c', 'h', 'cpp', 'hpp', 'cs', 'go', 'rs', 'rb', 'php',
   'sh', 'bat', 'ps1', 'sql',
 ]);
@@ -32,6 +32,9 @@ function getEntryExtension(entry) {
   return index > 0 ? name.slice(index + 1).toLowerCase() : '';
 }
 
+/** `.tiptap` packages keep the ProseMirror document here. */
+const TIPTAP_DOCUMENT_PATH = /^document\.json$/i;
+
 /**
  * @param {import('../types/nas4usb.d.ts').FsEntry} entry
  */
@@ -41,6 +44,7 @@ export function isContentSearchableEntry(entry) {
   return (
     PLAIN_TEXT_EXTENSIONS.has(extension) ||
     extension in ZIP_CONTENT_PATTERNS ||
+    extension === 'tiptap' ||
     extension === 'pdf'
   );
 }
@@ -117,6 +121,50 @@ async function readZipTextFragments(relativePath, extension, signal) {
 }
 
 /**
+ * Only the words the user typed — walking the whole JSON would match node names
+ * such as "paragraph" or asset URLs.
+ *
+ * @param {unknown} node
+ * @param {string[]} out
+ * @returns {string[]}
+ */
+function collectTiptapText(node, out) {
+  if (Array.isArray(node)) {
+    for (const item of node) collectTiptapText(item, out);
+    return out;
+  }
+  if (!node || typeof node !== 'object') return out;
+
+  if (typeof node.text === 'string') out.push(node.text);
+  for (const key of ['alt', 'title', 'latex']) {
+    const value = node.attrs?.[key];
+    if (typeof value === 'string' && value) out.push(value);
+  }
+  if (node.content) collectTiptapText(node.content, out);
+  return out;
+}
+
+/**
+ * @param {string} relativePath
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<string[]>}
+ */
+async function readTiptapTextFragments(relativePath, signal) {
+  const base64 = await window.nas4usb.fs.readFile(relativePath);
+  if (signal?.aborted) return [];
+
+  const { default: JSZip } = await import('jszip');
+  const zip = await JSZip.loadAsync(base64ToBytes(base64));
+  const documentFile = Object.values(zip.files).find(
+    (file) => !file.dir && TIPTAP_DOCUMENT_PATH.test(file.name),
+  );
+  if (!documentFile) return [];
+
+  const parsed = JSON.parse(await documentFile.async('string'));
+  return partsToSearchFragments(collectTiptapText(parsed?.content ?? parsed, []));
+}
+
+/**
  * Streams the PDF instead of pulling base64 through IPC, and stops at the first hit.
  *
  * @param {string} relativePath
@@ -165,9 +213,14 @@ export async function entryContentMatches(entry, needle, signal) {
     return pdfContainsText(entry.relativePath, needle, signal);
   }
 
-  const fragments = PLAIN_TEXT_EXTENSIONS.has(extension)
-    ? await readPlainTextFragments(entry.relativePath)
-    : await readZipTextFragments(entry.relativePath, extension, signal);
+  let fragments;
+  if (PLAIN_TEXT_EXTENSIONS.has(extension)) {
+    fragments = await readPlainTextFragments(entry.relativePath);
+  } else if (extension === 'tiptap') {
+    fragments = await readTiptapTextFragments(entry.relativePath, signal);
+  } else {
+    fragments = await readZipTextFragments(entry.relativePath, extension, signal);
+  }
 
   if (signal?.aborted) return false;
   return fragments.some((fragment) => fragment.includes(needle));

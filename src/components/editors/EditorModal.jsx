@@ -80,6 +80,7 @@ export default function EditorModal({
   onClose,
   allowClose = true,
   fullscreen = false,
+  raised = false,
   hideHistory = false,
   onShowHistory,
   onExportHtml,
@@ -98,7 +99,7 @@ export default function EditorModal({
     exportingHtml || exportingHwpx || exportingPdf || importingHtml || importingOnenote;
 
   return (
-    <AppModal open editor embedded={fullscreen} onClose={allowClose ? onClose : undefined}>
+    <AppModal open editor embedded={fullscreen} raised={raised} onClose={allowClose ? onClose : undefined}>
       <header className="modal-editor-header">
         <div className="modal-editor-header__primary min-w-0">
           <p className="truncate text-sm font-semibold text-[#323130]">{title}</p>

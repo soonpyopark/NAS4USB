@@ -18,16 +18,6 @@ import { isExternalFolderPath } from './externalFolders.js';
 /**
  * @param {string} relativePath
  */
-export function isSharedFolderPath(relativePath) {
-  const normalized = normalizeRelativePath(relativePath);
-  return (
-    normalized === SHARED_FOLDER || normalized.startsWith(`${SHARED_FOLDER}/`)
-  );
-}
-
-/**
- * @param {string} relativePath
- */
 export function isProtectedSharedSystemPath(relativePath) {
   return normalizeRelativePath(relativePath) === SHARED_FOLDER;
 }

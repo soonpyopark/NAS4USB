@@ -13,6 +13,18 @@ export function joinRelativePath(currentPath, name) {
   return currentPath === '.' ? name : `${currentPath}/${name}`;
 }
 
+/**
+ * Explorer / comic-page order: digits compare as numbers (`1` < `10` < `11`).
+ * @param {string} left
+ * @param {string} right
+ */
+export function compareNames(left, right) {
+  return String(left ?? '').localeCompare(String(right ?? ''), 'ko', {
+    numeric: true,
+    sensitivity: 'base',
+  });
+}
+
 const INVALID_FOLDER_NAME_PATTERN = /[<>:"/\\|?*\u0000-\u001f]/g;
 
 /**
@@ -149,10 +161,10 @@ export function sortEntries(entries, sortField, sortDirection) {
       case 'size':
         return factor * ((a.size ?? 0) - (b.size ?? 0));
       case 'type':
-        return factor * (a.extension ?? '').localeCompare(b.extension ?? '', 'ko');
+        return factor * compareNames(a.extension ?? '', b.extension ?? '');
       case 'name':
       default:
-        return factor * a.name.localeCompare(b.name, 'ko');
+        return factor * compareNames(a.name, b.name);
     }
   });
 

@@ -79,14 +79,22 @@ export async function writeWorkspaceFile(sessionId, base64) {
   return true;
 }
 
-export async function commitWorkspace(sessionId, dataRoot) {
-  void dataRoot;
-  const session = getSession(sessionId);
+/**
+ * Copy the session working file over the live document. Does not create history.
+ * @param {WorkspaceSession} session
+ */
+async function persistWorkingFile(session) {
   const destination = resolvePortablePath(session.relativePath);
   const { ensureParentDir } = await import('./fsService.js');
   await ensureParentDir(destination);
   await fs.copyFile(session.workingPath, destination);
   session.dirty = false;
+}
+
+export async function commitWorkspace(sessionId, dataRoot) {
+  void dataRoot;
+  const session = getSession(sessionId);
+  await persistWorkingFile(session);
   // Snapshot the just-written live document (「백업생성」). No-op for unsupported extensions.
   await archiveCurrentVersion(session.relativePath).catch(() => {});
   return { relativePath: session.relativePath };
@@ -149,11 +157,18 @@ export async function renameWorkspace(sessionId, newRelativePath, dataRoot) {
 
 export async function closeWorkspace(sessionId) {
   const session = sessions.get(sessionId);
-  if (!session) return false;
+  if (!session) return { closed: false, persisted: false, relativePath: null };
+
+  const relativePath = session.relativePath;
+  let persisted = false;
+  if (session.dirty) {
+    await persistWorkingFile(session);
+    persisted = true;
+  }
 
   await fs.rm(session.sessionDir, { recursive: true, force: true });
   sessions.delete(sessionId);
-  return true;
+  return { closed: true, persisted, relativePath };
 }
 
 export async function cleanupAllSessions(tempRoot) {

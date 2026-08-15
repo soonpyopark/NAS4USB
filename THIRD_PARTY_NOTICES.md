@@ -31,7 +31,6 @@ updated (NAS4USB **1.0.6**). Exact resolved versions are in `package-lock.json`.
 | FFmpeg (not bundled) | user-registered | LGPL / GPL | https://ffmpeg.org — path set in 설정 → 일반 |
 | epub.js (`epubjs`) | 0.3.x | BSD-2-Clause | https://github.com/futurepress/epub.js |
 | 7zip-min / 7zip-bin | 1.x | MIT / LGPL (7-Zip) | comic archive extract (`rar`/`cbr`/`7z`) |
-| Yomikiru (inspiration only) | — | MIT | https://github.com/mienaiyami/yomikiru — format/UX reference; not vendored |
 | SheetJS Community Edition (`xlsx`) | 0.18.5 | Apache-2.0 | https://sheetjs.com/ |
 | xlsx-js-style | 1.2.0 | Apache-2.0 | https://github.com/gitbrent/xlsx-js-style |
 | JSZip | 3.10.x | MIT OR GPL-3.0-or-later | https://github.com/Stuk/jszip |
