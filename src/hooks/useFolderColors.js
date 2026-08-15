@@ -50,7 +50,7 @@ export function useFolderColors() {
   const setNameBold = useCallback(
     async (relativePath, bold) => {
       if (!window.nas4usb?.folderColors?.setBold) {
-        throw new Error('이름 굵기 API를 사용할 수 없습니다.');
+        throw new Error('주요 파일 표시 API를 사용할 수 없습니다.');
       }
       await window.nas4usb.folderColors.setBold({ path: relativePath, bold: Boolean(bold) });
       await refreshFolderColorMap();

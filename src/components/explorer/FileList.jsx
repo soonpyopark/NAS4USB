@@ -2,8 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { EXTERNAL_FOLDER, SHARED_FOLDER } from '../../../shared/constants.js';
 import { HOMES_FOLDER } from '../../../shared/memberHomes.js';
 import { isFixedFolderOrderPath } from '../../../shared/folderOrder.js';
+import { displayEntryName } from '../../lib/fsPaths.js';
+import { favoriteAncestorLabel } from '../../lib/favoritesPaths.js';
 import { entryExtensionOf, isSecFileName } from '../../lib/filePassword/secPaths.js';
-import FileIcon from './FileIcon.jsx';
+import FileIcon, { fileTypeColorClass } from './FileIcon.jsx';
 import FileEntryStatusBadges, { FILE_STATUS_SLOT_WIDTH } from './FileEntryStatusBadges.jsx';
 
 const REORDER_MIME = 'application/x-nas4usb-reorder';
@@ -136,7 +138,7 @@ function SortableHeader({
 
   return (
     <th className={`font-medium ${className}`}>
-      <div className="flex items-center gap-2">
+      <div className={`flex items-center gap-2 ${column === 'name' ? 'min-h-7' : ''}`}>
         <button
           type="button"
           className="inline-flex items-center gap-1 uppercase tracking-wide text-nas-muted hover:text-slate-700"
@@ -189,6 +191,8 @@ export default function FileList({
   canMoveOrderDown = false,
   onMoveOrderUp,
   onMoveOrderDown,
+  showFavoriteLocation = false,
+  lockFixedOrder = true,
 }) {
   const selectAllRef = useRef(null);
   const dragPathRef = useRef(/** @type {string | null} */ (null));
@@ -248,14 +252,16 @@ export default function FileList({
         <thead className="sticky top-0 bg-slate-50 text-[10pt] uppercase tracking-wide text-nas-muted">
           <tr>
             <th className="w-10 px-2 py-2">
-              <input
-                ref={selectAllRef}
-                type="checkbox"
-                checked={allVisibleSelected}
-                onChange={onToggleSelectAll}
-                aria-label="전체 선택"
-                className="h-4 w-4 rounded border-slate-300 text-nas-accent focus:ring-nas-accent"
-              />
+              <div className="flex min-h-7 items-center justify-center">
+                <input
+                  ref={selectAllRef}
+                  type="checkbox"
+                  checked={allVisibleSelected}
+                  onChange={onToggleSelectAll}
+                  aria-label="전체 선택"
+                  className="h-4 w-4 rounded border-slate-300 text-nas-accent focus:ring-nas-accent"
+                />
+              </div>
             </th>
             <SortableHeader
               label="이름"
@@ -328,7 +334,14 @@ export default function FileList({
           {entries.map((entry) => {
             const selected = selectedSet.has(entry.relativePath);
             const modifiedLabel = formatModifiedDateLine(entry.modifiedAt);
-            const reorderable = canReorder && !isFixedFolderOrderPath(entry.relativePath);
+            const locationLabel = showFavoriteLocation
+              ? favoriteAncestorLabel(entry.relativePath, {
+                  includeSelf: true,
+                  isDirectory: entry.isDirectory,
+                })
+              : '';
+            const reorderable =
+              canReorder && !(lockFixedOrder && isFixedFolderOrderPath(entry.relativePath));
             const dragging = dragPath === entry.relativePath;
             const hintHere = dropHint?.path === entry.relativePath;
 
@@ -408,13 +421,15 @@ export default function FileList({
                   onDoubleClick={(event) => event.stopPropagation()}
                   onDragStart={(event) => event.preventDefault()}
                 >
-                  <input
-                    type="checkbox"
-                    checked={selected}
-                    onChange={() => onToggleCheckbox(entry)}
-                    aria-label={`${entry.name} 선택`}
-                    className="h-4 w-4 rounded border-slate-300 text-nas-accent focus:ring-nas-accent"
-                  />
+                  <div className="flex items-center justify-center">
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={() => onToggleCheckbox(entry)}
+                      aria-label={`${entry.name} 선택`}
+                      className="h-4 w-4 rounded border-slate-300 text-nas-accent focus:ring-nas-accent"
+                    />
+                  </div>
                 </td>
                 <td className="max-w-0 px-4 py-2">
                   <div className="flex min-w-0 items-center gap-2 overflow-hidden">
@@ -422,19 +437,30 @@ export default function FileList({
                       <FileIcon
                         entry={entry}
                         folderColor={folderColorMap[entry.relativePath]}
+                        nameBold={Boolean(nameBoldMap[entry.relativePath])}
                         className="h-5 w-5 shrink-0"
                       />
                     )}
-                    <span
-                      className={`min-w-0 flex-1 truncate text-slate-700 ${
-                        isWorkspaceRootSystemFolder(entry.relativePath) ||
-                        nameBoldMap[entry.relativePath]
-                          ? 'font-bold'
-                          : 'font-medium'
-                      }`}
-                      title={entry.name}
-                    >
-                      {entry.name}
+                    <span className="min-w-0 flex-1">
+                      <span
+                        className={`block truncate text-slate-700 ${
+                          isWorkspaceRootSystemFolder(entry.relativePath) ||
+                          nameBoldMap[entry.relativePath]
+                            ? 'font-bold'
+                            : 'font-medium'
+                        }`}
+                        title={entry.name}
+                      >
+                        {displayEntryName(entry)}
+                      </span>
+                      {locationLabel ? (
+                        <span
+                          className="block truncate text-[11px] leading-tight text-nas-muted"
+                          title={locationLabel}
+                        >
+                          {locationLabel}
+                        </span>
+                      ) : null}
                     </span>
                   </div>
                 </td>
@@ -454,7 +480,13 @@ export default function FileList({
                 <td className="hidden px-4 py-2 text-nas-muted sm:table-cell">
                   {entry.isDirectory ? '—' : formatSize(entry.size)}
                 </td>
-                <td className={`text-nas-muted ${TYPE_COLUMN_CLASS}`}>
+                <td
+                  className={`${TYPE_COLUMN_CLASS} ${
+                    entry.isDirectory
+                      ? 'text-nas-muted'
+                      : fileTypeColorClass(entryExtensionOf(entry) || entry.extension)
+                  }`}
+                >
                   {entry.isDirectory
                     ? '폴더'
                     : `${(entryExtensionOf(entry) || entry.extension || '파일').toUpperCase()}${

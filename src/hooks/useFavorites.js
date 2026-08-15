@@ -37,6 +37,13 @@ export function useFavorites() {
     [refreshFavoritesMap],
   );
 
+  const setFavoriteOrder = useCallback(async (kind, paths) => {
+    if (!window.nas4usb?.favorites?.setOrder) {
+      throw new Error('즐겨찾기 순서 API를 사용할 수 없습니다.');
+    }
+    await window.nas4usb.favorites.setOrder({ kind, paths });
+  }, []);
+
   // Stored values are 'folder' / 'file' ('true' in legacy stores means a file).
   const { favoritesCount, folderFavoritesCount, fileFavoritesCount } = useMemo(() => {
     let folders = 0;
@@ -66,6 +73,7 @@ export function useFavorites() {
     loading,
     refreshFavoritesMap,
     setFavorite,
+    setFavoriteOrder,
     isFavorite,
   };
 }

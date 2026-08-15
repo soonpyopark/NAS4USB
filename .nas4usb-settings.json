@@ -22,7 +22,7 @@
   "webServerPort": 3009,
   "webServerMode": "lan",
   "httpsEnabled": true,
-  "themeAccentColor": "#795548",
+  "themeAccentColor": "#57534e",
   "dataRoot": "D:\\NAS4USB_Data",
   "externalFolders": [
     {

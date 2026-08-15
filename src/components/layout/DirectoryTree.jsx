@@ -1,6 +1,7 @@
 import { EXTERNAL_FOLDER, SHARED_FOLDER } from '../../../shared/constants.js';
 import { HOMES_FOLDER } from '../../../shared/memberHomes.js';
 import FileIcon from '../explorer/FileIcon.jsx';
+import { displayEntryName } from '../../lib/fsPaths.js';
 
 function isRootExpandableFolder(relativePath) {
   return (
@@ -93,11 +94,12 @@ function TreeNode({
           <FileIcon
             entry={entry}
             folderColor={folderColorMap[entry.relativePath]}
+            nameBold={Boolean(nameBoldMap[entry.relativePath])}
             className={`h-4 w-4 shrink-0 ${isActive ? '!text-white' : ''}`}
           />
         )}
         <span className={`truncate ${isTopLevel || nameBoldMap[entry.relativePath] ? 'font-bold' : ''}`}>
-          {entry.name}
+          {displayEntryName(entry)}
         </span>
       </button>
 

@@ -305,6 +305,11 @@ export function createHttpNas4usbClient() {
           method: 'POST',
           body: JSON.stringify({ path, favorited }),
         }),
+      setOrder: ({ kind, paths }) =>
+        apiFetch('/favorites/setOrder', {
+          method: 'POST',
+          body: JSON.stringify({ kind, paths }),
+        }),
     },
 
     folderColors: {

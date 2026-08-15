@@ -4,9 +4,26 @@ const INVALID_ENTRY_NAME_PATTERN = /[<>:"/\\|?*\u0000-\u001f]/g;
 const EXTENSION_PATTERN = /^\.[A-Za-z0-9][A-Za-z0-9_-]{0,15}$/;
 
 /**
- * @param {string} name
- * @returns {{ stem: string, extension: string }}
+ * List/title label without the file extension (`.tiptap`, `.pdf.sec`, …).
+ * Folders keep their full name.
+ * @param {{ name?: string, relativePath?: string, isDirectory?: boolean } | string | null | undefined} entryOrName
+ * @param {{ isDirectory?: boolean }} [options]
  */
+export function displayEntryName(entryOrName, options) {
+  const isDirectory =
+    options?.isDirectory ??
+    (entryOrName && typeof entryOrName === 'object' ? Boolean(entryOrName.isDirectory) : false);
+  const raw =
+    typeof entryOrName === 'string'
+      ? entryOrName
+      : String(entryOrName?.name || entryOrName?.relativePath || '')
+          .replace(/\\/g, '/')
+          .split('/')
+          .pop() || '';
+  if (isDirectory || !raw) return raw;
+  return splitEntryExtension(raw).stem || raw;
+}
+
 export function splitEntryExtension(name) {
   const normalized = String(name ?? '');
   if (normalized.toLowerCase().endsWith('.sec') && normalized.length > 4) {

@@ -72,6 +72,7 @@ export function validateEntryName(name) {
 }
 
 export {
+  displayEntryName,
   joinEntryExtension,
   splitEntryExtension,
   validateRenameEntryName,
@@ -135,8 +136,10 @@ function workspaceRootFolderRank(name, relativePath = '') {
  * @param {SortField} sortField
  * @param {SortDirection} sortDirection
  * @param {string[] | null | undefined} [orderNames]
+ * @param {{ pinWorkspaceRoots?: boolean }} [options]
  */
-export function sortEntries(entries, sortField, sortDirection, orderNames) {
+export function sortEntries(entries, sortField, sortDirection, orderNames, options) {
+  const pinWorkspaceRoots = options?.pinWorkspaceRoots !== false;
   const factor = sortDirection === 'asc' ? 1 : -1;
   /** @type {Map<string, number>} */
   const orderRank = new Map();
@@ -155,10 +158,12 @@ export function sortEntries(entries, sortField, sortDirection, orderNames) {
     const b = right.entry;
     if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
 
-    const rootRank =
-      workspaceRootFolderRank(a.name, a.relativePath) -
-      workspaceRootFolderRank(b.name, b.relativePath);
-    if (rootRank !== 0) return rootRank;
+    if (pinWorkspaceRoots) {
+      const rootRank =
+        workspaceRootFolderRank(a.name, a.relativePath) -
+        workspaceRootFolderRank(b.name, b.relativePath);
+      if (rootRank !== 0) return rootRank;
+    }
 
     // External mount roots follow 환경설정 order, not name/date sort.
     if (isExternalMountRootPath(a.relativePath) && isExternalMountRootPath(b.relativePath)) {
@@ -167,8 +172,16 @@ export function sortEntries(entries, sortField, sortDirection, orderNames) {
 
     switch (sortField) {
       case 'custom': {
-        const aRank = orderRank.has(a.name) ? orderRank.get(a.name) : Number.POSITIVE_INFINITY;
-        const bRank = orderRank.has(b.name) ? orderRank.get(b.name) : Number.POSITIVE_INFINITY;
+        const aRank = orderRank.has(a.relativePath)
+          ? orderRank.get(a.relativePath)
+          : orderRank.has(a.name)
+            ? orderRank.get(a.name)
+            : Number.POSITIVE_INFINITY;
+        const bRank = orderRank.has(b.relativePath)
+          ? orderRank.get(b.relativePath)
+          : orderRank.has(b.name)
+            ? orderRank.get(b.name)
+            : Number.POSITIVE_INFINITY;
         if (aRank !== bRank) return aRank - bRank;
         return compareNames(a.name, b.name);
       }

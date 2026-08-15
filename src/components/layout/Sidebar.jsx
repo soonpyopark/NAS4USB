@@ -654,7 +654,7 @@ export default function Sidebar({
     try {
       await setNameBold(entry.relativePath, bold);
     } catch (err) {
-      nativeAlert(err instanceof Error ? err.message : '이름 굵기를 바꾸지 못했습니다.');
+      nativeAlert(err instanceof Error ? err.message : '주요 파일 표시를 바꾸지 못했습니다.');
     }
   };
 

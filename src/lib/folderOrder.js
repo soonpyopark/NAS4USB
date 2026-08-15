@@ -20,21 +20,48 @@ export function sortEntriesByFolderOrder(entries, parentPath, folderOrderMap, lo
  * @param {import('../types/nas4usb.d.ts').FsEntry[]} entries
  * @param {string[] | null | undefined} savedNames
  */
-export function materializeFolderOrder(entries, savedNames) {
-  const sorted = sortEntries(entries, 'custom', 'asc', savedNames);
+/**
+ * @param {import('../types/nas4usb.d.ts').FsEntry} entry
+ */
+export function folderOrderKey(entry) {
+  return entry.name;
+}
+
+/**
+ * @param {import('../types/nas4usb.d.ts').FsEntry} entry
+ */
+export function favoriteOrderKey(entry) {
+  return entry.relativePath;
+}
+
+/**
+ * @typedef {{ includeFixed?: boolean, pinWorkspaceRoots?: boolean }} FolderOrderOptions
+ */
+
+/**
+ * @param {import('../types/nas4usb.d.ts').FsEntry[]} entries
+ * @param {string[] | null | undefined} savedNames
+ * @param {(entry: import('../types/nas4usb.d.ts').FsEntry) => string} [getKey]
+ * @param {FolderOrderOptions} [options]
+ */
+export function materializeFolderOrder(entries, savedNames, getKey = folderOrderKey, options) {
+  const sorted = sortEntries(entries, 'custom', 'asc', savedNames, {
+    pinWorkspaceRoots: options?.pinWorkspaceRoots,
+  });
   return sorted
-    .filter((entry) => !isFixedFolderOrderPath(entry.relativePath))
-    .map((entry) => entry.name);
+    .filter((entry) => options?.includeFixed || !isFixedFolderOrderPath(entry.relativePath))
+    .map((entry) => getKey(entry));
 }
 
 /**
  * @param {import('../types/nas4usb.d.ts').FsEntry[]} entries
+ * @param {(entry: import('../types/nas4usb.d.ts').FsEntry) => string} [getKey]
  */
-export function folderOrderKindByName(entries) {
+export function folderOrderKindByName(entries, getKey = folderOrderKey) {
   /** @type {Map<string, 'dir' | 'file'>} */
   const map = new Map();
   for (const entry of entries) {
-    map.set(entry.name, entry.isDirectory ? 'dir' : 'file');
+    map.set(getKey(entry), entry.isDirectory ? 'dir' : 'file');
   }
   return map;
 }
@@ -67,9 +94,16 @@ export function moveFolderOrderName(names, name, delta, kindByName) {
  * @param {string} name
  * @param {number} delta
  */
-export function canMoveFolderOrder(entries, savedNames, name, delta) {
-  const names = materializeFolderOrder(entries, savedNames);
-  const next = moveFolderOrderName(names, name, delta, folderOrderKindByName(entries));
+export function canMoveFolderOrder(
+  entries,
+  savedNames,
+  name,
+  delta,
+  getKey = folderOrderKey,
+  options,
+) {
+  const names = materializeFolderOrder(entries, savedNames, getKey, options);
+  const next = moveFolderOrderName(names, name, delta, folderOrderKindByName(entries, getKey));
   return next.some((item, index) => item !== names[index]);
 }
 

@@ -1,5 +1,5 @@
 import FileIcon from '../explorer/FileIcon.jsx';
-import { getParentPath } from '../../lib/fsPaths.js';
+import { displayEntryName, getParentPath } from '../../lib/fsPaths.js';
 import { HOMES_FOLDER, isMemberHomeRootPath } from '../../lib/memberHomes.js';
 
 function formatParentPath(relativePath) {
@@ -67,11 +67,12 @@ export default function FileSearchResults({
             <FileIcon
               entry={entry}
               folderColor={folderColorMap[entry.relativePath]}
+              nameBold={Boolean(nameBoldMap[entry.relativePath])}
               className={`mt-0.5 h-4 w-4 shrink-0 ${isActive ? '!text-white' : ''}`}
             />
             <span className="min-w-0 flex-1">
               <span className={`block truncate ${nameBoldMap[entry.relativePath] ? 'font-bold' : 'font-medium'}`}>
-                {entry.name}
+                {displayEntryName(entry)}
               </span>
               <span className={`block truncate text-[10pt] ${isActive ? 'text-white/75' : 'text-slate-500'}`}>
                 {parentLabel}

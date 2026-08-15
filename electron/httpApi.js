@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { FAVORITES_FOLDER } from '../shared/constants.js';
 import {
   getAppPaths,
   getDataRoot,
@@ -66,6 +67,7 @@ import {
   getFavoritesMap,
   listFavoriteEntries,
   setFavorite,
+  setFavoriteOrder,
   syncFavoritesDelete,
   syncFavoritesRename,
 } from './favoritesService.js';
@@ -669,6 +671,15 @@ export async function handleHttpApiRequest(req, res) {
       const body = await readJsonBody(req);
       const result = await setFavorite(body.path, Boolean(body.favorited), getPortableRoot());
       notifyFsChanged(body.path);
+      sendJson(res, 200, result);
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/favorites/setOrder') {
+      assertAdminAuthenticated(isAdminAuthenticated(req));
+      const body = await readJsonBody(req);
+      const result = await setFavoriteOrder(body.kind, body.paths, getPortableRoot());
+      notifyFsChanged(FAVORITES_FOLDER);
       sendJson(res, 200, result);
       return true;
     }

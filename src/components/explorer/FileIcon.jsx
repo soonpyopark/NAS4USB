@@ -48,10 +48,18 @@ function FolderBarSvg({ className, style }) {
   );
 }
 
-function FileDotSvg({ className }) {
+function FileStarSvg({ className }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <circle cx="12" cy="12" r="3.5" />
+      <path d="M12 3.1 14.4 9h6.3l-5.1 3.8 1.9 6.1L12 15.4 6.5 18.9 8.4 12.8 3.3 9h6.3L12 3.1z" />
+    </svg>
+  );
+}
+
+function FileRingSvg({ className }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="12" cy="12" r="4.4" stroke="currentColor" strokeWidth="2.1" />
     </svg>
   );
 }
@@ -59,7 +67,7 @@ function FileDotSvg({ className }) {
 /**
  * @param {string | null | undefined} extension
  */
-function fileIconColor(extension) {
+export function fileTypeColorClass(extension) {
   if (extension === 'hwpx') return ICON_COLORS.hwpx;
   if (extension === 'wb4s') return ICON_COLORS.wb4s;
   if (extension === 'tiptap') return ICON_COLORS.tiptap;
@@ -109,7 +117,7 @@ export function folderIconTintClass(entry, colorKey) {
   return resolveFolderIconTint(entry, colorKey).className;
 }
 
-export default function FileIcon({ entry, className = 'h-5 w-5', folderColor }) {
+export default function FileIcon({ entry, className = 'h-5 w-5', folderColor, nameBold = false }) {
   // Put caller `className` last so size/color overrides (e.g. root system folders) win.
   if (entry.isDirectory) {
     const tint = resolveFolderIconTint(entry, folderColor);
@@ -125,8 +133,9 @@ export default function FileIcon({ entry, className = 'h-5 w-5', folderColor }) 
   const extension = isSecFileName(entry.name || entry.relativePath)
     ? innerExtensionOf(entry.name || entry.relativePath)
     : entry.extension;
+  const Icon = nameBold ? FileStarSvg : FileRingSvg;
 
-  return <FileDotSvg className={`${fileIconColor(extension)} ${className}`} />;
+  return <Icon className={`${fileTypeColorClass(extension)} ${className}`} />;
 }
 
 if (import.meta.hot) {

@@ -1,6 +1,7 @@
 import { AppModal, AppModalActions, AppModalButton } from '../common/AppModal.jsx';
 import { entryExtensionOf, isSecFileName } from '../../lib/filePassword/secPaths.js';
 import FolderColorSwatches from './FolderColorSwatches.jsx';
+import { fileTypeColorClass } from './FileIcon.jsx';
 
 function formatSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;
@@ -93,7 +94,13 @@ export default function FilePropertiesDialog({
             </div>
             <div>
               <dt>종류</dt>
-              <dd>
+              <dd
+                className={
+                  entry.isDirectory
+                    ? undefined
+                    : fileTypeColorClass(entryExtensionOf(entry) || entry.extension)
+                }
+              >
                 {entry.isDirectory
                   ? '폴더'
                   : `${(entryExtensionOf(entry) || entry.extension || '파일').toUpperCase()}${
@@ -127,12 +134,12 @@ export default function FilePropertiesDialog({
                 disabled={accessSaving || !canChangeNameBold}
                 onChange={(event) => onChangeNameBold?.(event.target.checked)}
               />
-              <span>진하게</span>
+              <span>주요 파일</span>
             </label>
             <p className="modal-access-hint">
               {canChangeNameBold
-                ? '탐색기·트리 목록에서 이름을 굵게 표시합니다.'
-                : '이름 굵기는 쓰기 권한이 있을 때 변경할 수 있습니다.'}
+                ? '이 폴더에서 주요 파일로 표시합니다. 목록에서 별 아이콘과 굵은 이름으로 구분됩니다.'
+                : '주요 파일 표시는 쓰기 권한이 있을 때 변경할 수 있습니다.'}
             </p>
           </div>
 

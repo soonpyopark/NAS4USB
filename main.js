@@ -3,7 +3,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell, Tray } f
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { APP_BLOG_URL, APP_NAME, APP_VERSION } from './shared/constants.js';
+import { APP_BLOG_URL, APP_NAME, APP_VERSION, FAVORITES_FOLDER } from './shared/constants.js';
 import { resolveUniqueName } from './shared/uniqueName.js';
 import {
   RELEASES_PAGE_URL,
@@ -122,6 +122,7 @@ import {
   getFavoritesMap,
   listFavoriteEntries,
   setFavorite,
+  setFavoriteOrder,
   syncFavoritesDelete,
   syncFavoritesRename,
 } from './electron/favoritesService.js';
@@ -1429,6 +1430,13 @@ ipcMain.handle('favorites:set', async (event, { path: relativePath, favorited } 
   assertAdminAuthenticated(isAdminFromEvent(event));
   const result = await setFavorite(relativePath, Boolean(favorited), getPortableRoot());
   notifyFsChanged(relativePath);
+  return result;
+});
+
+ipcMain.handle('favorites:setOrder', async (event, { kind, paths } = {}) => {
+  assertAdminAuthenticated(isAdminFromEvent(event));
+  const result = await setFavoriteOrder(kind, paths, getPortableRoot());
+  notifyFsChanged(FAVORITES_FOLDER);
   return result;
 });
 

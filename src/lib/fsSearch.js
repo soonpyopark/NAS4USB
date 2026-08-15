@@ -1,8 +1,21 @@
-import { sortEntries } from './fsPaths.js';
+import { compareNames } from './fsPaths.js';
+import { isFavoritesRelativePath } from '../../shared/constants.js';
 import { isTiptapAssetSidecarRelativePath } from '../../shared/tiptapAssetPaths.js';
 import { isFortuneSidecarRelativePath } from '../../shared/fortuneSheetSidecar.js';
 import { isPdfViewerSidecarRelativePath } from '../../shared/pdfViewerSidecar.js';
 import { isExternalFolderPath } from '../../shared/externalFolders.js';
+
+/**
+ * @param {import('../types/nas4usb.d.ts').FsEntry} entry
+ */
+function shouldSkipSearchEntry(entry) {
+  if (isTiptapAssetSidecarRelativePath(entry.relativePath)) return true;
+  if (isFortuneSidecarRelativePath(entry.relativePath)) return true;
+  if (isPdfViewerSidecarRelativePath(entry.relativePath)) return true;
+  if (isExternalFolderPath(entry.relativePath)) return true;
+  if (isFavoritesRelativePath(entry.relativePath)) return true;
+  return false;
+}
 
 /**
  * @param {string} query
@@ -19,34 +32,47 @@ export async function searchFileEntries(query, { maxResults = 200, signal } = {}
   const results = [];
   let truncated = false;
 
+  /**
+   * Match files in the current folder before descending, so sibling files
+   * are not crowded out by a deep folder tree (200-result cap).
+   * @param {string} relativePath
+   */
   async function walk(relativePath) {
     if (signal?.aborted || truncated) return;
 
-    const entries = await window.nas4usb.fs.readDir(relativePath);
+    /** @type {import('../types/nas4usb.d.ts').FsEntry[]} */
+    let entries = [];
+    try {
+      entries = await window.nas4usb.fs.readDir(relativePath);
+    } catch {
+      return;
+    }
+
+    const files = [];
+    const folders = [];
     for (const entry of entries) {
+      if (shouldSkipSearchEntry(entry)) continue;
+      if (entry.isDirectory) folders.push(entry);
+      else files.push(entry);
+    }
+
+    for (const entry of [...files, ...folders]) {
       if (signal?.aborted || truncated) return;
-
-      if (isTiptapAssetSidecarRelativePath(entry.relativePath)) continue;
-      if (isFortuneSidecarRelativePath(entry.relativePath)) continue;
-      if (isPdfViewerSidecarRelativePath(entry.relativePath)) continue;
-
-      // External mounts can be huge (whole drives / cloud sync) — exclude entirely.
-      if (isExternalFolderPath(entry.relativePath)) continue;
-
-      if (entry.name.toLowerCase().includes(normalized)) {
-        results.push(entry);
-        if (results.length >= maxResults) {
-          truncated = true;
-          return;
-        }
+      if (!entry.name.toLowerCase().includes(normalized)) continue;
+      results.push(entry);
+      if (results.length >= maxResults) {
+        truncated = true;
+        return;
       }
+    }
 
-      if (entry.isDirectory) {
-        await walk(entry.relativePath);
-      }
+    for (const folder of folders) {
+      if (signal?.aborted || truncated) return;
+      await walk(folder.relativePath);
     }
   }
 
   await walk('.');
-  return { entries: sortEntries(results, 'name', 'asc'), truncated };
+  results.sort((left, right) => compareNames(left.name, right.name));
+  return { entries: results, truncated };
 }

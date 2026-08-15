@@ -11,7 +11,7 @@ import {
   folderPreviewParentPath,
   listFolderPreviewEntries,
 } from '../../lib/folderPreview.js';
-import { getBaseName, getParentPath } from '../../lib/fsPaths.js';
+import { displayEntryName, getBaseName, getParentPath } from '../../lib/fsPaths.js';
 import { useFolderOrder } from '../../hooks/useFolderOrder.js';
 import { resolveComicFirstPage } from '../../lib/comicReader/firstPage.js';
 import { resolvePdfFirstPage } from '../../lib/pdf/firstPage.js';
@@ -325,6 +325,7 @@ export default function FilePreviewPane({
                           <FileIcon
                             entry={child}
                             folderColor={folderColorMap[child.relativePath]}
+                            nameBold={Boolean(nameBoldMap[child.relativePath])}
                             className="h-4 w-4 shrink-0"
                           />
                           <span
@@ -333,7 +334,7 @@ export default function FilePreviewPane({
                             }`}
                             title={child.name}
                           >
-                            {child.name}
+                            {displayEntryName(child)}
                           </span>
                         </button>
                       </li>

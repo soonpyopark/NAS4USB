@@ -46,7 +46,9 @@ import {
 } from '../../lib/explorerListSort.js';
 import {
   canMoveFolderOrder,
+  favoriteOrderKey,
   folderOrderKindByName,
+  folderOrderKey,
   materializeFolderOrder,
   moveFolderOrderName,
   placeFolderOrderNames,
@@ -177,7 +179,8 @@ export default function FileExplorer({
   const { hasClipboard, copyEntries, cutEntries, pasteEntries } = useFileClipboard();
   const { shareMap, refreshShareMap } = useShareLinks();
   const { accessMap, refreshAccessMap, setFileAccess } = useFileAccess();
-  const { favoritesMap, refreshFavoritesMap, setFavorite, isFavorite } = useFavorites();
+  const { favoritesMap, refreshFavoritesMap, setFavorite, setFavoriteOrder, isFavorite } =
+    useFavorites();
   const { folderColorMap, nameBoldMap, refreshFolderColorMap, setFolderColor, setNameBold } =
     useFolderColors();
   const { folderOrderMap, setFolderOrder } = useFolderOrder();
@@ -201,7 +204,8 @@ export default function FileExplorer({
   const { confirm: appConfirm, alert: appAlert, dialog: confirmDialog } = useAppConfirm();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchContents, setSearchContents] = useState(false);
+  const [searchContents, setSearchContents] = useState(true);
+  const [starOnly, setStarOnly] = useState(false);
   const [contextMenu, setContextMenu] = useState(null);
   const [propertiesEntry, setPropertiesEntry] = useState(null);
   const [propertiesStat, setPropertiesStat] = useState(null);
@@ -232,16 +236,28 @@ export default function FileExplorer({
     [adminId, currentPath, entries],
   );
   const currentOrderNames = useMemo(
-    () => folderOrderMap[orderParentPath] ?? [],
-    [folderOrderMap, orderParentPath],
+    () =>
+      isInFavoritesView
+        ? entries.map((entry) => entry.relativePath)
+        : folderOrderMap[orderParentPath] ?? [],
+    [entries, folderOrderMap, isInFavoritesView, orderParentPath],
   );
   const [listSort, setListSort] = useState(DEFAULT_CUSTOM_LIST_SORT);
-  const allowCustomSort = !isInTrashView && !isInFavoritesView;
+  const allowCustomSort = !isInTrashView;
+  const orderKeyOf = isInFavoritesView ? favoriteOrderKey : folderOrderKey;
+  const orderOptions = isInFavoritesView
+    ? { includeFixed: true, pinWorkspaceRoots: false }
+    : undefined;
+  const isOrderLocked = (relativePath) =>
+    !isInFavoritesView && isFixedFolderOrderPath(relativePath);
+  const canReorderFavorites = isInFavoritesView && isAdminLoggedIn;
   const canReorder =
-    canChangeFolderOrder(currentPath, { isSuperAdmin, loginId: adminId }) &&
+    ((canReorderFavorites && allowCustomSort) ||
+      canChangeFolderOrder(currentPath, { isSuperAdmin, loginId: adminId })) &&
     allowCustomSort &&
     listSort.field === 'custom' &&
-    !searchQuery.trim();
+    !searchQuery.trim() &&
+    !starOnly;
 
   useEffect(() => {
     setListSort(allowCustomSort ? DEFAULT_CUSTOM_LIST_SORT : DEFAULT_NAME_LIST_SORT);
@@ -249,26 +265,34 @@ export default function FileExplorer({
 
   const visibleEntries = useMemo(() => {
     const byName = filterEntries(entries, searchQuery);
-    if (!searchContents || contentSearch.matchedPaths.size === 0) {
-      return sortEntries(byName, listSort.field, listSort.direction, currentOrderNames);
-    }
-
-    const seen = new Set(byName.map((entry) => entry.relativePath));
-    const merged = [
-      ...byName,
-      ...entries.filter(
-        (entry) =>
-          !seen.has(entry.relativePath) && contentSearch.matchedPaths.has(entry.relativePath),
-      ),
-    ];
-    return sortEntries(merged, listSort.field, listSort.direction, currentOrderNames);
+    const matched = !searchContents || contentSearch.matchedPaths.size === 0
+      ? byName
+      : (() => {
+          const seen = new Set(byName.map((entry) => entry.relativePath));
+          return [
+            ...byName,
+            ...entries.filter(
+              (entry) =>
+                !seen.has(entry.relativePath) && contentSearch.matchedPaths.has(entry.relativePath),
+            ),
+          ];
+        })();
+    const filtered = starOnly
+      ? matched.filter((entry) => entry.isDirectory || nameBoldMap[entry.relativePath])
+      : matched;
+    return sortEntries(filtered, listSort.field, listSort.direction, currentOrderNames, {
+      pinWorkspaceRoots: !isInFavoritesView,
+    });
   }, [
     entries,
     searchQuery,
     searchContents,
     contentSearch.matchedPaths,
+    starOnly,
+    nameBoldMap,
     listSort,
     currentOrderNames,
+    isInFavoritesView,
   ]);
 
   const handleListSort = (column) => {
@@ -328,14 +352,35 @@ export default function FileExplorer({
     }
   };
 
+  const persistOrder = async (next, kindHint) => {
+    if (isInFavoritesView) {
+      const kind = kindHint === 'folder' || kindHint === 'file' ? kindHint : 'file';
+      const paths = next.filter((key) =>
+        entries.some(
+          (entry) =>
+            entry.relativePath === key && (kind === 'folder' ? entry.isDirectory : !entry.isDirectory),
+        ),
+      );
+      await setFavoriteOrder(kind, paths);
+      await refresh();
+      return;
+    }
+    await setFolderOrder(orderParentPath, next);
+  };
+
   const handleMoveOrderFor = async (entry, delta) => {
     if (!canReorder) return;
-    if (!entry || isFixedFolderOrderPath(entry.relativePath)) return;
-    const names = materializeFolderOrder(entries, currentOrderNames);
-    const next = moveFolderOrderName(names, entry.name, delta, folderOrderKindByName(entries));
+    if (!entry || isOrderLocked(entry.relativePath)) return;
+    const names = materializeFolderOrder(entries, currentOrderNames, orderKeyOf, orderOptions);
+    const next = moveFolderOrderName(
+      names,
+      orderKeyOf(entry),
+      delta,
+      folderOrderKindByName(entries, orderKeyOf),
+    );
     if (next.every((name, index) => name === names[index])) return;
     try {
-      await setFolderOrder(orderParentPath, next);
+      await persistOrder(next, entry.isDirectory ? 'folder' : 'file');
     } catch (err) {
       nativeAlert(err instanceof Error ? err.message : '순서를 바꾸지 못했습니다.');
     }
@@ -343,29 +388,29 @@ export default function FileExplorer({
 
   const handlePlaceOrder = async (dragged, target, place) => {
     if (!canReorder) return;
-    if (!dragged || !target || isFixedFolderOrderPath(dragged.relativePath)) return;
-    if (isFixedFolderOrderPath(target.relativePath)) return;
+    if (!dragged || !target || isOrderLocked(dragged.relativePath)) return;
+    if (isOrderLocked(target.relativePath)) return;
     if (dragged.isDirectory !== target.isDirectory) return;
 
     const movingEntries = selectedSet.has(dragged.relativePath)
       ? selectedEntries.filter(
           (entry) =>
-            entry.isDirectory === dragged.isDirectory && !isFixedFolderOrderPath(entry.relativePath),
+            entry.isDirectory === dragged.isDirectory && !isOrderLocked(entry.relativePath),
         )
       : [dragged];
     if (movingEntries.length === 0) return;
 
-    const names = materializeFolderOrder(entries, currentOrderNames);
+    const names = materializeFolderOrder(entries, currentOrderNames, orderKeyOf, orderOptions);
     const next = placeFolderOrderNames(
       names,
-      movingEntries.map((entry) => entry.name),
-      target.name,
+      movingEntries.map((entry) => orderKeyOf(entry)),
+      orderKeyOf(target),
       place,
-      folderOrderKindByName(entries),
+      folderOrderKindByName(entries, orderKeyOf),
     );
     if (next.every((name, index) => name === names[index])) return;
     try {
-      await setFolderOrder(orderParentPath, next);
+      await persistOrder(next, dragged.isDirectory ? 'folder' : 'file');
     } catch (err) {
       nativeAlert(err instanceof Error ? err.message : '순서를 바꾸지 못했습니다.');
     }
@@ -1103,7 +1148,7 @@ export default function FileExplorer({
     try {
       await setNameBold(entry.relativePath, bold);
     } catch (err) {
-      nativeAlert(err instanceof Error ? err.message : '이름 굵기를 바꾸지 못했습니다.');
+      nativeAlert(err instanceof Error ? err.message : '주요 파일 표시를 바꾸지 못했습니다.');
     }
   };
 
@@ -1188,13 +1233,27 @@ export default function FileExplorer({
         onMoveOrder: canReorder ? (delta) => handleMoveOrderFor(contextTarget, delta) : undefined,
         canMoveOrderUp: Boolean(
           contextTarget &&
-            !isFixedFolderOrderPath(contextTarget.relativePath) &&
-            canMoveFolderOrder(entries, currentOrderNames, contextTarget.name, -1),
+            !isOrderLocked(contextTarget.relativePath) &&
+            canMoveFolderOrder(
+              entries,
+              currentOrderNames,
+              orderKeyOf(contextTarget),
+              -1,
+              orderKeyOf,
+              orderOptions,
+            ),
         ),
         canMoveOrderDown: Boolean(
           contextTarget &&
-            !isFixedFolderOrderPath(contextTarget.relativePath) &&
-            canMoveFolderOrder(entries, currentOrderNames, contextTarget.name, 1),
+            !isOrderLocked(contextTarget.relativePath) &&
+            canMoveFolderOrder(
+              entries,
+              currentOrderNames,
+              orderKeyOf(contextTarget),
+              1,
+              orderKeyOf,
+              orderOptions,
+            ),
         ),
         canEditOpen: contextTarget
           ? canOpenFileForEdit(
@@ -1346,6 +1405,18 @@ export default function FileExplorer({
           />
           본문 검색
         </label>
+        <label
+          className="flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap text-[10pt] text-nas-muted"
+          title="주요 파일만 보여 줍니다. 폴더는 그대로 둡니다."
+        >
+          <input
+            type="checkbox"
+            checked={starOnly}
+            onChange={(event) => setStarOnly(event.target.checked)}
+            className="h-3.5 w-3.5 cursor-pointer accent-nas-accent"
+          />
+          주요 파일
+        </label>
       </div>
 
       {searchContents && searchQuery.trim() && (
@@ -1386,7 +1457,7 @@ export default function FileExplorer({
               title="이 폴더 바로 아래의 폴더·파일 수"
             >
               {`폴더 ${folderCounts.folders.toLocaleString('ko-KR')}개 · 파일 ${folderCounts.files.toLocaleString('ko-KR')}개`}
-              {searchQuery.trim() && visibleEntries.length !== folderCounts.total
+              {(searchQuery.trim() || starOnly) && visibleEntries.length !== folderCounts.total
                 ? ` · 표시 ${visibleEntries.length.toLocaleString('ko-KR')}`
                 : ''}
             </p>
@@ -1450,8 +1521,8 @@ export default function FileExplorer({
       {isInFavoritesView && (
         <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
           {favoritesView === 'folders'
-            ? '폴더 즐겨찾기 · 등록한 폴더로 바로 이동할 수 있습니다. 폴더를 우클릭해 즐겨찾기 추가 또는 속성에서 설정하세요.'
-            : '파일 즐겨찾기 · 등록한 문서를 한곳에서 열어볼 수 있습니다. 파일을 우클릭해 즐겨찾기 추가 또는 속성에서 설정하세요.'}
+            ? '폴더 즐겨찾기 · 등록한 폴더로 바로 이동할 수 있습니다. 로그인 후 위로/아래 또는 드래그로 순서를 바꿀 수 있습니다.'
+            : '파일 즐겨찾기 · 등록한 문서를 한곳에서 열어볼 수 있습니다. 로그인 후 위로/아래 또는 드래그로 순서를 바꿀 수 있습니다.'}
         </div>
       )}
 
@@ -1502,17 +1573,33 @@ export default function FileExplorer({
           canMoveOrderUp={
             canReorder &&
             selectedEntries.length === 1 &&
-            !isFixedFolderOrderPath(selectedEntries[0].relativePath) &&
-            canMoveFolderOrder(entries, currentOrderNames, selectedEntries[0].name, -1)
+            !isOrderLocked(selectedEntries[0].relativePath) &&
+            canMoveFolderOrder(
+              entries,
+              currentOrderNames,
+              orderKeyOf(selectedEntries[0]),
+              -1,
+              orderKeyOf,
+              orderOptions,
+            )
           }
           canMoveOrderDown={
             canReorder &&
             selectedEntries.length === 1 &&
-            !isFixedFolderOrderPath(selectedEntries[0].relativePath) &&
-            canMoveFolderOrder(entries, currentOrderNames, selectedEntries[0].name, 1)
+            !isOrderLocked(selectedEntries[0].relativePath) &&
+            canMoveFolderOrder(
+              entries,
+              currentOrderNames,
+              orderKeyOf(selectedEntries[0]),
+              1,
+              orderKeyOf,
+              orderOptions,
+            )
           }
           onMoveOrderUp={() => handleMoveOrderFor(selectedEntries[0], -1)}
           onMoveOrderDown={() => handleMoveOrderFor(selectedEntries[0], 1)}
+          showFavoriteLocation={isInFavoritesView}
+          lockFixedOrder={!isInFavoritesView}
         />
       )}
         <FilePreviewPane
