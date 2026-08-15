@@ -40,7 +40,11 @@ export function getTiptapPathForAssetSidecar(sidecarRelativePath) {
 export function isTiptapDocumentRelativePath(relativePath) {
   const normalized = normalizeRelativePath(relativePath);
   const base = normalized.split('/').pop() ?? normalized;
-  return base.toLowerCase().endsWith('.tiptap') && !isTiptapAssetSidecarRelativePath(relativePath);
+  const lower = base.toLowerCase();
+  return (
+    (lower.endsWith('.tiptap') || lower.endsWith('.tiptap.sec')) &&
+    !isTiptapAssetSidecarRelativePath(relativePath)
+  );
 }
 
 /**

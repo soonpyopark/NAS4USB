@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { entryExtensionOf } from '../lib/filePassword/secPaths.js';
 import { getParentPath } from '../lib/fsPaths.js';
 import { isVideoExtension } from '../lib/media/mediaTypes.js';
 import { selectVideoSeries } from '../lib/media/videoSeries.js';
@@ -31,8 +32,9 @@ export function useVideoSeriesQueue(relativePath, fileName, extension, enabled =
         if (cancelled) return;
         const videos = (Array.isArray(entries) ? entries : []).filter((entry) => {
           if (entry.isDirectory) return false;
-          if (!isVideoExtension(entry.extension)) return false;
-          if (ext && String(entry.extension || '').toLowerCase() !== ext) return false;
+          const entryExt = entryExtensionOf(entry);
+          if (!isVideoExtension(entryExt)) return false;
+          if (ext && entryExt !== ext) return false;
           return true;
         });
         setSiblings(selectVideoSeries(videos, fileName));

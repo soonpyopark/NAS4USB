@@ -1,10 +1,11 @@
 import { compareNames } from '../fsPaths.js';
+import { innerFileNameOf } from '../filePassword/secPaths.js';
 
 /**
  * @param {string} fileName
  */
 export function fileStem(fileName) {
-  const name = String(fileName || '');
+  const name = innerFileNameOf(fileName);
   const dot = name.lastIndexOf('.');
   return dot > 0 ? name.slice(0, dot) : name;
 }

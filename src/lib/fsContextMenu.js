@@ -1,3 +1,4 @@
+import { entryExtensionOf } from './filePassword/secPaths.js';
 import { isHtmlExtension, isImageExtension, isPdfExtension } from './media/mediaTypes.js';
 import { isTrashPath } from './trashPaths.js';
 import { isExternalContentPath, isExternalMountRoot } from './externalFoldersUi.js';
@@ -8,9 +9,9 @@ import { isExternalFolderContainerPath } from '../../shared/externalFolders.js';
  */
 function openFileMenuLabel(entry) {
   if (
-    isImageExtension(entry?.extension) ||
-    isPdfExtension(entry?.extension) ||
-    isHtmlExtension(entry?.extension)
+    isImageExtension(entryExtensionOf(entry)) ||
+    isPdfExtension(entryExtensionOf(entry)) ||
+    isHtmlExtension(entryExtensionOf(entry))
   ) {
     return '바로 보기';
   }
@@ -38,6 +39,9 @@ function openFileMenuLabel(entry) {
  *   onProperties: () => void,
  *   onDownload?: () => void,
  *   canDownload?: boolean,
+ *   onSetPassword?: () => void,
+ *   canSetPassword?: boolean,
+ *   passwordActionLabel?: string,
  *   onExportHtml?: () => void,
  *   canExportHtml?: boolean,
  *   onToggleFavorite?: (favorited: boolean) => void,
@@ -67,6 +71,9 @@ export function buildEntryContextMenuItems({
   onProperties,
   onDownload,
   canDownload = false,
+  onSetPassword,
+  canSetPassword = false,
+  passwordActionLabel = '비밀번호 설정',
   onExportHtml,
   canExportHtml = false,
   onToggleFavorite,
@@ -290,6 +297,12 @@ export function buildEntryContextMenuItems({
       label: 'HTML로 내보내기',
       disabled: !onExportHtml || !canExportHtml,
       onClick: () => onExportHtml?.(),
+    },
+    {
+      id: 'set-password',
+      label: passwordActionLabel,
+      disabled: !onSetPassword || !canSetPassword || !canWrite,
+      onClick: () => onSetPassword?.(),
     },
     ...sharedItems,
   ];

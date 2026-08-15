@@ -15,7 +15,9 @@ export default function AudioPlayerShell({
   raised = false,
 }) {
   const mimeType = getAudioMimeType(extension);
-  const { streamUrl, loadError, loading, bufferedPercent, mediaHandlers } = useMediaStream(relativePath);
+  const { streamUrl, loadError, loading, bufferedPercent, mediaHandlers } = useMediaStream(relativePath, {
+    mimeType,
+  });
 
   return (
     <ViewerModal
@@ -43,7 +45,7 @@ export default function AudioPlayerShell({
               <path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z" />
             </svg>
           </div>
-          <audio controls autoPlay className="w-full max-w-xl" src={streamUrl} {...mediaHandlers}>
+          <audio controls autoPlay className="w-full max-w-xl" src={streamUrl || undefined} {...mediaHandlers}>
             이 브라우저는 오디오 재생을 지원하지 않습니다.
           </audio>
         </>

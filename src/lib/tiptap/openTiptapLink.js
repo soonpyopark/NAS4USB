@@ -1,7 +1,8 @@
 import JSZip from 'jszip';
 import { base64ToBytes, bytesToBase64 } from '../bytes.js';
 import { getParentPath, joinRelativePath } from '../fsPaths.js';
-import { getFileViewerType } from '../fileViewerType.js';
+import { getFileViewerType, getFileViewerTypeFromName } from '../fileViewerType.js';
+import { entryExtensionOf } from '../filePassword/secPaths.js';
 import { isAudioExtension, isVideoExtension } from '../media/mediaTypes.js';
 import { isExternalHttpUrl } from '../openExternal.js';
 import { isElectronRenderer } from '../runtime.js';
@@ -16,10 +17,7 @@ import {
  * @param {string} fileName
  */
 function extensionOf(fileName) {
-  const name = String(fileName ?? '');
-  const index = name.lastIndexOf('.');
-  if (index <= 0) return '';
-  return name.slice(index + 1).toLowerCase();
+  return entryExtensionOf(fileName);
 }
 
 /**
@@ -64,12 +62,13 @@ export function resolveTiptapLinkClick(href, tiptapRelativePath) {
  * @param {(entry: object) => void | Promise<boolean>} [onOpenFile]
  */
 export async function openTiptapAttachment(entry, onOpenFile) {
-  const viewerType = getFileViewerType(entry.extension);
+  const viewerType =
+    getFileViewerTypeFromName(entry.fileName || entry.relativePath) || getFileViewerType(entry.extension);
   if (viewerType && onOpenFile) {
     const opened = await onOpenFile({
       relativePath: entry.relativePath,
       name: entry.fileName,
-      extension: entry.extension,
+      extension: entryExtensionOf(entry.fileName || entry.relativePath) || entry.extension,
       isDirectory: false,
     });
     if (opened !== false) return;

@@ -1,4 +1,5 @@
 import JSZip from 'jszip';
+import { unwrapWorkspaceBase64 } from '../filePassword/io.js';
 import { getImageMimeType, isImageExtension } from '../media/mediaTypes.js';
 import { getShareTokenFromUrl } from '../shareAccess.js';
 import { getStoredAdminToken } from '../nas4usbClient.js';
@@ -19,7 +20,8 @@ export function naturalCompareNames(a, b) {
  */
 export async function readRelativePathArrayBuffer(relativePath) {
   if (typeof window !== 'undefined' && window.nas4usb?.fs?.readFile) {
-    const base64 = await window.nas4usb.fs.readFile(relativePath);
+    const raw = await window.nas4usb.fs.readFile(relativePath);
+    const base64 = await unwrapWorkspaceBase64(relativePath, raw);
     const binary = atob(String(base64 ?? ''));
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i += 1) {

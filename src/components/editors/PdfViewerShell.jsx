@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import ViewerModal from './ViewerModal.jsx';
 import { AppModal, AppModalActions, AppModalBody, AppModalButton } from '../common/AppModal.jsx';
-import { buildMediaStreamUrl } from '../../lib/media/streamUrl.js';
+import { usePlaintextObjectUrl } from '../../hooks/usePlaintextObjectUrl.js';
+import { readWorkspacePlainBase64, writeWorkspacePlainBase64 } from '../../lib/filePassword/io.js';
 import { getPdfMimeType } from '../../lib/media/mediaTypes.js';
 import {
   PDF_MAX_SCALE,
@@ -108,10 +109,7 @@ export default function PdfViewerShell({
   const [documentEpoch, setDocumentEpoch] = useState(0);
   const [savingToFile, setSavingToFile] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
-  const streamUrl = useMemo(() => {
-    const base = buildMediaStreamUrl(relativePath);
-    return documentEpoch > 0 ? `${base}&v=${documentEpoch}` : base;
-  }, [documentEpoch, relativePath]);
+  const streamUrl = usePlaintextObjectUrl(relativePath, mimeType, documentEpoch);
   const absoluteStreamUrl = useMemo(() => {
     try {
       return new URL(streamUrl, window.location.origin).href;
@@ -926,6 +924,11 @@ export default function PdfViewerShell({
 
   // Load document once per stream URL; merge embedded + sidecar markups / view.
   useEffect(() => {
+    if (!streamUrl) {
+      setLoading(true);
+      return undefined;
+    }
+
     let cancelled = false;
     /** @type {import('pdfjs-dist').PDFDocumentProxy | null} */
     let pdf = null;
@@ -2150,13 +2153,13 @@ export default function PdfViewerShell({
         throw new Error('저장할 형광펜 변경을 만들지 못했습니다.');
       }
 
-      const sourceBase64 = await window.nas4usb.fs.readFile(relativePath);
+      const sourceBase64 = await readWorkspacePlainBase64(relativePath);
       const nextBytes = await embedMarkupsIntoPdfBytes(
         base64ToBytes(sourceBase64),
         embedEntries,
         pendingRemove,
       );
-      await window.nas4usb.fs.writeFile(relativePath, bytesToBase64(nextBytes));
+      await writeWorkspacePlainBase64(relativePath, bytesToBase64(nextBytes));
 
       setRemovedPdfMarkups([]);
       await writePdfViewerSidecar(relativePath, {

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { EXTERNAL_FOLDER, SHARED_FOLDER } from '../../../shared/constants.js';
 import { HOMES_FOLDER } from '../../../shared/memberHomes.js';
+import { entryExtensionOf, isSecFileName } from '../../lib/filePassword/secPaths.js';
 import FileIcon, { folderIconTintClass } from './FileIcon.jsx';
 import FileEntryStatusBadges, { FILE_STATUS_SLOT_WIDTH } from './FileEntryStatusBadges.jsx';
 
@@ -244,7 +245,11 @@ export default function FileList({
                   {entry.isDirectory ? '—' : formatSize(entry.size)}
                 </td>
                 <td className="hidden px-4 py-2 text-nas-muted lg:table-cell">
-                  {entry.isDirectory ? '폴더' : entry.extension?.toUpperCase() || '파일'}
+                  {entry.isDirectory
+                    ? '폴더'
+                    : `${(entryExtensionOf(entry) || entry.extension || '파일').toUpperCase()}${
+                        isSecFileName(entry.name || entry.relativePath) ? ' · 잠금' : ''
+                      }`}
                 </td>
               </tr>
             );

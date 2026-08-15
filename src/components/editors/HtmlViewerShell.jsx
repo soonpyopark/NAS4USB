@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import ViewerModal from './ViewerModal.jsx';
-import { buildMediaStreamUrl } from '../../lib/media/streamUrl.js';
+import { usePlaintextObjectUrl } from '../../hooks/usePlaintextObjectUrl.js';
 import { getHtmlMimeType } from '../../lib/media/mediaTypes.js';
 
 /**
@@ -23,7 +23,7 @@ export default function HtmlViewerShell({
   raised = false,
 }) {
   const mimeType = getHtmlMimeType(extension);
-  const streamUrl = useMemo(() => buildMediaStreamUrl(relativePath), [relativePath]);
+  const streamUrl = usePlaintextObjectUrl(relativePath, mimeType);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
 
@@ -47,17 +47,19 @@ export default function HtmlViewerShell({
           </p>
         )}
 
-        <iframe
-          title={fileName}
-          src={streamUrl}
-          className="min-h-0 w-full flex-1 border-0 bg-white"
-          sandbox="allow-same-origin allow-popups allow-forms"
-          onLoad={() => setLoading(false)}
-          onError={() => {
-            setLoadError('HTML을 표시할 수 없습니다.');
-            setLoading(false);
-          }}
-        />
+        {streamUrl ? (
+          <iframe
+            title={fileName}
+            src={streamUrl}
+            className="min-h-0 w-full flex-1 border-0 bg-white"
+            sandbox="allow-same-origin allow-popups allow-forms"
+            onLoad={() => setLoading(false)}
+            onError={() => {
+              setLoadError('HTML을 표시할 수 없습니다.');
+              setLoading(false);
+            }}
+          />
+        ) : null}
       </div>
     </ViewerModal>
   );

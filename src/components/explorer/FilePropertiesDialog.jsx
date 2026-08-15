@@ -1,4 +1,5 @@
 import { AppModal, AppModalActions, AppModalButton } from '../common/AppModal.jsx';
+import { entryExtensionOf, isSecFileName } from '../../lib/filePassword/secPaths.js';
 
 function formatSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;
@@ -79,7 +80,13 @@ export default function FilePropertiesDialog({
             </div>
             <div>
               <dt>종류</dt>
-              <dd>{entry.isDirectory ? '폴더' : entry.extension?.toUpperCase() || '파일'}</dd>
+              <dd>
+                {entry.isDirectory
+                  ? '폴더'
+                  : `${(entryExtensionOf(entry) || entry.extension || '파일').toUpperCase()}${
+                      isSecFileName(entry.name || entry.relativePath) ? ' · 잠금' : ''
+                    }`}
+              </dd>
             </div>
             <div>
               <dt>경로</dt>

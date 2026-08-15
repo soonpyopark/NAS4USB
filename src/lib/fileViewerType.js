@@ -1,3 +1,4 @@
+import { innerExtensionOf, isSecFileName } from './filePassword/secPaths.js';
 import {
   ARCHIVE_EXTENSIONS,
   AUDIO_EXTENSIONS,
@@ -83,5 +84,17 @@ export function getFileViewerType(extension) {
     .replace(/^\./, '')
     .toLowerCase();
   if (!ext) return undefined;
+  if (ext === 'sec') return undefined;
   return OPENABLE_EXTENSIONS[ext];
+}
+
+/**
+ * @param {string | null | undefined} fileNameOrPath
+ */
+export function getFileViewerTypeFromName(fileNameOrPath) {
+  const name = String(fileNameOrPath ?? '');
+  if (isSecFileName(name)) return getFileViewerType(innerExtensionOf(name));
+  const base = name.replace(/\\/g, '/').split('/').pop() ?? '';
+  const index = base.lastIndexOf('.');
+  return getFileViewerType(index > 0 ? base.slice(index + 1) : '');
 }

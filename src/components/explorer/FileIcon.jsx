@@ -1,4 +1,5 @@
 import { folderDisplayDepth } from '../../lib/memberHomes.js';
+import { innerExtensionOf, isSecFileName } from '../../lib/filePassword/secPaths.js';
 import {
   isAudioExtension,
   isHtmlExtension,
@@ -119,51 +120,55 @@ export default function FileIcon({ entry, className = 'h-5 w-5' }) {
     return <FolderSvg className={`${ICON_COLORS.folder} ${className}`} />;
   }
 
-  if (entry.extension === 'hwpx') {
+  const extension = isSecFileName(entry.name || entry.relativePath)
+    ? innerExtensionOf(entry.name || entry.relativePath)
+    : entry.extension;
+
+  if (extension === 'hwpx') {
     return <DocumentSvg className={`${ICON_COLORS.hwpx} ${className}`} />;
   }
 
-  if (entry.extension === 'wb4s') {
+  if (extension === 'wb4s') {
     return <WhiteboardSvg className={`${ICON_COLORS.wb4s} ${className}`} />;
   }
 
-  if (entry.extension === 'tiptap') {
+  if (extension === 'tiptap') {
     return <DocumentSvg className={`${ICON_COLORS.tiptap} ${className}`} />;
   }
 
-  if (entry.extension === 'one' || entry.extension === 'onepkg') {
+  if (extension === 'one' || extension === 'onepkg') {
     return <DocumentSvg className={`${ICON_COLORS.one} ${className}`} />;
   }
 
-  if (entry.extension === 'xlsx' || entry.extension === 'xls') {
+  if (extension === 'xlsx' || extension === 'xls' || extension === 'csv' || extension === 'tsv') {
     return <SheetSvg className={`${ICON_COLORS.xlsx} ${className}`} />;
   }
 
-  if (entry.extension === 'md') {
+  if (extension === 'md') {
     return <DocumentSvg className={`${ICON_COLORS.md} ${className}`} />;
   }
 
-  if (entry.extension === 'txt') {
+  if (extension === 'txt') {
     return <DocumentSvg className={`${ICON_COLORS.txt} ${className}`} />;
   }
 
-  if (isAudioExtension(entry.extension)) {
+  if (isAudioExtension(extension)) {
     return <AudioSvg className={`${ICON_COLORS.audio} ${className}`} />;
   }
 
-  if (isVideoExtension(entry.extension)) {
+  if (isVideoExtension(extension)) {
     return <VideoSvg className={`${ICON_COLORS.video} ${className}`} />;
   }
 
-  if (isImageExtension(entry.extension)) {
+  if (isImageExtension(extension)) {
     return <ImageSvg className={`${ICON_COLORS.image} ${className}`} />;
   }
 
-  if (isPdfExtension(entry.extension)) {
+  if (isPdfExtension(extension)) {
     return <PdfSvg className={`${ICON_COLORS.pdf} ${className}`} />;
   }
 
-  if (isHtmlExtension(entry.extension)) {
+  if (isHtmlExtension(extension)) {
     return <DocumentSvg className={`${ICON_COLORS.html} ${className}`} />;
   }
 

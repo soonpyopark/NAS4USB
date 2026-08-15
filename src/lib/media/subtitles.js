@@ -1,5 +1,6 @@
 import { getParentPath, joinRelativePath } from '../fsPaths.js';
 import { base64ToBytes } from '../bytes.js';
+import { innerFileNameOf } from '../filePassword/secPaths.js';
 
 /** @typedef {{ path: string, ext: 'srt' | 'smi' | 'vtt', label: string }} SubtitleCandidate */
 
@@ -70,7 +71,7 @@ const SUBTITLE_TAG_ALIASES = {
  * @param {string} fileName
  */
 export function fileStem(fileName) {
-  const name = String(fileName || '');
+  const name = innerFileNameOf(fileName);
   const index = name.lastIndexOf('.');
   return index > 0 ? name.slice(0, index) : name;
 }

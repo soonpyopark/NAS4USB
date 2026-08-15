@@ -57,13 +57,17 @@ export function useWorkspaceSession(relativePath) {
   const readBinary = useCallback(async () => {
     const id = sessionRef.current;
     if (!id) throw new Error('Workspace session is not ready.');
-    return window.nas4usb.workspace.read(id);
+    const raw = await window.nas4usb.workspace.read(id);
+    const { unwrapWorkspaceBase64 } = await import('../lib/filePassword/io.js');
+    return unwrapWorkspaceBase64(openPathRef.current, raw);
   }, []);
 
   const writeBinary = useCallback(async (base64) => {
     const id = sessionRef.current;
     if (!id) throw new Error('Workspace session is not ready.');
-    return window.nas4usb.workspace.write(id, base64);
+    const { wrapWorkspaceBase64 } = await import('../lib/filePassword/io.js');
+    const packed = await wrapWorkspaceBase64(openPathRef.current, base64);
+    return window.nas4usb.workspace.write(id, packed);
   }, []);
 
   const commit = useCallback(async () => {
@@ -75,14 +79,22 @@ export function useWorkspaceSession(relativePath) {
   const saveBinary = useCallback(async (base64) => {
     const id = sessionRef.current;
     if (!id) throw new Error('Workspace session is not ready.');
-    await window.nas4usb.workspace.write(id, base64);
+    const { wrapWorkspaceBase64 } = await import('../lib/filePassword/io.js');
+    const packed = await wrapWorkspaceBase64(openPathRef.current, base64);
+    await window.nas4usb.workspace.write(id, packed);
     return window.nas4usb.workspace.commit(id);
   }, []);
 
   const rename = useCallback(async (newRelativePath) => {
     const id = sessionRef.current;
     if (!id) throw new Error('Workspace session is not ready.');
-    return window.nas4usb.workspace.rename(id, newRelativePath);
+    const from = openPathRef.current;
+    const result = await window.nas4usb.workspace.rename(id, newRelativePath);
+    const to = result?.relativePath || newRelativePath;
+    const { moveFilePassword } = await import('../lib/filePassword/session.js');
+    moveFilePassword(from, to);
+    openPathRef.current = to;
+    return result;
   }, []);
 
   const close = useCallback(async () => {

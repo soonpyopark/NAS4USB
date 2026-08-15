@@ -40,6 +40,7 @@ const TIPTAP_DOCUMENT_PATH = /^document\.json$/i;
  */
 export function isContentSearchableEntry(entry) {
   if (!entry || entry.isDirectory) return false;
+  if (String(entry.name ?? entry.relativePath ?? '').toLowerCase().endsWith('.sec')) return false;
   const extension = getEntryExtension(entry);
   return (
     PLAIN_TEXT_EXTENSIONS.has(extension) ||

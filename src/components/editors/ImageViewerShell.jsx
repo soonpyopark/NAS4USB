@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import ViewerModal from './ViewerModal.jsx';
 import SiblingFileSideButtons from './SiblingFileSideButtons.jsx';
 import { useSiblingFileNav } from '../../hooks/useSiblingFileNav.js';
-import { buildMediaStreamUrl } from '../../lib/media/streamUrl.js';
+import { usePlaintextObjectUrl } from '../../hooks/usePlaintextObjectUrl.js';
 import { getImageMimeType } from '../../lib/media/mediaTypes.js';
 
 const MIN_SCALE = 0.1;
@@ -40,7 +40,7 @@ export default function ImageViewerShell({
   onOpenSibling,
 }) {
   const mimeType = getImageMimeType(extension);
-  const streamUrl = useMemo(() => buildMediaStreamUrl(relativePath), [relativePath]);
+  const streamUrl = usePlaintextObjectUrl(relativePath, mimeType);
   const absoluteStreamUrl = useMemo(() => {
     try {
       return new URL(streamUrl, window.location.origin).href;
@@ -285,18 +285,20 @@ export default function ImageViewerShell({
           <SiblingFileSideButtons prev={prev} next={next} onOpen={openSibling} disabled={busy} />
         ) : null}
 
-        <img
-          src={streamUrl}
-          alt={fileName}
-          className="max-h-full max-w-full origin-center object-contain transition-transform duration-150"
-          style={{ transform: `rotate(${rotation}deg) scale(${scale})` }}
-          onLoad={() => setLoading(false)}
-          onError={() => {
-            setLoadError('이미지를 표시할 수 없습니다.');
-            setLoading(false);
-          }}
-          draggable={false}
-        />
+        {streamUrl ? (
+          <img
+            src={streamUrl}
+            alt={fileName}
+            className="max-h-full max-w-full origin-center object-contain transition-transform duration-150"
+            style={{ transform: `rotate(${rotation}deg) scale(${scale})` }}
+            onLoad={() => setLoading(false)}
+            onError={() => {
+              setLoadError('이미지를 표시할 수 없습니다.');
+              setLoading(false);
+            }}
+            draggable={false}
+          />
+        ) : null}
       </div>
     </ViewerModal>
   );

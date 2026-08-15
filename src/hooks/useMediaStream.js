@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { base64ToBytes } from '../lib/bytes.js';
+import { unwrapWorkspaceBase64 } from '../lib/filePassword/io.js';
+import { isSecFileName } from '../lib/filePassword/secPaths.js';
 import { buildMediaStreamUrl, getMediaBufferedPercent } from '../lib/media/streamUrl.js';
 import { getShareTokenFromUrl } from '../lib/shareAccess.js';
 import { getStoredAdminToken } from '../lib/nas4usbClient.js';
@@ -49,11 +52,13 @@ async function prepareVideoPreview(relativePath, options = {}) {
 
 /**
  * @param {string} relativePath
- * @param {{ preferFfmpegPreview?: boolean, mediaRef?: import('react').RefObject<HTMLMediaElement | null> }} [options]
+ * @param {{ preferFfmpegPreview?: boolean, mediaRef?: import('react').RefObject<HTMLMediaElement | null>, mimeType?: string }} [options]
  */
 export function useMediaStream(relativePath, options = {}) {
-  const preferFfmpegPreview = Boolean(options.preferFfmpegPreview);
+  const locked = isSecFileName(relativePath);
+  const preferFfmpegPreview = Boolean(options.preferFfmpegPreview) && !locked;
   const mediaRef = options.mediaRef;
+  const mimeType = options.mimeType || '';
   const [usePreview, setUsePreview] = useState(false);
   const [forcePreview, setForcePreview] = useState(false);
   const [previewNonce, setPreviewNonce] = useState(0);
@@ -73,6 +78,46 @@ export function useMediaStream(relativePath, options = {}) {
   const [startSeconds, setStartSeconds] = useState(0);
   const retriedRef = useRef(false);
   const seekingRef = useRef(false);
+  const [secUrl, setSecUrl] = useState('');
+  const [secError, setSecError] = useState(/** @type {string | null} */ (null));
+
+  useEffect(() => {
+    if (!locked) {
+      setSecUrl('');
+      setSecError(null);
+      return undefined;
+    }
+
+    let cancelled = false;
+    let objectUrl = '';
+    setSecUrl('');
+    setSecError(null);
+    setLoading(true);
+
+    void (async () => {
+      try {
+        const raw = await window.nas4usb.fs.readFile(relativePath);
+        const plain = await unwrapWorkspaceBase64(relativePath, raw);
+        const bytes = base64ToBytes(plain);
+        objectUrl = URL.createObjectURL(new Blob([bytes], { type: mimeType || 'application/octet-stream' }));
+        if (!cancelled) {
+          setSecUrl(objectUrl);
+          setLoading(false);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setSecUrl('');
+          setSecError(error instanceof Error ? error.message : '비밀번호로 보호된 미디어를 열 수 없습니다.');
+          setLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [locked, mimeType, relativePath]);
 
   useEffect(() => {
     let cancelled = false;
@@ -188,6 +233,7 @@ export function useMediaStream(relativePath, options = {}) {
   }, [relativePath, usePreview, playerKind, previewStage, startSeconds]);
 
   const streamUrl = useMemo(() => {
+    if (locked) return secUrl;
     if (!ffmpegChecked || blockStream) return '';
     const url = buildMediaStreamUrl(relativePath, { preview: usePreview });
     if (!usePreview) return url;
@@ -198,6 +244,8 @@ export function useMediaStream(relativePath, options = {}) {
     extra.set('n', String(previewNonce));
     return `${url}&${extra.toString()}`;
   }, [
+    locked,
+    secUrl,
     relativePath,
     usePreview,
     forcePreview,
@@ -263,8 +311,8 @@ export function useMediaStream(relativePath, options = {}) {
 
   return {
     streamUrl,
-    loading: preparing || loading || !ffmpegChecked,
-    loadError,
+    loading: preparing || loading || !ffmpegChecked || (locked && !secUrl && !secError),
+    loadError: loadError || secError,
     bufferedPercent,
     mediaHandlers,
     previewNote,

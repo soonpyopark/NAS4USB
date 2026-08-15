@@ -48,6 +48,12 @@ import { resolveFileEntryStatus } from '../../lib/fileEntryStatus.js';
 import { canOpenFileForEdit, VIEW_OPEN_DENIED_MESSAGE, GUEST_READ_DENIED_MESSAGE } from '../../lib/fileEditAccess.js';
 import { useGuestPermissions } from '../../hooks/useGuestPermissions.js';
 import { downloadFileEntries } from '../../lib/downloadEntries.js';
+import {
+  canRemoveFilePassword,
+  canSetFilePassword,
+  removePasswordFromEntries,
+  setPasswordOnEntries,
+} from '../../lib/filePassword/actions.js';
 import { moveEntries } from '../../lib/moveEntries.js';
 import { TRASH_ACCESS_DENIED_MESSAGE } from '../../../shared/constants.js';
 import { isTrashPath, isTrashSubfolder, SHARED_FOLDER, TRASH_FOLDER } from '../../lib/trashPaths.js';
@@ -659,6 +665,16 @@ export default function Sidebar({
     onOpenFile(entry);
   };
 
+  const handleSetPassword = async (entry) => {
+    if (!entry || entry.isDirectory) return;
+    if (canRemoveFilePassword(entry)) {
+      await removePasswordFromEntries([entry]);
+    } else if (canSetFilePassword(entry)) {
+      await setPasswordOnEntries([entry]);
+    }
+    notifyChange();
+  };
+
   const handleOpenFileFromTree = (entry) => {
     handleOpen(entry);
   };
@@ -701,6 +717,12 @@ export default function Sidebar({
         onProperties: () => handleShowProperties(contextTarget),
         onDownload: () => handleDownload(contextTarget),
         canDownload: Boolean(contextTarget && !contextTarget.isDirectory),
+        onSetPassword: () => handleSetPassword(contextTarget),
+        canSetPassword: Boolean(
+          contextTarget &&
+            (canSetFilePassword(contextTarget) || canRemoveFilePassword(contextTarget)),
+        ),
+        passwordActionLabel: canRemoveFilePassword(contextTarget) ? '비밀번호 해제' : '비밀번호 설정',
         onExportHtml: () => handleExportHtml(contextTarget),
         canExportHtml: Boolean(
           contextTarget &&

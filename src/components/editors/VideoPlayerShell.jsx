@@ -61,7 +61,7 @@ export default function VideoPlayerShell({
     durationSeconds,
     startSeconds,
     seekTo,
-  } = useMediaStream(relativePath, { preferFfmpegPreview: true, mediaRef: videoRef });
+  } = useMediaStream(relativePath, { preferFfmpegPreview: true, mediaRef: videoRef, mimeType });
   /** @type {[{ path: string, ext: string, label: string, vtt: string }[], Function]} */
   const [subtitleSources, setSubtitleSources] = useState([]);
   /** @type {[{ path: string, ext: string, label: string, src: string }[], Function]} */

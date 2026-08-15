@@ -9,6 +9,13 @@ const EXTENSION_PATTERN = /^\.[A-Za-z0-9][A-Za-z0-9_-]{0,15}$/;
  */
 export function splitEntryExtension(name) {
   const normalized = String(name ?? '');
+  if (normalized.toLowerCase().endsWith('.sec') && normalized.length > 4) {
+    const inner = splitEntryExtension(normalized.slice(0, -4));
+    if (inner.extension) {
+      return { stem: inner.stem, extension: `${inner.extension}.sec` };
+    }
+    return { stem: normalized.slice(0, -4), extension: '.sec' };
+  }
   const index = normalized.lastIndexOf('.');
   if (index <= 0) {
     return { stem: normalized, extension: '' };

@@ -20,6 +20,7 @@ import { AdminAuthProvider, useAdminAuthContext } from './context/AdminAuthConte
 import { LoginDialogProvider } from './context/LoginDialogContext.jsx';
 import { FsSyncProvider, useFsSync } from './context/FsSyncContext.jsx';
 import AppDialogHost from './components/common/AppDialogHost.jsx';
+import FilePasswordHost from './components/common/FilePasswordHost.jsx';
 import { useAppInfo } from './hooks/useAppInfo.js';
 import { useFsChangeSync } from './hooks/useFsChangeSync.js';
 import { hasNas4usbApi } from './lib/runtime.js';
@@ -33,7 +34,10 @@ import { syncInfoForPath } from './lib/externalFoldersUi.js';
 import { nativeAlert } from './lib/nativeDialog.js';
 import { shouldUseLegacyImagePdfViewers, setLegacyViewerSettingsFlag } from './lib/comicReader/legacyViewerFlag.js';
 import { isImageExtension } from './lib/media/mediaTypes.js';
-import { getFileViewerType } from './lib/fileViewerType.js';
+import { getFileViewerType, getFileViewerTypeFromName } from './lib/fileViewerType.js';
+import { verifySecPassword } from './lib/filePassword/actions.js';
+import { forgetFilePassword, moveFilePassword } from './lib/filePassword/session.js';
+import { innerExtensionOf, isSecFileName } from './lib/filePassword/secPaths.js';
 
 /**
  * @param {{
@@ -346,6 +350,43 @@ function Nas4usbAppMain() {
     });
     if (!canOpen) return false;
 
+    if (isSecFileName(entry.relativePath)) {
+      try {
+        const password = await verifySecPassword(entry);
+        if (!password) return false;
+      } catch (err) {
+        await nativeAlert(err instanceof Error ? err.message : '비밀번호가 올바르지 않습니다.');
+        return false;
+      }
+      const innerExt = innerExtensionOf(entry.name || entry.relativePath);
+      const viewerType = getFileViewerType(innerExt) || getFileViewerTypeFromName(entry.name);
+      if (viewerType) {
+        setOpenEditor({
+          type: viewerType,
+          relativePath: entry.relativePath,
+          name: entry.name,
+          extension: innerExt || entry.extension,
+          shareMode: resolveOpenShareMode(entry.mode),
+        });
+        return true;
+      }
+      const unknownAction = await resolveUnknownFileOpenAction({
+        ...entry,
+        extension: innerExt || entry.extension,
+      });
+      if (unknownAction === 'text') {
+        setOpenEditor({
+          type: 'text',
+          relativePath: entry.relativePath,
+          name: entry.name,
+          extension: innerExt || 'txt',
+          shareMode: resolveOpenShareMode(entry.mode),
+        });
+        return true;
+      }
+      return false;
+    }
+
     if (entry.extension === 'one' || entry.extension === 'onepkg') {
       try {
         const { importOnenoteEntry } = await import('./lib/onenote/importOnenoteToFolder.js');
@@ -399,21 +440,24 @@ function Nas4usbAppMain() {
 
   const handleCloseEditor = useCallback(() => {
     if (isShareMode) return;
+    if (openEditor?.relativePath) {
+      forgetFilePassword(openEditor.relativePath);
+    }
     setOpenEditor(null);
-  }, [isShareMode]);
+  }, [isShareMode, openEditor?.relativePath]);
 
   const handleEditorRenamed = useCallback((entry) => {
     if (entry?.relativePath && entry?.name) {
       setOpenEditor((prev) => {
         if (!prev) return prev;
-        const extension = entry.name.includes('.')
-          ? entry.name.split('.').pop()?.toLowerCase()
-          : prev.extension;
+        if (prev.relativePath && prev.relativePath !== entry.relativePath) {
+          moveFilePassword(prev.relativePath, entry.relativePath);
+        }
         return {
           ...prev,
           relativePath: entry.relativePath,
           name: entry.name,
-          extension: extension ?? prev.extension,
+          extension: innerExtensionOf(entry.name) || prev.extension,
         };
       });
     }
@@ -514,6 +558,7 @@ function Nas4usbApp() {
   return (
     <FsSyncProvider>
       <AppDialogHost />
+      <FilePasswordHost />
       <Nas4usbAppMain />
     </FsSyncProvider>
   );

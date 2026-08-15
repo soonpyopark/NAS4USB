@@ -43,6 +43,12 @@ import { isTrashPath, isTrashSubfolder, SHARED_FOLDER, TRASH_FOLDER } from '../.
 import { isTiptapDocumentRelativePath } from '../../../shared/tiptapAssetPaths.js';
 import { favoritesViewKind, isFavoritesPath } from '../../lib/favoritesPaths.js';
 import { guardOpenFileEntry } from '../../lib/openFileGuard.js';
+import {
+  canRemoveFilePassword,
+  canSetFilePassword,
+  removePasswordFromEntries,
+  setPasswordOnEntries,
+} from '../../lib/filePassword/actions.js';
 import { nativeAlert } from '../../lib/nativeDialog.js';
 import { useTrash } from '../../hooks/useTrash.js';
 import { useAppConfirm } from '../../hooks/useAppConfirm.jsx';
@@ -765,6 +771,18 @@ export default function FileExplorer({
     await refreshAll();
   };
 
+  const handleSetPassword = async (entry) => {
+    const targets = entry ? getTargetEntries(entry) : selectedEntries;
+    const files = targets.filter((item) => !item.isDirectory);
+    if (!files.length) return;
+    if (files.every(canRemoveFilePassword)) {
+      await removePasswordFromEntries(files);
+    } else {
+      await setPasswordOnEntries(files.filter(canSetFilePassword));
+    }
+    await refreshAll();
+  };
+
   const handleOpen = async (entry) => {
     if (entry.isDirectory) {
       onNavigate(entry.relativePath);
@@ -953,6 +971,11 @@ export default function FileExplorer({
         onDownload: () => handleDownload(contextTarget),
         canDownload: contextTargets.some((target) => !target.isDirectory),
         onExportHtml: () => handleExportHtml(contextTarget),
+        onSetPassword: () => handleSetPassword(contextTarget),
+        canSetPassword: contextTargets.some((target) => canSetFilePassword(target) || canRemoveFilePassword(target)),
+        passwordActionLabel: contextTargets.every(canRemoveFilePassword)
+          ? '비밀번호 해제'
+          : '비밀번호 설정',
         canExportHtml:
           contextTargets.length === 1 &&
           !contextTargets[0].isDirectory &&
@@ -1165,6 +1188,15 @@ export default function FileExplorer({
         onClearSelection={clearSelection}
         onProperties={() => handleShowProperties()}
         canShowProperties={selectedEntries.length === 1}
+        onSetPassword={() => handleSetPassword()}
+        passwordActionLabel={
+          selectedEntries.length > 0 && selectedEntries.every(canRemoveFilePassword)
+            ? '비밀번호 해제'
+            : '비밀번호 설정'
+        }
+        canSetPassword={selectedEntries.some(
+          (entry) => canSetFilePassword(entry) || canRemoveFilePassword(entry),
+        )}
         onImportOnenote={handleImportOnenoteClick}
         importingOnenote={importingOnenote}
         onClearFolderBackups={

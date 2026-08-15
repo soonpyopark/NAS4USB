@@ -1,3 +1,5 @@
+import { innerFileNameOf } from '../filePassword/secPaths.js';
+
 /** TipTap document JSON (ProseMirror) stored inside `.tiptap` packages. */
 
 /**
@@ -22,6 +24,6 @@ export function isTiptapDoc(value) {
  * @param {string} fileName
  */
 export function getTiptapFileStem(fileName) {
-  const base = fileName.split(/[/\\]/).pop() ?? fileName;
+  const base = innerFileNameOf(fileName);
   return base.replace(/\.tiptap$/i, '') || 'NoName';
 }

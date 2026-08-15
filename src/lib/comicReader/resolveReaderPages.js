@@ -1,5 +1,8 @@
+import { isSecFileName } from '../filePassword/secPaths.js';
 import { buildMediaStreamUrl } from '../media/streamUrl.js';
 import {
+  getImageMimeType,
+  getPdfMimeType,
   isArchiveExtension,
   isEpubExtension,
   isImageExtension,
@@ -34,17 +37,29 @@ export async function resolveReaderPages(relativePath, extension) {
   const ext = String(extension ?? '').toLowerCase();
 
   if (isImageExtension(ext)) {
-    const url = buildMediaStreamUrl(relativePath);
+    const locked = isSecFileName(relativePath);
+    const url = locked
+      ? URL.createObjectURL(
+          new Blob([await readRelativePathArrayBuffer(relativePath)], { type: getImageMimeType(ext) }),
+        )
+      : buildMediaStreamUrl(relativePath);
     return {
       kind: 'image',
       pages: [{ id: 'image-0', name: relativePath.split(/[/\\]/).pop() ?? 'image', url }],
       pageCount: 1,
-      revoke: () => {},
+      revoke: locked ? () => URL.revokeObjectURL(url) : () => {},
     };
   }
 
   if (isPdfExtension(ext)) {
-    const url = buildMediaStreamUrl(relativePath);
+    const locked = isSecFileName(relativePath);
+    const url = locked
+      ? URL.createObjectURL(
+          new Blob([await readRelativePathArrayBuffer(relativePath)], {
+            type: getPdfMimeType(ext) || 'application/pdf',
+          }),
+        )
+      : buildMediaStreamUrl(relativePath);
     const pdfDocument = await loadPdfDocument(url);
     const pageCount = pdfDocument.numPages;
     /** @type {ReaderPage[]} */
@@ -63,6 +78,7 @@ export async function resolveReaderPages(relativePath, extension) {
         } catch {
           // ignore
         }
+        if (locked) URL.revokeObjectURL(url);
       },
     };
   }

@@ -27,6 +27,9 @@ export default function FileExplorerToolbar({
   onClearSelection,
   onProperties,
   canShowProperties = false,
+  onSetPassword,
+  passwordActionLabel = '비밀번호 설정',
+  canSetPassword = false,
   onImportOnenote,
   importingOnenote = false,
   onClearFolderBackups,
@@ -141,9 +144,25 @@ export default function FileExplorerToolbar({
         >
           속성
         </button>
-        {showWriteActions && onImportOnenote && (
+        {showWriteActions && onSetPassword && (
           <>
             <span className="mx-1 hidden h-4 w-px bg-nas-border sm:inline" />
+            <button
+              type="button"
+              className="nas-btn-ghost"
+              disabled={!canSetPassword}
+              onClick={onSetPassword}
+              title="선택한 파일에 비밀번호를 설정하거나 해제합니다"
+            >
+              {passwordActionLabel}
+            </button>
+          </>
+        )}
+        {showWriteActions && onImportOnenote && (
+          <>
+            {!onSetPassword ? (
+              <span className="mx-1 hidden h-4 w-px bg-nas-border sm:inline" />
+            ) : null}
             <button
               type="button"
               className="nas-btn-ghost"

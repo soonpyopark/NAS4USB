@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
-import { getFileViewerType } from '../../lib/fileViewerType.js';
+import { getFileViewerType, getFileViewerTypeFromName } from '../../lib/fileViewerType.js';
+import { entryExtensionOf } from '../../lib/filePassword/secPaths.js';
 import { isImageExtension } from '../../lib/media/mediaTypes.js';
 import { shouldUseLegacyImagePdfViewers } from '../../lib/comicReader/legacyViewerFlag.js';
 
@@ -33,8 +34,13 @@ export default function AttachmentEditorOverlay({
   onClose,
 }) {
   const fileName = entry.name || entry.fileName || entry.relativePath.split('/').pop() || '파일';
-  const extension = String(entry.extension ?? '').toLowerCase();
-  const type = entry.type || getFileViewerType(extension);
+  const extension =
+    entryExtensionOf(entry.name || entry.fileName || entry.relativePath) ||
+    String(entry.extension ?? '').toLowerCase();
+  const type =
+    entry.type ||
+    getFileViewerTypeFromName(entry.name || entry.fileName || entry.relativePath) ||
+    getFileViewerType(extension);
   const fallback = (
     <div className="flex min-h-[12rem] items-center justify-center text-sm text-nas-muted">
       첨부 편집기 여는 중…

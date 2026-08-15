@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { entryExtensionOf } from '../lib/filePassword/secPaths.js';
 import { getParentPath, sortEntries } from '../lib/fsPaths.js';
 import { isImageExtension } from '../lib/media/mediaTypes.js';
 
@@ -28,7 +29,7 @@ export function useSiblingFileNav(relativePath, kind = 'image', enabled = true) 
         const filtered = sortEntries(
           (Array.isArray(entries) ? entries : []).filter((entry) => {
             if (entry.isDirectory) return false;
-            if (kind === 'image') return isImageExtension(entry.extension);
+            if (kind === 'image') return isImageExtension(entryExtensionOf(entry));
             return false;
           }),
           'name',
