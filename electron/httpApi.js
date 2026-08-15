@@ -69,6 +69,12 @@ import {
   syncFavoritesRename,
 } from './favoritesService.js';
 import {
+  getFolderColorsMap,
+  setFolderColor,
+  syncFolderColorsDelete,
+  syncFolderColorsMoveTree,
+} from './folderColorsService.js';
+import {
   deletePermanent,
   emptyTrash,
   getTrashMap,
@@ -266,6 +272,7 @@ export async function handleHttpApiRequest(req, res) {
       await syncSharePathDelete(body.path, getPortableRoot());
       await syncFileAccessDelete(body.path, getPortableRoot());
       await syncFavoritesDelete(body.path, getPortableRoot());
+      await syncFolderColorsDelete(body.path, getPortableRoot());
       await syncFortuneSidecarDelete(body.path);
       await syncPdfViewerSidecarDelete(body.path);
       await syncFileHistoryDelete(body.path, getPortableRoot());
@@ -286,6 +293,7 @@ export async function handleHttpApiRequest(req, res) {
       await syncSharePathRename(body.from, body.to, getPortableRoot());
       await syncFileAccessRename(body.from, body.to, getPortableRoot());
       await syncFavoritesRename(body.from, body.to, getPortableRoot());
+      await syncFolderColorsMoveTree(body.from, body.to, getPortableRoot());
       await syncFortuneSidecarRename(body.from, body.to);
       await syncPdfViewerSidecarRename(body.from, body.to);
       await syncTiptapAssetRename(body.from, body.to);
@@ -357,6 +365,7 @@ export async function handleHttpApiRequest(req, res) {
       await syncSharePathRename(body.from, dest, getPortableRoot());
       await syncFileAccessRename(body.from, dest, getPortableRoot());
       await syncFavoritesRename(body.from, dest, getPortableRoot());
+      await syncFolderColorsMoveTree(body.from, dest, getPortableRoot());
       await syncFortuneSidecarRename(body.from, dest);
       await syncPdfViewerSidecarRename(body.from, dest);
       await syncTiptapAssetRename(body.from, dest);
@@ -417,6 +426,7 @@ export async function handleHttpApiRequest(req, res) {
           void ensureVideoPreview(relativePath, getPortableRoot(), {
             waitMs: 0,
             startSeconds: Number.isFinite(hlsStart) ? hlsStart : 0,
+            replace: false,
           }).catch(() => {});
           const asset = await resolveVideoPreviewHlsFile(relativePath, hlsName);
           await streamHlsAsset(req, res, asset.absolutePath, asset.contentType, {
@@ -436,6 +446,7 @@ export async function handleHttpApiRequest(req, res) {
           force,
           waitForFull,
           startSeconds: Number.isFinite(startSeconds) ? startSeconds : 0,
+          replace: url.searchParams.get('replace') === '1',
         });
         if (prepare) {
           sendJson(res, 200, {
@@ -567,6 +578,7 @@ export async function handleHttpApiRequest(req, res) {
       await syncSharePathRename(fromPath, result.relativePath, getPortableRoot());
       await syncFileAccessRename(fromPath, result.relativePath, getPortableRoot());
       await syncFavoritesRename(fromPath, result.relativePath, getPortableRoot());
+      await syncFolderColorsMoveTree(fromPath, result.relativePath, getPortableRoot());
       await syncFortuneSidecarRename(fromPath, result.relativePath);
       await syncPdfViewerSidecarRename(fromPath, result.relativePath);
       await syncTiptapAssetRename(fromPath, result.relativePath);
@@ -637,6 +649,29 @@ export async function handleHttpApiRequest(req, res) {
       assertAdminAuthenticated(isAdminAuthenticated(req));
       const body = await readJsonBody(req);
       const result = await setFavorite(body.path, Boolean(body.favorited), getPortableRoot());
+      notifyFsChanged(body.path);
+      sendJson(res, 200, result);
+      return true;
+    }
+
+    if (method === 'GET' && url.pathname === '/api/folder-colors/map') {
+      const auth = getAccessAuth(req);
+      const perms = await getEffectiveAccessPermissions(auth, getPortableRoot());
+      if (!perms.view && !perms.write) {
+        sendJson(res, 200, {});
+        return true;
+      }
+      sendJson(res, 200, await getFolderColorsMap(getPortableRoot()));
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/folder-colors/set') {
+      const body = await readJsonBody(req);
+      const auth = getAccessAuth(req);
+      const shareToken = getShareTokenFromQuery(url);
+      assertHomeSystemPathMutable(body.path, 'mutate');
+      await assertCanEditFile(body.path ?? '', auth, shareToken);
+      const result = await setFolderColor(body.path, body.color, getPortableRoot());
       notifyFsChanged(body.path);
       sendJson(res, 200, result);
       return true;

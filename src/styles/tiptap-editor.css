@@ -265,6 +265,11 @@
   cursor: col-resize;
 }
 
+.tiptap-editor-shell .tiptap.is-format-painting,
+.tiptap-editor-shell .tiptap.is-format-painting * {
+  cursor: copy !important;
+}
+
 .tiptap-editor-shell .tiptap[contenteditable='false'] .column-resize-handle {
   display: none;
 }
@@ -620,6 +625,11 @@
 .tiptap-toolbar__btn.is-active {
   background: #dbeafe;
   color: #1d4ed8;
+}
+
+.tiptap-toolbar__btn.is-active.is-format-locked {
+  background: #fde68a;
+  color: #92400e;
 }
 
 .tiptap-toolbar__btn:disabled {

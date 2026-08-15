@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { EXTERNAL_FOLDER, SHARED_FOLDER } from '../../../shared/constants.js';
 import { HOMES_FOLDER } from '../../../shared/memberHomes.js';
 import { entryExtensionOf, isSecFileName } from '../../lib/filePassword/secPaths.js';
-import FileIcon, { folderIconTintClass } from './FileIcon.jsx';
+import FileIcon from './FileIcon.jsx';
 import FileEntryStatusBadges, { FILE_STATUS_SLOT_WIDTH } from './FileEntryStatusBadges.jsx';
 
 function formatSize(bytes) {
@@ -31,15 +31,16 @@ function isWorkspaceRootSystemFolder(relativePath) {
 }
 
 const MODIFIED_DATE_COLUMN_CLASS = 'hidden w-44 min-w-[9.5rem] whitespace-nowrap px-2 py-2 md:table-cell';
+const TYPE_COLUMN_CLASS = 'hidden w-36 min-w-[8.5rem] whitespace-nowrap px-2 py-2 lg:table-cell';
 
 export default function FileList({
   entries,
   loading,
-  viewMode,
   selectedSet,
   accessMap = {},
   shareMap = {},
   favoritesMap = {},
+  folderColorMap = {},
   onOpen,
   onSelect,
   onToggleCheckbox,
@@ -81,75 +82,6 @@ export default function FileList({
     );
   }
 
-  if (viewMode === 'grid') {
-    return (
-      <div
-        className="grid flex-1 grid-cols-[repeat(auto-fill,minmax(120px,1fr))] gap-3 overflow-y-auto p-4"
-        onClick={(event) => {
-          if (event.currentTarget === event.target) onBackgroundClick();
-        }}
-      >
-        {entries.map((entry) => {
-          const selected = selectedSet.has(entry.relativePath);
-
-          return (
-            <button
-              key={entry.relativePath}
-              type="button"
-              className={`group relative flex min-w-0 flex-col items-center gap-2 overflow-hidden rounded-lg border p-3 text-center transition-colors ${
-                selected
-                  ? 'border-nas-accent bg-nas-accentSoft'
-                  : 'border-transparent hover:border-nas-border hover:bg-slate-50'
-              }`}
-              onClick={(event) => onSelect(entry, event)}
-              onDoubleClick={() => onOpen(entry)}
-              onContextMenu={(event) => onContextMenu(event, entry)}
-            >
-              <label
-                className="absolute left-2 top-2 z-10"
-                onClick={(event) => event.stopPropagation()}
-                onDoubleClick={(event) => event.stopPropagation()}
-              >
-                <input
-                  type="checkbox"
-                  checked={selected}
-                  onChange={() => onToggleCheckbox(entry)}
-                  aria-label={`${entry.name} 선택`}
-                  className="h-4 w-4 rounded border-slate-300 text-nas-accent focus:ring-nas-accent"
-                />
-              </label>
-              <div
-                className="mt-5 flex justify-center"
-                style={{ width: `${FILE_STATUS_SLOT_WIDTH}px` }}
-              >
-                <FileEntryStatusBadges
-                  entry={entry}
-                  accessMap={accessMap}
-                  shareMap={shareMap}
-                  favoritesMap={favoritesMap}
-                  onShareLinkClick={onShareLinkClick}
-                  onPropertiesClick={onPropertiesClick}
-                />
-              </div>
-              <FileIcon
-                entry={entry}
-                className={`h-12 w-12 ${folderIconTintClass(entry)}`}
-              />
-              <span
-                className={`w-full truncate text-[10pt] text-slate-700 ${
-                  isWorkspaceRootSystemFolder(entry.relativePath) ? 'font-bold' : ''
-                }`}
-                title={entry.name}
-              >
-                {entry.name}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    );
-  }
-
   return (
     <div
       className="min-h-0 flex-1 overflow-y-auto"
@@ -179,7 +111,7 @@ export default function FileList({
             </th>
             <th className={`font-medium ${MODIFIED_DATE_COLUMN_CLASS}`}>수정일</th>
             <th className="hidden w-24 px-4 py-2 font-medium sm:table-cell">크기</th>
-            <th className="hidden w-20 px-4 py-2 font-medium lg:table-cell">종류</th>
+            <th className={`font-medium ${TYPE_COLUMN_CLASS}`}>종류</th>
           </tr>
         </thead>
         <tbody>
@@ -214,7 +146,8 @@ export default function FileList({
                   <div className="flex min-w-0 items-center gap-2 overflow-hidden">
                     <FileIcon
                       entry={entry}
-                      className={`h-5 w-5 shrink-0 ${folderIconTintClass(entry)}`}
+                      folderColor={folderColorMap[entry.relativePath]}
+                      className="h-5 w-5 shrink-0"
                     />
                     <span
                       className={`min-w-0 flex-1 truncate text-slate-700 ${
@@ -244,7 +177,7 @@ export default function FileList({
                 <td className="hidden px-4 py-2 text-nas-muted sm:table-cell">
                   {entry.isDirectory ? '—' : formatSize(entry.size)}
                 </td>
-                <td className="hidden px-4 py-2 text-nas-muted lg:table-cell">
+                <td className={`text-nas-muted ${TYPE_COLUMN_CLASS}`}>
                   {entry.isDirectory
                     ? '폴더'
                     : `${(entryExtensionOf(entry) || entry.extension || '파일').toUpperCase()}${

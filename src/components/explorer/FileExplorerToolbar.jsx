@@ -3,8 +3,6 @@ export default function FileExplorerToolbar({
   sortDirection,
   onSortFieldChange,
   onToggleSortDirection,
-  viewMode,
-  onViewModeChange,
   hasSelection,
   canRename = false,
   hasClipboard,
@@ -27,9 +25,6 @@ export default function FileExplorerToolbar({
   onClearSelection,
   onProperties,
   canShowProperties = false,
-  onSetPassword,
-  passwordActionLabel = '비밀번호 설정',
-  canSetPassword = false,
   onImportOnenote,
   importingOnenote = false,
   onClearFolderBackups,
@@ -144,25 +139,9 @@ export default function FileExplorerToolbar({
         >
           속성
         </button>
-        {showWriteActions && onSetPassword && (
-          <>
-            <span className="mx-1 hidden h-4 w-px bg-nas-border sm:inline" />
-            <button
-              type="button"
-              className="nas-btn-ghost"
-              disabled={!canSetPassword}
-              onClick={onSetPassword}
-              title="선택한 파일에 비밀번호를 설정하거나 해제합니다"
-            >
-              {passwordActionLabel}
-            </button>
-          </>
-        )}
         {showWriteActions && onImportOnenote && (
           <>
-            {!onSetPassword ? (
-              <span className="mx-1 hidden h-4 w-px bg-nas-border sm:inline" />
-            ) : null}
+            <span className="mx-1 hidden h-4 w-px bg-nas-border sm:inline" />
             <button
               type="button"
               className="nas-btn-ghost"
@@ -199,22 +178,6 @@ export default function FileExplorerToolbar({
         <button type="button" className="nas-btn-ghost px-2" onClick={onToggleSortDirection}>
           {sortDirection === 'asc' ? '↑' : '↓'}
         </button>
-        <div className="flex rounded-md border border-nas-border p-0.5">
-          <button
-            type="button"
-            className={`rounded px-2 py-1 text-[10pt] ${viewMode === 'list' ? 'bg-slate-100 font-medium' : ''}`}
-            onClick={() => onViewModeChange('list')}
-          >
-            목록
-          </button>
-          <button
-            type="button"
-            className={`rounded px-2 py-1 text-[10pt] ${viewMode === 'grid' ? 'bg-slate-100 font-medium' : ''}`}
-            onClick={() => onViewModeChange('grid')}
-          >
-            아이콘
-          </button>
-        </div>
       </div>
     </div>
   );

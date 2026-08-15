@@ -2961,7 +2961,7 @@ export default function PdfViewerShell({
           z-index: 20;
           display: flex;
           flex-direction: column;
-          gap: 10px;
+          gap: 20px;
           pointer-events: none;
         }
         .pdf-page-fab__btn {

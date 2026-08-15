@@ -29,7 +29,7 @@ async function fetchFfmpegAvailable() {
 
 /**
  * @param {string} relativePath
- * @param {{ force?: boolean, waitForFull?: boolean, statusOnly?: boolean, startSeconds?: number }} [options]
+ * @param {{ force?: boolean, waitForFull?: boolean, statusOnly?: boolean, startSeconds?: number, replace?: boolean }} [options]
  */
 async function prepareVideoPreview(relativePath, options = {}) {
   const url = new URL(buildMediaStreamUrl(relativePath, { preview: true }), window.location.origin);
@@ -37,7 +37,9 @@ async function prepareVideoPreview(relativePath, options = {}) {
   if (options.force) url.searchParams.set('force', '1');
   if (options.waitForFull) url.searchParams.set('full', '1');
   if (options.statusOnly) url.searchParams.set('status', '1');
+  if (options.replace) url.searchParams.set('replace', '1');
   if (Number(options.startSeconds) > 0.5) url.searchParams.set('start', String(options.startSeconds));
+  else if (options.replace) url.searchParams.set('start', '0');
   const headers = {};
   const adminToken = getStoredAdminToken();
   if (adminToken) headers['X-Admin-Token'] = adminToken;
@@ -212,7 +214,11 @@ export function useMediaStream(relativePath, options = {}) {
           setAvailableSeconds(Number(data.availableSeconds));
         }
         if (!seekingRef.current && Number.isFinite(Number(data.startSeconds))) {
-          setStartSeconds(Number(data.startSeconds) > 0 ? Number(data.startSeconds) : 0);
+          const reported = Number(data.startSeconds) > 0 ? Number(data.startSeconds) : 0;
+          setStartSeconds((current) => {
+            if (current > 0.5 && reported < 0.5) return current;
+            return reported;
+          });
         }
         if (data.fullReady !== true) return;
         setPreviewStage('full');
@@ -340,8 +346,11 @@ export function useMediaStream(relativePath, options = {}) {
         if (media.buffered.length > 0) {
           localReady = Math.max(localReady, media.buffered.end(media.buffered.length - 1));
         }
+        if (media.seekable.length > 0) {
+          localReady = Math.max(localReady, media.seekable.end(media.seekable.length - 1));
+        }
       }
-      const convertedEnd = origin + localReady + 2.5;
+      const convertedEnd = origin + localReady + 0.75;
 
       if (
         media instanceof HTMLMediaElement &&
@@ -357,7 +366,7 @@ export function useMediaStream(relativePath, options = {}) {
       setPreparing(true);
       setLoadError(null);
       try {
-        const data = await prepareVideoPreview(relativePath, { startSeconds: clamped });
+        const data = await prepareVideoPreview(relativePath, { startSeconds: clamped, replace: true });
         setStartSeconds(Number(data.startSeconds) > 0 ? Number(data.startSeconds) : clamped);
         if (Number(data.durationSeconds) > 0) setDurationSeconds(Number(data.durationSeconds));
         if (Number.isFinite(Number(data.availableSeconds))) {

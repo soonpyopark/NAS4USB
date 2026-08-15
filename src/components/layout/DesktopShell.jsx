@@ -9,6 +9,15 @@ const SIDEBAR_MIN_WIDTH = SIDEBAR_DEFAULT_WIDTH;
 const SIDEBAR_MAX_RATIO = 0.5;
 /** Below this width: one pane at a time (folder | files). */
 const COMPACT_LAYOUT_MAX = 900;
+const SIDEBAR_COLLAPSED_KEY = 'nas4usb.sidebarCollapsed';
+
+function readSidebarCollapsed() {
+  try {
+    return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
 
 export default function DesktopShell({
   children,
@@ -26,6 +35,7 @@ export default function DesktopShell({
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
   const [layoutWidth, setLayoutWidth] = useState(0);
   const [isResizing, setIsResizing] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed);
   const [mobilePane, setMobilePane] = useState(/** @type {'folders' | 'files'} */ ('files'));
 
   const isCompact = layoutWidth > 0 && layoutWidth < COMPACT_LAYOUT_MAX;
@@ -33,6 +43,15 @@ export default function DesktopShell({
   const clampSidebarWidth = useCallback((nextWidth, containerWidth) => {
     const maxWidth = Math.max(SIDEBAR_MIN_WIDTH, containerWidth * SIDEBAR_MAX_RATIO);
     return Math.min(maxWidth, Math.max(SIDEBAR_MIN_WIDTH, nextWidth));
+  }, []);
+
+  const setCollapsed = useCallback((next) => {
+    setSidebarCollapsed(next);
+    try {
+      window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? '1' : '0');
+    } catch {
+      // ignore
+    }
   }, []);
 
   const handleResizeStart = useCallback(
@@ -100,7 +119,7 @@ export default function DesktopShell({
     [isCompact, onOpenFile],
   );
 
-  const showFolders = !isCompact || mobilePane === 'folders';
+  const showFolders = isCompact ? mobilePane === 'folders' : !sidebarCollapsed;
   const showFiles = !isCompact || mobilePane === 'files';
 
   const explorerChildren = Children.map(children, (child) => {
@@ -156,7 +175,7 @@ export default function DesktopShell({
           className={`sidebar-panel relative flex min-h-0 min-w-0 shrink-0 flex-col ${
             showFolders ? '' : 'desktop-pane--hidden'
           }`}
-          style={isCompact ? undefined : { ['--sidebar-width']: `${sidebarWidth}px` }}
+          style={isCompact || sidebarCollapsed ? undefined : { ['--sidebar-width']: `${sidebarWidth}px` }}
           aria-hidden={!showFolders}
         >
           <Sidebar
@@ -168,7 +187,7 @@ export default function DesktopShell({
           />
         </div>
 
-        {!isCompact ? (
+        {!isCompact && !sidebarCollapsed ? (
           <div
             role="separator"
             aria-orientation="vertical"
@@ -178,7 +197,32 @@ export default function DesktopShell({
             aria-valuenow={sidebarWidth}
             className={`sidebar-resize-handle shrink-0 ${isResizing ? 'sidebar-resize-handle--active' : ''}`}
             onMouseDown={handleResizeStart}
-          />
+          >
+            <button
+              type="button"
+              className="sidebar-collapse-tab"
+              title="폴더 패널 접기"
+              aria-label="폴더 패널 접기"
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={() => setCollapsed(true)}
+            >
+              <span aria-hidden="true">‹</span>
+            </button>
+          </div>
+        ) : null}
+
+        {!isCompact && sidebarCollapsed ? (
+          <div className="sidebar-collapsed-rail">
+            <button
+              type="button"
+              className="sidebar-collapse-tab sidebar-collapse-tab--collapsed"
+              title="폴더 패널 펼치기"
+              aria-label="폴더 패널 펼치기"
+              onClick={() => setCollapsed(false)}
+            >
+              <span aria-hidden="true">›</span>
+            </button>
+          </div>
         ) : null}
 
         <main

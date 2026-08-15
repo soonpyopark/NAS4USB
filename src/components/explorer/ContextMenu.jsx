@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import FolderColorSwatches from './FolderColorSwatches.jsx';
 
 const VIEWPORT_PADDING = 8;
 
@@ -35,7 +36,16 @@ function resolveMenuPosition(x, y, width, height) {
  * @param {{
  *   x: number,
  *   y: number,
- *   items: Array<{ id: string, label: string, danger?: boolean, disabled?: boolean, onClick: () => void }>,
+ *   items: Array<{
+ *     id: string,
+ *     label: string,
+ *     danger?: boolean,
+ *     disabled?: boolean,
+ *     type?: 'item' | 'swatches',
+ *     value?: string,
+ *     onClick?: () => void,
+ *     onSelect?: (value: string) => void,
+ *   }>,
  *   onClose: () => void,
  * }} props
  */
@@ -81,24 +91,39 @@ export default function ContextMenu({ x, y, items, onClose }) {
       style={{ left: position.left, top: position.top }}
       role="menu"
     >
-      {items.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          role="menuitem"
-          disabled={item.disabled}
-          onClick={() => {
-            if (item.disabled) return;
-            item.onClick();
-            onClose();
-          }}
-          className={`flex w-full px-3 py-2 text-left text-[10pt] disabled:cursor-not-allowed disabled:opacity-40 ${
-            item.danger ? 'text-red-600 hover:bg-red-50' : 'text-slate-700 hover:bg-slate-50'
-          }`}
-        >
-          {item.label}
-        </button>
-      ))}
+      {items.map((item) =>
+        item.type === 'swatches' ? (
+          <div key={item.id} className="px-3 py-2" role="none">
+            <div className="mb-1.5 text-[10pt] text-slate-500">{item.label}</div>
+            <FolderColorSwatches
+              value={item.value || ''}
+              disabled={item.disabled}
+              onChange={(color) => {
+                if (item.disabled) return;
+                item.onSelect?.(color);
+                if (!String(color).startsWith('#')) onClose();
+              }}
+            />
+          </div>
+        ) : (
+          <button
+            key={item.id}
+            type="button"
+            role="menuitem"
+            disabled={item.disabled}
+            onClick={() => {
+              if (item.disabled) return;
+              item.onClick?.();
+              onClose();
+            }}
+            className={`flex w-full px-3 py-2 text-left text-[10pt] disabled:cursor-not-allowed disabled:opacity-40 ${
+              item.danger ? 'text-red-600 hover:bg-red-50' : 'text-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            {item.label}
+          </button>
+        ),
+      )}
     </div>
   );
 }

@@ -307,6 +307,15 @@ export function createHttpNas4usbClient() {
         }),
     },
 
+    folderColors: {
+      getMap: () => apiFetch('/folder-colors/map'),
+      set: ({ path, color }) =>
+        apiFetch('/folder-colors/set', {
+          method: 'POST',
+          body: JSON.stringify({ path, color }),
+        }),
+    },
+
     trash: {
       getMap: () => apiFetch('/trash/map'),
       move: (relativePath) =>

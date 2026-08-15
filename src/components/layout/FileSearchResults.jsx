@@ -1,4 +1,4 @@
-import FileIcon, { folderIconTintClass } from '../explorer/FileIcon.jsx';
+import FileIcon from '../explorer/FileIcon.jsx';
 import { getParentPath } from '../../lib/fsPaths.js';
 import { HOMES_FOLDER, isMemberHomeRootPath } from '../../lib/memberHomes.js';
 
@@ -17,6 +17,7 @@ export default function FileSearchResults({
   onNavigate,
   onOpenFile,
   onContextMenu,
+  folderColorMap = {},
 }) {
   if (searching && results.length === 0) {
     return (
@@ -64,9 +65,8 @@ export default function FileSearchResults({
           >
             <FileIcon
               entry={entry}
-              className={`mt-0.5 h-4 w-4 shrink-0 ${
-                isActive ? '!text-white' : folderIconTintClass(entry)
-              }`}
+              folderColor={folderColorMap[entry.relativePath]}
+              className={`mt-0.5 h-4 w-4 shrink-0 ${isActive ? '!text-white' : ''}`}
             />
             <span className="min-w-0 flex-1">
               <span className="block truncate font-medium">{entry.name}</span>

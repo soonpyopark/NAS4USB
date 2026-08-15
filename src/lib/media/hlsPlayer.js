@@ -19,9 +19,9 @@ export function attachHlsPlayback(video, url, handlers = {}) {
   const hls = new Hls({
     enableWorker: false,
     lowLatencyMode: false,
-    startPosition: 0,
-    // EVENT playlists look "live" while FFmpeg appends. A finite
-    // liveMaxLatencyDurationCount seeks forward to the transcode edge.
+    startPosition: -1,
+    // EVENT playlists look "live" while FFmpeg appends. Never snap to the
+    // transcode edge or back to 0 — the timeline is treated as VOD.
     liveSyncMode: 'buffered',
     liveSyncDurationCount: 3,
     liveMaxLatencyDurationCount: Number.POSITIVE_INFINITY,
@@ -40,6 +40,25 @@ export function attachHlsPlayback(video, url, handlers = {}) {
   });
 
   let destroyed = false;
+  let resumeAt = 0;
+
+  const rememberPosition = () => {
+    if (Number.isFinite(video.currentTime) && video.currentTime > 0.25) {
+      resumeAt = video.currentTime;
+    }
+  };
+
+  const restorePosition = () => {
+    if (resumeAt > 0.25 && Math.abs((Number(video.currentTime) || 0) - resumeAt) > 0.5) {
+      try {
+        video.currentTime = resumeAt;
+      } catch {
+        // ignore
+      }
+    }
+  };
+
+  video.addEventListener('timeupdate', rememberPosition);
 
   hls.attachMedia(video);
   hls.on(Hls.Events.MEDIA_ATTACHED, () => {
@@ -47,21 +66,19 @@ export function attachHlsPlayback(video, url, handlers = {}) {
   });
   hls.on(Hls.Events.MANIFEST_PARSED, () => {
     handlers.onReady?.();
-    if (video.currentTime > 0.5) {
-      // keep whatever position the user already reached
-    } else {
-      video.currentTime = 0;
-    }
+    restorePosition();
     void video.play().catch(() => {});
   });
   hls.on(Hls.Events.ERROR, (_event, data) => {
     if (destroyed || !data?.fatal) return;
+    rememberPosition();
     if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
       hls.startLoad();
       return;
     }
     if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
       hls.recoverMediaError();
+      window.setTimeout(restorePosition, 80);
       return;
     }
     handlers.onFatalError?.(data);
@@ -69,6 +86,7 @@ export function attachHlsPlayback(video, url, handlers = {}) {
 
   return () => {
     destroyed = true;
+    video.removeEventListener('timeupdate', rememberPosition);
     hls.destroy();
   };
 }

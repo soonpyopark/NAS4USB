@@ -105,6 +105,10 @@ window.nas4usb = {
     listEntries: () => {},
     set: ({ path, favorited }) => {},
   },
+  folderColors: {
+    getMap: () => {},
+    set: ({ path, color }) => {},
+  },
   trash: {
     getMap: () => {},
     move: (relativePath) => {},

@@ -124,6 +124,12 @@ import {
   syncFavoritesRename,
 } from './electron/favoritesService.js';
 import {
+  getFolderColorsMap,
+  setFolderColor,
+  syncFolderColorsDelete,
+  syncFolderColorsMoveTree,
+} from './electron/folderColorsService.js';
+import {
   deletePermanent,
   emptyTrash,
   getTrashMap,
@@ -1046,6 +1052,7 @@ ipcMain.handle('fs:rename', async (event, fromRelative, toRelative) => {
   await syncSharePathRename(fromRelative, toRelative, getPortableRoot());
   await syncFileAccessRename(fromRelative, toRelative, getPortableRoot());
   await syncFavoritesRename(fromRelative, toRelative, getPortableRoot());
+  await syncFolderColorsMoveTree(fromRelative, toRelative, getPortableRoot());
   await syncFortuneSidecarRename(fromRelative, toRelative);
   await syncPdfViewerSidecarRename(fromRelative, toRelative);
   await syncTiptapAssetRename(fromRelative, toRelative);
@@ -1069,6 +1076,7 @@ ipcMain.handle('fs:delete', async (event, relativePath) => {
   await syncSharePathDelete(relativePath, getPortableRoot());
   await syncFileAccessDelete(relativePath, getPortableRoot());
   await syncFavoritesDelete(relativePath, getPortableRoot());
+  await syncFolderColorsDelete(relativePath, getPortableRoot());
   await syncFortuneSidecarDelete(relativePath);
   await syncPdfViewerSidecarDelete(relativePath);
   await syncFileHistoryDelete(relativePath, getPortableRoot());
@@ -1119,6 +1127,7 @@ ipcMain.handle('fs:move', async (event, fromRelative, toRelative) => {
   await syncSharePathRename(fromRelative, dest, getPortableRoot());
   await syncFileAccessRename(fromRelative, dest, getPortableRoot());
   await syncFavoritesRename(fromRelative, dest, getPortableRoot());
+  await syncFolderColorsMoveTree(fromRelative, dest, getPortableRoot());
   await syncFortuneSidecarRename(fromRelative, dest);
   await syncPdfViewerSidecarRename(fromRelative, dest);
   await syncTiptapAssetRename(fromRelative, dest);
@@ -1186,6 +1195,7 @@ ipcMain.handle('workspace:rename', async (event, sessionId, newRelativePath) => 
   await syncSharePathRename(fromPath, result.relativePath, getPortableRoot());
   await syncFileAccessRename(fromPath, result.relativePath, getPortableRoot());
   await syncFavoritesRename(fromPath, result.relativePath, getPortableRoot());
+  await syncFolderColorsMoveTree(fromPath, result.relativePath, getPortableRoot());
   await syncFortuneSidecarRename(fromPath, result.relativePath);
   await syncPdfViewerSidecarRename(fromPath, result.relativePath);
   await syncTiptapAssetRename(fromPath, result.relativePath);
@@ -1373,6 +1383,23 @@ ipcMain.handle('favorites:listEntries', async (event) => {
 ipcMain.handle('favorites:set', async (event, { path: relativePath, favorited } = {}) => {
   assertAdminAuthenticated(isAdminFromEvent(event));
   const result = await setFavorite(relativePath, Boolean(favorited), getPortableRoot());
+  notifyFsChanged(relativePath);
+  return result;
+});
+
+ipcMain.handle('folderColors:getMap', async (event) => {
+  const auth = getAccessAuthFromEvent(event);
+  const perms = await getEffectiveAccessPermissions(auth, getPortableRoot());
+  if (!perms.view && !perms.write) return {};
+  return getFolderColorsMap(getPortableRoot());
+});
+
+ipcMain.handle('folderColors:set', async (event, { path: relativePath, color } = {}) => {
+  const auth = getAccessAuthFromEvent(event);
+  const shareToken = getShareTokenFromEvent(event);
+  assertHomeSystemPathMutable(relativePath, 'mutate');
+  await assertCanEditFile(relativePath, auth, shareToken);
+  const result = await setFolderColor(relativePath, color, getPortableRoot());
   notifyFsChanged(relativePath);
   return result;
 });

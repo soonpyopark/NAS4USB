@@ -17,6 +17,7 @@ import { useAppConfirm } from '../../hooks/useAppConfirm.jsx';
 import { useShareLinks } from '../../hooks/useShareLinks.js';
 import { useFileAccess } from '../../hooks/useFileAccess.js';
 import { useFavorites } from '../../hooks/useFavorites.js';
+import { useFolderColors } from '../../hooks/useFolderColors.js';
 import { useTrash } from '../../hooks/useTrash.js';
 import { useFileDropZone } from '../../hooks/useFileDropZone.js';
 import { useAdminAuthContext } from '../../context/AdminAuthContext.jsx';
@@ -113,6 +114,7 @@ export default function Sidebar({
     setFavorite,
     isFavorite,
   } = useFavorites();
+  const { folderColorMap, refreshFolderColorMap, setFolderColor } = useFolderColors();
   const { isAdminLoggedIn, adminId } = useAdminAuthContext();
   const { openLogin } = useLoginDialog();
   const { effectivePermissions } = useGuestPermissions();
@@ -154,6 +156,7 @@ export default function Sidebar({
     await refreshShareMap();
     await refreshAccessMap();
     await refreshFavoritesMap();
+    await refreshFolderColorMap();
     await refreshTrash();
   };
 
@@ -636,6 +639,15 @@ export default function Sidebar({
     }
   };
 
+  const handleSetFolderColor = async (entry, color) => {
+    if (!entry?.isDirectory) return;
+    try {
+      await setFolderColor(entry.relativePath, color);
+    } catch (err) {
+      nativeAlert(err instanceof Error ? err.message : '폴더 색을 바꾸지 못했습니다.');
+    }
+  };
+
   const handleShareLinkRevoke = async () => {
     if (!shareLinkDialog?.entry) return;
     await revokeShareLinkForEntry({ entry: shareLinkDialog.entry, refreshShareMap });
@@ -732,6 +744,8 @@ export default function Sidebar({
         ),
         onToggleFavorite: (favorited) => handleToggleFavorite(contextTarget, favorited),
         isFavorite: Boolean(contextTarget && isFavorite(contextTarget.relativePath)),
+        onSetFolderColor: (color) => handleSetFolderColor(contextTarget, color),
+        folderColor: contextTarget ? folderColorMap[contextTarget.relativePath] || '' : '',
         canEditOpen: contextTarget
           ? canOpenFileForEdit(
               contextTarget.relativePath,
@@ -816,6 +830,7 @@ export default function Sidebar({
           onNavigate={onNavigate}
           onOpenFile={handleOpenFileFromTree}
           onContextMenu={openContextMenu}
+          folderColorMap={folderColorMap}
         />
       ) : (
         <div className="min-h-0 flex-1 overflow-auto">
@@ -833,6 +848,7 @@ export default function Sidebar({
             onBackgroundContextMenu={(event, targetPath = currentPath) =>
               openContextMenu(event, null, targetPath)
             }
+            folderColorMap={folderColorMap}
           />
         </div>
       )}
@@ -991,6 +1007,14 @@ export default function Sidebar({
           onChangeShareView={handlePropertiesShareViewChange}
           onChangeShareEdit={handlePropertiesShareEditChange}
           onChangeFavorite={handlePropertiesFavoriteChange}
+          folderColor={folderColorMap[propertiesEntry.relativePath] || ''}
+          canChangeFolderColor={canWriteAtPath(
+            propertiesEntry.relativePath,
+            adminId,
+            isAdminLoggedIn,
+            globalWrite,
+          )}
+          onChangeFolderColor={(color) => handleSetFolderColor(propertiesEntry, color)}
           onClose={() => {
             setPropertiesEntry(null);
             setPropertiesStat(null);

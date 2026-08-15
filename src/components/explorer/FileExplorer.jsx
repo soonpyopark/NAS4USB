@@ -15,6 +15,7 @@ import { useFileSystem } from '../../hooks/useFileSystem.js';
 import { useShareLinks } from '../../hooks/useShareLinks.js';
 import { useFileAccess } from '../../hooks/useFileAccess.js';
 import { useFavorites } from '../../hooks/useFavorites.js';
+import { useFolderColors } from '../../hooks/useFolderColors.js';
 import {
   openShareLinkForEntry,
   revokeShareLinkForEntry,
@@ -35,6 +36,7 @@ import {
   resolveUniqueName,
   sortEntries,
 } from '../../lib/fsPaths.js';
+import { readFolderSort, writeFolderSort } from '../../lib/folderSortPrefs.js';
 import { resolveFileEntryStatus } from '../../lib/fileEntryStatus.js';
 import { downloadFileEntries } from '../../lib/downloadEntries.js';
 import { moveEntries } from '../../lib/moveEntries.js';
@@ -123,6 +125,7 @@ export default function FileExplorer({
   const { shareMap, refreshShareMap } = useShareLinks();
   const { accessMap, refreshAccessMap, setFileAccess } = useFileAccess();
   const { favoritesMap, refreshFavoritesMap, setFavorite, isFavorite } = useFavorites();
+  const { folderColorMap, refreshFolderColorMap, setFolderColor } = useFolderColors();
   const { isAdminLoggedIn, adminId } = useAdminAuthContext();
   const { openLogin } = useLoginDialog();
   const { effectivePermissions } = useGuestPermissions();
@@ -142,11 +145,10 @@ export default function FileExplorer({
   const { refresh: refreshTrash } = useTrash();
   const { confirm: appConfirm, alert: appAlert, dialog: confirmDialog } = useAppConfirm();
 
-  const [viewMode, setViewMode] = useState('list');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchContents, setSearchContents] = useState(false);
-  const [sortField, setSortField] = useState('name');
-  const [sortDirection, setSortDirection] = useState('asc');
+  const [sortField, setSortField] = useState(() => readFolderSort(currentPath).field);
+  const [sortDirection, setSortDirection] = useState(() => readFolderSort(currentPath).direction);
   const [contextMenu, setContextMenu] = useState(null);
   const [propertiesEntry, setPropertiesEntry] = useState(null);
   const [propertiesStat, setPropertiesStat] = useState(null);
@@ -194,6 +196,35 @@ export default function FileExplorer({
     sortDirection,
   ]);
 
+  const folderCounts = useMemo(() => {
+    let folders = 0;
+    let files = 0;
+    for (const entry of entries) {
+      if (entry.isDirectory) folders += 1;
+      else files += 1;
+    }
+    return { folders, files, total: folders + files };
+  }, [entries]);
+
+  useEffect(() => {
+    const saved = readFolderSort(currentPath);
+    setSortField(saved.field);
+    setSortDirection(saved.direction);
+  }, [currentPath]);
+
+  const handleSortFieldChange = (field) => {
+    setSortField(field);
+    writeFolderSort(currentPath, field, sortDirection);
+  };
+
+  const handleToggleSortDirection = () => {
+    setSortDirection((prev) => {
+      const next = prev === 'asc' ? 'desc' : 'asc';
+      writeFolderSort(currentPath, sortField, next);
+      return next;
+    });
+  };
+
   const propertiesEntryStatus = useMemo(() => {
     if (!propertiesEntry || propertiesEntry.isDirectory) return null;
     return resolveFileEntryStatus(propertiesEntry.relativePath, accessMap, shareMap, favoritesMap);
@@ -208,6 +239,7 @@ export default function FileExplorer({
     await refreshShareMap();
     await refreshAccessMap();
     await refreshFavoritesMap();
+    await refreshFolderColorMap();
     await refreshTrash();
   };
 
@@ -911,6 +943,15 @@ export default function FileExplorer({
     }
   };
 
+  const handleSetFolderColor = async (entry, color) => {
+    if (!entry?.isDirectory) return;
+    try {
+      await setFolderColor(entry.relativePath, color);
+    } catch (err) {
+      nativeAlert(err instanceof Error ? err.message : '폴더 색을 바꾸지 못했습니다.');
+    }
+  };
+
   const handleSelect = (entry, event) => {
     if (event.shiftKey && lastSelectedPath) {
       selectRange(lastSelectedPath, entry.relativePath);
@@ -984,6 +1025,8 @@ export default function FileExplorer({
             /\.md$/i.test(contextTargets[0].relativePath)),
         onToggleFavorite: (favorited) => handleToggleFavorite(contextTarget, favorited),
         isFavorite: Boolean(contextTarget && isFavorite(contextTarget.relativePath)),
+        onSetFolderColor: (color) => handleSetFolderColor(contextTarget, color),
+        folderColor: contextTarget ? folderColorMap[contextTarget.relativePath] || '' : '',
         canEditOpen: contextTarget
           ? canOpenFileForEdit(
               contextTarget.relativePath,
@@ -1148,14 +1191,23 @@ export default function FileExplorer({
           <div className="min-w-0 flex-1">
             <Breadcrumb currentPath={currentPath} onNavigate={onNavigate} />
           </div>
+          {!loading && !showViewAccessDenied ? (
+            <p
+              className="ml-auto shrink-0 tabular-nums text-[10pt] text-nas-muted"
+              title="이 폴더 바로 아래의 폴더·파일 수"
+            >
+              {`폴더 ${folderCounts.folders.toLocaleString('ko-KR')}개 · 파일 ${folderCounts.files.toLocaleString('ko-KR')}개`}
+              {searchQuery.trim() && visibleEntries.length !== folderCounts.total
+                ? ` · 표시 ${visibleEntries.length.toLocaleString('ko-KR')}`
+                : ''}
+            </p>
+          ) : null}
         </div>
       <FileExplorerToolbar
         sortField={sortField}
         sortDirection={sortDirection}
-        onSortFieldChange={setSortField}
-        onToggleSortDirection={() => setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
+        onSortFieldChange={handleSortFieldChange}
+        onToggleSortDirection={handleToggleSortDirection}
         hasSelection={selectedEntries.length > 0}
         canRename={
           selectedEntries.length === 1 &&
@@ -1189,15 +1241,6 @@ export default function FileExplorer({
         onClearSelection={clearSelection}
         onProperties={() => handleShowProperties()}
         canShowProperties={selectedEntries.length === 1}
-        onSetPassword={() => handleSetPassword()}
-        passwordActionLabel={
-          selectedEntries.length > 0 && selectedEntries.every(canRemoveFilePassword)
-            ? '비밀번호 해제'
-            : '비밀번호 설정'
-        }
-        canSetPassword={selectedEntries.some(
-          (entry) => canSetFilePassword(entry) || canRemoveFilePassword(entry),
-        )}
         onImportOnenote={handleImportOnenoteClick}
         importingOnenote={importingOnenote}
         onClearFolderBackups={
@@ -1249,11 +1292,11 @@ export default function FileExplorer({
         <FileList
           entries={visibleEntries}
           loading={loading}
-          viewMode={viewMode}
           selectedSet={selectedSet}
           accessMap={accessMap}
           shareMap={shareMap}
           favoritesMap={favoritesMap}
+          folderColorMap={folderColorMap}
           onOpen={handleOpen}
           onSelect={handleSelect}
           onToggleCheckbox={handleToggleCheckbox}
@@ -1287,6 +1330,14 @@ export default function FileExplorer({
           onChangeShareView={handlePropertiesShareViewChange}
           onChangeShareEdit={handlePropertiesShareEditChange}
           onChangeFavorite={handlePropertiesFavoriteChange}
+          folderColor={folderColorMap[propertiesEntry.relativePath] || ''}
+          canChangeFolderColor={canWriteAtPath(
+            propertiesEntry.relativePath,
+            adminId,
+            isAdminLoggedIn,
+            globalWrite,
+          )}
+          onChangeFolderColor={(color) => handleSetFolderColor(propertiesEntry, color)}
           onClose={() => {
             setPropertiesEntry(null);
             setPropertiesStat(null);

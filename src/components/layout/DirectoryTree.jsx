@@ -1,6 +1,6 @@
 import { EXTERNAL_FOLDER, SHARED_FOLDER } from '../../../shared/constants.js';
 import { HOMES_FOLDER } from '../../../shared/memberHomes.js';
-import FileIcon, { folderIconTintClass } from '../explorer/FileIcon.jsx';
+import FileIcon from '../explorer/FileIcon.jsx';
 
 function isRootExpandableFolder(relativePath) {
   return (
@@ -37,6 +37,7 @@ function TreeNode({
   onNavigate,
   onOpenFile,
   onContextMenu,
+  folderColorMap = {},
 }) {
   const isFolder = entry.isDirectory;
   const isExpanded = expandedPaths.has(entry.relativePath);
@@ -89,7 +90,8 @@ function TreeNode({
         )}
         <FileIcon
           entry={entry}
-          className={`h-4 w-4 shrink-0 ${isActive ? '!text-white' : folderIconTintClass(entry)}`}
+          folderColor={folderColorMap[entry.relativePath]}
+          className={`h-4 w-4 shrink-0 ${isActive ? '!text-white' : ''}`}
         />
         <span className={`truncate ${isTopLevel ? 'font-bold' : ''}`}>{entry.name}</span>
       </button>
@@ -109,6 +111,7 @@ function TreeNode({
               onNavigate={onNavigate}
               onOpenFile={onOpenFile}
               onContextMenu={onContextMenu}
+              folderColorMap={folderColorMap}
             />
           ))}
         </div>
@@ -129,6 +132,7 @@ export default function DirectoryTree({
   onContextMenu,
   onBackgroundContextMenu,
   viewAccessDenied = false,
+  folderColorMap = {},
 }) {
   return (
     <div
@@ -157,9 +161,10 @@ export default function DirectoryTree({
               onNavigate={onNavigate}
               onOpenFile={onOpenFile}
               onContextMenu={onContextMenu}
+              folderColorMap={folderColorMap}
             />
             {index < rootEntries.length - 1 ? (
-              <div className="mx-3 my-1.5 h-px bg-slate-600" role="separator" />
+              <div className="mx-3 my-1.5 border-t border-dashed border-slate-500" role="separator" />
             ) : null}
           </div>
         ))

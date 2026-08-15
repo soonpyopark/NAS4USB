@@ -1,4 +1,5 @@
 import { useTiptapEditorTick } from '../../../hooks/useTiptapEditorTick.js';
+import { useTiptapFormatPainter } from '../../../hooks/useTiptapFormatPainter.js';
 import TipTapTableInsertPicker from './TipTapTableInsertPicker.jsx';
 import TipTapTableControls from './TipTapTableControls.jsx';
 import TipTapColorSwatchPicker from './TipTapColorSwatchPicker.jsx';
@@ -14,6 +15,7 @@ import {
   IconAlignRight,
   IconBold,
   IconClearFormat,
+  IconFormatPainter,
   IconCode,
   IconDetails,
   IconHorizontalRule,
@@ -105,10 +107,10 @@ export default function TipTapToolbar({
   onZoomReset,
 }) {
   useTiptapEditorTick(editor);
+  const disabled = !editor || readOnly || !editor.isEditable;
+  const formatPainter = useTiptapFormatPainter(editor, disabled);
 
   if (!editor) return null;
-
-  const disabled = readOnly || !editor.isEditable;
   const chars = editor.storage.characterCount?.characters?.() ?? 0;
   const words = editor.storage.characterCount?.words?.() ?? 0;
   const textColor = editor.getAttributes('textStyle').color || '';
@@ -509,6 +511,22 @@ export default function TipTapToolbar({
             <IconMarkdown />
           </ToolbarButton>
           <ToolbarButton
+            title={
+              formatPainter.mode === 'locked'
+                ? '서식 연속 적용 중 — Esc 또는 다시 클릭하면 종료'
+                : formatPainter.mode === 'once'
+                  ? '서식 복사 중 — 적용할 텍스트를 선택하세요 (Esc 취소)'
+                  : '서식 복사 — 클릭 후 칠하기, 더블클릭은 연속 (Ctrl+Shift+C / V)'
+            }
+            active={Boolean(formatPainter.mode)}
+            extraClass={formatPainter.mode === 'locked' ? 'is-format-locked' : ''}
+            disabled={disabled}
+            onClick={formatPainter.onButtonClick}
+            onDoubleClick={formatPainter.onButtonDoubleClick}
+          >
+            <IconFormatPainter />
+          </ToolbarButton>
+          <ToolbarButton
             title="서식 지우기"
             disabled={disabled}
             onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}
@@ -590,16 +608,25 @@ function ToolbarGroup({ children }) {
   return <div className="tiptap-toolbar__group">{children}</div>;
 }
 
-function ToolbarButton({ children, active = false, disabled = false, title, onClick }) {
+function ToolbarButton({
+  children,
+  active = false,
+  disabled = false,
+  title,
+  extraClass = '',
+  onClick,
+  onDoubleClick,
+}) {
   return (
     <button
       type="button"
-      className={`tiptap-toolbar__btn${active ? ' is-active' : ''}`}
+      className={`tiptap-toolbar__btn${active ? ' is-active' : ''}${extraClass ? ` ${extraClass}` : ''}`}
       disabled={disabled}
       title={title}
       aria-label={title}
       aria-pressed={active}
       onClick={onClick}
+      onDoubleClick={onDoubleClick}
     >
       {children}
     </button>

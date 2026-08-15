@@ -1,3 +1,4 @@
+import { folderColorClassName, isCustomFolderColor, normalizeFolderColorValue } from '../../../shared/folderColors.js';
 import { folderDisplayDepth } from '../../lib/memberHomes.js';
 import { innerExtensionOf, isSecFileName } from '../../lib/filePassword/secPaths.js';
 import {
@@ -31,9 +32,9 @@ const ICON_COLORS = {
   default: 'text-slate-400',
 };
 
-function FolderSvg({ className }) {
+function FolderSvg({ className, style }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <svg className={className} style={style} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
     </svg>
   );
@@ -106,18 +107,41 @@ const FOLDER_LEVEL_CYCLE = [
 
 /**
  * Workspace folder tint cycles: 빨강 → 호박 → 연한 파랑 → 멜론 → 레몬 → 자주.
+ * A stored color key or custom hex overrides the depth cycle.
+ *
  * @param {{ isDirectory?: boolean, relativePath?: string } | null | undefined} entry
+ * @param {string} [colorKey]
  */
-export function folderIconTintClass(entry) {
-  if (!entry?.isDirectory) return '';
+export function resolveFolderIconTint(entry, colorKey) {
+  if (!entry?.isDirectory) return { className: '', style: undefined };
+  const value = normalizeFolderColorValue(colorKey);
+  if (isCustomFolderColor(value)) {
+    return { className: '', style: { color: value } };
+  }
+  const preset = folderColorClassName(value);
+  if (preset) return { className: preset, style: undefined };
   const depth = Math.max(1, folderDisplayDepth(entry.relativePath));
-  return FOLDER_LEVEL_CYCLE[(depth - 1) % FOLDER_LEVEL_CYCLE.length];
+  return { className: FOLDER_LEVEL_CYCLE[(depth - 1) % FOLDER_LEVEL_CYCLE.length], style: undefined };
 }
 
-export default function FileIcon({ entry, className = 'h-5 w-5' }) {
+/**
+ * @param {{ isDirectory?: boolean, relativePath?: string } | null | undefined} entry
+ * @param {string} [colorKey]
+ */
+export function folderIconTintClass(entry, colorKey) {
+  return resolveFolderIconTint(entry, colorKey).className;
+}
+
+export default function FileIcon({ entry, className = 'h-5 w-5', folderColor }) {
   // Put caller `className` last so size/color overrides (e.g. root system folders) win.
   if (entry.isDirectory) {
-    return <FolderSvg className={`${ICON_COLORS.folder} ${className}`} />;
+    const tint = resolveFolderIconTint(entry, folderColor);
+    return (
+      <FolderSvg
+        className={`${ICON_COLORS.folder} ${tint.className} ${className}`}
+        style={tint.style}
+      />
+    );
   }
 
   const extension = isSecFileName(entry.name || entry.relativePath)

@@ -1,5 +1,6 @@
 import { AppModal, AppModalActions, AppModalButton } from '../common/AppModal.jsx';
 import { entryExtensionOf, isSecFileName } from '../../lib/filePassword/secPaths.js';
+import FolderColorSwatches from './FolderColorSwatches.jsx';
 
 function formatSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;
@@ -37,6 +38,9 @@ function formatDate(iso) {
  *   onChangeShareView?: (checked: boolean) => void,
  *   onChangeShareEdit?: (checked: boolean) => void,
  *   onChangeFavorite?: (checked: boolean) => void,
+ *   folderColor?: string,
+ *   canChangeFolderColor?: boolean,
+ *   onChangeFolderColor?: (color: string) => void,
  *   onClose: () => void,
  * }} props
  */
@@ -52,6 +56,9 @@ export default function FilePropertiesDialog({
   onChangeShareView,
   onChangeShareEdit,
   onChangeFavorite,
+  folderColor = '',
+  canChangeFolderColor = false,
+  onChangeFolderColor,
   onClose,
 }) {
   const canEditAccessOptions = isAdminLoggedIn;
@@ -175,6 +182,19 @@ export default function FilePropertiesDialog({
                   ? '즐겨찾기한 폴더는 왼쪽 아래 폴더 즐겨찾기에서 바로 열 수 있습니다.'
                   : '즐겨찾기는 총괄관리자만 변경할 수 있습니다.'}
               </p>
+              <div>
+                <div className="mb-2 text-sm text-slate-700">폴더 색</div>
+                <FolderColorSwatches
+                  value={folderColor}
+                  disabled={accessSaving || !canChangeFolderColor}
+                  onChange={(color) => onChangeFolderColor?.(color)}
+                />
+                <p className="modal-access-hint folder-color-hint">
+                  {canChangeFolderColor
+                    ? '맨 오른쪽 무지개 칸에서 원하는 색을 고를 수 있습니다. 지정하지 않으면 폴더 깊이에 따라 색이 정해집니다.'
+                    : '폴더 색은 쓰기 권한이 있을 때 변경할 수 있습니다.'}
+                </p>
+              </div>
             </div>
           )}
 

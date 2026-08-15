@@ -95,6 +95,11 @@ contextBridge.exposeInMainWorld('nas4usb', {
     set: ({ path, favorited }) => ipcRenderer.invoke('favorites:set', { path, favorited }),
   },
 
+  folderColors: {
+    getMap: () => ipcRenderer.invoke('folderColors:getMap'),
+    set: ({ path, color }) => ipcRenderer.invoke('folderColors:set', { path, color }),
+  },
+
   trash: {
     getMap: () => ipcRenderer.invoke('trash:getMap'),
     move: (relativePath) => ipcRenderer.invoke('trash:move', { path: relativePath }),

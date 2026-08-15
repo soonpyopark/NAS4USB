@@ -783,13 +783,13 @@ function startLiveTranscode(ffmpegPath, sourceAbsolute, outDir, analysis, option
   const startSeconds = Number(options.startSeconds) > 0.5 ? Number(options.startSeconds) : 0;
   const resume = Boolean(options.resume) && !options.replace;
   const existing = liveJobs.get(outDir);
-  if (
-    existing &&
-    !existing.done &&
-    !options.replace &&
-    Math.abs((existing.startSeconds || 0) - startSeconds) < 1
-  ) {
-    return existing;
+  if (existing && !existing.done) {
+    const sameStart = Math.abs((existing.startSeconds || 0) - startSeconds) < 1;
+    // HLS playlist/segment polls must not kill a running job. Only an explicit
+    // replace (user seek / force) may switch the transcode window.
+    if (sameStart || !options.replace) {
+      return existing;
+    }
   }
 
   /** @type {LiveTranscodeJob} */
@@ -913,14 +913,15 @@ export async function getVideoPreviewStatus(relativePath) {
  * returns as soon as the first bytes can be streamed.
  * @param {string} relativePath
  * @param {string} [portableRoot]
- * @param {{ force?: boolean, waitForFull?: boolean }} [options]
+ * @param {{ force?: boolean, waitForFull?: boolean, replace?: boolean, startSeconds?: number, waitMs?: number }} [options]
  */
 export async function ensureVideoPreview(relativePath, portableRoot, options = {}) {
   const force = Boolean(options.force);
   const waitForFull = Boolean(options.waitForFull) || force;
   const startSeconds = Number(options.startSeconds) > 0.5 ? Number(options.startSeconds) : 0;
+  const replace = force || options.replace === true;
   const sourceAbsolute = resolvePortablePath(relativePath);
-  const lockKey = `${sourceAbsolute}|${force ? 'force' : 'auto'}|${waitForFull ? 'full' : 'live'}|ss${Math.floor(startSeconds)}`;
+  const lockKey = `${sourceAbsolute}|${force ? 'force' : 'auto'}|${waitForFull ? 'full' : 'live'}|ss${Math.floor(startSeconds)}|${replace ? 'replace' : 'keep'}`;
   const pending = inflightPreviews.get(lockKey);
   if (pending) return pending;
 
@@ -928,6 +929,7 @@ export async function ensureVideoPreview(relativePath, portableRoot, options = {
     force,
     waitForFull,
     startSeconds,
+    replace,
     waitMs: options.waitMs,
   })
     .then(async (result) => {
@@ -947,13 +949,14 @@ export async function ensureVideoPreview(relativePath, portableRoot, options = {
 /**
  * @param {string} relativePath
  * @param {string} [portableRoot]
- * @param {{ force?: boolean, waitForFull?: boolean }} options
+ * @param {{ force?: boolean, waitForFull?: boolean, replace?: boolean, startSeconds?: number, waitMs?: number }} options
  */
 async function ensureVideoPreviewUnlocked(relativePath, portableRoot, options) {
   const ffmpegPath = await getConfiguredFfmpegPath(portableRoot);
   const sourceAbsolute = resolvePortablePath(relativePath);
   const stat = await fs.stat(sourceAbsolute);
   const startSeconds = Number(options.startSeconds) > 0.5 ? Number(options.startSeconds) : 0;
+  const replace = Boolean(options.force) || options.replace === true;
   const outDir = cacheDirPath(relativePath, { mtimeMs: stat.mtimeMs, size: stat.size });
 
   if (!ffmpegPath) {
@@ -966,7 +969,7 @@ async function ensureVideoPreviewUnlocked(relativePath, portableRoot, options) {
   const playable = complete || (await hasPlayableSegment(outDir));
   const meta = await readPreviewMeta(outDir);
 
-  if (!options.force && startSeconds < 0.5 && (playable || growing)) {
+  if (!replace && startSeconds < 0.5 && (playable || growing)) {
     let availableSeconds = 0;
     try {
       availableSeconds = playlistAvailableSeconds(await readPlaylistText(outDir));
@@ -995,7 +998,7 @@ async function ensureVideoPreviewUnlocked(relativePath, portableRoot, options) {
   const job = startLiveTranscode(ffmpegPath, sourceAbsolute, outDir, defaultRemuxAnalysis(), {
     startSeconds,
     durationSeconds: meta.durationSeconds,
-    replace: startSeconds > 0.5 || Boolean(options.force),
+    replace,
   });
 
   void probeMedia(sourceAbsolute, ffmpegPath)

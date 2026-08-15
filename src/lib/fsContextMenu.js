@@ -46,6 +46,8 @@ function openFileMenuLabel(entry) {
  *   canExportHtml?: boolean,
  *   onToggleFavorite?: (favorited: boolean) => void,
  *   isFavorite?: boolean,
+ *   onSetFolderColor?: (color: string) => void,
+ *   folderColor?: string,
  *   canEditOpen?: boolean,
  *   isAdminLoggedIn?: boolean,
  *   canWrite?: boolean,
@@ -78,6 +80,8 @@ export function buildEntryContextMenuItems({
   canExportHtml = false,
   onToggleFavorite,
   isFavorite = false,
+  onSetFolderColor,
+  folderColor = '',
   canEditOpen = true,
   isAdminLoggedIn = true,
   canWrite = true,
@@ -232,6 +236,18 @@ export function buildEntryContextMenuItems({
             label: isFavorite ? '즐겨찾기 해제' : '즐겨찾기 추가',
             disabled: targetCount !== 1 || externalMountRoot,
             onClick: () => onToggleFavorite(!isFavorite),
+          },
+        ]
+      : []),
+    ...(entry?.isDirectory && onSetFolderColor
+      ? [
+          {
+            id: 'folder-color',
+            type: 'swatches',
+            label: '폴더 색',
+            value: folderColor,
+            disabled: targetCount !== 1 || externalMountRoot || externalContainer,
+            onSelect: (color) => onSetFolderColor(color),
           },
         ]
       : []),

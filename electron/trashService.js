@@ -28,6 +28,7 @@ import * as fsService from './fsService.js';
 import { syncSharePathDelete, syncSharePathMoveTree } from './shareLinkService.js';
 import { syncFileAccessDelete, syncFileAccessMoveTree } from './fileAccessService.js';
 import { syncFavoritesDelete, syncFavoritesMoveTree } from './favoritesService.js';
+import { syncFolderColorsDelete, syncFolderColorsMoveTree } from './folderColorsService.js';
 import { syncFileHistoryDelete, syncFileHistoryMoveTree } from './fileHistoryService.js';
 
 export const EXTERNAL_TRASH_UNSUPPORTED_MESSAGE =
@@ -120,6 +121,7 @@ async function syncMetadataMoveTree(fromRelative, toRelative, portableRoot) {
   await syncSharePathMoveTree(fromRelative, toRelative, portableRoot);
   await syncFileAccessMoveTree(fromRelative, toRelative, portableRoot);
   await syncFavoritesMoveTree(fromRelative, toRelative, portableRoot);
+  await syncFolderColorsMoveTree(fromRelative, toRelative, portableRoot);
   await syncFortuneSidecarMoveTree(fromRelative, toRelative);
   await syncPdfViewerSidecarMoveTree(fromRelative, toRelative);
   await syncFileHistoryMoveTree(fromRelative, toRelative, getDataRoot(), portableRoot);
@@ -329,6 +331,7 @@ export async function deletePermanent(relativePath, portableRoot = getPortableRo
   await syncSharePathDelete(normalized, portableRoot);
   await syncFileAccessDelete(normalized, portableRoot);
   await syncFavoritesDelete(normalized, portableRoot);
+  await syncFolderColorsDelete(normalized, portableRoot);
   await syncFortuneSidecarDelete(normalized);
   await syncPdfViewerSidecarDelete(normalized);
   await syncFileHistoryDelete(normalized, portableRoot);
