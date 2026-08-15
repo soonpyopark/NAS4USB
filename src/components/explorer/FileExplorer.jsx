@@ -40,6 +40,11 @@ import {
   sortEntries,
 } from '../../lib/fsPaths.js';
 import {
+  DEFAULT_CUSTOM_LIST_SORT,
+  DEFAULT_NAME_LIST_SORT,
+  nextExplorerListSort,
+} from '../../lib/explorerListSort.js';
+import {
   canMoveFolderOrder,
   folderOrderKindByName,
   materializeFolderOrder,
@@ -195,17 +200,22 @@ export default function FileExplorer({
     () => folderOrderMap[orderParentPath] ?? [],
     [folderOrderMap, orderParentPath],
   );
+  const [listSort, setListSort] = useState(DEFAULT_CUSTOM_LIST_SORT);
+  const allowCustomSort = !isInTrashView && !isInFavoritesView;
   const canReorder =
     canChangeFolderOrder(currentPath, { isSuperAdmin, loginId: adminId }) &&
-    !isInTrashView &&
-    !isInFavoritesView &&
+    allowCustomSort &&
+    listSort.field === 'custom' &&
     !searchQuery.trim();
-  const listSortField = isInTrashView || isInFavoritesView ? 'name' : 'custom';
+
+  useEffect(() => {
+    setListSort(allowCustomSort ? DEFAULT_CUSTOM_LIST_SORT : DEFAULT_NAME_LIST_SORT);
+  }, [allowCustomSort, currentPath]);
 
   const visibleEntries = useMemo(() => {
     const byName = filterEntries(entries, searchQuery);
     if (!searchContents || contentSearch.matchedPaths.size === 0) {
-      return sortEntries(byName, listSortField, 'asc', currentOrderNames);
+      return sortEntries(byName, listSort.field, listSort.direction, currentOrderNames);
     }
 
     const seen = new Set(byName.map((entry) => entry.relativePath));
@@ -216,15 +226,19 @@ export default function FileExplorer({
           !seen.has(entry.relativePath) && contentSearch.matchedPaths.has(entry.relativePath),
       ),
     ];
-    return sortEntries(merged, listSortField, 'asc', currentOrderNames);
+    return sortEntries(merged, listSort.field, listSort.direction, currentOrderNames);
   }, [
     entries,
     searchQuery,
     searchContents,
     contentSearch.matchedPaths,
-    listSortField,
+    listSort,
     currentOrderNames,
   ]);
+
+  const handleListSort = (column) => {
+    setListSort((current) => nextExplorerListSort(current, column, allowCustomSort));
+  };
 
   const folderCounts = useMemo(() => {
     let folders = 0;
@@ -1369,21 +1383,6 @@ export default function FileExplorer({
           selectedEntries.length === 0 ||
           !selectedEntries.every((entry) => isExternalContentPath(entry.relativePath))
         }
-        showReorderActions={canReorder}
-        canMoveOrderUp={
-          canReorder &&
-          selectedEntries.length === 1 &&
-          !isFixedFolderOrderPath(selectedEntries[0].relativePath) &&
-          canMoveFolderOrder(entries, currentOrderNames, selectedEntries[0].name, -1)
-        }
-        canMoveOrderDown={
-          canReorder &&
-          selectedEntries.length === 1 &&
-          !isFixedFolderOrderPath(selectedEntries[0].relativePath) &&
-          canMoveFolderOrder(entries, currentOrderNames, selectedEntries[0].name, 1)
-        }
-        onMoveOrderUp={() => handleMoveOrderFor(selectedEntries[0], -1)}
-        onMoveOrderDown={() => handleMoveOrderFor(selectedEntries[0], 1)}
       />
 
       {isInTrashView && (
@@ -1440,6 +1439,23 @@ export default function FileExplorer({
           onPropertiesClick={handleShowProperties}
           canReorder={canReorder}
           onReorder={handlePlaceOrder}
+          sortField={listSort.field}
+          sortDirection={listSort.direction}
+          onSort={handleListSort}
+          canMoveOrderUp={
+            canReorder &&
+            selectedEntries.length === 1 &&
+            !isFixedFolderOrderPath(selectedEntries[0].relativePath) &&
+            canMoveFolderOrder(entries, currentOrderNames, selectedEntries[0].name, -1)
+          }
+          canMoveOrderDown={
+            canReorder &&
+            selectedEntries.length === 1 &&
+            !isFixedFolderOrderPath(selectedEntries[0].relativePath) &&
+            canMoveFolderOrder(entries, currentOrderNames, selectedEntries[0].name, 1)
+          }
+          onMoveOrderUp={() => handleMoveOrderFor(selectedEntries[0], -1)}
+          onMoveOrderDown={() => handleMoveOrderFor(selectedEntries[0], 1)}
         />
       )}
         <FilePreviewPane

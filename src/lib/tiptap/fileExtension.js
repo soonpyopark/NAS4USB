@@ -41,7 +41,9 @@ export function createTiptapFileExtension(options = {}) {
           getAttrs: (element) => {
             if (!(element instanceof HTMLElement)) return false;
             return {
-              src: element.getAttribute('href'),
+              src:
+                element.getAttribute('data-asset-src') ||
+                element.getAttribute('href'),
               name: element.getAttribute('data-name') || element.textContent || null,
               mime: element.getAttribute('data-mime'),
               size: element.getAttribute('data-size'),
@@ -58,6 +60,7 @@ export function createTiptapFileExtension(options = {}) {
         mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, {
           'data-type': 'file-attachment',
           href: node.attrs.src,
+          'data-asset-src': node.attrs.src || undefined,
           'data-name': name,
           'data-mime': node.attrs.mime || undefined,
           'data-size': node.attrs.size || undefined,

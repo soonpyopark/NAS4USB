@@ -1,4 +1,5 @@
 import { DOMParser as SchemaDOMParser } from '@tiptap/pm/model';
+import { rematerializePastedTiptapAssets } from './copyPasteAssets.js';
 import { materializePastedImages, promoteVmlImages } from './pasteImages.js';
 
 /**
@@ -408,10 +409,14 @@ export function normalizeOfficeClipboardHtml(html) {
  * @param {{
  *   files?: File[],
  *   uploadFile?: (file: File) => Promise<string>,
+ *   destTiptapPath?: string,
  * }} [options]
  */
 export async function insertHtmlIntoView(view, html, options = {}) {
-  let cleaned = normalizeOfficeClipboardHtml(html);
+  const isProseMirror = /data-pm-slice/i.test(String(html || ''));
+  let cleaned = isProseMirror
+    ? extractClipboardHtmlFragment(html) || String(html || '')
+    : normalizeOfficeClipboardHtml(html);
   if (!cleaned) return false;
 
   if (options.uploadFile) {
@@ -419,6 +424,12 @@ export async function insertHtmlIntoView(view, html, options = {}) {
       files: options.files || [],
       uploadFile: options.uploadFile,
     });
+    if (options.destTiptapPath) {
+      cleaned = await rematerializePastedTiptapAssets(cleaned, {
+        destTiptapPath: options.destTiptapPath,
+        uploadFile: options.uploadFile,
+      });
+    }
   }
   if (!cleaned) return false;
 

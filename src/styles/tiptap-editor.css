@@ -34,7 +34,8 @@
   margin: 0 auto;
   padding: 18mm 16mm 40mm;
   outline: none;
-  font-size: 1rem;
+  font-family: 'Malgun Gothic', '맑은 고딕', 'Apple SD Gothic Neo', sans-serif;
+  font-size: 12pt;
   line-height: 1.6;
   color: #1a1a1a;
 }
@@ -447,6 +448,11 @@
   color: #1d4ed8;
 }
 
+.tiptap-editor-shell .tiptap-image-toolbar__delete:hover {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
 @media print {
   .tiptap-editor-shell .tiptap-image-handle,
   .tiptap-editor-shell .tiptap-image-size-badge,
@@ -851,6 +857,87 @@
 .tiptap-toolbar--zoom-only {
   justify-content: flex-end;
   padding-block: 6px;
+}
+
+.tiptap-html-source {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  flex-direction: column;
+  background: #0f172a;
+}
+
+.tiptap-html-source__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #1e293b;
+  background: #1e293b;
+}
+
+.tiptap-html-source__hint {
+  margin: 0;
+  flex: 1 1 16rem;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #94a3b8;
+}
+
+.tiptap-html-source__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tiptap-html-source__btn {
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid #475569;
+  border-radius: 6px;
+  background: transparent;
+  color: #e2e8f0;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tiptap-html-source__btn:hover:not(:disabled) {
+  background: #334155;
+}
+
+.tiptap-html-source__btn--primary {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
+.tiptap-html-source__btn--primary:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.tiptap-html-source__btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.tiptap-html-source__editor {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+  background: #0f172a;
+}
+
+.tiptap-html-source__editor .cm-editor {
+  height: 100%;
+}
+
+.tiptap-html-source__editor .cm-scroller {
+  overflow: auto;
 }
 
 .tiptap-search-bar {
@@ -1297,7 +1384,8 @@
   .tiptap-floating-menu,
   .tiptap-toc-panel,
   .tiptap-table-picker,
-  .tiptap-search-bar {
+  .tiptap-search-bar,
+  .tiptap-html-source {
     display: none !important;
   }
 

@@ -24,6 +24,7 @@ function clamp(value, min, max) {
  *   selected: boolean,
  *   editor: import('@tiptap/core').Editor,
  *   updateAttributes: (attrs: Record<string, unknown>) => void,
+ *   deleteNode: () => void,
  *   extension: { options: {
  *     resolveFileUrl?: (url: string) => Promise<string>,
  *     uploadFile?: (file: File) => Promise<string>,
@@ -35,6 +36,7 @@ export default function TiptapImageView({
   selected,
   editor,
   updateAttributes,
+  deleteNode,
   extension,
 }) {
   const src = node.attrs.src ?? '';
@@ -137,6 +139,15 @@ export default function TiptapImageView({
     updateAttributes({ width: null, height: null });
   }, [updateAttributes]);
 
+  const removeImage = useCallback(
+    (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      deleteNode?.();
+    },
+    [deleteNode],
+  );
+
   const openEditor = useCallback(
     (event) => {
       if (!canEditPixels) return;
@@ -230,6 +241,15 @@ export default function TiptapImageView({
               onClick={resetSize}
             >
               원본
+            </button>
+            <button
+              type="button"
+              className="tiptap-image-toolbar__delete"
+              title="이미지 삭제"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={removeImage}
+            >
+              삭제
             </button>
           </span>
         )}

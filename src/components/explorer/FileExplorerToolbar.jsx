@@ -33,11 +33,6 @@ export default function FileExplorerToolbar({
   canWrite = true,
   canEmptyTrash = true,
   showTrashDelete = true,
-  showReorderActions = false,
-  canMoveOrderUp = false,
-  canMoveOrderDown = false,
-  onMoveOrderUp,
-  onMoveOrderDown,
 }) {
   const showWriteActions = canWrite && !isInTrashView && !isInFavoritesView;
   const showTrashAdminActions = canWrite && isInTrashView;
@@ -165,29 +160,6 @@ export default function FileExplorerToolbar({
             {clearingFolderBackups ? '제거 중…' : '백업 일괄 제거'}
           </button>
         )}
-        {showReorderActions && onMoveOrderUp && onMoveOrderDown ? (
-          <>
-            <span className="mx-1 hidden h-4 w-px bg-nas-border sm:inline" />
-            <button
-              type="button"
-              className="nas-btn-ghost px-2"
-              disabled={!canMoveOrderUp}
-              onClick={onMoveOrderUp}
-              title="선택한 항목을 한 칸 위로"
-            >
-              위로
-            </button>
-            <button
-              type="button"
-              className="nas-btn-ghost px-2"
-              disabled={!canMoveOrderDown}
-              onClick={onMoveOrderDown}
-              title="선택한 항목을 한 칸 아래로"
-            >
-              아래로
-            </button>
-          </>
-        ) : null}
       </div>
     </div>
   );

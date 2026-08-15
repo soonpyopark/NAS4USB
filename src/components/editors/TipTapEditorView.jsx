@@ -15,6 +15,13 @@ import {
   pickTiptapMediaFile,
 } from '../../lib/tiptap/insertMedia.js';
 import { clipboardHasEditableHtml, insertHtmlIntoView } from '../../lib/tiptap/clipboardHtml.js';
+import {
+  annotateHtmlWithAssetPaths,
+  clipboardHasTiptapAssets,
+  rematerializeCopiedSlice,
+  rewriteCopiedSliceForClipboard,
+  sliceHasTiptapAssetUrls,
+} from '../../lib/tiptap/copyPasteAssets.js';
 import { collectClipboardImageFiles } from '../../lib/tiptap/pasteImages.js';
 import { useSpellcheckEnabled } from '../../hooks/useSpellcheckEnabled.js';
 import { cleanupUnreferencedTiptapAssets } from '../../lib/tiptap/assetCleanup.js';
@@ -25,7 +32,10 @@ import {
 import TipTapToolbar, { TipTapZoomControls } from './tiptap/TipTapToolbar.jsx';
 import TipTapSearchBar from './tiptap/TipTapSearchBar.jsx';
 import TipTapBubbleMenus from './tiptap/TipTapBubbleMenus.jsx';
+import TipTapHtmlSourcePanel from './tiptap/TipTapHtmlSourcePanel.jsx';
 import TipTapTocPanel from './tiptap/TipTapTocPanel.jsx';
+import { formatTiptapHtml } from '../../lib/tiptap/formatHtml.js';
+import { importHtmlIntoEditor } from '../../lib/tiptap/importHtml.js';
 import { IconSearch } from './tiptap/TipTapIcons.jsx';
 import { openExternalUrl } from '../../lib/openExternal.js';
 import { getFileViewerType } from '../../lib/fileViewerType.js';
@@ -85,7 +95,7 @@ export default function TipTapEditorView({
   const audioInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   const fileInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   const scrollRef = useRef(/** @type {HTMLDivElement | null} */ (null));
-  const [tocOpen, setTocOpen] = useState(false);
+  const [tocOpen, setTocOpen] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchFocusNonce, setSearchFocusNonce] = useState(0);
   const [assetPlayer, setAssetPlayer] = useState(
@@ -102,7 +112,17 @@ export default function TipTapEditorView({
   searchOpenRef.current = searchOpen;
   const [emojiOpenRequest, setEmojiOpenRequest] = useState(0);
   const [zoom, setZoom] = useState(1);
+  const [htmlMode, setHtmlMode] = useState(false);
+  const [htmlDraft, setHtmlDraft] = useState('');
+  const [htmlBaseline, setHtmlBaseline] = useState('');
+  const [htmlApplying, setHtmlApplying] = useState(false);
+  const htmlModeRef = useRef(false);
+  const htmlDraftRef = useRef('');
+  const htmlBaselineRef = useRef('');
   const spellcheckEnabled = useSpellcheckEnabled();
+  htmlModeRef.current = htmlMode;
+  htmlDraftRef.current = htmlDraft;
+  htmlBaselineRef.current = htmlBaseline;
 
   const zoomBy = useCallback((direction) => {
     setZoom((prev) => stepZoom(prev, direction));
@@ -188,23 +208,55 @@ export default function TipTapEditorView({
             });
           return true;
         },
-        handlePaste: (view, event) => {
+        transformCopied: (slice) => rewriteCopiedSliceForClipboard(slice, relativePath),
+        handlePaste: (view, event, slice) => {
           if (readOnly) return false;
           const clipboard = event.clipboardData;
           if (!clipboard) return false;
 
-          // OneNote/Word copy a screenshot file *and* HTML. Prefer the HTML so
-          // the paste stays editable, then upload images from the HTML / matching files.
-          if (clipboardHasEditableHtml(clipboard)) {
-            const html = clipboard.getData('text/html') || '';
+          const html = clipboard.getData('text/html') || '';
+          const annotatedHtml = /data-nas-asset-path/i.test(html);
+          const proseMirrorHtml = /data-pm-slice/i.test(html);
+          const assetHtml = clipboardHasTiptapAssets(clipboard);
+          const assetSlice = sliceHasTiptapAssetUrls(slice);
+
+          const insertPastedHtml = () => {
             event.preventDefault();
             insertHtmlIntoView(view, html, {
               files: collectClipboardImageFiles(clipboard),
               uploadFile,
+              destTiptapPath: relativePath,
             }).catch((err) => {
               window.alert(err instanceof Error ? err.message : '붙여넣기에 실패했습니다.');
             });
             return true;
+          };
+
+          // HTML-mode copies keep the source sidecar path on the element; the
+          // parsed slice drops that attribute, so rematerialize from HTML.
+          if (annotatedHtml || (assetHtml && !proseMirrorHtml && !assetSlice)) {
+            return insertPastedHtml();
+          }
+
+          if (assetSlice) {
+            event.preventDefault();
+            rematerializeCopiedSlice(slice, {
+              destTiptapPath: relativePath,
+              uploadFile,
+            })
+              .then((next) => {
+                view.dispatch(view.state.tr.replaceSelection(next).scrollIntoView());
+              })
+              .catch((err) => {
+                window.alert(err instanceof Error ? err.message : '붙여넣기에 실패했습니다.');
+              });
+            return true;
+          }
+
+          // OneNote/Word copy a screenshot file *and* HTML. Prefer the HTML so
+          // the paste stays editable, then upload images from the HTML / matching files.
+          if (clipboardHasEditableHtml(clipboard) || assetHtml) {
+            return insertPastedHtml();
           }
 
           const file = pickTiptapMediaFile(clipboard.files);
@@ -229,8 +281,8 @@ export default function TipTapEditorView({
       },
     },
     collabDoc
-      ? [collabDoc, collabProvider, extensions, readOnly]
-      : [extensions, initialContent, readOnly],
+      ? [collabDoc, collabProvider, extensions, readOnly, relativePath]
+      : [extensions, initialContent, readOnly, relativePath],
   );
 
   useEffect(() => {
@@ -245,8 +297,73 @@ export default function TipTapEditorView({
 
   useEffect(() => {
     if (!editor) return;
-    editor.setEditable(!readOnly);
-  }, [editor, readOnly]);
+    editor.setEditable(!readOnly && !htmlMode);
+  }, [editor, htmlMode, readOnly]);
+
+  const openHtmlMode = useCallback(() => {
+    if (!editor || readOnly) return;
+    const next = annotateHtmlWithAssetPaths(formatTiptapHtml(editor.getHTML()), relativePath);
+    setHtmlDraft(next);
+    setHtmlBaseline(next);
+    setSearchOpen(false);
+    setTocOpen(false);
+    setHtmlMode(true);
+  }, [editor, readOnly, relativePath]);
+
+  const closeHtmlMode = useCallback(() => {
+    setHtmlMode(false);
+    setHtmlDraft('');
+    setHtmlBaseline('');
+    setHtmlApplying(false);
+  }, []);
+
+  const applyHtmlMode = useCallback(async () => {
+    if (!editor || readOnly) return false;
+    setHtmlApplying(true);
+    try {
+      await importHtmlIntoEditor(editor, htmlDraftRef.current || '<p></p>', {
+        uploadFile,
+        destTiptapPath: relativePath,
+      });
+      closeHtmlMode();
+      return true;
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'HTML을 적용하지 못했습니다.');
+      return false;
+    } finally {
+      setHtmlApplying(false);
+    }
+  }, [closeHtmlMode, editor, readOnly, relativePath, uploadFile]);
+
+  const discardHtmlMode = useCallback(() => {
+    const dirty = htmlDraftRef.current !== htmlBaselineRef.current;
+    if (dirty && !window.confirm('적용하지 않은 HTML 변경을 버릴까요?')) return false;
+    closeHtmlMode();
+    return true;
+  }, [closeHtmlMode]);
+
+  const toggleHtmlMode = useCallback(() => {
+    if (htmlModeRef.current) {
+      discardHtmlMode();
+      return;
+    }
+    openHtmlMode();
+  }, [discardHtmlMode, openHtmlMode]);
+
+  useEffect(() => {
+    if (!editor) return undefined;
+    editor.flushHtmlSource = async () => {
+      if (!htmlModeRef.current) return true;
+      if (htmlDraftRef.current === htmlBaselineRef.current) {
+        closeHtmlMode();
+        return true;
+      }
+      return applyHtmlMode();
+    };
+    return () => {
+      delete editor.flushHtmlSource;
+    };
+  }, [applyHtmlMode, closeHtmlMode, editor]);
 
   useEffect(() => {
     if (!editor || !collabProvider) return;
@@ -267,7 +384,13 @@ export default function TipTapEditorView({
       const key = event.key;
       if (!readOnly && key.toLowerCase() === 's') {
         event.preventDefault();
-        onSave?.();
+        void (async () => {
+          if (htmlModeRef.current) {
+            const flushed = await editor?.flushHtmlSource?.();
+            if (flushed === false) return;
+          }
+          onSave?.();
+        })();
         return;
       }
       if (key === '=' || key === '+') {
@@ -294,7 +417,7 @@ export default function TipTapEditorView({
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onSave, readOnly, resetZoom, searchOpen, zoomBy]);
+  }, [editor, onSave, readOnly, resetZoom, searchOpen, zoomBy]);
 
   useEffect(() => {
     const el = scrollRef.current;
@@ -409,6 +532,8 @@ export default function TipTapEditorView({
           onZoomIn={() => zoomBy('in')}
           onZoomOut={() => zoomBy('out')}
           onZoomReset={resetZoom}
+          htmlMode={htmlMode}
+          onToggleHtml={toggleHtmlMode}
         />
       ) : (
         <div className="tiptap-toolbar tiptap-toolbar--zoom-only" role="toolbar" aria-label="보기 배율">
@@ -434,21 +559,39 @@ export default function TipTapEditorView({
 
       <TipTapSearchBar
         editor={editor}
-        open={searchOpen}
+        open={searchOpen && !htmlMode}
         readOnly={readOnly}
         focusNonce={searchFocusNonce}
         onClose={() => setSearchOpen(false)}
       />
 
-      <TipTapBubbleMenus editor={editor} readOnly={readOnly} />
+      {htmlMode ? null : <TipTapBubbleMenus editor={editor} readOnly={readOnly} />}
 
       <div className="tiptap-editor-shell__body">
-        <div className="tiptap-editor-shell__scroll" ref={scrollRef}>
+        {htmlMode ? (
+          <TipTapHtmlSourcePanel
+            value={htmlDraft}
+            dirty={htmlDraft !== htmlBaseline}
+            applying={htmlApplying}
+            onChange={setHtmlDraft}
+            onApply={() => {
+              void applyHtmlMode();
+            }}
+            onCancel={discardHtmlMode}
+          />
+        ) : null}
+        <div
+          className="tiptap-editor-shell__scroll"
+          ref={scrollRef}
+          hidden={htmlMode}
+        >
           <div className="tiptap-editor-shell__zoom" style={{ zoom }} onClick={handleEditorClick}>
             <EditorContent editor={editor} />
           </div>
         </div>
-        <TipTapTocPanel editor={editor} open={tocOpen} onClose={() => setTocOpen(false)} />
+        {htmlMode ? null : (
+          <TipTapTocPanel editor={editor} open={tocOpen} onClose={() => setTocOpen(false)} />
+        )}
       </div>
 
       <input

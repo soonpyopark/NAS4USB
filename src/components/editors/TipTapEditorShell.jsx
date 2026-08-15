@@ -152,6 +152,12 @@ export default function TipTapEditorShell({
     async ({ archive = true } = {}) => {
       if (shareReadOnly) return false;
       if (!workspace.ready || !editorRef.current) return false;
+      if (typeof editorRef.current.flushHtmlSource === 'function') {
+        const flushed = await editorRef.current.flushHtmlSource();
+        if (flushed === false) {
+          throw new Error('HTML을 적용하지 못했습니다.');
+        }
+      }
       setSaving(true);
       try {
         const title = getTiptapFileStem(fileName);
@@ -309,7 +315,10 @@ export default function TipTapEditorShell({
           }
         }
         html = promoteOnenoteEmbeddedFiles(html, rewrittenAssets);
-        await importHtmlIntoEditor(editorRef.current, html, { uploadFile });
+        await importHtmlIntoEditor(editorRef.current, html, {
+          uploadFile,
+          destTiptapPath: relativePath,
+        });
 
         const parent = getParentPath(relativePath);
         let existingNames = [];
@@ -369,6 +378,7 @@ export default function TipTapEditorShell({
         const { createTiptapUploadFile } = await import('../../lib/tiptap/uploadFile.js');
         await importHtmlIntoEditor(editorRef.current, file, {
           uploadFile: createTiptapUploadFile(relativePath),
+          destTiptapPath: relativePath,
         });
       } catch (err) {
         setLoadError(err instanceof Error ? err.message : 'HTML 가져오기에 실패했습니다.');

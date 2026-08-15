@@ -1,4 +1,5 @@
 import { normalizeOfficeClipboardHtml } from './clipboardHtml.js';
+import { rematerializePastedTiptapAssets } from './copyPasteAssets.js';
 import { materializePastedImages } from './pasteImages.js';
 import { flattenWebDocumentHtml, looksLikeWebDocument } from './importWebHtml.js';
 
@@ -59,7 +60,10 @@ function withTrailingParagraph(html) {
  *
  * @param {import('@tiptap/core').Editor} editor
  * @param {File | string} fileOrHtml
- * @param {{ uploadFile?: (file: File) => Promise<string> }} [options]
+ * @param {{
+ *   uploadFile?: (file: File) => Promise<string>,
+ *   destTiptapPath?: string,
+ * }} [options]
  */
 export async function importHtmlIntoEditor(editor, fileOrHtml, options = {}) {
   if (!editor) throw new Error('에디터가 준비되지 않았습니다.');
@@ -74,6 +78,12 @@ export async function importHtmlIntoEditor(editor, fileOrHtml, options = {}) {
       files: [],
       uploadFile: options.uploadFile,
     });
+    if (options.destTiptapPath) {
+      cleaned = await rematerializePastedTiptapAssets(cleaned, {
+        destTiptapPath: options.destTiptapPath,
+        uploadFile: options.uploadFile,
+      });
+    }
   }
   editor.chain().setContent(withTrailingParagraph(cleaned)).setTextSelection(0).run();
 }

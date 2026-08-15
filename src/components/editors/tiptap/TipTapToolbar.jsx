@@ -19,6 +19,7 @@ import {
   IconCode,
   IconDetails,
   IconHorizontalRule,
+  IconHtml,
   IconImage,
   IconInvisibleChars,
   IconItalic,
@@ -44,22 +45,52 @@ import {
 } from './TipTapIcons.jsx';
 
 const FONT_FAMILIES = [
-  { label: 'Aa', value: '' },
+  { label: '맑은 고딕', value: '' },
   { label: 'Sans', value: 'ui-sans-serif, system-ui, sans-serif' },
   { label: 'Serif', value: 'ui-serif, Georgia, serif' },
   { label: 'Mono', value: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace' },
 ];
 
 const FONT_SIZES = [
-  { label: 'Size', value: '' },
-  { label: '12', value: '12px' },
-  { label: '14', value: '14px' },
-  { label: '16', value: '16px' },
-  { label: '18', value: '18px' },
-  { label: '20', value: '20px' },
-  { label: '24', value: '24px' },
-  { label: '32', value: '32px' },
+  { label: '크기', value: '' },
+  { label: '8pt', value: '8pt' },
+  { label: '9pt', value: '9pt' },
+  { label: '10pt', value: '10pt' },
+  { label: '11pt', value: '11pt' },
+  { label: '12pt', value: '12pt' },
+  { label: '14pt', value: '14pt' },
+  { label: '16pt', value: '16pt' },
+  { label: '18pt', value: '18pt' },
+  { label: '20pt', value: '20pt' },
+  { label: '22pt', value: '22pt' },
+  { label: '24pt', value: '24pt' },
+  { label: '28pt', value: '28pt' },
+  { label: '36pt', value: '36pt' },
 ];
+
+/**
+ * @param {string | null | undefined} raw
+ */
+function toPtFontSize(raw) {
+  const value = String(raw ?? '').trim();
+  if (!value) return '';
+  const pt = value.match(/^([\d.]+)\s*pt$/i);
+  if (pt) return `${Number(pt[1])}pt`;
+  const px = value.match(/^([\d.]+)\s*px$/i);
+  if (px) return `${Math.round((Number(px[1]) * 72) / 96)}pt`;
+  return value;
+}
+
+/**
+ * @param {string | null | undefined} raw
+ */
+function fontFamilySelectValue(raw) {
+  const value = String(raw ?? '').trim();
+  if (!value) return '';
+  if (/malgun gothic|맑은 고딕/i.test(value)) return '';
+  const match = FONT_FAMILIES.find((item) => item.value && item.value === value);
+  return match ? match.value : value;
+}
 
 const LINE_HEIGHTS = [
   { label: 'LH', value: '' },
@@ -87,6 +118,8 @@ const LINE_HEIGHTS = [
  *   onZoomIn?: () => void,
  *   onZoomOut?: () => void,
  *   onZoomReset?: () => void,
+ *   htmlMode?: boolean,
+ *   onToggleHtml?: () => void,
  * }} props
  */
 export default function TipTapToolbar({
@@ -105,9 +138,11 @@ export default function TipTapToolbar({
   onZoomIn,
   onZoomOut,
   onZoomReset,
+  htmlMode = false,
+  onToggleHtml,
 }) {
   useTiptapEditorTick(editor);
-  const disabled = !editor || readOnly || !editor.isEditable;
+  const disabled = !editor || readOnly || !editor.isEditable || htmlMode;
   const formatPainter = useTiptapFormatPainter(editor, disabled);
 
   if (!editor) return null;
@@ -117,6 +152,16 @@ export default function TipTapToolbar({
   const highlightColor =
     editor.getAttributes('highlight').color || (editor.isActive('highlight') ? '#fef08a' : '');
   const invisiblesVisible = Boolean(editor.storage.invisibleCharacters?.visibility?.());
+  const currentFontFamily = fontFamilySelectValue(editor.getAttributes('textStyle').fontFamily);
+  const currentFontSize = toPtFontSize(editor.getAttributes('textStyle').fontSize);
+  const fontFamilyOptions =
+    currentFontFamily && !FONT_FAMILIES.some((item) => item.value === currentFontFamily)
+      ? [...FONT_FAMILIES, { label: currentFontFamily, value: currentFontFamily }]
+      : FONT_FAMILIES;
+  const fontSizeOptions =
+    currentFontSize && !FONT_SIZES.some((item) => item.value === currentFontSize)
+      ? [...FONT_SIZES, { label: currentFontSize, value: currentFontSize }]
+      : FONT_SIZES;
 
   const setLink = () => {
     const previous = editor.getAttributes('link').href;
@@ -229,14 +274,14 @@ export default function TipTapToolbar({
             disabled={disabled}
             title="글꼴"
             aria-label="글꼴"
-            value={editor.getAttributes('textStyle').fontFamily || ''}
+            value={currentFontFamily}
             onChange={(event) => {
               const value = event.target.value;
               if (!value) editor.chain().focus().unsetFontFamily().run();
               else editor.chain().focus().setFontFamily(value).run();
             }}
           >
-            {FONT_FAMILIES.map((item) => (
+            {fontFamilyOptions.map((item) => (
               <option key={item.label} value={item.value}>
                 {item.label}
               </option>
@@ -247,14 +292,14 @@ export default function TipTapToolbar({
             disabled={disabled}
             title="글자 크기"
             aria-label="글자 크기"
-            value={editor.getAttributes('textStyle').fontSize || ''}
+            value={currentFontSize}
             onChange={(event) => {
               const value = event.target.value;
               if (!value) editor.chain().focus().unsetFontSize().run();
               else editor.chain().focus().setFontSize(value).run();
             }}
           >
-            {FONT_SIZES.map((item) => (
+            {fontSizeOptions.map((item) => (
               <option key={item.label} value={item.value}>
                 {item.label}
               </option>
@@ -511,6 +556,14 @@ export default function TipTapToolbar({
             <IconMarkdown />
           </ToolbarButton>
           <ToolbarButton
+            title={htmlMode ? '서식 편집으로 돌아가기' : 'HTML 편집'}
+            active={htmlMode}
+            disabled={!editor || readOnly}
+            onClick={() => onToggleHtml?.()}
+          >
+            <IconHtml />
+          </ToolbarButton>
+          <ToolbarButton
             title={
               formatPainter.mode === 'locked'
                 ? '서식 연속 적용 중 — Esc 또는 다시 클릭하면 종료'
@@ -550,7 +603,9 @@ export default function TipTapToolbar({
             onZoomReset={onZoomReset}
           />
           <span className="tiptap-toolbar__hint">
-            `/` 블록 · `:` 이모지 · `$…$` 수식 · 표 안 Tab 이동
+            {htmlMode
+              ? 'HTML 편집 중 — 적용해야 문서에 반영됩니다'
+              : '`/` 블록 · `:` 이모지 · `$…$` 수식 · 표 안 Tab 이동'}
           </span>
         </div>
       </div>

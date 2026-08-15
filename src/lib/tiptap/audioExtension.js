@@ -38,7 +38,19 @@ export function createTiptapAudioExtension(options = {}) {
     },
 
     parseHTML() {
-      return [{ tag: 'audio[src]' }];
+      return [
+        { tag: 'audio[src]' },
+        {
+          tag: 'audio',
+          getAttrs: (element) => {
+            if (!(element instanceof HTMLElement)) return false;
+            const src =
+              element.getAttribute('src') ||
+              element.querySelector('source')?.getAttribute('src');
+            return src ? { src } : false;
+          },
+        },
+      ];
     },
 
     renderHTML({ HTMLAttributes }) {

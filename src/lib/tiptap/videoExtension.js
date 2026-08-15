@@ -38,7 +38,19 @@ export function createTiptapVideoExtension(options = {}) {
     },
 
     parseHTML() {
-      return [{ tag: 'video[src]' }];
+      return [
+        { tag: 'video[src]' },
+        {
+          tag: 'video',
+          getAttrs: (element) => {
+            if (!(element instanceof HTMLElement)) return false;
+            const src =
+              element.getAttribute('src') ||
+              element.querySelector('source')?.getAttribute('src');
+            return src ? { src } : false;
+          },
+        },
+      ];
     },
 
     renderHTML({ HTMLAttributes }) {

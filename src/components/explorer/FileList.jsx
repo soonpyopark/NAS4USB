@@ -47,6 +47,122 @@ function isWorkspaceRootSystemFolder(relativePath) {
 const MODIFIED_DATE_COLUMN_CLASS = 'hidden w-44 min-w-[9.5rem] whitespace-nowrap px-2 py-2 md:table-cell';
 const TYPE_COLUMN_CLASS = 'hidden w-36 min-w-[8.5rem] whitespace-nowrap px-2 py-2 lg:table-cell';
 
+function IconSortAsc() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
+      <path d="M6 2.2 10.5 9H1.5L6 2.2z" />
+    </svg>
+  );
+}
+
+function IconSortDesc() {
+  return (
+    <svg width="10" height="10" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
+      <path d="M6 9.8 1.5 3h9L6 9.8z" />
+    </svg>
+  );
+}
+
+function IconSortCustom() {
+  return (
+    <svg width="10" height="12" viewBox="0 0 12 14" fill="currentColor" aria-hidden="true">
+      <circle cx="4" cy="3" r="1.2" />
+      <circle cx="8" cy="3" r="1.2" />
+      <circle cx="4" cy="7" r="1.2" />
+      <circle cx="8" cy="7" r="1.2" />
+      <circle cx="4" cy="11" r="1.2" />
+      <circle cx="8" cy="11" r="1.2" />
+    </svg>
+  );
+}
+
+function IconMoveUp() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M12 19V5M6 11l6-6 6 6"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function IconMoveDown() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M12 5v14M6 13l6 6 6-6"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/**
+ * @param {{
+ *   label: string,
+ *   column: 'name' | 'modifiedAt' | 'size' | 'type',
+ *   sortField: string,
+ *   sortDirection: 'asc' | 'desc',
+ *   className?: string,
+ *   extra?: import('react').ReactNode,
+ *   onSort?: (column: 'name' | 'modifiedAt' | 'size' | 'type') => void,
+ * }} props
+ */
+function SortableHeader({
+  label,
+  column,
+  sortField,
+  sortDirection,
+  className = '',
+  extra = null,
+  onSort,
+}) {
+  const active = sortField === column || (column === 'name' && sortField === 'custom');
+  const title =
+    column === 'name' && sortField === 'custom'
+      ? '사용자 정의 순서'
+      : active
+        ? sortDirection === 'asc'
+          ? '오름차순'
+          : '내림차순'
+        : `${label} 정렬`;
+
+  return (
+    <th className={`font-medium ${className}`}>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          className="inline-flex items-center gap-1 uppercase tracking-wide text-nas-muted hover:text-slate-700"
+          title={title}
+          aria-label={title}
+          onClick={() => onSort?.(column)}
+        >
+          <span>{label}</span>
+          {column === 'name' && sortField === 'custom' ? (
+            <IconSortCustom />
+          ) : active && sortDirection === 'asc' ? (
+            <IconSortAsc />
+          ) : active && sortDirection === 'desc' ? (
+            <IconSortDesc />
+          ) : (
+            <span className="inline-flex w-2.5 opacity-30">
+              <IconSortDesc />
+            </span>
+          )}
+        </button>
+        {extra}
+      </div>
+    </th>
+  );
+}
+
 export default function FileList({
   entries,
   loading,
@@ -65,6 +181,13 @@ export default function FileList({
   onPropertiesClick,
   canReorder = false,
   onReorder,
+  sortField = 'custom',
+  sortDirection = 'asc',
+  onSort,
+  canMoveOrderUp = false,
+  canMoveOrderDown = false,
+  onMoveOrderUp,
+  onMoveOrderDown,
 }) {
   const selectAllRef = useRef(null);
   const dragPathRef = useRef(/** @type {string | null} */ (null));
@@ -133,16 +256,71 @@ export default function FileList({
                 className="h-4 w-4 rounded border-slate-300 text-nas-accent focus:ring-nas-accent"
               />
             </th>
-            <th className="px-4 py-2 font-medium">이름</th>
+            <SortableHeader
+              label="이름"
+              column="name"
+              sortField={sortField}
+              sortDirection={sortDirection}
+              className="px-4 py-2"
+              onSort={onSort}
+              extra={
+                canReorder && onMoveOrderUp && onMoveOrderDown ? (
+                  <div className="inline-flex items-center rounded-md border border-nas-border bg-white normal-case tracking-normal">
+                    <button
+                      type="button"
+                      className="inline-flex h-6 items-center px-1.5 text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                      disabled={!canMoveOrderUp}
+                      onClick={onMoveOrderUp}
+                      title="선택한 항목을 한 칸 위로"
+                      aria-label="위로"
+                    >
+                      <IconMoveUp />
+                    </button>
+                    <span className="h-3.5 w-px bg-nas-border" aria-hidden="true" />
+                    <button
+                      type="button"
+                      className="inline-flex h-6 items-center px-1.5 text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+                      disabled={!canMoveOrderDown}
+                      onClick={onMoveOrderDown}
+                      title="선택한 항목을 한 칸 아래로"
+                      aria-label="아래로"
+                    >
+                      <IconMoveDown />
+                    </button>
+                  </div>
+                ) : null
+              }
+            />
             <th
               className="px-1 py-2 font-medium"
               style={{ width: `${FILE_STATUS_SLOT_WIDTH}px` }}
             >
               상태
             </th>
-            <th className={`font-medium ${MODIFIED_DATE_COLUMN_CLASS}`}>수정일</th>
-            <th className="hidden w-24 px-4 py-2 font-medium sm:table-cell">크기</th>
-            <th className={`font-medium ${TYPE_COLUMN_CLASS}`}>종류</th>
+            <SortableHeader
+              label="수정일"
+              column="modifiedAt"
+              sortField={sortField}
+              sortDirection={sortDirection}
+              className={MODIFIED_DATE_COLUMN_CLASS}
+              onSort={onSort}
+            />
+            <SortableHeader
+              label="크기"
+              column="size"
+              sortField={sortField}
+              sortDirection={sortDirection}
+              className="hidden w-24 px-4 py-2 sm:table-cell"
+              onSort={onSort}
+            />
+            <SortableHeader
+              label="종류"
+              column="type"
+              sortField={sortField}
+              sortDirection={sortDirection}
+              className={TYPE_COLUMN_CLASS}
+              onSort={onSort}
+            />
           </tr>
         </thead>
         <tbody>
