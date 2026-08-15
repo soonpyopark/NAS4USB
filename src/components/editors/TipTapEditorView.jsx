@@ -381,6 +381,8 @@ export default function TipTapEditorView({
         return;
       }
       if (!(event.ctrlKey || event.metaKey)) return;
+      const target = event.target;
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
       const key = event.key;
       if (!readOnly && key.toLowerCase() === 's') {
         event.preventDefault();

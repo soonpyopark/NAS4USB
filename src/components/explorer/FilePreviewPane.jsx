@@ -46,6 +46,7 @@ const TEXT_PREVIEW_LIMIT = 400_000;
  *   onPreview?: (entry: import('../../types/nas4usb.d.ts').FsEntry) => void,
  *   previewAnchorPath?: string | null,
  *   folderColorMap?: Record<string, string>,
+ *   nameBoldMap?: Record<string, boolean>,
  * }} props
  */
 export default function FilePreviewPane({
@@ -57,6 +58,7 @@ export default function FilePreviewPane({
   onPreview,
   previewAnchorPath = null,
   folderColorMap = {},
+  nameBoldMap = {},
 }) {
   const kind = getFilePreviewKind(entry);
   const { folderOrderMap } = useFolderOrder();
@@ -325,7 +327,12 @@ export default function FilePreviewPane({
                             folderColor={folderColorMap[child.relativePath]}
                             className="h-4 w-4 shrink-0"
                           />
-                          <span className="file-preview-pane__folder-name" title={child.name}>
+                          <span
+                            className={`file-preview-pane__folder-name${
+                              nameBoldMap[child.relativePath] ? ' font-bold' : ''
+                            }`}
+                            title={child.name}
+                          >
                             {child.name}
                           </span>
                         </button>

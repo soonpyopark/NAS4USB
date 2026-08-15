@@ -171,6 +171,7 @@ export default function FileList({
   shareMap = {},
   favoritesMap = {},
   folderColorMap = {},
+  nameBoldMap = {},
   onOpen,
   onSelect,
   onToggleCheckbox,
@@ -426,7 +427,8 @@ export default function FileList({
                     )}
                     <span
                       className={`min-w-0 flex-1 truncate text-slate-700 ${
-                        isWorkspaceRootSystemFolder(entry.relativePath)
+                        isWorkspaceRootSystemFolder(entry.relativePath) ||
+                        nameBoldMap[entry.relativePath]
                           ? 'font-bold'
                           : 'font-medium'
                       }`}

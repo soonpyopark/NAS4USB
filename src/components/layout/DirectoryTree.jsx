@@ -38,6 +38,7 @@ function TreeNode({
   onOpenFile,
   onContextMenu,
   folderColorMap = {},
+  nameBoldMap = {},
 }) {
   const isFolder = entry.isDirectory;
   const isExpanded = expandedPaths.has(entry.relativePath);
@@ -95,7 +96,9 @@ function TreeNode({
             className={`h-4 w-4 shrink-0 ${isActive ? '!text-white' : ''}`}
           />
         )}
-        <span className={`truncate ${isTopLevel ? 'font-bold' : ''}`}>{entry.name}</span>
+        <span className={`truncate ${isTopLevel || nameBoldMap[entry.relativePath] ? 'font-bold' : ''}`}>
+          {entry.name}
+        </span>
       </button>
 
       {isFolder && isExpanded && (
@@ -114,6 +117,7 @@ function TreeNode({
               onOpenFile={onOpenFile}
               onContextMenu={onContextMenu}
               folderColorMap={folderColorMap}
+              nameBoldMap={nameBoldMap}
             />
           ))}
         </div>
@@ -135,6 +139,7 @@ export default function DirectoryTree({
   onBackgroundContextMenu,
   viewAccessDenied = false,
   folderColorMap = {},
+  nameBoldMap = {},
 }) {
   return (
     <div
@@ -164,6 +169,7 @@ export default function DirectoryTree({
               onOpenFile={onOpenFile}
               onContextMenu={onContextMenu}
               folderColorMap={folderColorMap}
+              nameBoldMap={nameBoldMap}
             />
             {index < rootEntries.length - 1 ? (
               <div className="mx-3 my-1.5 border-t border-dashed border-slate-500" role="separator" />

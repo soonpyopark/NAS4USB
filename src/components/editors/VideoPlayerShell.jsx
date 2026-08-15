@@ -5,6 +5,7 @@ import ViewerModal from './ViewerModal.jsx';
 import { useMediaStream } from '../../hooks/useMediaStream.js';
 import { useVideoSeriesQueue } from '../../hooks/useVideoSeriesQueue.js';
 import { attachHlsPlayback } from '../../lib/media/hlsPlayer.js';
+import { isIosWebKit } from '../../lib/media/iosPlayback.js';
 import { getVideoMimeType } from '../../lib/media/mediaTypes.js';
 import { loadSiblingSubtitleTracks, shiftWebVttCues, vttToTrackUrl } from '../../lib/media/subtitles.js';
 import { mountVideoJsPlayer } from '../../lib/media/videoJsPlayer.js';
@@ -193,18 +194,38 @@ export default function VideoPlayerShell({
 
     const detachHls =
       playerKind === 'hls'
-        ? attachHlsPlayback(video, streamUrl, {
-            onReady: () => {
-              setLoading(false);
-              setPreparing(false);
-              mounted.player.trigger('durationchange');
-            },
-            onFatalError: () => {
-              setLoadError('호환 변환 영상을 재생할 수 없습니다.');
-              setLoading(false);
-              setPreparing(false);
-            },
-          })
+        ? isIosWebKit()
+          ? (() => {
+              mounted.player.src({ src: streamUrl, type: 'application/vnd.apple.mpegurl' });
+              const onReady = () => {
+                setLoading(false);
+                setPreparing(false);
+                mounted.player.trigger('durationchange');
+              };
+              const onError = () => {
+                setLoadError('호환 변환 영상을 재생할 수 없습니다.');
+                setLoading(false);
+                setPreparing(false);
+              };
+              video.addEventListener('loadedmetadata', onReady);
+              video.addEventListener('error', onError);
+              return () => {
+                video.removeEventListener('loadedmetadata', onReady);
+                video.removeEventListener('error', onError);
+              };
+            })()
+          : attachHlsPlayback(video, streamUrl, {
+              onReady: () => {
+                setLoading(false);
+                setPreparing(false);
+                mounted.player.trigger('durationchange');
+              },
+              onFatalError: () => {
+                setLoadError('호환 변환 영상을 재생할 수 없습니다.');
+                setLoading(false);
+                setPreparing(false);
+              },
+            })
         : undefined;
 
     return () => {

@@ -72,7 +72,9 @@ import {
 import {
   assignRandomFolderColor,
   getFolderColorsMap,
+  getEntryBoldMap,
   setFolderColor,
+  setEntryBold,
   syncFolderColorsDelete,
   syncFolderColorsMoveTree,
 } from './folderColorsService.js';
@@ -689,6 +691,29 @@ export async function handleHttpApiRequest(req, res) {
       assertHomeSystemPathMutable(body.path, 'mutate');
       await assertCanEditFile(body.path ?? '', auth, shareToken);
       const result = await setFolderColor(body.path, body.color, getPortableRoot());
+      notifyFsChanged(body.path);
+      sendJson(res, 200, result);
+      return true;
+    }
+
+    if (method === 'GET' && url.pathname === '/api/folder-colors/bold-map') {
+      const auth = getAccessAuth(req);
+      const perms = await getEffectiveAccessPermissions(auth, getPortableRoot());
+      if (!perms.view && !perms.write) {
+        sendJson(res, 200, {});
+        return true;
+      }
+      sendJson(res, 200, await getEntryBoldMap(getPortableRoot()));
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/folder-colors/set-bold') {
+      const body = await readJsonBody(req);
+      const auth = getAccessAuth(req);
+      const shareToken = getShareTokenFromQuery(url);
+      assertHomeSystemPathMutable(body.path, 'mutate');
+      await assertCanEditFile(body.path ?? '', auth, shareToken);
+      const result = await setEntryBold(body.path, Boolean(body.bold), getPortableRoot());
       notifyFsChanged(body.path);
       sendJson(res, 200, result);
       return true;

@@ -108,6 +108,8 @@ window.nas4usb = {
   folderColors: {
     getMap: () => {},
     set: ({ path, color }) => {},
+    getBoldMap: () => {},
+    setBold: ({ path, bold }) => {},
   },
   folderOrder: {
     getMap: () => {},

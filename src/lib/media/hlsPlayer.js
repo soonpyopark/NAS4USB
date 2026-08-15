@@ -1,19 +1,42 @@
 import Hls from 'hls.js';
+import { isIosWebKit } from './iosPlayback.js';
+
+/**
+ * @param {HTMLVideoElement} video
+ * @param {string} url
+ * @param {{ onReady?: () => void, onFatalError?: (data: unknown) => void }} [handlers]
+ */
+function attachNativeHls(video, url, handlers = {}) {
+  video.setAttribute('playsinline', '');
+  video.setAttribute('webkit-playsinline', '');
+  video.src = url;
+  video.load();
+
+  const onReady = () => handlers.onReady?.();
+  const onError = () => handlers.onFatalError?.(video.error);
+  video.addEventListener('loadedmetadata', onReady);
+  video.addEventListener('error', onError);
+  void video.play().catch(() => {});
+
+  return () => {
+    video.removeEventListener('loadedmetadata', onReady);
+    video.removeEventListener('error', onError);
+    video.removeAttribute('src');
+    video.load();
+  };
+}
 
 /**
  * Attach hls.js to a video element so transcode playlists can grow without
- * killing Chromium's native MP4 demuxer.
+ * killing Chromium's native MP4 demuxer. iOS WebKit has no usable MSE, so
+ * that path always uses native HLS.
  * @param {HTMLVideoElement} video
  * @param {string} url
  * @param {{ onReady?: () => void, onFatalError?: (data: unknown) => void }} [handlers]
  */
 export function attachHlsPlayback(video, url, handlers = {}) {
-  if (!Hls.isSupported()) {
-    video.src = url;
-    return () => {
-      video.removeAttribute('src');
-      video.load();
-    };
+  if (isIosWebKit() || !Hls.isSupported()) {
+    return attachNativeHls(video, url, handlers);
   }
 
   const hls = new Hls({

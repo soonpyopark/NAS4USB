@@ -45,7 +45,7 @@ export default function TipTapTableControls({ editor, disabled = false }) {
   };
 
   const setCellBackground = (backgroundColor) => {
-    editor.chain().focus().setCellAttribute('backgroundColor', backgroundColor || null).run();
+    editor.chain().setCellAttribute('backgroundColor', backgroundColor || null).run();
   };
 
   return (

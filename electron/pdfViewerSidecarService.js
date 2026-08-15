@@ -2,9 +2,12 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { resolvePortablePath } from './appContext.js';
 import * as fsService from './fsService.js';
+import { isExternalFolderPath } from '../shared/externalFolders.js';
 import {
   getPdfPathForViewerSidecar,
   getPdfViewerSidecarPath,
+  getPdfViewerStateCacheRelativePath,
+  isCanonicalPdfViewerSidecarRelativePath,
   isPdfDocumentRelativePath,
   isPdfViewerSidecarRelativePath,
   normalizeRelativePath,
@@ -185,10 +188,25 @@ export async function pruneOrphanPdfViewerSidecars(relativePath, options = {}) {
 
       if (!isPdfViewerSidecarRelativePath(rel)) continue;
       const pdfPath = getPdfPathForViewerSidecar(rel);
-      if (!pdfPath || (await fsService.pathExists(pdfPath))) continue;
+      const pdfExists = Boolean(pdfPath && (await fsService.pathExists(pdfPath)));
+      const canonical = isCanonicalPdfViewerSidecarRelativePath(rel);
+      const external = isExternalFolderPath(rel);
 
-      await fsService.deletePath(rel).catch(() => {});
-      deleted.push(rel);
+      if (external && canonical && pdfExists) {
+        const cachePath = getPdfViewerStateCacheRelativePath(pdfPath);
+        if (!(await fsService.pathExists(cachePath))) {
+          try {
+            await fsService.copyPath(rel, cachePath);
+          } catch {
+            // keep deleting the phone-side copy even if cache migrate fails
+          }
+        }
+      }
+
+      if (external || !canonical || !pdfExists) {
+        await fsService.deletePath(rel).catch(() => {});
+        deleted.push(rel);
+      }
     }
   }
 

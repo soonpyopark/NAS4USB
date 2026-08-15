@@ -818,6 +818,32 @@
   border-radius: 2px;
 }
 
+.tiptap-swatch__hex-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: #64748b;
+}
+
+.tiptap-swatch__hex {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #111827;
+  outline: none;
+}
+
+.tiptap-swatch__hex:focus {
+  border-color: #2563eb;
+}
+
 .tiptap-swatch__caption {
   margin-top: 8px;
   font-size: 11px;

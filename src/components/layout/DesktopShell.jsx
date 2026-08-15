@@ -128,6 +128,8 @@ export default function DesktopShell({
       onNavigate: handleNavigate,
       compactMode: isCompact,
       onShowFolders: () => setMobilePane('folders'),
+      sidebarCollapsed,
+      onToggleSidebar: isCompact ? undefined : () => setCollapsed(!sidebarCollapsed),
     });
   });
 
@@ -197,32 +199,7 @@ export default function DesktopShell({
             aria-valuenow={sidebarWidth}
             className={`sidebar-resize-handle shrink-0 ${isResizing ? 'sidebar-resize-handle--active' : ''}`}
             onMouseDown={handleResizeStart}
-          >
-            <button
-              type="button"
-              className="sidebar-collapse-tab"
-              title="폴더 패널 접기"
-              aria-label="폴더 패널 접기"
-              onMouseDown={(event) => event.stopPropagation()}
-              onClick={() => setCollapsed(true)}
-            >
-              <span aria-hidden="true">‹</span>
-            </button>
-          </div>
-        ) : null}
-
-        {!isCompact && sidebarCollapsed ? (
-          <div className="sidebar-collapsed-rail">
-            <button
-              type="button"
-              className="sidebar-collapse-tab sidebar-collapse-tab--collapsed"
-              title="폴더 패널 펼치기"
-              aria-label="폴더 패널 펼치기"
-              onClick={() => setCollapsed(false)}
-            >
-              <span aria-hidden="true">›</span>
-            </button>
-          </div>
+          />
         ) : null}
 
         <main

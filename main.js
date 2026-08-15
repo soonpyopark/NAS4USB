@@ -42,6 +42,7 @@ import {
   getCaCertificatePath,
   getTlsDir,
   getTlsStatus,
+  isTrustedElectronCertificate,
   isTrustedServerFingerprint,
 } from './electron/tlsCerts.js';
 import { readServerEnvRaw, resolveDataRoot, resolveWorkspaceRoot } from './electron/envConfig.js';
@@ -128,6 +129,8 @@ import {
   assignRandomFolderColor,
   getFolderColorsMap,
   setFolderColor,
+  getEntryBoldMap,
+  setEntryBold,
   syncFolderColorsDelete,
   syncFolderColorsMoveTree,
 } from './electron/folderColorsService.js';
@@ -199,9 +202,28 @@ if (!gotSingleInstanceLock) {
 /** @type {{ port: number, addresses: string[], appUrl?: string, https?: boolean } | null} */
 let activeServerInfo = null;
 
-app.on('certificate-error', (event, _webContents, _url, _error, certificate, callback) => {
+function isLocalAppUrl(url) {
   try {
-    if (isTrustedServerFingerprint(certificate?.fingerprint256)) {
+    const parsed = new URL(String(url ?? ''));
+    const port = Number(parsed.port) || (parsed.protocol === 'https:' ? 443 : 80);
+    if (port !== (activeServerInfo?.port ?? getSyncPort())) return false;
+    const host = parsed.hostname.toLowerCase();
+    if (host === '127.0.0.1' || host === 'localhost' || host === '::1') return true;
+    return (activeServerInfo?.addresses ?? getLocalIPv4Addresses()).some(
+      (address) => String(address).toLowerCase() === host,
+    );
+  } catch {
+    return false;
+  }
+}
+
+app.on('certificate-error', (event, _webContents, url, _error, certificate, callback) => {
+  try {
+    if (
+      isTrustedElectronCertificate(certificate) ||
+      isTrustedServerFingerprint(certificate?.fingerprint256) ||
+      isLocalAppUrl(url)
+    ) {
       event.preventDefault();
       callback(true);
       return;
@@ -335,9 +357,15 @@ function createMainWindow() {
   mainWindow.setMenuBarVisibility(false);
   mainWindow.setMenu(null);
 
-  mainWindow.once('ready-to-show', () => {
+  const revealMainWindow = () => {
     closeSplashWindow();
     if (!launchedHidden) mainWindow?.show();
+  };
+
+  mainWindow.once('ready-to-show', revealMainWindow);
+  mainWindow.webContents.on('did-fail-load', (_event, code, description, validatedURL) => {
+    console.error(`[window] load failed: ${description} (${code}) ${validatedURL}`);
+    revealMainWindow();
   });
 
   mainWindow.loadURL(currentAppUrl());
@@ -1417,6 +1445,23 @@ ipcMain.handle('folderColors:set', async (event, { path: relativePath, color } =
   assertHomeSystemPathMutable(relativePath, 'mutate');
   await assertCanEditFile(relativePath, auth, shareToken);
   const result = await setFolderColor(relativePath, color, getPortableRoot());
+  notifyFsChanged(relativePath);
+  return result;
+});
+
+ipcMain.handle('folderColors:getBoldMap', async (event) => {
+  const auth = getAccessAuthFromEvent(event);
+  const perms = await getEffectiveAccessPermissions(auth, getPortableRoot());
+  if (!perms.view && !perms.write) return {};
+  return getEntryBoldMap(getPortableRoot());
+});
+
+ipcMain.handle('folderColors:setBold', async (event, { path: relativePath, bold } = {}) => {
+  const auth = getAccessAuthFromEvent(event);
+  const shareToken = getShareTokenFromEvent(event);
+  assertHomeSystemPathMutable(relativePath, 'mutate');
+  await assertCanEditFile(relativePath, auth, shareToken);
+  const result = await setEntryBold(relativePath, Boolean(bold), getPortableRoot());
   notifyFsChanged(relativePath);
   return result;
 });

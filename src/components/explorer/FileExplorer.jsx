@@ -101,6 +101,38 @@ import {
   isExternalContentPath,
 } from '../../lib/externalFoldersUi.js';
 
+function SidebarCollapseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M9 4v16" stroke="currentColor" strokeWidth="1.8" />
+      <path
+        d="M16.25 8.75 13 12l3.25 3.25"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function SidebarExpandIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M9 4v16" stroke="currentColor" strokeWidth="1.8" />
+      <path
+        d="M12.75 8.75 16 12l-3.25 3.25"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export default function FileExplorer({
   currentPath,
   onNavigate,
@@ -109,6 +141,8 @@ export default function FileExplorer({
   isEditorOpen = false,
   compactMode = false,
   onShowFolders,
+  sidebarCollapsed = false,
+  onToggleSidebar,
 }) {
   const {
     entries,
@@ -144,7 +178,8 @@ export default function FileExplorer({
   const { shareMap, refreshShareMap } = useShareLinks();
   const { accessMap, refreshAccessMap, setFileAccess } = useFileAccess();
   const { favoritesMap, refreshFavoritesMap, setFavorite, isFavorite } = useFavorites();
-  const { folderColorMap, refreshFolderColorMap, setFolderColor } = useFolderColors();
+  const { folderColorMap, nameBoldMap, refreshFolderColorMap, setFolderColor, setNameBold } =
+    useFolderColors();
   const { folderOrderMap, setFolderOrder } = useFolderOrder();
   const { isAdminLoggedIn, adminId, isSuperAdmin } = useAdminAuthContext();
   const { openLogin } = useLoginDialog();
@@ -1063,6 +1098,15 @@ export default function FileExplorer({
     }
   };
 
+  const handleSetNameBold = async (entry, bold) => {
+    if (!entry) return;
+    try {
+      await setNameBold(entry.relativePath, bold);
+    } catch (err) {
+      nativeAlert(err instanceof Error ? err.message : '이름 굵기를 바꾸지 못했습니다.');
+    }
+  };
+
   const handleSelect = (entry, event) => {
     if (event.shiftKey && lastSelectedPath) {
       selectRange(lastSelectedPath, entry.relativePath);
@@ -1270,16 +1314,28 @@ export default function FileExplorer({
       onContextMenu={(event) => openContextMenu(event, null)}
     >
       {!isInTrashView && !isInFavoritesView && isFileDragOver && <FileDropOverlay />}
-      <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 px-0.5">
+      <div className="flex h-8 shrink-0 flex-nowrap items-center gap-2 px-0.5">
+        {typeof onToggleSidebar === 'function' ? (
+          <button
+            type="button"
+            className="sidebar-toggle-btn"
+            title={sidebarCollapsed ? '폴더 패널 펼치기' : '폴더 패널 접기'}
+            aria-label={sidebarCollapsed ? '폴더 패널 펼치기' : '폴더 패널 접기'}
+            aria-pressed={!sidebarCollapsed}
+            onClick={onToggleSidebar}
+          >
+            {sidebarCollapsed ? <SidebarExpandIcon /> : <SidebarCollapseIcon />}
+          </button>
+        ) : null}
         <input
           type="search"
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
           placeholder={searchContents ? '이름·본문 검색…' : '현재 폴더 검색…'}
-          className="h-8 w-full min-w-0 max-w-[220px] rounded-md border border-nas-border bg-white px-3 text-[10pt] outline-none focus:border-nas-accent focus:ring-1 focus:ring-nas-accent"
+          className="ml-auto h-8 w-[220px] shrink-0 rounded-md border border-nas-border bg-white px-3 text-[10pt] outline-none focus:border-nas-accent focus:ring-1 focus:ring-nas-accent"
         />
         <label
-          className="flex shrink-0 cursor-pointer items-center gap-1.5 text-[10pt] text-nas-muted"
+          className="flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap text-[10pt] text-nas-muted"
           title="현재 폴더의 문서 내용까지 검색합니다 (txt·md·tiptap·hwpx·docx·xlsx·pdf 등). 외부폴더는 본문 검색에서 제외됩니다."
         >
           <input
@@ -1288,7 +1344,7 @@ export default function FileExplorer({
             onChange={(event) => setSearchContents(event.target.checked)}
             className="h-3.5 w-3.5 cursor-pointer accent-nas-accent"
           />
-            본문 검색
+          본문 검색
         </label>
       </div>
 
@@ -1426,6 +1482,7 @@ export default function FileExplorer({
           shareMap={shareMap}
           favoritesMap={favoritesMap}
           folderColorMap={folderColorMap}
+          nameBoldMap={nameBoldMap}
           onOpen={handleOpen}
           onSelect={handleSelect}
           onToggleCheckbox={handleToggleCheckbox}
@@ -1467,6 +1524,7 @@ export default function FileExplorer({
           onPreview={(next) => openPreviewFor(next)}
           previewAnchorPath={previewAnchorPath}
           folderColorMap={folderColorMap}
+          nameBoldMap={nameBoldMap}
         />
       </div>
       {contextMenu && contextItems.length > 0 && (
@@ -1499,6 +1557,14 @@ export default function FileExplorer({
             globalWrite,
           )}
           onChangeFolderColor={(color) => handleSetFolderColor(propertiesEntry, color)}
+          nameBold={Boolean(nameBoldMap[propertiesEntry.relativePath])}
+          canChangeNameBold={canWriteAtPath(
+            propertiesEntry.relativePath,
+            adminId,
+            isAdminLoggedIn,
+            globalWrite,
+          )}
+          onChangeNameBold={(bold) => handleSetNameBold(propertiesEntry, bold)}
           onClose={() => {
             setPropertiesEntry(null);
             setPropertiesStat(null);

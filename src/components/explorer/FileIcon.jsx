@@ -40,60 +40,41 @@ function FolderSvg({ className, style }) {
   );
 }
 
-function DocumentSvg({ className }) {
+function FolderBarSvg({ className, style }) {
   return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm-1 7V3.5L18.5 9H13z" />
+    <svg className={className} style={style} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <rect x="9" y="3.5" width="6" height="17" rx="1.5" />
     </svg>
   );
 }
 
-function SheetSvg({ className }) {
+function FileDotSvg({ className }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 14H7v-2h5v2zm5-4H7v-2h10v2zm0-4H7V7h10v2z" />
+      <circle cx="12" cy="12" r="3.5" />
     </svg>
   );
 }
 
-function AudioSvg({ className }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z" />
-    </svg>
-  );
-}
-
-function VideoSvg({ className }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z" />
-    </svg>
-  );
-}
-
-function ImageSvg({ className }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
-    </svg>
-  );
-}
-
-function PdfSvg({ className }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm-1 7V3.5L18.5 9H13zM8.5 17.5H7v-4h1.5c.8 0 1.5.7 1.5 1.5v1c0 .8-.7 1.5-1.5 1.5zm4.5 0h-1.5v-4H14c.6 0 1 .4 1 1v2c0 .6-.4 1-1 1zm4.5-2.5H16v1h1.5v1H16v1.5h-1.5v-4H17.5v1.5zM9 14.5H8.5v1H9v-1zm4 .5h-.5v1.5h.5v-1.5z" />
-    </svg>
-  );
-}
-
-function WhiteboardSvg({ className }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M4 4h16v12H4V4zm2 2v8h12V6H6zm-1 14h14v2H5v-2z" />
-    </svg>
-  );
+/**
+ * @param {string | null | undefined} extension
+ */
+function fileIconColor(extension) {
+  if (extension === 'hwpx') return ICON_COLORS.hwpx;
+  if (extension === 'wb4s') return ICON_COLORS.wb4s;
+  if (extension === 'tiptap') return ICON_COLORS.tiptap;
+  if (extension === 'one' || extension === 'onepkg') return ICON_COLORS.one;
+  if (extension === 'xlsx' || extension === 'xls' || extension === 'csv' || extension === 'tsv') {
+    return ICON_COLORS.xlsx;
+  }
+  if (extension === 'md') return ICON_COLORS.md;
+  if (extension === 'txt') return ICON_COLORS.txt;
+  if (isAudioExtension(extension)) return ICON_COLORS.audio;
+  if (isVideoExtension(extension)) return ICON_COLORS.video;
+  if (isImageExtension(extension)) return ICON_COLORS.image;
+  if (isPdfExtension(extension)) return ICON_COLORS.pdf;
+  if (isHtmlExtension(extension)) return ICON_COLORS.html;
+  return ICON_COLORS.default;
 }
 
 const FOLDER_LEVEL_CYCLE = [
@@ -132,8 +113,9 @@ export default function FileIcon({ entry, className = 'h-5 w-5', folderColor }) 
   // Put caller `className` last so size/color overrides (e.g. root system folders) win.
   if (entry.isDirectory) {
     const tint = resolveFolderIconTint(entry, folderColor);
+    const Icon = folderDisplayDepth(entry.relativePath) >= 3 ? FolderBarSvg : FolderSvg;
     return (
-      <FolderSvg
+      <Icon
         className={`${ICON_COLORS.folder} ${tint.className} ${className}`}
         style={tint.style}
       />
@@ -144,53 +126,11 @@ export default function FileIcon({ entry, className = 'h-5 w-5', folderColor }) 
     ? innerExtensionOf(entry.name || entry.relativePath)
     : entry.extension;
 
-  if (extension === 'hwpx') {
-    return <DocumentSvg className={`${ICON_COLORS.hwpx} ${className}`} />;
-  }
+  return <FileDotSvg className={`${fileIconColor(extension)} ${className}`} />;
+}
 
-  if (extension === 'wb4s') {
-    return <WhiteboardSvg className={`${ICON_COLORS.wb4s} ${className}`} />;
-  }
-
-  if (extension === 'tiptap') {
-    return <DocumentSvg className={`${ICON_COLORS.tiptap} ${className}`} />;
-  }
-
-  if (extension === 'one' || extension === 'onepkg') {
-    return <DocumentSvg className={`${ICON_COLORS.one} ${className}`} />;
-  }
-
-  if (extension === 'xlsx' || extension === 'xls' || extension === 'csv' || extension === 'tsv') {
-    return <SheetSvg className={`${ICON_COLORS.xlsx} ${className}`} />;
-  }
-
-  if (extension === 'md') {
-    return <DocumentSvg className={`${ICON_COLORS.md} ${className}`} />;
-  }
-
-  if (extension === 'txt') {
-    return <DocumentSvg className={`${ICON_COLORS.txt} ${className}`} />;
-  }
-
-  if (isAudioExtension(extension)) {
-    return <AudioSvg className={`${ICON_COLORS.audio} ${className}`} />;
-  }
-
-  if (isVideoExtension(extension)) {
-    return <VideoSvg className={`${ICON_COLORS.video} ${className}`} />;
-  }
-
-  if (isImageExtension(extension)) {
-    return <ImageSvg className={`${ICON_COLORS.image} ${className}`} />;
-  }
-
-  if (isPdfExtension(extension)) {
-    return <PdfSvg className={`${ICON_COLORS.pdf} ${className}`} />;
-  }
-
-  if (isHtmlExtension(extension)) {
-    return <DocumentSvg className={`${ICON_COLORS.html} ${className}`} />;
-  }
-
-  return <DocumentSvg className={`${ICON_COLORS.default} ${className}`} />;
+if (import.meta.hot) {
+  import.meta.hot.accept(() => {
+    import.meta.hot.invalidate();
+  });
 }

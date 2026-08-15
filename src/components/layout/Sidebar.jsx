@@ -114,7 +114,8 @@ export default function Sidebar({
     setFavorite,
     isFavorite,
   } = useFavorites();
-  const { folderColorMap, refreshFolderColorMap, setFolderColor } = useFolderColors();
+  const { folderColorMap, nameBoldMap, refreshFolderColorMap, setFolderColor, setNameBold } =
+    useFolderColors();
   const { isAdminLoggedIn, adminId } = useAdminAuthContext();
   const { openLogin } = useLoginDialog();
   const { effectivePermissions } = useGuestPermissions();
@@ -648,6 +649,15 @@ export default function Sidebar({
     }
   };
 
+  const handleSetNameBold = async (entry, bold) => {
+    if (!entry) return;
+    try {
+      await setNameBold(entry.relativePath, bold);
+    } catch (err) {
+      nativeAlert(err instanceof Error ? err.message : '이름 굵기를 바꾸지 못했습니다.');
+    }
+  };
+
   const handleShareLinkRevoke = async () => {
     if (!shareLinkDialog?.entry) return;
     await revokeShareLinkForEntry({ entry: shareLinkDialog.entry, refreshShareMap });
@@ -831,6 +841,7 @@ export default function Sidebar({
           onOpenFile={handleOpenFileFromTree}
           onContextMenu={openContextMenu}
           folderColorMap={folderColorMap}
+          nameBoldMap={nameBoldMap}
         />
       ) : (
         <div className="min-h-0 flex-1 overflow-auto">
@@ -849,6 +860,7 @@ export default function Sidebar({
               openContextMenu(event, null, targetPath)
             }
             folderColorMap={folderColorMap}
+            nameBoldMap={nameBoldMap}
           />
         </div>
       )}
@@ -1015,6 +1027,14 @@ export default function Sidebar({
             globalWrite,
           )}
           onChangeFolderColor={(color) => handleSetFolderColor(propertiesEntry, color)}
+          nameBold={Boolean(nameBoldMap[propertiesEntry.relativePath])}
+          canChangeNameBold={canWriteAtPath(
+            propertiesEntry.relativePath,
+            adminId,
+            isAdminLoggedIn,
+            globalWrite,
+          )}
+          onChangeNameBold={(bold) => handleSetNameBold(propertiesEntry, bold)}
           onClose={() => {
             setPropertiesEntry(null);
             setPropertiesStat(null);

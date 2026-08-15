@@ -98,6 +98,8 @@ contextBridge.exposeInMainWorld('nas4usb', {
   folderColors: {
     getMap: () => ipcRenderer.invoke('folderColors:getMap'),
     set: ({ path, color }) => ipcRenderer.invoke('folderColors:set', { path, color }),
+    getBoldMap: () => ipcRenderer.invoke('folderColors:getBoldMap'),
+    setBold: ({ path, bold }) => ipcRenderer.invoke('folderColors:setBold', { path, bold }),
   },
 
   folderOrder: {

@@ -41,6 +41,9 @@ function formatDate(iso) {
  *   folderColor?: string,
  *   canChangeFolderColor?: boolean,
  *   onChangeFolderColor?: (color: string) => void,
+ *   nameBold?: boolean,
+ *   canChangeNameBold?: boolean,
+ *   onChangeNameBold?: (checked: boolean) => void,
  *   onClose: () => void,
  * }} props
  */
@@ -59,6 +62,9 @@ export default function FilePropertiesDialog({
   folderColor = '',
   canChangeFolderColor = false,
   onChangeFolderColor,
+  nameBold = false,
+  canChangeNameBold = false,
+  onChangeNameBold,
   onClose,
 }) {
   const canEditAccessOptions = isAdminLoggedIn;
@@ -112,6 +118,23 @@ export default function FilePropertiesDialog({
               <dd>{formatDate(statInfo?.modifiedAt ?? entry.modifiedAt)}</dd>
             </div>
           </dl>
+
+          <div className="modal-access-options">
+            <label className={`modal-access-option${canChangeNameBold ? '' : ' modal-access-option--readonly'}`}>
+              <input
+                type="checkbox"
+                checked={Boolean(nameBold)}
+                disabled={accessSaving || !canChangeNameBold}
+                onChange={(event) => onChangeNameBold?.(event.target.checked)}
+              />
+              <span>진하게</span>
+            </label>
+            <p className="modal-access-hint">
+              {canChangeNameBold
+                ? '탐색기·트리 목록에서 이름을 굵게 표시합니다.'
+                : '이름 굵기는 쓰기 권한이 있을 때 변경할 수 있습니다.'}
+            </p>
+          </div>
 
           {showAccessOptions && resolvedFileStatus && (
             <div className="modal-access-options">

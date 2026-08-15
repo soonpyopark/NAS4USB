@@ -1,5 +1,6 @@
 import videojs from 'video.js';
 import ko from 'video.js/dist/lang/ko.json';
+import { isIosWebKit } from './iosPlayback.js';
 
 videojs.addLanguage('ko', ko);
 
@@ -29,7 +30,7 @@ videojs.registerComponent('SkipForward5', SkipForward5);
  *   seekToRef: { current: (seconds: number) => unknown },
  * }} clock
  */
-function patchTimelineClock(player, clock) {
+function patchTimelineClock(player, clock, options = {}) {
   const readDuration = player.duration.bind(player);
   const readCurrentTime = player.currentTime.bind(player);
 
@@ -56,6 +57,9 @@ function patchTimelineClock(player, clock) {
     if (!Number.isFinite(next)) return readCurrentTime();
     const current = origin + (Number(readCurrentTime()) || 0);
     if (!acceptSeeks || Math.abs(next - current) < 0.35) return next;
+    if (options.nativeSeek) {
+      return readCurrentTime(Math.max(0, next - origin));
+    }
     void clock.seekToRef.current?.(next);
     return next;
   };
@@ -103,9 +107,20 @@ function clickZone(player, x, y) {
 /**
  * @param {Event} event
  */
-function isPlayerChrome(event) {
+function isPlayerChrome(event, player, point) {
   const target = event.target;
-  return target instanceof Element && Boolean(target.closest(UI_CHROME_SELECTOR));
+  if (target instanceof Element && target.closest(UI_CHROME_SELECTOR)) return true;
+  if (!point) return false;
+  const root = player.el();
+  if (!root) return false;
+  for (const node of root.querySelectorAll(UI_CHROME_SELECTOR)) {
+    if (!(node instanceof HTMLElement) || node.clientHeight <= 0) continue;
+    const rect = node.getBoundingClientRect();
+    if (point.x >= rect.left && point.x <= rect.right && point.y >= rect.top && point.y <= rect.bottom) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -166,10 +181,19 @@ function handleDoubleTap(player, zone) {
  * }} clock
  */
 export function mountVideoJsPlayer(host, clock) {
+  const ios = isIosWebKit();
   const video = document.createElement('video');
   video.className = 'video-js vjs-big-play-centered vjs-fill';
   video.playsInline = true;
-  video.crossOrigin = 'anonymous';
+  video.controls = false;
+  video.setAttribute('playsinline', '');
+  video.setAttribute('webkit-playsinline', '');
+  video.removeAttribute('controls');
+  video.preload = 'auto';
+  if (!ios) {
+    video.crossOrigin = 'anonymous';
+  }
+  host.classList.toggle('nas4usb-videojs-host--ios', ios);
   host.replaceChildren(video);
 
   let pendingClick = 0;
@@ -186,8 +210,8 @@ export function mountVideoJsPlayer(host, clock) {
    * @param {Event} event
    */
   const handleSurfaceTap = (event) => {
-    if (isPlayerChrome(event)) return;
     const point = clientPoint(event);
+    if (isPlayerChrome(event, player, point)) return;
     if (!point) return;
     const now = Date.now();
     const zone = clickZone(player, point.x, point.y);
@@ -209,13 +233,14 @@ export function mountVideoJsPlayer(host, clock) {
     cancelPendingClick();
     pendingClick = window.setTimeout(() => {
       pendingClick = 0;
+      player.userActive(true);
       togglePlayPause(player);
     }, CLICK_DELAY_MS);
   };
 
   const player = videojs(video, {
     controls: true,
-    autoplay: true,
+    autoplay: !ios,
     preload: 'auto',
     fill: true,
     responsive: true,
@@ -229,18 +254,19 @@ export function mountVideoJsPlayer(host, clock) {
       liveTolerance: 15,
     },
     enableSmoothSeeking: false,
-    disablePictureInPicture: false,
+    disablePictureInPicture: ios,
     spatialNavigation: {
-      enabled: true,
-      horizontalSeek: true,
+      enabled: !ios,
+      horizontalSeek: !ios,
     },
     userActions: {
       click: false,
       doubleClick: false,
-      hotkeys: true,
+      hotkeys: !ios,
     },
     html5: {
-      vhs: { overrideNative: true },
+      vhs: { overrideNative: !ios },
+      nativeControlsForTouch: false,
       nativeAudioTracks: true,
       nativeVideoTracks: true,
       nativeTextTracks: true,
@@ -274,7 +300,7 @@ export function mountVideoJsPlayer(host, clock) {
     },
   });
 
-  patchTimelineClock(player, clock);
+  patchTimelineClock(player, clock, { nativeSeek: ios });
 
   /** @type {HTMLElement | null} */
   let surfaceEl = null;
@@ -283,12 +309,22 @@ export function mountVideoJsPlayer(host, clock) {
 
   const onPointerDown = (event) => {
     if (event.isPrimary === false) return;
+    const point = clientPoint(event);
+    if (isPlayerChrome(event, player, point)) {
+      pointerStart = null;
+      return;
+    }
     pointerStart = { x: event.clientX, y: event.clientY };
   };
 
   const onPointerUp = (event) => {
     if (event.isPrimary === false) return;
     if (event.pointerType === 'mouse' && event.button !== 0) return;
+    const point = clientPoint(event);
+    if (isPlayerChrome(event, player, point)) {
+      pointerStart = null;
+      return;
+    }
     const start = pointerStart;
     pointerStart = null;
     if (
@@ -311,17 +347,23 @@ export function mountVideoJsPlayer(host, clock) {
   const onTouchEnd = (event) => {
     if (handledByPointer) return;
     if (event.touches && event.touches.length > 0) return;
+    const point = clientPoint(event);
+    if (isPlayerChrome(event, player, point)) return;
     handleSurfaceTap(event);
   };
 
   player.ready(() => {
     player.trigger('durationchange');
+    video.controls = false;
+    video.removeAttribute('controls');
     surfaceEl = player.el();
     if (!surfaceEl) return;
     surfaceEl.addEventListener('pointerdown', onPointerDown);
     surfaceEl.addEventListener('pointerup', onPointerUp);
     surfaceEl.addEventListener('pointercancel', onPointerCancel);
-    surfaceEl.addEventListener('touchend', onTouchEnd);
+    if (!ios) {
+      surfaceEl.addEventListener('touchend', onTouchEnd);
+    }
   });
 
   return {
@@ -333,7 +375,9 @@ export function mountVideoJsPlayer(host, clock) {
         surfaceEl.removeEventListener('pointerdown', onPointerDown);
         surfaceEl.removeEventListener('pointerup', onPointerUp);
         surfaceEl.removeEventListener('pointercancel', onPointerCancel);
-        surfaceEl.removeEventListener('touchend', onTouchEnd);
+        if (!ios) {
+          surfaceEl.removeEventListener('touchend', onTouchEnd);
+        }
         surfaceEl = null;
       }
       try {

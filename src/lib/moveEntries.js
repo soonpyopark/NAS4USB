@@ -1,5 +1,6 @@
 import { getParentPath, joinRelativePath, resolveUniqueName } from './fsPaths.js';
 import { sortEntriesByFolderOrder } from './folderOrder.js';
+import { filterTiptapAssetSidecarFromEntries } from '../../shared/tiptapAssetPaths.js';
 import { isTrashPath, TRASH_FOLDER } from './trashPaths.js';
 
 /**
@@ -111,7 +112,9 @@ export async function moveEntries(entries, destinationPath) {
  */
 export async function listMoveDestinationFolders(relativePath) {
   const entries = await window.nas4usb.fs.readDir(relativePath);
-  const folders = entries.filter((entry) => entry.isDirectory && entry.relativePath !== TRASH_FOLDER);
+  const folders = filterTiptapAssetSidecarFromEntries(
+    entries.filter((entry) => entry.isDirectory && entry.relativePath !== TRASH_FOLDER),
+  );
   /** @type {Record<string, string[]>} */
   let orderMap = {};
   try {

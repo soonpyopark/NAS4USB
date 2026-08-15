@@ -7,10 +7,16 @@ const TEXT_ALIGNS = ['left', 'center', 'right', 'justify'];
 
 /**
  * @typedef {{
+ *   type: 'heading' | 'paragraph',
+ *   level?: number,
+ * }} FormatBlockSnapshot
+ *
+ * @typedef {{
  *   booleanMarks: string[],
  *   textStyle: Record<string, string>,
  *   highlightColor: string,
  *   textAlign: string,
+ *   block: FormatBlockSnapshot | null,
  * }} FormatSnapshot
  */
 
@@ -42,7 +48,18 @@ export function snapshotFormat(editor) {
     }
   }
 
-  return { booleanMarks, textStyle, highlightColor, textAlign };
+  /** @type {FormatBlockSnapshot | null} */
+  let block = null;
+  if (editor.isActive('heading')) {
+    const level = Number(editor.getAttributes('heading').level);
+    if (Number.isInteger(level) && level >= 1 && level <= 6) {
+      block = { type: 'heading', level };
+    }
+  } else if (editor.isActive('paragraph')) {
+    block = { type: 'paragraph' };
+  }
+
+  return { booleanMarks, textStyle, highlightColor, textAlign, block };
 }
 
 /**
@@ -82,6 +99,12 @@ export function applyFormat(editor, snapshot) {
   if (editor.state.selection.empty) expandCollapsedToWord(editor);
 
   let chain = editor.chain().focus();
+  if (snapshot.block?.type === 'heading' && snapshot.block.level) {
+    chain = chain.setHeading({ level: snapshot.block.level });
+  } else if (snapshot.block?.type === 'paragraph') {
+    chain = chain.setParagraph();
+  }
+
   for (const name of COPYABLE_MARKS) {
     if (typeof chain.unsetMark === 'function') chain = chain.unsetMark(name);
   }

@@ -295,6 +295,35 @@ export function isTrustedServerFingerprint(fingerprint256, root) {
 }
 
 /**
+ * Electron's Certificate struct often has SHA-1 `fingerprint` and PEM `data`,
+ * not `fingerprint256`. Compare all of those against our server cert.
+ * @param {{ fingerprint?: string, fingerprint256?: string, data?: string } | null | undefined} certificate
+ * @param {string} [root]
+ */
+export function isTrustedElectronCertificate(certificate, root) {
+  const pem = readServerCertificatePem(root);
+  if (!pem || !certificate) return false;
+  try {
+    const ours = new X509Certificate(pem);
+    const ours256 = ours.fingerprint256.replace(/:/g, '').toLowerCase();
+    const ours1 = ours.fingerprint.replace(/:/g, '').toLowerCase();
+    const claimed256 = String(certificate.fingerprint256 ?? '').replace(/:/g, '').toLowerCase();
+    if (claimed256 && claimed256 === ours256) return true;
+    const claimed1 = String(certificate.fingerprint ?? '').replace(/:/g, '').toLowerCase();
+    if (claimed1 && claimed1 === ours1) return true;
+    const data = String(certificate.data ?? '').trim();
+    if (!data) return false;
+    const wrapped = data.includes('BEGIN CERTIFICATE')
+      ? data
+      : `-----BEGIN CERTIFICATE-----\n${data}\n-----END CERTIFICATE-----`;
+    const theirs = new X509Certificate(wrapped);
+    return ours256 === theirs.fingerprint256.replace(/:/g, '').toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
+/**
  * @param {string} [root]
  */
 export async function getTlsStatus(root) {

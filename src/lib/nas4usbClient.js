@@ -314,6 +314,12 @@ export function createHttpNas4usbClient() {
           method: 'POST',
           body: JSON.stringify({ path, color }),
         }),
+      getBoldMap: () => apiFetch('/folder-colors/bold-map'),
+      setBold: ({ path, bold }) =>
+        apiFetch('/folder-colors/set-bold', {
+          method: 'POST',
+          body: JSON.stringify({ path, bold }),
+        }),
     },
 
     folderOrder: {

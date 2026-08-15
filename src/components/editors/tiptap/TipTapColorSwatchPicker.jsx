@@ -24,8 +24,10 @@ export default function TipTapColorSwatchPicker({
   onChange,
 }) {
   const [open, setOpen] = useState(false);
+  const [hexDraft, setHexDraft] = useState('');
   const rootRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   const customInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
+  const pickingRef = useRef(false);
   const listId = useId();
 
   const paletteValues = useMemo(
@@ -39,11 +41,20 @@ export default function TipTapColorSwatchPicker({
 
   useEffect(() => {
     if (!open) return undefined;
+    setHexDraft(normalizeHexColor(value) || '');
+  }, [open, value]);
+
+  useEffect(() => {
+    if (!open) return undefined;
     const onPointerDown = (event) => {
+      if (pickingRef.current) return;
+      if (customInputRef.current && document.activeElement === customInputRef.current) return;
       if (!rootRef.current?.contains(event.target)) setOpen(false);
     };
     const onKeyDown = (event) => {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key !== 'Escape') return;
+      if (event.target instanceof HTMLInputElement) return;
+      setOpen(false);
     };
     window.addEventListener('pointerdown', onPointerDown);
     window.addEventListener('keydown', onKeyDown);
@@ -134,23 +145,54 @@ export default function TipTapColorSwatchPicker({
                           'conic-gradient(from 180deg, #ef4444, #f59e0b, #eab308, #22c55e, #06b6d4, #3b82f6, #a855f7, #ef4444)',
                       }
                 }
-                onClick={() => customInputRef.current?.click()}
+                onClick={() => {
+                  pickingRef.current = true;
+                  customInputRef.current?.click();
+                }}
               />
             )}
           </div>
 
           {allowCustom && (
-            <input
-              ref={customInputRef}
-              type="color"
-              className="tiptap-swatch__native"
-              value={normalizeHexColor(value) || '#2563eb'}
-              aria-label={`${title} 사용자 지정`}
-              onChange={(event) => {
-                onChange(event.target.value);
-                setOpen(false);
-              }}
-            />
+            <>
+              <input
+                ref={customInputRef}
+                type="color"
+                className="tiptap-swatch__native"
+                value={normalizeHexColor(value) || '#2563eb'}
+                aria-label={`${title} 사용자 지정`}
+                onChange={(event) => {
+                  onChange(event.target.value);
+                  setHexDraft(event.target.value);
+                }}
+                onBlur={() => {
+                  window.setTimeout(() => {
+                    pickingRef.current = false;
+                  }, 0);
+                }}
+              />
+              <label className="tiptap-swatch__hex-row">
+                <span>HEX</span>
+                <input
+                  type="text"
+                  spellCheck={false}
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  maxLength={7}
+                  className="tiptap-swatch__hex"
+                  value={hexDraft}
+                  placeholder="#RRGGBB"
+                  aria-label={`${title} HEX`}
+                  onChange={(event) => {
+                    const next = event.target.value.replace(/[^#0-9a-fA-F]/g, '').slice(0, 7);
+                    setHexDraft(next);
+                    const normalized = normalizeHexColor(next);
+                    if (normalized) onChange(normalized);
+                  }}
+                  onKeyDown={(event) => event.stopPropagation()}
+                />
+              </label>
+            </>
           )}
 
           <div className="tiptap-swatch__caption">{active?.label || title}</div>
@@ -163,7 +205,8 @@ export default function TipTapColorSwatchPicker({
 /** @param {string} value */
 function normalizeHexColor(value) {
   if (!value || typeof value !== 'string') return '';
-  const trimmed = value.trim();
+  let trimmed = value.trim();
+  if (!trimmed.startsWith('#')) trimmed = `#${trimmed}`;
   if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) return trimmed;
   if (/^#[0-9a-fA-F]{3}$/.test(trimmed)) {
     const [, r, g, b] = trimmed;

@@ -55,8 +55,14 @@ export async function streamAbsoluteFile(req, res, absolutePath, contentType) {
   const total = stat.size;
   const range = parseRangeHeader(req.headers.range, total);
 
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Range, Content-Type',
+    'Access-Control-Expose-Headers': 'Accept-Ranges, Content-Length, Content-Range',
+  };
+
   if (req.headers.range && !range) {
-    res.writeHead(416, { 'Content-Range': `bytes */${total}` });
+    res.writeHead(416, { 'Content-Range': `bytes */${total}`, ...corsHeaders });
     res.end();
     return;
   }
@@ -68,6 +74,7 @@ export async function streamAbsoluteFile(req, res, absolutePath, contentType) {
       'Accept-Ranges': 'bytes',
       'Content-Length': end - start + 1,
       'Content-Type': contentType,
+      ...corsHeaders,
     });
     fs.createReadStream(absolutePath, { start, end }).pipe(res);
     return;
@@ -77,6 +84,7 @@ export async function streamAbsoluteFile(req, res, absolutePath, contentType) {
     'Content-Length': total,
     'Content-Type': contentType,
     'Accept-Ranges': 'bytes',
+    ...corsHeaders,
   });
   fs.createReadStream(absolutePath).pipe(res);
 }

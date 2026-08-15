@@ -1,8 +1,14 @@
 import { base64ToBytes, bytesToBase64 } from '../bytes.js';
+import { isExternalFolderPath } from '../../../shared/externalFolders.js';
 import {
   PDF_VIEWER_SIDECAR_FORMAT,
   PDF_VIEWER_SIDECAR_VERSION,
+  getPdfPathForViewerSidecar,
   getPdfViewerSidecarPath,
+  getPdfViewerStateCacheRelativePath,
+  isCanonicalPdfViewerSidecarRelativePath,
+  isPdfViewerSidecarRelativePath,
+  normalizeRelativePath,
 } from '../../../shared/pdfViewerSidecar.js';
 
 /**
@@ -213,18 +219,66 @@ export function buildPdfViewerSidecarBase64(state) {
 }
 
 /**
+ * @param {string} relativePath
+ */
+async function readSidecarFile(relativePath) {
+  try {
+    const base64 = await window.nas4usb.fs.readFile(relativePath);
+    return parsePdfViewerSidecarBase64(base64);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * @param {string} pdfRelativePath
+ * @param {{ keepCanonical?: boolean }} [options]
+ */
+async function removeSiblingViewerSidecars(pdfRelativePath, options = {}) {
+  if (!window.nas4usb?.fs?.readDir || !window.nas4usb?.fs?.delete) return;
+  const normalized = normalizeRelativePath(pdfRelativePath);
+  const slash = normalized.lastIndexOf('/');
+  const parent = slash < 0 ? '.' : normalized.slice(0, slash);
+  let entries = [];
+  try {
+    entries = await window.nas4usb.fs.readDir(parent);
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if (!isPdfViewerSidecarRelativePath(entry.relativePath)) continue;
+    if (getPdfPathForViewerSidecar(entry.relativePath) !== normalized) continue;
+    if (options.keepCanonical && isCanonicalPdfViewerSidecarRelativePath(entry.relativePath)) {
+      continue;
+    }
+    await window.nas4usb.fs.delete(entry.relativePath).catch(() => {});
+  }
+}
+
+/**
  * @param {string} pdfRelativePath
  * @returns {Promise<PdfViewerSidecarPayload | null>}
  */
 export async function loadPdfViewerSidecar(pdfRelativePath) {
   if (!pdfRelativePath || !window.nas4usb?.fs?.readFile) return null;
-  const sidecarPath = getPdfViewerSidecarPath(pdfRelativePath);
-  try {
-    const base64 = await window.nas4usb.fs.readFile(sidecarPath);
-    return parsePdfViewerSidecarBase64(base64);
-  } catch {
-    return null;
+  if (isExternalFolderPath(pdfRelativePath)) {
+    const cached = await readSidecarFile(getPdfViewerStateCacheRelativePath(pdfRelativePath));
+    if (cached) return cached;
+    const legacy = await readSidecarFile(getPdfViewerSidecarPath(pdfRelativePath));
+    if (legacy) {
+      try {
+        await window.nas4usb.fs.writeFile(
+          getPdfViewerStateCacheRelativePath(pdfRelativePath),
+          buildPdfViewerSidecarBase64(legacy),
+        );
+      } catch {
+        // listing prune will still remove phone-side copies
+      }
+      await removeSiblingViewerSidecars(pdfRelativePath);
+    }
+    return legacy;
   }
+  return readSidecarFile(getPdfViewerSidecarPath(pdfRelativePath));
 }
 
 /**
@@ -237,16 +291,24 @@ export async function loadPdfViewerSidecar(pdfRelativePath) {
  */
 export async function writePdfViewerSidecar(pdfRelativePath, state) {
   if (!pdfRelativePath || !window.nas4usb?.fs?.writeFile) return;
-  const sidecarPath = getPdfViewerSidecarPath(pdfRelativePath);
   try {
     const exists = await window.nas4usb.fs.exists(pdfRelativePath);
     if (!exists) {
-      await window.nas4usb.fs.delete(sidecarPath).catch(() => {});
+      await window.nas4usb.fs.delete(getPdfViewerSidecarPath(pdfRelativePath)).catch(() => {});
+      if (isExternalFolderPath(pdfRelativePath)) {
+        await window.nas4usb.fs.delete(getPdfViewerStateCacheRelativePath(pdfRelativePath)).catch(() => {});
+      }
       return;
     }
   } catch {
     return;
   }
   const base64 = buildPdfViewerSidecarBase64(state);
-  await window.nas4usb.fs.writeFile(sidecarPath, base64);
+  if (isExternalFolderPath(pdfRelativePath)) {
+    await window.nas4usb.fs.writeFile(getPdfViewerStateCacheRelativePath(pdfRelativePath), base64);
+    await removeSiblingViewerSidecars(pdfRelativePath);
+    return;
+  }
+  await window.nas4usb.fs.writeFile(getPdfViewerSidecarPath(pdfRelativePath), base64);
+  await removeSiblingViewerSidecars(pdfRelativePath, { keepCanonical: true });
 }
