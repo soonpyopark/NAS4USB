@@ -1,11 +1,12 @@
 import { APP_NAME, DEFAULT_SYNC_PORT } from '../shared/constants.js';
+import { formatAccessUrl } from '../shared/httpsConfig.js';
 import { createRequire } from 'node:module';
-import http from 'node:http';
-import os from 'node:os';
 import { WebSocketServer } from 'ws';
 import { handleHttpApiRequest } from './httpApi.js';
 import { serveStaticDist } from './staticServer.js';
 import { rejectIfIpNotAllowed, rejectUpgradeIfIpNotAllowed } from './ipAccessGuard.js';
+import { getLocalIPv4Addresses } from './lanAddresses.js';
+import { createAppHttpServer } from './tlsCerts.js';
 
 const require = createRequire(import.meta.url);
 const { setupWSConnection } = require('y-websocket/bin/utils');
@@ -14,32 +15,21 @@ const { setupWSConnection } = require('y-websocket/bin/utils');
 let syncPort = DEFAULT_SYNC_PORT;
 /** @type {string} */
 let syncHostname = '0.0.0.0';
+/** @type {boolean} */
+let syncHttpsEnabled = false;
 
 let syncServer = null;
 let syncWss = null;
 /** Tracked so a restart can free the port instead of waiting on keep-alive peers. */
 const openSockets = new Set();
 
-export function getLocalIPv4Addresses() {
-  const interfaces = os.networkInterfaces();
-  const addresses = [];
-
-  for (const entries of Object.values(interfaces)) {
-    for (const entry of entries ?? []) {
-      if (entry.family === 'IPv4' && !entry.internal) {
-        addresses.push(entry.address);
-      }
-    }
-  }
-
-  return addresses;
-}
+export { getLocalIPv4Addresses };
 
 /** @type {string | null} */
 let staticDistRoot = null;
 
 /**
- * @param {{ port?: number, hostname?: string }} [options]
+ * @param {{ port?: number, hostname?: string, httpsEnabled?: boolean }} [options]
  */
 export function configureSyncServer(options = {}) {
   if (options.port != null) {
@@ -48,19 +38,31 @@ export function configureSyncServer(options = {}) {
   if (options.hostname != null) {
     syncHostname = options.hostname;
   }
+  if (options.httpsEnabled != null) {
+    syncHttpsEnabled = Boolean(options.httpsEnabled);
+  }
+}
+
+function syncListenInfo() {
+  return {
+    port: syncPort,
+    addresses: getLocalIPv4Addresses(),
+    https: syncHttpsEnabled,
+    appUrl: formatAccessUrl('127.0.0.1', syncPort, syncHttpsEnabled),
+  };
 }
 
 /**
  * @param {string} [distRoot]
  */
-export function startSyncServer(distRoot) {
+export async function startSyncServer(distRoot) {
   if (syncServer) {
-    return { port: syncPort, addresses: getLocalIPv4Addresses() };
+    return syncListenInfo();
   }
 
   staticDistRoot = distRoot ?? null;
 
-  syncServer = http.createServer(async (req, res) => {
+  syncServer = await createAppHttpServer(syncHttpsEnabled, async (req, res) => {
     if (await rejectIfIpNotAllowed(req, res)) return;
     if (await handleHttpApiRequest(req, res)) return;
 
@@ -97,11 +99,12 @@ export function startSyncServer(distRoot) {
   });
 
   syncServer.listen(syncPort, syncHostname, () => {
-    console.log(`[sync] Y.js broker listening on ${syncHostname}:${syncPort}`);
+    const scheme = syncHttpsEnabled ? 'https' : 'http';
+    console.log(`[sync] Y.js broker listening on ${scheme}://${syncHostname}:${syncPort}`);
     console.log(`[sync] LAN addresses: ${getLocalIPv4Addresses().join(', ') || 'none'}`);
   });
 
-  return { port: syncPort, addresses: getLocalIPv4Addresses() };
+  return syncListenInfo();
 }
 
 export function stopSyncServer() {
@@ -121,4 +124,8 @@ export function getSyncPort() {
 
 export function getSyncHostname() {
   return syncHostname;
+}
+
+export function getSyncHttpsEnabled() {
+  return syncHttpsEnabled;
 }

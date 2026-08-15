@@ -35,7 +35,7 @@ export async function createFolderAtPath(targetPath, name) {
 
   const entries = await window.nas4usb.fs.readDir(targetPath);
   const existingNames = entries.filter((entry) => entry.isDirectory).map((entry) => entry.name);
-  const folderName = resolveUniqueName(existingNames, validation.name);
+  const folderName = resolveUniqueName(existingNames, validation.name, true);
   await window.nas4usb.fs.mkdir(joinRelativePath(targetPath, folderName));
   return folderName;
 }

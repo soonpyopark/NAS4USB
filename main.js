@@ -34,8 +34,16 @@ import {
   stopSyncServer,
   getSyncPort,
   getSyncHostname,
+  getSyncHttpsEnabled,
   getLocalIPv4Addresses,
 } from './electron/syncServer.js';
+import {
+  ensureTlsMaterial,
+  getCaCertificatePath,
+  getTlsDir,
+  getTlsStatus,
+  isTrustedServerFingerprint,
+} from './electron/tlsCerts.js';
 import { readServerEnvRaw, resolveDataRoot, resolveWorkspaceRoot } from './electron/envConfig.js';
 import {
   hostnameForWebServerMode,
@@ -44,6 +52,7 @@ import {
   resolveWebServerPort,
   webServerModeForHostname,
 } from './shared/webServerConfig.js';
+import { formatAccessUrl, normalizeHttpsEnabled } from './shared/httpsConfig.js';
 import { allowFirewallInbound, removeFirewallInbound } from './electron/firewallService.js';
 import {
   START_HIDDEN_ARG,
@@ -173,8 +182,21 @@ if (!gotSingleInstanceLock) {
   });
 }
 
-/** @type {{ port: number, addresses: string[], appUrl?: string } | null} */
+/** @type {{ port: number, addresses: string[], appUrl?: string, https?: boolean } | null} */
 let activeServerInfo = null;
+
+app.on('certificate-error', (event, _webContents, _url, _error, certificate, callback) => {
+  try {
+    if (isTrustedServerFingerprint(certificate?.fingerprint256)) {
+      event.preventDefault();
+      callback(true);
+      return;
+    }
+  } catch {
+    // App context may not be ready yet.
+  }
+  callback(false);
+});
 
 let mainWindow = null;
 /** @type {import('electron').BrowserWindow | null} */
@@ -340,11 +362,15 @@ async function configureServerFromSettings(root) {
   configureSyncServer({
     port: resolveWebServerPort(settings.webServerPort, envRaw.portRaw),
     hostname: storedMode ? hostnameForWebServerMode(storedMode) : envRaw.hostname,
+    httpsEnabled: normalizeHttpsEnabled(settings.httpsEnabled),
   });
 }
 
 function currentAppUrl() {
-  return activeServerInfo?.appUrl ?? `http://127.0.0.1:${activeServerInfo?.port ?? getSyncPort()}`;
+  return (
+    activeServerInfo?.appUrl ??
+    formatAccessUrl('127.0.0.1', activeServerInfo?.port ?? getSyncPort(), getSyncHttpsEnabled())
+  );
 }
 
 async function ensureServer() {
@@ -354,7 +380,7 @@ async function ensureServer() {
     const { startDevServer } = await import('./electron/devServer.js');
     activeServerInfo = await startDevServer();
   } else {
-    activeServerInfo = startSyncServer(path.join(__dirname, 'dist'));
+    activeServerInfo = await startSyncServer(path.join(__dirname, 'dist'));
   }
 
   return activeServerInfo;
@@ -381,6 +407,7 @@ function getServerManagementInfo() {
     hostname: getSyncHostname(),
     addresses: running ? (activeServerInfo?.addresses ?? []) : getLocalIPv4Addresses(),
     appUrl: running ? currentAppUrl() : null,
+    httpsEnabled: getSyncHttpsEnabled(),
     autoLaunch: getAutoLaunchState(),
   };
 }
@@ -389,12 +416,20 @@ function getServerManagementInfo() {
  * Rebind the server to a new port/mode. The renderer is served by this very
  * server, so the caller must navigate the window to the returned `appUrl`.
  *
- * @param {{ port: number, mode: import('./shared/webServerConfig.js').WebServerMode }} config
+ * @param {{ port: number, mode: import('./shared/webServerConfig.js').WebServerMode, httpsEnabled: boolean }} config
  */
-async function restartServerWithConfig({ port, mode }) {
-  const previous = { port: getSyncPort(), hostname: getSyncHostname() };
+async function restartServerWithConfig({ port, mode, httpsEnabled }) {
+  const previous = {
+    port: getSyncPort(),
+    hostname: getSyncHostname(),
+    httpsEnabled: getSyncHttpsEnabled(),
+  };
   await shutdownServer();
-  configureSyncServer({ port, hostname: hostnameForWebServerMode(mode) });
+  configureSyncServer({
+    port,
+    hostname: hostnameForWebServerMode(mode),
+    httpsEnabled,
+  });
 
   try {
     await ensureServer();
@@ -763,9 +798,16 @@ ipcMain.handle('sync:getInfo', async () => {
   return getSyncInfo();
 });
 
+async function getServerManagementInfoWithTls() {
+  return {
+    ...getServerManagementInfo(),
+    tls: await getTlsStatus(),
+  };
+}
+
 ipcMain.handle('server:getInfo', async (event) => {
   assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
-  return getServerManagementInfo();
+  return getServerManagementInfoWithTls();
 });
 
 ipcMain.handle('server:applyConfig', async (event, patch = {}) => {
@@ -779,27 +821,122 @@ ipcMain.handle('server:applyConfig', async (event, patch = {}) => {
   if (patch?.mode != null && mode == null) {
     throw new Error('서버 모드가 올바르지 않습니다.');
   }
+  const httpsEnabled = patch?.httpsEnabled == null ? null : Boolean(patch.httpsEnabled);
+
+  if (patch?.revealTlsFolder) {
+    const dir = getTlsDir();
+    await fs.promises.mkdir(dir, { recursive: true });
+    const error = await shell.openPath(dir);
+    if (error) throw new Error(error);
+    return { restarted: false, info: await getServerManagementInfoWithTls() };
+  }
+
+  if (patch?.exportCa) {
+    return exportCaCertificate();
+  }
+
+  if (patch?.regenerateTls) {
+    return regenerateTlsCertificates();
+  }
 
   /** @type {Record<string, unknown>} */
   const settingsPatch = {};
   if (port != null) settingsPatch.webServerPort = port;
   if (mode != null) settingsPatch.webServerMode = mode;
+  if (httpsEnabled != null) settingsPatch.httpsEnabled = httpsEnabled;
   if (Object.keys(settingsPatch).length > 0) {
     await updateAppSettings(settingsPatch, getPortableRoot());
   }
 
   const nextPort = port ?? getSyncPort();
   const nextMode = mode ?? webServerModeForHostname(getSyncHostname());
+  const nextHttps = httpsEnabled ?? getSyncHttpsEnabled();
   const needsRestart =
     nextPort !== getSyncPort() ||
     hostnameForWebServerMode(nextMode) !== getSyncHostname() ||
+    nextHttps !== getSyncHttpsEnabled() ||
     activeServerInfo == null;
 
-  if (!needsRestart) {
-    return { restarted: false, info: getServerManagementInfo() };
+  if (nextHttps) {
+    await ensureTlsMaterial();
   }
 
-  return { restarted: true, info: await restartServerWithConfig({ port: nextPort, mode: nextMode }) };
+  if (!needsRestart) {
+    return { restarted: false, info: await getServerManagementInfoWithTls() };
+  }
+
+  return {
+    restarted: true,
+    info: {
+      ...(await restartServerWithConfig({
+        port: nextPort,
+        mode: nextMode,
+        httpsEnabled: nextHttps,
+      })),
+      tls: await getTlsStatus(),
+    },
+  };
+});
+
+async function exportCaCertificate() {
+  const caPath = getCaCertificatePath();
+  if (!fs.existsSync(caPath)) {
+    await ensureTlsMaterial();
+  }
+  const result = await dialog.showSaveDialog(mainWindow ?? undefined, {
+    title: 'CA 인증서 내보내기',
+    defaultPath: 'NAS4USB-Local-CA.crt',
+    filters: [{ name: '인증서', extensions: ['crt', 'pem'] }],
+  });
+  if (result.canceled || !result.filePath) {
+    return { ok: false, restarted: false, info: await getServerManagementInfoWithTls() };
+  }
+  await fs.promises.copyFile(getCaCertificatePath(), result.filePath);
+  return {
+    ok: true,
+    path: result.filePath,
+    restarted: false,
+    info: await getServerManagementInfoWithTls(),
+  };
+}
+
+async function regenerateTlsCertificates() {
+  await ensureTlsMaterial({ forceServer: true });
+  if (!getSyncHttpsEnabled()) {
+    return { ok: true, regenerated: true, restarted: false, info: await getServerManagementInfoWithTls() };
+  }
+  return {
+    ok: true,
+    regenerated: true,
+    restarted: true,
+    info: {
+      ...(await restartServerWithConfig({
+        port: getSyncPort(),
+        mode: webServerModeForHostname(getSyncHostname()),
+        httpsEnabled: true,
+      })),
+      tls: await getTlsStatus(),
+    },
+  };
+}
+
+ipcMain.handle('server:exportCa', async (event) => {
+  assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
+  return exportCaCertificate();
+});
+
+ipcMain.handle('server:revealTlsFolder', async (event) => {
+  assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
+  const dir = getTlsDir();
+  await fs.promises.mkdir(dir, { recursive: true });
+  const error = await shell.openPath(dir);
+  if (error) throw new Error(error);
+  return { ok: true, path: dir };
+});
+
+ipcMain.handle('server:regenerateTls', async (event) => {
+  assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
+  return regenerateTlsCertificates();
 });
 
 ipcMain.handle('server:setAutoLaunch', async (event, { enabled, startHidden } = {}) => {
@@ -1441,6 +1578,7 @@ if (gotSingleInstanceLock) {
       getServerInfo: () => ({
         port: activeServerInfo?.port ?? getSyncPort(),
         addresses: activeServerInfo?.addresses ?? getLocalIPv4Addresses(),
+        https: getSyncHttpsEnabled(),
       }),
     });
 

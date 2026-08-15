@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { DEFAULT_SYNC_PORT } from '../../../shared/constants.js';
+import { formatAccessUrl } from '../../../shared/httpsConfig.js';
 import { normalizeWebServerPort } from '../../../shared/webServerConfig.js';
 import { useAppConfirm } from '../../hooks/useAppConfirm.jsx';
 import { isElectronRenderer } from '../../lib/runtime.js';
@@ -21,6 +22,15 @@ import { isElectronRenderer } from '../../lib/runtime.js';
  *   hostname: string,
  *   addresses: string[],
  *   appUrl: string | null,
+ *   httpsEnabled?: boolean,
+ *   tls?: {
+ *     dir?: string,
+ *     caPath?: string,
+ *     hasCa?: boolean,
+ *     hasServer?: boolean,
+ *     sans?: string[],
+ *     notAfter?: string,
+ *   },
  *   autoLaunch: AutoLaunchState,
  * }} ServerInfo
  */
@@ -38,7 +48,8 @@ const PRIMARY_BUTTON_CLASS =
 function statusLabel(info) {
   if (!info) return '확인 중…';
   if (!info.running) return '중지됨';
-  return info.mode === 'lan' ? '실행 중 · Web (LAN)' : '실행 중 · Local (127.0.0.1)';
+  const scope = info.mode === 'lan' ? '실행 중 · Web (LAN)' : '실행 중 · Local (127.0.0.1)';
+  return info.httpsEnabled ? `${scope} · HTTPS` : scope;
 }
 
 /**
@@ -47,7 +58,36 @@ function statusLabel(info) {
 function lanUrls(info) {
   if (!info?.running || info.mode !== 'lan') return [];
   const port = info.port ?? info.configuredPort;
-  return info.addresses.map((address) => `http://${address}:${port}`);
+  return info.addresses.map((address) =>
+    formatAccessUrl(address, port, Boolean(info.httpsEnabled)),
+  );
+}
+
+function isMissingIpcHandler(error) {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  return /No handler registered/i.test(message);
+}
+
+/**
+ * @param {ServerInfo | null} info
+ */
+async function resolveTlsFolderPath(info) {
+  if (info?.tls?.dir) return info.tls.dir;
+  try {
+    const paths = await window.nas4usb.getPaths();
+    const root = paths?.workspaceRoot || paths?.appPath || paths?.exeRoot;
+    if (root) return `${String(root).replace(/[\\/]+$/, '')}\\.nas4usb\\tls`;
+  } catch {
+    // ignore
+  }
+  return '';
+}
+
+async function revealTlsFolder(info) {
+  const result = await window.nas4usb.server.applyConfig({ revealTlsFolder: true });
+  if (info && !info.tls?.dir && !result?.info?.tls?.dir && !result?.tls?.dir) {
+    throw new Error('No handler registered for revealTlsFolder');
+  }
 }
 
 /** Super-admin only: HTTP·Y.js 서버 포트, Local/Web 모드, 방화벽 인바운드 규칙. */
@@ -235,7 +275,7 @@ export default function ServerSettingsPanel() {
       <section className="space-y-3">
         <h3 className="text-sm font-semibold text-slate-800">포트</h3>
         <p className="text-sm leading-relaxed text-slate-600">
-          HTTP·Y.js 서버가 사용하는 TCP 포트입니다. 저장하면{' '}
+          HTTP(S)·Y.js 서버가 사용하는 TCP 포트입니다. 저장하면{' '}
           <code className="rounded bg-slate-100 px-1 text-[12px]">.nas4usb-settings.json</code>에
           기록되어 <code className="rounded bg-slate-100 px-1 text-[12px]">.env</code>의{' '}
           <code className="rounded bg-slate-100 px-1 text-[12px]">PORT</code>보다 우선 적용됩니다.
@@ -314,6 +354,172 @@ export default function ServerSettingsPanel() {
           서버를 완전히 중지하려면 트레이 아이콘 메뉴의 Stop Server를 사용하세요. 이 화면도 서버가
           제공하므로 여기서 중지하면 창이 비어 버립니다.
         </p>
+      </section>
+
+      <section className="space-y-3">
+        <h3 className="text-sm font-semibold text-slate-800">HTTPS</h3>
+        <p className="text-sm leading-relaxed text-slate-600">
+          같은 포트에서 TLS로 암호화합니다. 이 앱 창은 자체 인증서를 자동으로 신뢰합니다. 다른
+          PC·휴대폰 브라우저는 아래 CA 인증서를 한 번 설치해야 경고가 사라집니다. LAN IP가 바뀌면
+          서버 인증서를 다시 만드세요.
+        </p>
+        <dl className="grid gap-2 text-sm text-slate-700 sm:grid-cols-[6rem_1fr]">
+          <dt className="text-slate-500">상태</dt>
+          <dd>{info?.httpsEnabled ? '켜짐' : '꺼짐'}</dd>
+          <dt className="text-slate-500">SAN</dt>
+          <dd className="break-all">{info?.tls?.sans?.length ? info.tls.sans.join(', ') : '—'}</dd>
+          <dt className="text-slate-500">만료</dt>
+          <dd>{info?.tls?.notAfter ? new Date(info.tls.notAfter).toLocaleString('ko-KR') : '—'}</dd>
+          <dt className="text-slate-500">폴더</dt>
+          <dd className="break-all font-mono text-xs">{info?.tls?.dir || '앱을 재시작하면 표시됩니다'}</dd>
+        </dl>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className={info?.httpsEnabled ? DANGER_BUTTON_CLASS : PRIMARY_BUTTON_CLASS}
+            disabled={busy}
+            onClick={() =>
+              void run(async () => {
+                const port = await draftPortOrAlert();
+                if (port == null) return;
+                const enable = !info?.httpsEnabled;
+                if (enable) {
+                  const ok = await appConfirm({
+                    title: 'HTTPS',
+                    body: 'HTTPS를 켜면 서버가 다시 시작됩니다. 다른 기기 브라우저는 CA 인증서를 설치해야 자물쇠가 정상입니다. 계속할까요?',
+                    confirmLabel: '켜기',
+                  });
+                  if (!ok) return;
+                }
+                try {
+                  await applyConfig(
+                    { port, httpsEnabled: enable },
+                    enable ? 'HTTPS를 켰습니다.' : 'HTTPS를 껐습니다. HTTP로 다시 시작합니다.',
+                  );
+                } catch (error) {
+                  await appAlert({
+                    title: 'HTTPS',
+                    body: error instanceof Error ? error.message : 'HTTPS 설정을 바꾸지 못했습니다.',
+                  });
+                  await refresh();
+                }
+              })
+            }
+          >
+            {info?.httpsEnabled ? 'HTTPS 끄기' : 'HTTPS 켜기'}
+          </button>
+          <button
+            type="button"
+            className={BUTTON_CLASS}
+            disabled={busy}
+            onClick={() =>
+              void run(async () => {
+                const ok = await appConfirm({
+                  title: '인증서 다시 만들기',
+                  body: '현재 LAN IP를 넣어 서버 인증서를 다시 만듭니다. HTTPS가 켜져 있으면 서버를 재시작합니다.',
+                  confirmLabel: '다시 만들기',
+                });
+                if (!ok) return;
+                try {
+                  const result = await window.nas4usb.server.applyConfig({ regenerateTls: true });
+                  if (!result?.regenerated && !result?.tls && !result?.info?.tls) {
+                    throw new Error('No handler registered');
+                  }
+                  setInfo(result.info);
+                  if (result.restarted && result.info.appUrl) {
+                    await appAlert({
+                      title: 'HTTPS',
+                      body: `서버 인증서를 다시 만들었습니다.\n${result.info.appUrl}`,
+                    });
+                    window.location.replace(result.info.appUrl);
+                    return;
+                  }
+                  await appAlert({ title: 'HTTPS', body: '서버 인증서를 다시 만들었습니다.' });
+                } catch (error) {
+                  const folder = await resolveTlsFolderPath(info);
+                  await appAlert({
+                    title: 'HTTPS',
+                    body: isMissingIpcHandler(error)
+                      ? `앱을 트레이에서 종료한 뒤 다시 실행하세요.${folder ? `\n\n폴더: ${folder}` : ''}`
+                      : error instanceof Error
+                        ? error.message
+                        : '인증서를 다시 만들지 못했습니다.',
+                  });
+                }
+              })
+            }
+          >
+            인증서 다시 만들기
+          </button>
+          <button
+            type="button"
+            className={BUTTON_CLASS}
+            disabled={busy}
+            onClick={() =>
+              void run(async () => {
+                try {
+                  const result = await window.nas4usb.server.applyConfig({ exportCa: true });
+                  if (result?.ok && result.path) {
+                    await appAlert({
+                      title: 'CA 인증서 내보내기',
+                      body: `저장했습니다.\n${result.path}\n\nWindows: 인증서 가져오기 → 로컬 컴퓨터 → 신뢰할 수 있는 루트 인증 기관`,
+                    });
+                    return;
+                  }
+                  if (result && result.ok === false) return;
+                  const folder = await resolveTlsFolderPath(info);
+                  await appAlert({
+                    title: 'CA 인증서 내보내기',
+                    body: `앱을 트레이에서 종료한 뒤 다시 실행하세요.${
+                      folder ? `\n\n폴더: ${folder}\n파일: ca.crt` : ''
+                    }`,
+                  });
+                } catch (error) {
+                  const folder = await resolveTlsFolderPath(info);
+                  await appAlert({
+                    title: 'CA 인증서 내보내기',
+                    body: isMissingIpcHandler(error)
+                      ? `앱을 트레이에서 종료한 뒤 다시 실행하세요.${
+                          folder ? `\n\n폴더: ${folder}\n파일: ca.crt` : ''
+                        }`
+                      : error instanceof Error
+                        ? error.message
+                        : '내보내지 못했습니다.',
+                  });
+                }
+              })
+            }
+          >
+            CA 인증서 내보내기
+          </button>
+          <button
+            type="button"
+            className={BUTTON_CLASS}
+            disabled={busy}
+            onClick={() =>
+              void run(async () => {
+                try {
+                  await revealTlsFolder(info);
+                } catch (error) {
+                  const folder = await resolveTlsFolderPath(info);
+                  const staleMain = isMissingIpcHandler(error);
+                  await appAlert({
+                    title: '인증서 폴더',
+                    body: staleMain
+                      ? `앱 메인 프로세스가 이전 코드로 실행 중입니다. 트레이 아이콘에서 종료한 뒤 NAS4USB를 다시 실행하세요.${
+                          folder ? `\n\n폴더: ${folder}` : ''
+                        }`
+                      : error instanceof Error
+                        ? error.message
+                        : '폴더를 열지 못했습니다.',
+                  });
+                }
+              })
+            }
+          >
+            인증서 폴더 열기
+          </button>
+        </div>
       </section>
 
       <section className="space-y-3">

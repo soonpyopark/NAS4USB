@@ -12,6 +12,7 @@
  * @typedef {Object} Nas4usbSyncInfo
  * @property {number} port
  * @property {string[]} addresses
+ * @property {boolean} [https]
  */
 
 /**

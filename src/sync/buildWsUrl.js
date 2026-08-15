@@ -1,4 +1,5 @@
 import { DEFAULT_SYNC_PORT } from '../../shared/constants.js';
+import { formatAccessUrl, httpScheme, isHttpsEnabledFromPage, wsScheme } from '../../shared/httpsConfig.js';
 import { loadSyncHost } from '../lib/syncHost.js';
 
 function resolveSyncHost(syncInfo) {
@@ -19,38 +20,48 @@ function resolveSyncHost(syncInfo) {
   return '127.0.0.1';
 }
 
-/** Build the HTTP base URL consumed by y-websocket's WebsocketProvider. */
+function resolveHttps(syncInfo) {
+  return isHttpsEnabledFromPage(syncInfo);
+}
+
+function resolvePort(syncInfo) {
+  return syncInfo?.port ?? DEFAULT_SYNC_PORT;
+}
+
+/** Build the HTTP(S) base URL consumed by y-websocket's WebsocketProvider. */
 export function getSyncServerUrl(syncInfo) {
-  const port = syncInfo?.port ?? DEFAULT_SYNC_PORT;
-  return `http://${resolveSyncHost(syncInfo)}:${port}`;
+  return formatAccessUrl(resolveSyncHost(syncInfo), resolvePort(syncInfo), resolveHttps(syncInfo));
 }
 
 export function getSyncWsEndpoint(syncInfo, roomId) {
-  const port = syncInfo?.port ?? DEFAULT_SYNC_PORT;
-  return `ws://${resolveSyncHost(syncInfo)}:${port}/${roomId}`;
+  const port = resolvePort(syncInfo);
+  return `${wsScheme(resolveHttps(syncInfo))}://${resolveSyncHost(syncInfo)}:${port}/${roomId}`;
 }
 
 export function getLanWsEndpoints(syncInfo, roomId) {
-  const port = syncInfo?.port ?? DEFAULT_SYNC_PORT;
+  const port = resolvePort(syncInfo);
+  const scheme = wsScheme(resolveHttps(syncInfo));
   const addresses = syncInfo?.addresses?.length ? syncInfo.addresses : ['127.0.0.1'];
-  return addresses.map((address) => `ws://${address}:${port}/${roomId}`);
+  return addresses.map((address) => `${scheme}://${address}:${port}/${roomId}`);
 }
 
-/** @returns {string[]} Browser HTTP access URLs for LAN peers. */
+/** @returns {string[]} Browser HTTP(S) access URLs for LAN peers. */
 export function buildLanAccessLinks(syncInfo) {
-  const port = syncInfo?.port ?? DEFAULT_SYNC_PORT;
+  const port = resolvePort(syncInfo);
+  const httpsOn = resolveHttps(syncInfo);
   const configured = loadSyncHost();
   if (configured) {
-    return [`http://${configured}:${port}`];
+    return [formatAccessUrl(configured, port, httpsOn)];
   }
 
   const addresses = syncInfo?.addresses?.length ? syncInfo.addresses : ['127.0.0.1'];
-  return addresses.map((address) => `http://${address}:${port}`);
+  return addresses.map((address) => formatAccessUrl(address, port, httpsOn));
 }
 
 /** @returns {string} Clipboard text: access URL(s) and port. */
 export function buildLanAccessClipboardText(syncInfo) {
-  const port = syncInfo?.port ?? DEFAULT_SYNC_PORT;
+  const port = resolvePort(syncInfo);
   const links = buildLanAccessLinks(syncInfo);
-  return [...links, `포트: ${port}`].join('\n');
+  const scheme = httpScheme(resolveHttps(syncInfo)).toUpperCase();
+  return [...links, `포트: ${port}`, `전송: ${scheme}`].join('\n');
 }

@@ -17,14 +17,14 @@ export default function BrowserOnlyNotice({ error = null }) {
         <p className="mt-3 text-sm leading-6 text-slate-600">
           브라우저에서도 {APP_NAME}를 사용할 수 있습니다. 먼저 PC에서{' '}
           <code className="rounded bg-slate-100 px-1">npm run dev</code> 또는 Electron 앱을 실행한 뒤,
-          같은 주소(<code className="rounded bg-slate-100 px-1">http://호스트IP:{DEFAULT_SYNC_PORT}</code>)로
+          같은 주소(<code className="rounded bg-slate-100 px-1">http(s)://호스트IP:{DEFAULT_SYNC_PORT}</code>)로
           접속하세요.
         </p>
         <ul className="mt-4 space-y-2 text-left text-sm text-slate-600">
           <li>• 파일 탐색·HWPX/XLSX 편집·실시간 협업 모두 브라우저에서 가능</li>
           <li>
             • LAN: 다른 PC 브라우저에서{' '}
-            <code className="rounded bg-slate-100 px-1">http://서버IP:{DEFAULT_SYNC_PORT}</code>
+            <code className="rounded bg-slate-100 px-1">http(s)://서버IP:{DEFAULT_SYNC_PORT}</code>
           </li>
           <li>• Electron 창과 브라우저 탭을 동시에 사용해도 Y.js로 동기화됩니다</li>
         </ul>

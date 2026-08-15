@@ -504,7 +504,7 @@ export default function Sidebar({
   const handleDuplicate = async (entry) => {
     const parent = getParentPath(entry.relativePath);
     const siblingNames = await getSiblingNames(parent === '.' ? '.' : parent);
-    const uniqueName = resolveUniqueName(siblingNames, entry.name);
+    const uniqueName = resolveUniqueName(siblingNames, entry.name, entry.isDirectory);
     const destination = parent === '.' ? uniqueName : joinRelativePath(parent, uniqueName);
     await fs.copyTo(entry.relativePath, destination);
     await notifyChange();

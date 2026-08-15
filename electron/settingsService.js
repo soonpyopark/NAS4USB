@@ -9,6 +9,7 @@ import {
   normalizeAccessPermissionsFromUi,
 } from '../shared/guestPermissions.js';
 import { getMemberAccessPermissionsByLoginId } from './membersService.js';
+import { normalizeHttpsEnabled } from '../shared/httpsConfig.js';
 import { normalizeWebServerMode, normalizeWebServerPort } from '../shared/webServerConfig.js';
 import { DEFAULT_ACCENT_COLOR, normalizeAccentColor } from '../shared/theme.js';
 import { normalizeExternalFolders } from '../shared/externalFolders.js';
@@ -26,6 +27,7 @@ const SETTINGS_FILE = '.nas4usb-settings.json';
  *   loggedInPermissions: import('../shared/guestPermissions.js').AccessPermissionFlags,
  *   webServerPort: number | null,
  *   webServerMode: import('../shared/webServerConfig.js').WebServerMode | null,
+ *   httpsEnabled: boolean,
  *   themeAccentColor: string,
  *   dataRoot: string | null,
  *   externalFolders: import('../shared/externalFolders.js').ExternalFolderMount[],
@@ -90,6 +92,7 @@ function emptySettings() {
     loggedInPermissions: { ...DEFAULT_LOGGED_IN_PERMISSIONS },
     webServerPort: null,
     webServerMode: null,
+    httpsEnabled: false,
     themeAccentColor: DEFAULT_ACCENT_COLOR,
     dataRoot: null,
     externalFolders: [],
@@ -132,6 +135,7 @@ async function loadStore(portableRoot) {
       ),
       webServerPort: normalizeWebServerPort(parsed?.webServerPort),
       webServerMode: normalizeWebServerMode(parsed?.webServerMode),
+      httpsEnabled: normalizeHttpsEnabled(parsed?.httpsEnabled),
       themeAccentColor: normalizeAccentColor(parsed?.themeAccentColor),
       dataRoot: normalizeConfiguredDataRoot(parsed?.dataRoot),
       externalFolders: normalizeExternalFolders(parsed?.externalFolders),
@@ -282,6 +286,9 @@ export async function updateAppSettings(patch, portableRoot = getPortableRoot())
   }
   if (patch && 'webServerMode' in patch) {
     settings.webServerMode = normalizeWebServerMode(patch.webServerMode);
+  }
+  if (patch && 'httpsEnabled' in patch) {
+    settings.httpsEnabled = normalizeHttpsEnabled(patch.httpsEnabled);
   }
   if (patch && 'themeAccentColor' in patch) {
     settings.themeAccentColor = normalizeAccentColor(patch.themeAccentColor);

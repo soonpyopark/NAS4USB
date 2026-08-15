@@ -1,15 +1,16 @@
 import { createRequire } from 'node:module';
-import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer as createViteServer } from 'vite';
 import { WebSocketServer } from 'ws';
-import { getSyncHostname, getSyncPort } from './syncServer.js';
+import { formatAccessUrl } from '../shared/httpsConfig.js';
+import { getSyncHostname, getSyncHttpsEnabled, getSyncPort } from './syncServer.js';
 import { handleHttpApiRequest } from './httpApi.js';
-import { getLocalIPv4Addresses } from './syncServer.js';
+import { getLocalIPv4Addresses } from './lanAddresses.js';
 import { readEnvFile } from './envConfig.js';
 import { parseAllowedHosts } from '../shared/viteHosts.js';
 import { rejectIfIpNotAllowed, rejectUpgradeIfIpNotAllowed } from './ipAccessGuard.js';
+import { createAppHttpServer } from './tlsCerts.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
@@ -77,7 +78,8 @@ export async function startDevServer() {
   }
 
   const syncPort = getSyncPort();
-  const server = http.createServer();
+  const httpsEnabled = getSyncHttpsEnabled();
+  const server = await createAppHttpServer(httpsEnabled);
   const projectRoot = path.resolve(__dirname, '..');
   const fileEnv = readEnvFile(projectRoot);
   const allowedHosts = parseAllowedHosts(fileEnv.ALLOWED_HOSTS ?? process.env.ALLOWED_HOSTS);
@@ -90,10 +92,13 @@ export async function startDevServer() {
       host: getSyncHostname() === '0.0.0.0' ? true : getSyncHostname(),
       allowedHosts,
       middlewareMode: { server },
-      hmr: {
-        port: syncPort + 21670,
-        clientPort: syncPort + 21670,
-      },
+      // HTTPS pages cannot open a plaintext HMR websocket (mixed content).
+      hmr: httpsEnabled
+        ? false
+        : {
+            port: syncPort + 21670,
+            clientPort: syncPort + 21670,
+          },
     },
     appType: 'spa',
   });
@@ -132,7 +137,11 @@ export async function startDevServer() {
   const listenHost = getSyncHostname();
   await listenWithRetry(server, listenHost, syncPort);
 
-  console.log(`[dev] Vite + Y.js unified server on http://${listenHost}:${syncPort}`);
+  const scheme = httpsEnabled ? 'https' : 'http';
+  console.log(`[dev] Vite + Y.js unified server on ${scheme}://${listenHost}:${syncPort}`);
+  if (httpsEnabled) {
+    console.log('[dev] HTTPS is on — Vite HMR is disabled for this session');
+  }
   console.log(`[dev] allowedHosts: ${allowedHosts === true ? 'all (*)' : allowedHosts.join(', ')}`);
   console.log(`[sync] LAN addresses: ${getLocalIPv4Addresses().join(', ') || 'none'}`);
 
@@ -141,10 +150,12 @@ export async function startDevServer() {
 }
 
 export function getDevServerInfo() {
+  const httpsEnabled = getSyncHttpsEnabled();
   return {
     port: getSyncPort(),
     addresses: getLocalIPv4Addresses(),
-    appUrl: `http://127.0.0.1:${getSyncPort()}`,
+    https: httpsEnabled,
+    appUrl: formatAccessUrl('127.0.0.1', getSyncPort(), httpsEnabled),
   };
 }
 

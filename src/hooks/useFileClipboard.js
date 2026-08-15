@@ -32,7 +32,7 @@ export function useFileClipboard() {
       const names = new Set(existingNames);
 
       for (const entry of clipboard.entries) {
-        const uniqueName = resolveUniqueName(names, entry.name);
+        const uniqueName = resolveUniqueName(names, entry.name, entry.isDirectory);
         const destination = joinRelativePath(destinationPath, uniqueName);
         names.add(uniqueName);
 

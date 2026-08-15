@@ -141,6 +141,9 @@ contextBridge.exposeInMainWorld('nas4usb', {
     setAutoLaunch: (options) => ipcRenderer.invoke('server:setAutoLaunch', options),
     allowFirewall: (port) => ipcRenderer.invoke('server:allowFirewall', port),
     removeFirewall: (port) => ipcRenderer.invoke('server:removeFirewall', port),
+    exportCa: () => ipcRenderer.invoke('server:applyConfig', { exportCa: true }),
+    revealTlsFolder: () => ipcRenderer.invoke('server:applyConfig', { revealTlsFolder: true }),
+    regenerateTls: () => ipcRenderer.invoke('server:applyConfig', { regenerateTls: true }),
   },
 
   members: {

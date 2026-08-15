@@ -90,7 +90,7 @@ export async function moveEntries(entries, destinationPath) {
 
   for (const entry of entries) {
     const parent = getParentPath(entry.relativePath);
-    const uniqueName = resolveUniqueName(names, entry.name);
+    const uniqueName = resolveUniqueName(names, entry.name, entry.isDirectory);
     const destination = joinRelativePath(destinationPath, uniqueName);
 
     if (parent === destinationPath && uniqueName === entry.name) {

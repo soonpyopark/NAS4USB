@@ -85,7 +85,7 @@ export function useYjsSession(relativePath, syncInfo, { syncReady = true } = {})
       setStatus('disconnected');
       setSynced(false);
     };
-  }, [relativePath, roomId, syncInfo?.port, syncReady]);
+  }, [relativePath, roomId, syncInfo?.port, syncInfo?.https, syncReady]);
 
   return { doc, provider, status, synced, roomId };
 }

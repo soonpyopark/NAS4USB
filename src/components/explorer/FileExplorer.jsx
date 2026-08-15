@@ -764,6 +764,7 @@ export default function FileExplorer({
     const uniqueName = resolveUniqueName(
       entries.map((item) => item.name),
       target.name,
+      target.isDirectory,
     );
     const normalized = parent === '.' ? uniqueName : joinRelativePath(parent, uniqueName);
 

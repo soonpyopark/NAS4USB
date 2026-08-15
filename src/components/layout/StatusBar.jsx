@@ -9,7 +9,9 @@ function formatPath(relativePath) {
 export default function StatusBar({ paths, syncInfo, currentPath }) {
   const lanHint =
     syncInfo?.addresses?.length > 0
-      ? syncInfo.addresses.map((addr) => `ws://${addr}:${syncInfo.port}`).join(' · ')
+      ? syncInfo.addresses
+          .map((addr) => `${syncInfo.https ? 'wss' : 'ws'}://${addr}:${syncInfo.port}`)
+          .join(' · ')
       : 'LAN 주소 없음';
 
   return (

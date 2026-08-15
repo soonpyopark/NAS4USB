@@ -81,7 +81,7 @@ export function useFileSystem(currentPath) {
       }
 
       const existingNames = entries.filter((entry) => entry.isDirectory).map((entry) => entry.name);
-      const folderName = resolveUniqueName(existingNames, validation.name);
+      const folderName = resolveUniqueName(existingNames, validation.name, true);
       await window.nas4usb.fs.mkdir(joinRelativePath(currentPath, folderName));
       return folderName;
     },

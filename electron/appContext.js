@@ -25,7 +25,7 @@ import { normalizeExternalFolders } from '../shared/externalFolders.js';
  *   tempPath: string,
  *   isDev: boolean,
  *   externalFolders?: import('../shared/externalFolders.js').ExternalFolderMount[],
- *   getServerInfo: () => { port: number, addresses: string[] },
+ *   getServerInfo: () => { port: number, addresses: string[], https?: boolean },
  * }} AppContext
  */
 

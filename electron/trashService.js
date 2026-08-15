@@ -226,7 +226,7 @@ export async function trashPath(relativePath, portableRoot = getPortableRoot()) 
   const stat = await fsService.statPath(normalized);
   const trashEntries = await fsService.readDir(TRASH_FOLDER);
   const trashNames = trashEntries.map((entry) => entry.name);
-  const uniqueName = resolveUniqueName(trashNames, getBaseName(normalized));
+  const uniqueName = resolveUniqueName(trashNames, getBaseName(normalized), stat.isDirectory);
   const trashDest = `${TRASH_FOLDER}/${uniqueName}`;
 
   await purgeYjsRoomsForPathTree(normalized);
@@ -265,7 +265,9 @@ export async function restorePath(trashRelativePath, portableRoot = getPortableR
   const siblingEntries = await fsService.readDir(parent);
   const names = siblingEntries.map((entry) => entry.name);
   const baseName = getBaseName(originalPath);
-  const uniqueName = names.includes(baseName) ? resolveUniqueName(names, baseName) : baseName;
+  const uniqueName = names.includes(baseName)
+    ? resolveUniqueName(names, baseName, Boolean(meta.isDirectory))
+    : baseName;
   const restoreDest = parent === '.' ? uniqueName : `${parent}/${uniqueName}`;
 
   await syncMetadataMoveTree(normalized, restoreDest, portableRoot);
