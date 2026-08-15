@@ -318,6 +318,7 @@ export async function migrateStoredWorkspacePaths(portableRoot = getPortableRoot
   const files = [
     '.nas4usb-favorites.json',
     '.nas4usb-folder-colors.json',
+    '.nas4usb-folder-order.json',
     '.nas4usb-file-access.json',
     '.nas4usb-shares.json',
     '.nas4usb-trash.json',
@@ -355,6 +356,12 @@ export async function migrateStoredWorkspacePaths(portableRoot = getPortableRoot
           const colors = rewritePathKeyedMap(parsed.colors);
           if (JSON.stringify(colors) !== JSON.stringify(parsed.colors)) {
             next = { ...parsed, colors };
+            changed = true;
+          }
+        } else if (parsed.orders && typeof parsed.orders === 'object') {
+          const orders = rewritePathKeyedMap(parsed.orders);
+          if (JSON.stringify(orders) !== JSON.stringify(parsed.orders)) {
+            next = { ...parsed, orders };
             changed = true;
           }
         } else if (parsed.files && typeof parsed.files === 'object') {

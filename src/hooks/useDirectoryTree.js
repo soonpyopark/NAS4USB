@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAdminAuthContext } from '../context/AdminAuthContext.jsx';
 import { resolveTreeReloadPaths } from '../lib/fsInvalidatePaths.js';
-import { sortEntries } from '../lib/fsPaths.js';
+import { sortEntriesByFolderOrder } from '../lib/folderOrder.js';
+import { useFolderOrder } from './useFolderOrder.js';
 import { readDirWithRetry } from '../lib/readDirWithRetry.js';
 import {
   filterTrashFromEntries,
@@ -20,9 +22,25 @@ function foldersOnly(entries) {
 }
 
 /**
+ * @param {import('../types/nas4usb.d.ts').FsEntry[]} entries
+ * @param {string} relativePath
+ */
+function filterTreeFolders(entries, relativePath) {
+  return foldersOnly(
+    filterPdfViewerSidecarFromEntries(
+      filterFortuneSidecarFromEntries(
+        filterTiptapAssetSidecarFromEntries(filterTrashFromEntries(entries, relativePath)),
+      ),
+    ),
+  );
+}
+
+/**
  * @param {string} currentPath
  */
 export function useDirectoryTree(currentPath) {
+  const { folderOrderMap } = useFolderOrder();
+  const { adminId } = useAdminAuthContext();
   const [expandedPaths, setExpandedPaths] = useState(() => new Set(['.']));
   const [childrenMap, setChildrenMap] = useState({});
   const [loadingPaths, setLoadingPaths] = useState(() => new Set());
@@ -38,17 +56,9 @@ export function useDirectoryTree(currentPath) {
     setLoadingPaths((prev) => new Set(prev).add(relativePath));
     try {
       const entries = await readDirWithRetry(relativePath);
-      const sorted = foldersOnly(
-        filterPdfViewerSidecarFromEntries(
-          filterFortuneSidecarFromEntries(
-            filterTiptapAssetSidecarFromEntries(
-              filterTrashFromEntries(sortEntries(entries, 'name', 'asc'), relativePath),
-            ),
-          ),
-        ),
-      );
-      setChildrenMap((prev) => ({ ...prev, [relativePath]: sorted }));
-      return sorted;
+      const folders = filterTreeFolders(entries, relativePath);
+      setChildrenMap((prev) => ({ ...prev, [relativePath]: folders }));
+      return folders;
     } catch (err) {
       if (isFsNotFoundError(err) || isFsNotADirectoryError(err)) {
         setChildrenMap((prev) => {
@@ -113,18 +123,7 @@ export function useDirectoryTree(currentPath) {
       uniquePaths.map(async (path) => {
         try {
           const entries = await readDirWithRetry(path);
-          return [
-            path,
-            foldersOnly(
-              filterPdfViewerSidecarFromEntries(
-                filterFortuneSidecarFromEntries(
-                  filterTiptapAssetSidecarFromEntries(
-                    filterTrashFromEntries(sortEntries(entries, 'name', 'asc'), path),
-                  ),
-                ),
-              ),
-            ),
-          ];
+          return [path, filterTreeFolders(entries, path)];
         } catch (err) {
           if (isFsNotFoundError(err) || isFsNotADirectoryError(err)) return [path, null];
           return [path, undefined];
@@ -205,9 +204,18 @@ export function useDirectoryTree(currentPath) {
     };
   }, [currentPath, loadChildren]);
 
+  const sortedChildrenMap = useMemo(() => {
+    /** @type {Record<string, import('../types/nas4usb.d.ts').FsEntry[]>} */
+    const next = {};
+    for (const [path, list] of Object.entries(childrenMap)) {
+      next[path] = sortEntriesByFolderOrder(list, path, folderOrderMap, adminId);
+    }
+    return next;
+  }, [adminId, childrenMap, folderOrderMap]);
+
   return {
-    rootEntries: childrenMap['.'] ?? [],
-    childrenMap,
+    rootEntries: sortedChildrenMap['.'] ?? [],
+    childrenMap: sortedChildrenMap,
     expandedPaths,
     loadingPaths,
     toggleExpand,

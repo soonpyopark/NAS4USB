@@ -5,9 +5,32 @@ import { entryExtensionOf, isSecFileName } from '../../lib/filePassword/secPaths
 import { readWorkspacePlainBase64 } from '../../lib/filePassword/io.js';
 import { decodeTextBase64 } from '../../lib/text/textIO.js';
 import { renderMarkdown } from '../../lib/text/markdown.js';
-import { canPreviewEntry, getFilePreviewKind } from '../../lib/filePreview.js';
+import { getFilePreviewKind } from '../../lib/filePreview.js';
+import {
+  folderPreviewCrumbs,
+  folderPreviewParentPath,
+  listFolderPreviewEntries,
+} from '../../lib/folderPreview.js';
+import { getBaseName, getParentPath } from '../../lib/fsPaths.js';
+import { useFolderOrder } from '../../hooks/useFolderOrder.js';
 import { resolveComicFirstPage } from '../../lib/comicReader/firstPage.js';
 import { resolvePdfFirstPage } from '../../lib/pdf/firstPage.js';
+import FileIcon from './FileIcon.jsx';
+
+/**
+ * @param {string} relativePath
+ * @returns {import('../../types/nas4usb.d.ts').FsEntry}
+ */
+function folderStub(relativePath) {
+  return {
+    name: getBaseName(relativePath) || '폴더',
+    relativePath,
+    isDirectory: true,
+    size: 0,
+    modifiedAt: '',
+    extension: null,
+  };
+}
 
 const TipTapEditorView = lazy(() => import('../editors/TipTapEditorView.jsx'));
 
@@ -20,6 +43,9 @@ const TEXT_PREVIEW_LIMIT = 400_000;
  *   canView?: boolean,
  *   onClose: () => void,
  *   onOpenFull?: (entry: import('../../types/nas4usb.d.ts').FsEntry) => void,
+ *   onPreview?: (entry: import('../../types/nas4usb.d.ts').FsEntry) => void,
+ *   previewAnchorPath?: string | null,
+ *   folderColorMap?: Record<string, string>,
  * }} props
  */
 export default function FilePreviewPane({
@@ -28,8 +54,21 @@ export default function FilePreviewPane({
   canView = true,
   onClose,
   onOpenFull,
+  onPreview,
+  previewAnchorPath = null,
+  folderColorMap = {},
 }) {
   const kind = getFilePreviewKind(entry);
+  const { folderOrderMap } = useFolderOrder();
+  const listingPath = entry?.isDirectory
+    ? entry.relativePath
+    : getParentPath(entry?.relativePath ?? '.');
+  const parentPath = !entry
+    ? null
+    : entry.isDirectory
+      ? folderPreviewParentPath(entry.relativePath, previewAnchorPath)
+      : listingPath;
+  const crumbs = folderPreviewCrumbs(previewAnchorPath, listingPath);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [text, setText] = useState('');
@@ -39,13 +78,19 @@ export default function FilePreviewPane({
   const [truncated, setTruncated] = useState(false);
   const [tiptapContent, setTiptapContent] = useState(null);
   const [tiptapResolveFileUrl, setTiptapResolveFileUrl] = useState(null);
+  const [folderEntries, setFolderEntries] = useState(
+    /** @type {import('../../types/nas4usb.d.ts').FsEntry[]} */ ([]),
+  );
+  const [folderCounts, setFolderCounts] = useState({ folders: 0, files: 0, total: 0, truncated: false });
+  const [folderLoading, setFolderLoading] = useState(false);
+  const [folderError, setFolderError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
     /** @type {(() => void | Promise<void>) | null} */
     let revoke = null;
 
-    setLoading(Boolean(open && entry && kind && canView));
+    setLoading(Boolean(open && entry && kind && kind !== 'folder' && canView));
     setError('');
     setText('');
     setHtml('');
@@ -55,7 +100,7 @@ export default function FilePreviewPane({
     setTiptapContent(null);
     setTiptapResolveFileUrl(null);
 
-    if (!open || !entry || !kind || !canView) {
+    if (!open || !entry || !kind || kind === 'folder' || !canView) {
       return () => {
         cancelled = true;
       };
@@ -153,24 +198,71 @@ export default function FilePreviewPane({
     };
   }, [open, entry?.relativePath, kind, canView]);
 
+  useEffect(() => {
+    let cancelled = false;
+    setFolderEntries([]);
+    setFolderCounts({ folders: 0, files: 0, total: 0, truncated: false });
+    setFolderError('');
+    if (!open || !entry || kind !== 'folder' || !canView) {
+      setFolderLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setFolderLoading(true);
+    (async () => {
+      try {
+        const result = await listFolderPreviewEntries(entry.relativePath, folderOrderMap);
+        if (cancelled) return;
+        setFolderEntries(result.entries);
+        setFolderCounts({
+          folders: result.folders,
+          files: result.files,
+          total: result.total,
+          truncated: result.truncated,
+        });
+        setFolderLoading(false);
+      } catch (err) {
+        if (!cancelled) {
+          setFolderError(err instanceof Error ? err.message : '폴더를 불러오지 못했습니다.');
+          setFolderLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, entry?.relativePath, kind, canView, folderOrderMap]);
+
   return (
     <div
       className={`file-preview-overlay${open ? ' file-preview-overlay--open' : ''}`}
       aria-hidden={!open}
     >
-      <aside className="file-preview-pane" aria-label="파일 미리보기" inert={open ? undefined : true}>
+      <aside className="file-preview-pane" aria-label="미리보기" inert={open ? undefined : true}>
         <header className="file-preview-pane__header">
           <p className="file-preview-pane__title" title={entry?.name}>
             {entry?.name || '미리보기'}
           </p>
           <div className="file-preview-pane__actions">
-            {entry && canPreviewEntry(entry) && typeof onOpenFull === 'function' ? (
+            {parentPath && typeof onPreview === 'function' ? (
+              <button
+                type="button"
+                className="nas-btn-ghost file-preview-pane__btn"
+                onClick={() => onPreview(folderStub(parentPath))}
+              >
+                상위
+              </button>
+            ) : null}
+            {entry && typeof onOpenFull === 'function' ? (
               <button
                 type="button"
                 className="nas-btn-ghost file-preview-pane__btn"
                 onClick={() => onOpenFull(entry)}
               >
-                열기
+                {entry.isDirectory ? '폴더 열기' : '열기'}
               </button>
             ) : null}
             <button type="button" className="nas-btn-ghost file-preview-pane__btn" onClick={onClose}>
@@ -178,16 +270,77 @@ export default function FilePreviewPane({
             </button>
           </div>
         </header>
+        {open && entry && crumbs.length > 0 ? (
+          <nav className="file-preview-pane__crumbs" aria-label="미리보기 경로">
+            {crumbs.map((crumb, index) => (
+              <span key={crumb.path} className="file-preview-pane__crumb">
+                {index > 0 ? <span className="file-preview-pane__crumb-sep">/</span> : null}
+                {(index === crumbs.length - 1 && kind === 'folder') || typeof onPreview !== 'function' ? (
+                  <span className="file-preview-pane__crumb-current">{crumb.name}</span>
+                ) : (
+                  <button
+                    type="button"
+                    className="file-preview-pane__crumb-btn"
+                    onClick={() => onPreview(folderStub(crumb.path))}
+                  >
+                    {crumb.name}
+                  </button>
+                )}
+              </span>
+            ))}
+          </nav>
+        ) : null}
 
         <div className="file-preview-pane__body">
           {!entry ? (
-            <p className="file-preview-pane__empty">미리볼 파일을 선택하세요.</p>
+            <p className="file-preview-pane__empty">미리볼 항목을 선택하세요.</p>
           ) : !canView ? (
-            <p className="file-preview-pane__empty">이 파일을 열람할 권한이 없습니다.</p>
+            <p className="file-preview-pane__empty">이 항목을 열람할 권한이 없습니다.</p>
           ) : !kind ? (
-            <p className="file-preview-pane__empty">
-              {entry.isDirectory ? '폴더는 미리볼 수 없습니다.' : '이 형식은 아직 미리볼 수 없습니다.'}
-            </p>
+            <p className="file-preview-pane__empty">이 형식은 아직 미리볼 수 없습니다.</p>
+          ) : kind === 'folder' ? (
+            folderLoading ? (
+              <p className="file-preview-pane__empty">불러오는 중…</p>
+            ) : folderError ? (
+              <p className="file-preview-pane__empty">{folderError}</p>
+            ) : (
+              <div className="file-preview-pane__folder">
+                <p className="file-preview-pane__folder-meta">
+                  {`폴더 ${folderCounts.folders.toLocaleString('ko-KR')}개 · 파일 ${folderCounts.files.toLocaleString('ko-KR')}개`}
+                </p>
+                {folderEntries.length === 0 ? (
+                  <p className="file-preview-pane__empty">폴더가 비어 있습니다.</p>
+                ) : (
+                  <ul className="file-preview-pane__folder-list">
+                    {folderEntries.map((child) => (
+                      <li key={child.relativePath}>
+                        <button
+                          type="button"
+                          className="file-preview-pane__folder-item"
+                          onClick={() => onPreview?.(child)}
+                          onDoubleClick={() => onOpenFull?.(child)}
+                        >
+                          <FileIcon
+                            entry={child}
+                            folderColor={folderColorMap[child.relativePath]}
+                            className="h-4 w-4 shrink-0"
+                          />
+                          <span className="file-preview-pane__folder-name" title={child.name}>
+                            {child.name}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {folderCounts.truncated ? (
+                  <p className="file-preview-pane__caption file-preview-pane__folder-more">
+                    앞 {folderEntries.length.toLocaleString('ko-KR')}개만 표시합니다. 전체를 보려면
+                    폴더를 여세요.
+                  </p>
+                ) : null}
+              </div>
+            )
           ) : loading ? (
             <p className="file-preview-pane__empty">불러오는 중…</p>
           ) : error ? (

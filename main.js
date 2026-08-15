@@ -90,6 +90,7 @@ import {
   assertCanAccessTrash,
   assertCanAccessFile,
   assertCanEditFile,
+  assertCanChangeFolderOrder,
   assertGuestCanWrite,
   assertHomeSystemPathMutable,
   filterTrashMapByHomeAccess,
@@ -124,11 +125,18 @@ import {
   syncFavoritesRename,
 } from './electron/favoritesService.js';
 import {
+  assignRandomFolderColor,
   getFolderColorsMap,
   setFolderColor,
   syncFolderColorsDelete,
   syncFolderColorsMoveTree,
 } from './electron/folderColorsService.js';
+import {
+  getFolderOrderMap,
+  setFolderOrder,
+  syncFolderOrderDelete,
+  syncFolderOrderMoveTree,
+} from './electron/folderOrderService.js';
 import {
   deletePermanent,
   emptyTrash,
@@ -1038,6 +1046,11 @@ ipcMain.handle('fs:mkdir', async (event, relativePath) => {
   const target = resolveHomeScopedWritePath(relativePath, auth);
   await assertCanEditFile(target, auth, getShareTokenFromEvent(event));
   const result = await fsService.mkdir(target);
+  try {
+    await assignRandomFolderColor(target, getPortableRoot());
+  } catch {
+    // folder creation must still succeed if color assignment fails
+  }
   notifyFsChanged(target);
   return result;
 });
@@ -1053,6 +1066,7 @@ ipcMain.handle('fs:rename', async (event, fromRelative, toRelative) => {
   await syncFileAccessRename(fromRelative, toRelative, getPortableRoot());
   await syncFavoritesRename(fromRelative, toRelative, getPortableRoot());
   await syncFolderColorsMoveTree(fromRelative, toRelative, getPortableRoot());
+  await syncFolderOrderMoveTree(fromRelative, toRelative, getPortableRoot());
   await syncFortuneSidecarRename(fromRelative, toRelative);
   await syncPdfViewerSidecarRename(fromRelative, toRelative);
   await syncTiptapAssetRename(fromRelative, toRelative);
@@ -1077,6 +1091,7 @@ ipcMain.handle('fs:delete', async (event, relativePath) => {
   await syncFileAccessDelete(relativePath, getPortableRoot());
   await syncFavoritesDelete(relativePath, getPortableRoot());
   await syncFolderColorsDelete(relativePath, getPortableRoot());
+  await syncFolderOrderDelete(relativePath, getPortableRoot());
   await syncFortuneSidecarDelete(relativePath);
   await syncPdfViewerSidecarDelete(relativePath);
   await syncFileHistoryDelete(relativePath, getPortableRoot());
@@ -1128,6 +1143,7 @@ ipcMain.handle('fs:move', async (event, fromRelative, toRelative) => {
   await syncFileAccessRename(fromRelative, dest, getPortableRoot());
   await syncFavoritesRename(fromRelative, dest, getPortableRoot());
   await syncFolderColorsMoveTree(fromRelative, dest, getPortableRoot());
+  await syncFolderOrderMoveTree(fromRelative, dest, getPortableRoot());
   await syncFortuneSidecarRename(fromRelative, dest);
   await syncPdfViewerSidecarRename(fromRelative, dest);
   await syncTiptapAssetRename(fromRelative, dest);
@@ -1196,6 +1212,7 @@ ipcMain.handle('workspace:rename', async (event, sessionId, newRelativePath) => 
   await syncFileAccessRename(fromPath, result.relativePath, getPortableRoot());
   await syncFavoritesRename(fromPath, result.relativePath, getPortableRoot());
   await syncFolderColorsMoveTree(fromPath, result.relativePath, getPortableRoot());
+  await syncFolderOrderMoveTree(fromPath, result.relativePath, getPortableRoot());
   await syncFortuneSidecarRename(fromPath, result.relativePath);
   await syncPdfViewerSidecarRename(fromPath, result.relativePath);
   await syncTiptapAssetRename(fromPath, result.relativePath);
@@ -1400,6 +1417,22 @@ ipcMain.handle('folderColors:set', async (event, { path: relativePath, color } =
   assertHomeSystemPathMutable(relativePath, 'mutate');
   await assertCanEditFile(relativePath, auth, shareToken);
   const result = await setFolderColor(relativePath, color, getPortableRoot());
+  notifyFsChanged(relativePath);
+  return result;
+});
+
+ipcMain.handle('folderOrder:getMap', async (event) => {
+  const auth = getAccessAuthFromEvent(event);
+  const perms = await getEffectiveAccessPermissions(auth, getPortableRoot());
+  if (!perms.view && !perms.write) return {};
+  return getFolderOrderMap(getPortableRoot());
+});
+
+ipcMain.handle('folderOrder:set', async (event, { path: relativePath, names } = {}) => {
+  const auth = getAccessAuthFromEvent(event);
+  const shareToken = getShareTokenFromEvent(event);
+  await assertCanChangeFolderOrder(relativePath, auth);
+  const result = await setFolderOrder(relativePath, names, getPortableRoot(), auth.loginId);
   notifyFsChanged(relativePath);
   return result;
 });

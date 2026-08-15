@@ -1,4 +1,4 @@
-import { folderColorClassName, isCustomFolderColor, normalizeFolderColorValue } from '../../../shared/folderColors.js';
+import { folderColorHex } from '../../../shared/folderColors.js';
 import { folderDisplayDepth } from '../../lib/memberHomes.js';
 import { innerExtensionOf, isSecFileName } from '../../lib/filePassword/secPaths.js';
 import {
@@ -114,12 +114,8 @@ const FOLDER_LEVEL_CYCLE = [
  */
 export function resolveFolderIconTint(entry, colorKey) {
   if (!entry?.isDirectory) return { className: '', style: undefined };
-  const value = normalizeFolderColorValue(colorKey);
-  if (isCustomFolderColor(value)) {
-    return { className: '', style: { color: value } };
-  }
-  const preset = folderColorClassName(value);
-  if (preset) return { className: preset, style: undefined };
+  const hex = folderColorHex(colorKey);
+  if (hex) return { className: '', style: { color: hex } };
   const depth = Math.max(1, folderDisplayDepth(entry.relativePath));
   return { className: FOLDER_LEVEL_CYCLE[(depth - 1) % FOLDER_LEVEL_CYCLE.length], style: undefined };
 }

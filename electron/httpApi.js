@@ -35,6 +35,7 @@ import {
   assertCanAccessFile,
   assertCanAccessTrash,
   assertCanEditFile,
+  assertCanChangeFolderOrder,
   assertGuestCanWrite,
   assertHomeSystemPathMutable,
   filterTrashMapByHomeAccess,
@@ -69,11 +70,18 @@ import {
   syncFavoritesRename,
 } from './favoritesService.js';
 import {
+  assignRandomFolderColor,
   getFolderColorsMap,
   setFolderColor,
   syncFolderColorsDelete,
   syncFolderColorsMoveTree,
 } from './folderColorsService.js';
+import {
+  getFolderOrderMap,
+  setFolderOrder,
+  syncFolderOrderDelete,
+  syncFolderOrderMoveTree,
+} from './folderOrderService.js';
 import {
   deletePermanent,
   emptyTrash,
@@ -250,6 +258,11 @@ export async function handleHttpApiRequest(req, res) {
       const target = resolveHomeScopedWritePath(body.path ?? '', auth);
       await assertCanEditFile(target, auth, getShareTokenFromQuery(url));
       const result = await fsService.mkdir(target);
+      try {
+        await assignRandomFolderColor(target, getPortableRoot());
+      } catch {
+        // folder creation must still succeed if color assignment fails
+      }
       notifyFsChanged(target);
       sendJson(res, 200, result);
       return true;
@@ -273,6 +286,7 @@ export async function handleHttpApiRequest(req, res) {
       await syncFileAccessDelete(body.path, getPortableRoot());
       await syncFavoritesDelete(body.path, getPortableRoot());
       await syncFolderColorsDelete(body.path, getPortableRoot());
+      await syncFolderOrderDelete(body.path, getPortableRoot());
       await syncFortuneSidecarDelete(body.path);
       await syncPdfViewerSidecarDelete(body.path);
       await syncFileHistoryDelete(body.path, getPortableRoot());
@@ -294,6 +308,7 @@ export async function handleHttpApiRequest(req, res) {
       await syncFileAccessRename(body.from, body.to, getPortableRoot());
       await syncFavoritesRename(body.from, body.to, getPortableRoot());
       await syncFolderColorsMoveTree(body.from, body.to, getPortableRoot());
+      await syncFolderOrderMoveTree(body.from, body.to, getPortableRoot());
       await syncFortuneSidecarRename(body.from, body.to);
       await syncPdfViewerSidecarRename(body.from, body.to);
       await syncTiptapAssetRename(body.from, body.to);
@@ -366,6 +381,7 @@ export async function handleHttpApiRequest(req, res) {
       await syncFileAccessRename(body.from, dest, getPortableRoot());
       await syncFavoritesRename(body.from, dest, getPortableRoot());
       await syncFolderColorsMoveTree(body.from, dest, getPortableRoot());
+      await syncFolderOrderMoveTree(body.from, dest, getPortableRoot());
       await syncFortuneSidecarRename(body.from, dest);
       await syncPdfViewerSidecarRename(body.from, dest);
       await syncTiptapAssetRename(body.from, dest);
@@ -579,6 +595,7 @@ export async function handleHttpApiRequest(req, res) {
       await syncFileAccessRename(fromPath, result.relativePath, getPortableRoot());
       await syncFavoritesRename(fromPath, result.relativePath, getPortableRoot());
       await syncFolderColorsMoveTree(fromPath, result.relativePath, getPortableRoot());
+      await syncFolderOrderMoveTree(fromPath, result.relativePath, getPortableRoot());
       await syncFortuneSidecarRename(fromPath, result.relativePath);
       await syncPdfViewerSidecarRename(fromPath, result.relativePath);
       await syncTiptapAssetRename(fromPath, result.relativePath);
@@ -672,6 +689,28 @@ export async function handleHttpApiRequest(req, res) {
       assertHomeSystemPathMutable(body.path, 'mutate');
       await assertCanEditFile(body.path ?? '', auth, shareToken);
       const result = await setFolderColor(body.path, body.color, getPortableRoot());
+      notifyFsChanged(body.path);
+      sendJson(res, 200, result);
+      return true;
+    }
+
+    if (method === 'GET' && url.pathname === '/api/folder-order/map') {
+      const auth = getAccessAuth(req);
+      const perms = await getEffectiveAccessPermissions(auth, getPortableRoot());
+      if (!perms.view && !perms.write) {
+        sendJson(res, 200, {});
+        return true;
+      }
+      sendJson(res, 200, await getFolderOrderMap(getPortableRoot()));
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/folder-order/set') {
+      const body = await readJsonBody(req);
+      const auth = getAccessAuth(req);
+      const shareToken = getShareTokenFromQuery(url);
+      await assertCanChangeFolderOrder(body.path ?? '', auth);
+      const result = await setFolderOrder(body.path, body.names, getPortableRoot(), auth.loginId);
       notifyFsChanged(body.path);
       sendJson(res, 200, result);
       return true;

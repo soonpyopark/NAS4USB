@@ -316,6 +316,15 @@ export function createHttpNas4usbClient() {
         }),
     },
 
+    folderOrder: {
+      getMap: () => apiFetch('/folder-order/map'),
+      set: ({ path, names }) =>
+        apiFetch('/folder-order/set', {
+          method: 'POST',
+          body: JSON.stringify({ path, names }),
+        }),
+    },
+
     trash: {
       getMap: () => apiFetch('/trash/map'),
       move: (relativePath) =>

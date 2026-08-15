@@ -18,6 +18,7 @@ import { useShareLinks } from '../../hooks/useShareLinks.js';
 import { useFileAccess } from '../../hooks/useFileAccess.js';
 import { useFavorites } from '../../hooks/useFavorites.js';
 import { useFolderColors } from '../../hooks/useFolderColors.js';
+import { useFolderOrder } from '../../hooks/useFolderOrder.js';
 import {
   openShareLinkForEntry,
   revokeShareLinkForEntry,
@@ -38,7 +39,18 @@ import {
   resolveUniqueName,
   sortEntries,
 } from '../../lib/fsPaths.js';
-import { readFolderSort, writeFolderSort } from '../../lib/folderSortPrefs.js';
+import {
+  canMoveFolderOrder,
+  folderOrderKindByName,
+  materializeFolderOrder,
+  moveFolderOrderName,
+  placeFolderOrderNames,
+} from '../../lib/folderOrder.js';
+import {
+  canChangeFolderOrder,
+  isFixedFolderOrderPath,
+  resolveFolderOrderParent,
+} from '../../../shared/folderOrder.js';
 import { resolveFileEntryStatus } from '../../lib/fileEntryStatus.js';
 import { downloadFileEntries } from '../../lib/downloadEntries.js';
 import { moveEntries } from '../../lib/moveEntries.js';
@@ -128,7 +140,8 @@ export default function FileExplorer({
   const { accessMap, refreshAccessMap, setFileAccess } = useFileAccess();
   const { favoritesMap, refreshFavoritesMap, setFavorite, isFavorite } = useFavorites();
   const { folderColorMap, refreshFolderColorMap, setFolderColor } = useFolderColors();
-  const { isAdminLoggedIn, adminId } = useAdminAuthContext();
+  const { folderOrderMap, setFolderOrder } = useFolderOrder();
+  const { isAdminLoggedIn, adminId, isSuperAdmin } = useAdminAuthContext();
   const { openLogin } = useLoginDialog();
   const { effectivePermissions } = useGuestPermissions();
   const globalWrite = Boolean(effectivePermissions.write);
@@ -149,8 +162,6 @@ export default function FileExplorer({
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchContents, setSearchContents] = useState(false);
-  const [sortField, setSortField] = useState(() => readFolderSort(currentPath).field);
-  const [sortDirection, setSortDirection] = useState(() => readFolderSort(currentPath).direction);
   const [contextMenu, setContextMenu] = useState(null);
   const [propertiesEntry, setPropertiesEntry] = useState(null);
   const [propertiesStat, setPropertiesStat] = useState(null);
@@ -167,6 +178,7 @@ export default function FileExplorer({
   const [transfer, setTransfer] = useState(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewEntry, setPreviewEntry] = useState(/** @type {import('../../types/nas4usb.d.ts').FsEntry | null} */ (null));
+  const [previewAnchorPath, setPreviewAnchorPath] = useState(/** @type {string | null} */ (null));
 
   const uploadInputRef = useRef(null);
   const onenoteInputRef = useRef(null);
@@ -175,11 +187,25 @@ export default function FileExplorer({
   const keyHandlersRef = useRef({});
 
   const contentSearch = useFolderContentSearch(entries, searchQuery, searchContents);
+  const orderParentPath = useMemo(
+    () => resolveFolderOrderParent(currentPath, adminId, entries[0]?.relativePath),
+    [adminId, currentPath, entries],
+  );
+  const currentOrderNames = useMemo(
+    () => folderOrderMap[orderParentPath] ?? [],
+    [folderOrderMap, orderParentPath],
+  );
+  const canReorder =
+    canChangeFolderOrder(currentPath, { isSuperAdmin, loginId: adminId }) &&
+    !isInTrashView &&
+    !isInFavoritesView &&
+    !searchQuery.trim();
+  const listSortField = isInTrashView || isInFavoritesView ? 'name' : 'custom';
 
   const visibleEntries = useMemo(() => {
     const byName = filterEntries(entries, searchQuery);
     if (!searchContents || contentSearch.matchedPaths.size === 0) {
-      return sortEntries(byName, sortField, sortDirection);
+      return sortEntries(byName, listSortField, 'asc', currentOrderNames);
     }
 
     const seen = new Set(byName.map((entry) => entry.relativePath));
@@ -190,14 +216,14 @@ export default function FileExplorer({
           !seen.has(entry.relativePath) && contentSearch.matchedPaths.has(entry.relativePath),
       ),
     ];
-    return sortEntries(merged, sortField, sortDirection);
+    return sortEntries(merged, listSortField, 'asc', currentOrderNames);
   }, [
     entries,
     searchQuery,
     searchContents,
     contentSearch.matchedPaths,
-    sortField,
-    sortDirection,
+    listSortField,
+    currentOrderNames,
   ]);
 
   const folderCounts = useMemo(() => {
@@ -211,17 +237,16 @@ export default function FileExplorer({
   }, [entries]);
 
   useEffect(() => {
-    const saved = readFolderSort(currentPath);
-    setSortField(saved.field);
-    setSortDirection(saved.direction);
     setPreviewOpen(false);
     setPreviewEntry(null);
+    setPreviewAnchorPath(null);
   }, [currentPath]);
 
   useEffect(() => {
     if (isEditorOpen) {
       setPreviewOpen(false);
       setPreviewEntry(null);
+      setPreviewAnchorPath(null);
     }
   }, [isEditorOpen]);
 
@@ -239,27 +264,62 @@ export default function FileExplorer({
 
   const closePreview = () => {
     setPreviewOpen(false);
+    setPreviewAnchorPath(null);
   };
 
-  const openPreviewFor = (entry) => {
+  const openPreviewFor = (entry, { fromList = false } = {}) => {
     if (!entry) return;
+    if (isInTrashView || isInFavoritesView) return;
+    if (fromList) {
+      setPreviewAnchorPath(entry.isDirectory ? entry.relativePath : currentPath);
+    }
     setPreviewEntry(entry);
-    if (canPreviewEntry(entry) && canPreviewView(entry) && !isInTrashView) {
+    if (canPreviewView(entry) && (canPreviewEntry(entry) || previewOpen)) {
       setPreviewOpen(true);
     }
   };
 
-  const handleSortFieldChange = (field) => {
-    setSortField(field);
-    writeFolderSort(currentPath, field, sortDirection);
+  const handleMoveOrderFor = async (entry, delta) => {
+    if (!canReorder) return;
+    if (!entry || isFixedFolderOrderPath(entry.relativePath)) return;
+    const names = materializeFolderOrder(entries, currentOrderNames);
+    const next = moveFolderOrderName(names, entry.name, delta, folderOrderKindByName(entries));
+    if (next.every((name, index) => name === names[index])) return;
+    try {
+      await setFolderOrder(orderParentPath, next);
+    } catch (err) {
+      nativeAlert(err instanceof Error ? err.message : '순서를 바꾸지 못했습니다.');
+    }
   };
 
-  const handleToggleSortDirection = () => {
-    setSortDirection((prev) => {
-      const next = prev === 'asc' ? 'desc' : 'asc';
-      writeFolderSort(currentPath, sortField, next);
-      return next;
-    });
+  const handlePlaceOrder = async (dragged, target, place) => {
+    if (!canReorder) return;
+    if (!dragged || !target || isFixedFolderOrderPath(dragged.relativePath)) return;
+    if (isFixedFolderOrderPath(target.relativePath)) return;
+    if (dragged.isDirectory !== target.isDirectory) return;
+
+    const movingEntries = selectedSet.has(dragged.relativePath)
+      ? selectedEntries.filter(
+          (entry) =>
+            entry.isDirectory === dragged.isDirectory && !isFixedFolderOrderPath(entry.relativePath),
+        )
+      : [dragged];
+    if (movingEntries.length === 0) return;
+
+    const names = materializeFolderOrder(entries, currentOrderNames);
+    const next = placeFolderOrderNames(
+      names,
+      movingEntries.map((entry) => entry.name),
+      target.name,
+      place,
+      folderOrderKindByName(entries),
+    );
+    if (next.every((name, index) => name === names[index])) return;
+    try {
+      await setFolderOrder(orderParentPath, next);
+    } catch (err) {
+      nativeAlert(err instanceof Error ? err.message : '순서를 바꾸지 못했습니다.');
+    }
   };
 
   const propertiesEntryStatus = useMemo(() => {
@@ -997,7 +1057,7 @@ export default function FileExplorer({
     } else {
       selectOnly(entry.relativePath);
       if (previewOpen || canPreviewEntry(entry)) {
-        openPreviewFor(entry);
+        openPreviewFor(entry, { fromList: true });
       }
     }
     setLastSelectedPath(entry.relativePath);
@@ -1067,6 +1127,17 @@ export default function FileExplorer({
         isFavorite: Boolean(contextTarget && isFavorite(contextTarget.relativePath)),
         onSetFolderColor: (color) => handleSetFolderColor(contextTarget, color),
         folderColor: contextTarget ? folderColorMap[contextTarget.relativePath] || '' : '',
+        onMoveOrder: canReorder ? (delta) => handleMoveOrderFor(contextTarget, delta) : undefined,
+        canMoveOrderUp: Boolean(
+          contextTarget &&
+            !isFixedFolderOrderPath(contextTarget.relativePath) &&
+            canMoveFolderOrder(entries, currentOrderNames, contextTarget.name, -1),
+        ),
+        canMoveOrderDown: Boolean(
+          contextTarget &&
+            !isFixedFolderOrderPath(contextTarget.relativePath) &&
+            canMoveFolderOrder(entries, currentOrderNames, contextTarget.name, 1),
+        ),
         canEditOpen: contextTarget
           ? canOpenFileForEdit(
               contextTarget.relativePath,
@@ -1252,10 +1323,6 @@ export default function FileExplorer({
           ) : null}
         </div>
       <FileExplorerToolbar
-        sortField={sortField}
-        sortDirection={sortDirection}
-        onSortFieldChange={handleSortFieldChange}
-        onToggleSortDirection={handleToggleSortDirection}
         hasSelection={selectedEntries.length > 0}
         canRename={
           selectedEntries.length === 1 &&
@@ -1302,6 +1369,21 @@ export default function FileExplorer({
           selectedEntries.length === 0 ||
           !selectedEntries.every((entry) => isExternalContentPath(entry.relativePath))
         }
+        showReorderActions={canReorder}
+        canMoveOrderUp={
+          canReorder &&
+          selectedEntries.length === 1 &&
+          !isFixedFolderOrderPath(selectedEntries[0].relativePath) &&
+          canMoveFolderOrder(entries, currentOrderNames, selectedEntries[0].name, -1)
+        }
+        canMoveOrderDown={
+          canReorder &&
+          selectedEntries.length === 1 &&
+          !isFixedFolderOrderPath(selectedEntries[0].relativePath) &&
+          canMoveFolderOrder(entries, currentOrderNames, selectedEntries[0].name, 1)
+        }
+        onMoveOrderUp={() => handleMoveOrderFor(selectedEntries[0], -1)}
+        onMoveOrderDown={() => handleMoveOrderFor(selectedEntries[0], 1)}
       />
 
       {isInTrashView && (
@@ -1356,6 +1438,8 @@ export default function FileExplorer({
           }}
           onShareLinkClick={handleShareLinkBadgeClick}
           onPropertiesClick={handleShowProperties}
+          canReorder={canReorder}
+          onReorder={handlePlaceOrder}
         />
       )}
         <FilePreviewPane
@@ -1364,6 +1448,9 @@ export default function FileExplorer({
           canView={canPreviewView(previewEntry)}
           onClose={closePreview}
           onOpenFull={handleOpen}
+          onPreview={(next) => openPreviewFor(next)}
+          previewAnchorPath={previewAnchorPath}
+          folderColorMap={folderColorMap}
         />
       </div>
       {contextMenu && contextItems.length > 0 && (

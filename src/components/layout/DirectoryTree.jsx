@@ -71,7 +71,7 @@ function TreeNode({
         className={`flex w-full items-center gap-1 rounded-md text-left text-[10pt] transition-colors ${rowClass} ${
           isTopLevel ? 'px-3 py-2' : 'py-1.5 pr-2'
         }`}
-        style={isTopLevel ? undefined : { paddingLeft: `${depth * 12 + 8}px` }}
+        style={isTopLevel ? undefined : { paddingLeft: `${depth * 12}px` }}
         onClick={handleClick}
         onContextMenu={(event) => onContextMenu(event, entry)}
       >
@@ -88,11 +88,13 @@ function TreeNode({
         ) : (
           <span className="inline-block h-4 w-4 shrink-0" />
         )}
-        <FileIcon
-          entry={entry}
-          folderColor={folderColorMap[entry.relativePath]}
-          className={`h-4 w-4 shrink-0 ${isActive ? '!text-white' : ''}`}
-        />
+        {isTopLevel ? null : (
+          <FileIcon
+            entry={entry}
+            folderColor={folderColorMap[entry.relativePath]}
+            className={`h-4 w-4 shrink-0 ${isActive ? '!text-white' : ''}`}
+          />
+        )}
         <span className={`truncate ${isTopLevel ? 'font-bold' : ''}`}>{entry.name}</span>
       </button>
 

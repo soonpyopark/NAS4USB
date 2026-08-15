@@ -21,6 +21,7 @@ import {
   LEGACY_HOMES_DISK_DIR,
   LEGACY_HOMES_FOLDER,
   memberHomeRelativePath,
+  resolveHomeAuth,
   resolveHomePathAccess,
   rewritePathIntoOwnHome,
 } from '../shared/memberHomes.js';
@@ -28,6 +29,7 @@ import {
   isProtectedSharedSystemPath,
   isWorkspaceRootPath,
 } from '../shared/workspacePaths.js';
+import { canChangeFolderOrder, resolveFolderOrderParent } from '../shared/folderOrder.js';
 import {
   isExternalFolderPath,
   isExternalFolderContainerPath,
@@ -386,6 +388,27 @@ export async function assertCanEditFile(
   }
 
   await assertCanWriteFs(auth, portableRoot, normalizedPath);
+}
+
+export const FOLDER_ORDER_DENIED_MESSAGE =
+  '폴더 순서는 총괄관리자 또는 본인 개인폴더에서만 변경할 수 있습니다.';
+
+/**
+ * @param {string} relativePath
+ * @param {AccessAuth} auth
+ * @param {string} [portableRoot]
+ */
+export async function assertCanChangeFolderOrder(
+  relativePath,
+  auth,
+  portableRoot = getPortableRoot(),
+) {
+  const home = resolveHomeAuth(homeAuthFrom(auth));
+  const resolvedPath = resolveFolderOrderParent(relativePath, home.loginId);
+  if (!canChangeFolderOrder(resolvedPath, home)) {
+    throw new Error(FOLDER_ORDER_DENIED_MESSAGE);
+  }
+  await assertCanAccessFile(resolvedPath, auth, null, portableRoot);
 }
 
 /**

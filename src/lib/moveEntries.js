@@ -1,4 +1,5 @@
-import { getParentPath, joinRelativePath, resolveUniqueName, sortEntries } from './fsPaths.js';
+import { getParentPath, joinRelativePath, resolveUniqueName } from './fsPaths.js';
+import { sortEntriesByFolderOrder } from './folderOrder.js';
 import { isTrashPath, TRASH_FOLDER } from './trashPaths.js';
 
 /**
@@ -110,9 +111,13 @@ export async function moveEntries(entries, destinationPath) {
  */
 export async function listMoveDestinationFolders(relativePath) {
   const entries = await window.nas4usb.fs.readDir(relativePath);
-  return sortEntries(
-    entries.filter((entry) => entry.isDirectory && entry.relativePath !== TRASH_FOLDER),
-    'name',
-    'asc',
-  );
+  const folders = entries.filter((entry) => entry.isDirectory && entry.relativePath !== TRASH_FOLDER);
+  /** @type {Record<string, string[]>} */
+  let orderMap = {};
+  try {
+    orderMap = (await window.nas4usb.folderOrder?.getMap?.()) ?? {};
+  } catch {
+    orderMap = {};
+  }
+  return sortEntriesByFolderOrder(folders, relativePath, orderMap);
 }

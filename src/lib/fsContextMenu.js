@@ -48,6 +48,9 @@ function openFileMenuLabel(entry) {
  *   isFavorite?: boolean,
  *   onSetFolderColor?: (color: string) => void,
  *   folderColor?: string,
+ *   onMoveOrder?: (delta: number) => void,
+ *   canMoveOrderUp?: boolean,
+ *   canMoveOrderDown?: boolean,
  *   canEditOpen?: boolean,
  *   isAdminLoggedIn?: boolean,
  *   canWrite?: boolean,
@@ -82,6 +85,9 @@ export function buildEntryContextMenuItems({
   isFavorite = false,
   onSetFolderColor,
   folderColor = '',
+  onMoveOrder,
+  canMoveOrderUp = false,
+  canMoveOrderDown = false,
   canEditOpen = true,
   isAdminLoggedIn = true,
   canWrite = true,
@@ -229,6 +235,22 @@ export function buildEntryContextMenuItems({
               onClick: () => onPermanentDelete?.(),
             },
           ]),
+    ...(onMoveOrder
+      ? [
+          {
+            id: 'move-up',
+            label: '위로',
+            disabled: targetCount !== 1 || !canMoveOrderUp,
+            onClick: () => onMoveOrder(-1),
+          },
+          {
+            id: 'move-down',
+            label: '아래로',
+            disabled: targetCount !== 1 || !canMoveOrderDown,
+            onClick: () => onMoveOrder(1),
+          },
+        ]
+      : []),
     ...(onToggleFavorite && isAdminLoggedIn
       ? [
           {

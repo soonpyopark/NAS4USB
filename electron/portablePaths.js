@@ -18,6 +18,7 @@ const STATE_FILES = [
   '.nas4usb-file-access.json',
   '.nas4usb-favorites.json',
   '.nas4usb-folder-colors.json',
+  '.nas4usb-folder-order.json',
   '.nas4usb-trash.json',
 ];
 

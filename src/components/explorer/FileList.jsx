@@ -1,9 +1,23 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { EXTERNAL_FOLDER, SHARED_FOLDER } from '../../../shared/constants.js';
 import { HOMES_FOLDER } from '../../../shared/memberHomes.js';
+import { isFixedFolderOrderPath } from '../../../shared/folderOrder.js';
 import { entryExtensionOf, isSecFileName } from '../../lib/filePassword/secPaths.js';
 import FileIcon from './FileIcon.jsx';
 import FileEntryStatusBadges, { FILE_STATUS_SLOT_WIDTH } from './FileEntryStatusBadges.jsx';
+
+const REORDER_MIME = 'application/x-nas4usb-reorder';
+
+function isExternalFileDrag(event) {
+  const types = event.dataTransfer?.types;
+  if (!types) return false;
+  return Array.from(types).includes('Files');
+}
+
+function dropPlaceFromEvent(event) {
+  const rect = event.currentTarget.getBoundingClientRect();
+  return event.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+}
 
 function formatSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;
@@ -49,11 +63,28 @@ export default function FileList({
   onBackgroundClick,
   onShareLinkClick,
   onPropertiesClick,
+  canReorder = false,
+  onReorder,
 }) {
   const selectAllRef = useRef(null);
+  const dragPathRef = useRef(/** @type {string | null} */ (null));
+  const [dragPath, setDragPath] = useState(/** @type {string | null} */ (null));
+  const [dropHint, setDropHint] = useState(
+    /** @type {{ path: string, place: 'before' | 'after' } | null} */ (null),
+  );
   const selectedVisibleCount = entries.filter((entry) => selectedSet.has(entry.relativePath)).length;
   const allVisibleSelected = entries.length > 0 && selectedVisibleCount === entries.length;
   const someVisibleSelected = selectedVisibleCount > 0 && !allVisibleSelected;
+
+  const clearReorderDrag = () => {
+    dragPathRef.current = null;
+    setDragPath(null);
+    setDropHint(null);
+  };
+
+  useEffect(() => {
+    if (!canReorder) clearReorderDrag();
+  }, [canReorder]);
 
   useEffect(() => {
     if (selectAllRef.current) {
@@ -118,21 +149,85 @@ export default function FileList({
           {entries.map((entry) => {
             const selected = selectedSet.has(entry.relativePath);
             const modifiedLabel = formatModifiedDateLine(entry.modifiedAt);
+            const reorderable = canReorder && !isFixedFolderOrderPath(entry.relativePath);
+            const dragging = dragPath === entry.relativePath;
+            const hintHere = dropHint?.path === entry.relativePath;
 
             return (
               <tr
                 key={entry.relativePath}
-                className={`cursor-pointer border-t border-nas-border ${
-                  selected ? 'bg-nas-accentSoft' : 'hover:bg-slate-50'
+                draggable={reorderable}
+                className={`border-t border-nas-border ${
+                  reorderable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
+                } ${selected ? 'bg-nas-accentSoft' : 'hover:bg-slate-50'} ${
+                  dragging ? 'opacity-50' : ''
                 }`}
+                style={
+                  hintHere
+                    ? {
+                        boxShadow:
+                          dropHint.place === 'before'
+                            ? 'inset 0 2px 0 0 rgb(var(--nas-accent))'
+                            : 'inset 0 -2px 0 0 rgb(var(--nas-accent))',
+                      }
+                    : undefined
+                }
                 onClick={(event) => onSelect(entry, event)}
                 onDoubleClick={() => onOpen(entry)}
                 onContextMenu={(event) => onContextMenu(event, entry)}
+                onDragStart={(event) => {
+                  if (!reorderable || isExternalFileDrag(event)) return;
+                  event.dataTransfer.effectAllowed = 'move';
+                  event.dataTransfer.setData(REORDER_MIME, entry.relativePath);
+                  event.dataTransfer.setData('text/plain', entry.relativePath);
+                  dragPathRef.current = entry.relativePath;
+                  setDragPath(entry.relativePath);
+                }}
+                onDragEnd={clearReorderDrag}
+                onDragOver={(event) => {
+                  const sourcePath = dragPathRef.current;
+                  if (!canReorder || isExternalFileDrag(event) || !sourcePath) return;
+                  if (!reorderable || sourcePath === entry.relativePath) {
+                    if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
+                    if (dropHint) setDropHint(null);
+                    return;
+                  }
+                  const source = entries.find((item) => item.relativePath === sourcePath);
+                  if (!source || source.isDirectory !== entry.isDirectory) {
+                    if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
+                    if (dropHint) setDropHint(null);
+                    return;
+                  }
+                  event.preventDefault();
+                  if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+                  const place = dropPlaceFromEvent(event);
+                  if (dropHint?.path !== entry.relativePath || dropHint.place !== place) {
+                    setDropHint({ path: entry.relativePath, place });
+                  }
+                }}
+                onDragLeave={(event) => {
+                  const related = event.relatedTarget;
+                  if (related instanceof Node && event.currentTarget.contains(related)) return;
+                  if (dropHint?.path === entry.relativePath) setDropHint(null);
+                }}
+                onDrop={(event) => {
+                  const sourcePath = dragPathRef.current;
+                  if (!canReorder || isExternalFileDrag(event) || !sourcePath) return;
+                  event.preventDefault();
+                  const source = entries.find((item) => item.relativePath === sourcePath);
+                  const place = dropHint?.path === entry.relativePath
+                    ? dropHint.place
+                    : dropPlaceFromEvent(event);
+                  clearReorderDrag();
+                  if (!source || !reorderable) return;
+                  onReorder?.(source, entry, place);
+                }}
               >
                 <td
                   className="w-10 px-2 py-2"
                   onClick={(event) => event.stopPropagation()}
                   onDoubleClick={(event) => event.stopPropagation()}
+                  onDragStart={(event) => event.preventDefault()}
                 >
                   <input
                     type="checkbox"
@@ -144,11 +239,13 @@ export default function FileList({
                 </td>
                 <td className="max-w-0 px-4 py-2">
                   <div className="flex min-w-0 items-center gap-2 overflow-hidden">
-                    <FileIcon
-                      entry={entry}
-                      folderColor={folderColorMap[entry.relativePath]}
-                      className="h-5 w-5 shrink-0"
-                    />
+                    {isWorkspaceRootSystemFolder(entry.relativePath) ? null : (
+                      <FileIcon
+                        entry={entry}
+                        folderColor={folderColorMap[entry.relativePath]}
+                        className="h-5 w-5 shrink-0"
+                      />
+                    )}
                     <span
                       className={`min-w-0 flex-1 truncate text-slate-700 ${
                         isWorkspaceRootSystemFolder(entry.relativePath)

@@ -1,6 +1,6 @@
 const STORAGE_KEY = 'nas4usb.folderSort';
 
-/** @typedef {'name'|'modifiedAt'|'size'|'type'} SortField */
+/** @typedef {'name'|'modifiedAt'|'size'|'type'|'custom'} SortField */
 /** @typedef {'asc'|'desc'} SortDirection */
 
 export const DEFAULT_FOLDER_SORT = /** @type {{ field: SortField, direction: SortDirection }} */ ({
@@ -8,7 +8,7 @@ export const DEFAULT_FOLDER_SORT = /** @type {{ field: SortField, direction: Sor
   direction: 'asc',
 });
 
-const SORT_FIELDS = new Set(['name', 'modifiedAt', 'size', 'type']);
+const SORT_FIELDS = new Set(['name', 'modifiedAt', 'size', 'type', 'custom']);
 const SORT_DIRECTIONS = new Set(['asc', 'desc']);
 
 /**

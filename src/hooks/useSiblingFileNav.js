@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { entryExtensionOf } from '../lib/filePassword/secPaths.js';
-import { getParentPath, sortEntries } from '../lib/fsPaths.js';
+import { getParentPath } from '../lib/fsPaths.js';
+import { sortEntriesByFolderOrder } from '../lib/folderOrder.js';
 import { isImageExtension } from '../lib/media/mediaTypes.js';
+import { useFolderOrder } from './useFolderOrder.js';
 
 /**
  * Sibling files in the same folder (name-sorted), for prev/next navigation.
@@ -11,6 +13,7 @@ import { isImageExtension } from '../lib/media/mediaTypes.js';
  * @param {boolean} [enabled=true]
  */
 export function useSiblingFileNav(relativePath, kind = 'image', enabled = true) {
+  const { folderOrderMap } = useFolderOrder();
   const [siblings, setSiblings] = useState(/** @type {import('../types/nas4usb.d.ts').FsEntry[]} */ ([]));
 
   useEffect(() => {
@@ -26,14 +29,14 @@ export function useSiblingFileNav(relativePath, kind = 'image', enabled = true) 
       try {
         const entries = await window.nas4usb.fs.readDir(parent);
         if (cancelled) return;
-        const filtered = sortEntries(
+        const filtered = sortEntriesByFolderOrder(
           (Array.isArray(entries) ? entries : []).filter((entry) => {
             if (entry.isDirectory) return false;
             if (kind === 'image') return isImageExtension(entryExtensionOf(entry));
             return false;
           }),
-          'name',
-          'asc',
+          parent,
+          folderOrderMap,
         );
         setSiblings(filtered);
       } catch {
@@ -45,7 +48,7 @@ export function useSiblingFileNav(relativePath, kind = 'image', enabled = true) 
     return () => {
       cancelled = true;
     };
-  }, [relativePath, kind, enabled]);
+  }, [relativePath, kind, enabled, folderOrderMap]);
 
   return useMemo(() => {
     if (!enabled) {

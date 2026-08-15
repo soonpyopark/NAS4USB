@@ -115,7 +115,7 @@ export function readFileAsBase64(file) {
   });
 }
 
-/** @typedef {'name'|'modifiedAt'|'size'|'type'} SortField */
+/** @typedef {'name'|'modifiedAt'|'size'|'type'|'custom'} SortField */
 /** @typedef {'asc'|'desc'} SortDirection */
 
 /**
@@ -134,9 +134,19 @@ function workspaceRootFolderRank(name, relativePath = '') {
  * @param {import('../types/nas4usb.d.ts').FsEntry[]} entries
  * @param {SortField} sortField
  * @param {SortDirection} sortDirection
+ * @param {string[] | null | undefined} [orderNames]
  */
-export function sortEntries(entries, sortField, sortDirection) {
+export function sortEntries(entries, sortField, sortDirection, orderNames) {
   const factor = sortDirection === 'asc' ? 1 : -1;
+  /** @type {Map<string, number>} */
+  const orderRank = new Map();
+  if (sortField === 'custom' && Array.isArray(orderNames)) {
+    orderNames.forEach((name, index) => {
+      if (typeof name === 'string' && name && !orderRank.has(name)) {
+        orderRank.set(name, index);
+      }
+    });
+  }
   // Preserve settings order for external mounts (API list order).
   const indexed = entries.map((entry, index) => ({ entry, index }));
 
@@ -156,6 +166,12 @@ export function sortEntries(entries, sortField, sortDirection) {
     }
 
     switch (sortField) {
+      case 'custom': {
+        const aRank = orderRank.has(a.name) ? orderRank.get(a.name) : Number.POSITIVE_INFINITY;
+        const bRank = orderRank.has(b.name) ? orderRank.get(b.name) : Number.POSITIVE_INFINITY;
+        if (aRank !== bRank) return aRank - bRank;
+        return compareNames(a.name, b.name);
+      }
       case 'modifiedAt':
         return factor * (new Date(a.modifiedAt).getTime() - new Date(b.modifiedAt).getTime());
       case 'size':

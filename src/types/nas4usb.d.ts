@@ -109,6 +109,10 @@ window.nas4usb = {
     getMap: () => {},
     set: ({ path, color }) => {},
   },
+  folderOrder: {
+    getMap: () => {},
+    set: ({ path, names }) => {},
+  },
   trash: {
     getMap: () => {},
     move: (relativePath) => {},
