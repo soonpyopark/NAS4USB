@@ -108,6 +108,7 @@ export default function FilePasswordDialog({
             />
             <button
               type="button"
+              tabIndex={-1}
               className="absolute right-1 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border-0 bg-transparent text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:opacity-60"
               aria-label={showPassword ? '비밀번호 숨기기' : '비밀번호 표시'}
               aria-pressed={showPassword}
@@ -139,6 +140,7 @@ export default function FilePasswordDialog({
               />
               <button
                 type="button"
+                tabIndex={-1}
                 className="absolute right-1 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full border-0 bg-transparent text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:opacity-60"
                 aria-label={showPassword ? '비밀번호 숨기기' : '비밀번호 표시'}
                 aria-pressed={showPassword}

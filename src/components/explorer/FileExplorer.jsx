@@ -3,6 +3,8 @@ import Breadcrumb from './Breadcrumb.jsx';
 import ContextMenu from './ContextMenu.jsx';
 import FileExplorerToolbar from './FileExplorerToolbar.jsx';
 import FileList from './FileList.jsx';
+import FilePreviewPane from './FilePreviewPane.jsx';
+import { canPreviewEntry } from '../../lib/filePreview.js';
 import FilePropertiesDialog from './FilePropertiesDialog.jsx';
 import NewFileDialog from './NewFileDialog.jsx';
 import NewFolderDialog from './NewFolderDialog.jsx';
@@ -163,6 +165,8 @@ export default function FileExplorer({
   const [clearingFolderBackups, setClearingFolderBackups] = useState(false);
   /** @type {[null | { kind: 'upload' | 'download', current: number, total: number, fileName?: string }, Function]} */
   const [transfer, setTransfer] = useState(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewEntry, setPreviewEntry] = useState(/** @type {import('../../types/nas4usb.d.ts').FsEntry | null} */ (null));
 
   const uploadInputRef = useRef(null);
   const onenoteInputRef = useRef(null);
@@ -210,7 +214,40 @@ export default function FileExplorer({
     const saved = readFolderSort(currentPath);
     setSortField(saved.field);
     setSortDirection(saved.direction);
+    setPreviewOpen(false);
+    setPreviewEntry(null);
   }, [currentPath]);
+
+  useEffect(() => {
+    if (isEditorOpen) {
+      setPreviewOpen(false);
+      setPreviewEntry(null);
+    }
+  }, [isEditorOpen]);
+
+  const canPreviewView = (entry) => {
+    if (!entry || entry.isDirectory) return true;
+    if (isInTrashView) return false;
+    const pathPerms = effectivePermissionsForPath(
+      entry.relativePath,
+      adminId,
+      isAdminLoggedIn,
+      effectivePermissions,
+    );
+    return canOpenFileForEdit(entry.relativePath, accessMap, isAdminLoggedIn, pathPerms);
+  };
+
+  const closePreview = () => {
+    setPreviewOpen(false);
+  };
+
+  const openPreviewFor = (entry) => {
+    if (!entry) return;
+    setPreviewEntry(entry);
+    if (canPreviewEntry(entry) && canPreviewView(entry) && !isInTrashView) {
+      setPreviewOpen(true);
+    }
+  };
 
   const handleSortFieldChange = (field) => {
     setSortField(field);
@@ -959,6 +996,9 @@ export default function FileExplorer({
       toggleSelection(entry.relativePath);
     } else {
       selectOnly(entry.relativePath);
+      if (previewOpen || canPreviewEntry(entry)) {
+        openPreviewFor(entry);
+      }
     }
     setLastSelectedPath(entry.relativePath);
   };
@@ -1079,6 +1119,8 @@ export default function FileExplorer({
     currentPath,
     selectedEntries,
     hasClipboard,
+    previewOpen,
+    closePreview,
   };
 
   useEffect(() => {
@@ -1094,6 +1136,12 @@ export default function FileExplorer({
       }
 
       const h = keyHandlersRef.current;
+
+      if (event.key === 'Escape' && h.previewOpen) {
+        event.preventDefault();
+        h.closePreview();
+        return;
+      }
 
       if (event.key === 'F5') {
         event.preventDefault();
@@ -1302,11 +1350,21 @@ export default function FileExplorer({
           onToggleCheckbox={handleToggleCheckbox}
           onToggleSelectAll={() => toggleSelectAllVisible(visibleEntries)}
           onContextMenu={openContextMenu}
-          onBackgroundClick={clearSelection}
+          onBackgroundClick={() => {
+            clearSelection();
+            closePreview();
+          }}
           onShareLinkClick={handleShareLinkBadgeClick}
           onPropertiesClick={handleShowProperties}
         />
       )}
+        <FilePreviewPane
+          entry={previewEntry}
+          open={previewOpen}
+          canView={canPreviewView(previewEntry)}
+          onClose={closePreview}
+          onOpenFull={handleOpen}
+        />
       </div>
       {contextMenu && contextItems.length > 0 && (
         <ContextMenu

@@ -111,6 +111,141 @@
     color: rgb(var(--nas-accent-text));
   }
 
+  .file-preview-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 25;
+    pointer-events: none;
+    overflow: hidden;
+  }
+
+  .file-preview-pane {
+    pointer-events: auto;
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    width: 60%;
+    min-width: 280px;
+    flex-direction: column;
+    background: #fff;
+    border-left: 1px solid #e2e8f0;
+    box-shadow: -8px 0 24px rgba(15, 23, 42, 0.12);
+    transform: translateX(100%);
+    transition: transform 0.22s ease;
+  }
+
+  .file-preview-overlay--open .file-preview-pane {
+    transform: translateX(0);
+  }
+
+  .file-preview-pane__header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 0.65rem 0.75rem;
+  }
+
+  .file-preview-pane__title {
+    min-width: 0;
+    flex: 1;
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #323130;
+  }
+
+  .file-preview-pane__actions {
+    display: flex;
+    flex-shrink: 0;
+    gap: 0.25rem;
+  }
+
+  .file-preview-pane__btn {
+    min-width: 0;
+    height: 1.75rem;
+    padding: 0 0.6rem;
+    font-size: 0.75rem;
+  }
+
+  .file-preview-pane__body {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+    overflow: auto;
+    background: #f8fafc;
+  }
+
+  .file-preview-pane__empty {
+    margin: 2rem 1.25rem;
+    text-align: center;
+    font-size: 0.8125rem;
+    color: #64748b;
+  }
+
+  .file-preview-pane__media {
+    display: flex;
+    min-height: 100%;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+  }
+
+  .file-preview-pane__image {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    background: #fff;
+    box-shadow: 0 1px 6px rgba(15, 23, 42, 0.08);
+  }
+
+  .file-preview-pane__caption {
+    margin: 0.75rem 0 0;
+    font-size: 0.75rem;
+    color: #64748b;
+  }
+
+  .file-preview-pane__text {
+    margin: 0;
+    padding: 1rem 1.1rem 1.5rem;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.75rem;
+    line-height: 1.55;
+    color: #1e2937;
+  }
+
+  .file-preview-pane__rich {
+    padding: 1rem 1.1rem 1.5rem;
+    background: #fff;
+  }
+
+  .file-preview-pane .tiptap-toolbar,
+  .file-preview-pane .tiptap-search-bar,
+  .file-preview-pane .tiptap-bubble-menu,
+  .file-preview-pane .tiptap-floating-menu,
+  .file-preview-pane .tiptap-toc-panel {
+    display: none !important;
+  }
+
+  .file-preview-pane .tiptap-editor-shell {
+    min-height: 0;
+    flex: 1;
+    background: #fff;
+  }
+
+  .file-preview-pane .tiptap-editor-shell .tiptap {
+    padding: 12mm 10mm 24mm;
+  }
+
   .sidebar-resize-handle {
     position: relative;
     z-index: 20;
@@ -1000,6 +1135,7 @@
   .sidebar-resize-handle,
   .sidebar-collapsed-rail,
   .sidebar-collapse-tab,
+  .file-preview-overlay,
   .nas-topbar,
   .desktop-pane-tabs,
   .modal-editor-header,
