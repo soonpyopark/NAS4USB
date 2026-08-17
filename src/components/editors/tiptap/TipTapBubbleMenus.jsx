@@ -18,12 +18,17 @@ import {
  *   editor: import('@tiptap/core').Editor,
  *   readOnly?: boolean,
  *   onUploadImage?: () => void,
+ *   onEditLink?: () => void,
  * }} props
  */
-export default function TipTapBubbleMenus({ editor, readOnly = false }) {
+export default function TipTapBubbleMenus({ editor, readOnly = false, onEditLink }) {
   if (!editor || readOnly) return null;
 
   const setLink = () => {
+    if (onEditLink) {
+      onEditLink();
+      return;
+    }
     const previous = editor.getAttributes('link').href;
     const next = window.prompt('링크 URL', previous || 'https://');
     if (next === null) return;

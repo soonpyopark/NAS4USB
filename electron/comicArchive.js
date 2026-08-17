@@ -1,13 +1,9 @@
-import { createRequire } from 'node:module';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { getTempPath, resolvePortablePath } from './appContext.js';
 import { getImageMimeType, isImageExtension } from '../shared/mediaTypes.js';
-
-const require = createRequire(import.meta.url);
-/** @type {{ unpack: (src: string, dest: string) => Promise<string> }} */
-const sevenZipMin = require('7zip-min');
+import { sevenZipMin } from './sevenZip.js';
 
 /** @type {Map<string, { dir: string, pages: Array<{ name: string, absolutePath: string, mimeType: string }>, relativePath: string }>} */
 const sessions = new Map();

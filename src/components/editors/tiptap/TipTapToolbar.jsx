@@ -123,6 +123,7 @@ const LINE_HEIGHTS = [
  *   onZoomReset?: () => void,
  *   htmlMode?: boolean,
  *   onToggleHtml?: () => void,
+ *   onEditLink?: () => void,
  * }} props
  */
 export default function TipTapToolbar({
@@ -143,6 +144,7 @@ export default function TipTapToolbar({
   onZoomReset,
   htmlMode = false,
   onToggleHtml,
+  onEditLink,
 }) {
   useTiptapEditorTick(editor);
   const disabled = !editor || readOnly || !editor.isEditable || htmlMode;
@@ -167,6 +169,10 @@ export default function TipTapToolbar({
       : FONT_SIZES;
 
   const setLink = () => {
+    if (onEditLink) {
+      onEditLink();
+      return;
+    }
     const previous = editor.getAttributes('link').href;
     const next = window.prompt('링크 URL', previous || 'https://');
     if (next === null) return;

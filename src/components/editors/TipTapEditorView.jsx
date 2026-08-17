@@ -32,6 +32,8 @@ import {
 import TipTapToolbar, { TipTapZoomControls } from './tiptap/TipTapToolbar.jsx';
 import TipTapSearchBar from './tiptap/TipTapSearchBar.jsx';
 import TipTapBubbleMenus from './tiptap/TipTapBubbleMenus.jsx';
+import TipTapLinkDialog from './tiptap/TipTapLinkDialog.jsx';
+import { applyTiptapLink, snapshotTiptapLinkSelection } from '../../lib/tiptap/editLink.js';
 import TipTapHtmlSourcePanel from './tiptap/TipTapHtmlSourcePanel.jsx';
 import TipTapTocPanel from './tiptap/TipTapTocPanel.jsx';
 import { formatTiptapHtml } from '../../lib/tiptap/formatHtml.js';
@@ -116,6 +118,9 @@ export default function TipTapEditorView({
   const [htmlDraft, setHtmlDraft] = useState('');
   const [htmlBaseline, setHtmlBaseline] = useState('');
   const [htmlApplying, setHtmlApplying] = useState(false);
+  const [linkDialog, setLinkDialog] = useState(
+    /** @type {{ from: number, to: number, href: string } | null} */ (null),
+  );
   const htmlModeRef = useRef(false);
   const htmlDraftRef = useRef('');
   const htmlBaselineRef = useRef('');
@@ -447,6 +452,12 @@ export default function TipTapEditorView({
     };
   }, [editor, readOnly, relativePath]);
 
+  const openLinkDialog = useCallback(() => {
+    const snapshot = snapshotTiptapLinkSelection(editor);
+    if (!snapshot) return;
+    setLinkDialog(snapshot);
+  }, [editor]);
+
   const handleMediaPicked = async (event) => {
     const file = event.target.files?.[0];
     event.target.value = '';
@@ -539,6 +550,7 @@ export default function TipTapEditorView({
           onZoomReset={resetZoom}
           htmlMode={htmlMode}
           onToggleHtml={toggleHtmlMode}
+          onEditLink={openLinkDialog}
         />
       ) : (
         <div className="tiptap-toolbar tiptap-toolbar--zoom-only" role="toolbar" aria-label="보기 배율">
@@ -570,7 +582,9 @@ export default function TipTapEditorView({
         onClose={() => setSearchOpen(false)}
       />
 
-      {htmlMode ? null : <TipTapBubbleMenus editor={editor} readOnly={readOnly} />}
+      {htmlMode ? null : (
+        <TipTapBubbleMenus editor={editor} readOnly={readOnly} onEditLink={openLinkDialog} />
+      )}
 
       <div className="tiptap-editor-shell__body">
         {htmlMode ? (
@@ -640,6 +654,20 @@ export default function TipTapEditorView({
           raised
         />
       ) : null}
+      <TipTapLinkDialog
+        open={Boolean(linkDialog)}
+        href={linkDialog?.href ?? ''}
+        onApply={(href) => {
+          if (linkDialog) applyTiptapLink(editor, linkDialog, href);
+          setLinkDialog(null);
+        }}
+        onRemove={() => {
+          if (linkDialog) applyTiptapLink(editor, linkDialog, '');
+          setLinkDialog(null);
+        }}
+        onCancel={() => setLinkDialog(null)}
+      />
+
       {overlayEditor ? (
         <AttachmentEditorOverlay
           entry={overlayEditor}

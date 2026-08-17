@@ -1,8 +1,8 @@
-import { createRequire } from 'node:module';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { getDataRoot, getHomesRoot, getPortableRoot } from './appContext.js';
 import { getAppSettings, updateAppSettings } from './settingsService.js';
+import { sevenZipMin } from './sevenZip.js';
 import {
   backupPrivateFileName,
   backupShareFileName,
@@ -13,10 +13,6 @@ import {
   isWorkspaceBackupFileName,
   normalizeWorkspaceBackup,
 } from '../shared/workspaceBackup.js';
-
-const require = createRequire(import.meta.url);
-/** @type {{ cmd: (args: string[]) => Promise<string> }} */
-const sevenZipMin = require('7zip-min');
 
 const STATE_FILE = path.join('.nas4usb', 'workspace-backup-state.json');
 const TICK_MS = 30_000;
