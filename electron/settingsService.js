@@ -35,6 +35,7 @@ const SETTINGS_FILE = '.nas4usb-settings.json';
  *   videoPreviewCacheMaxBytes: number,
  *   useLegacyImagePdfViewers: boolean,
  *   spellcheckEnabled: boolean,
+ *   loginLockoutEnabled: boolean,
  * }} AppSettings
  *
  * @typedef {{ isLoggedIn?: boolean, loginId?: string | null, role?: string | null } | boolean} AccessAuth
@@ -83,6 +84,14 @@ export function normalizeUseLegacyImagePdfViewers(value) {
 }
 
 /**
+ * After 3 failed logins, lock that id for 5 minutes. Default off.
+ * @param {unknown} value
+ */
+export function normalizeLoginLockoutEnabled(value) {
+  return value === true;
+}
+
+/**
  * @returns {AppSettings}
  */
 function emptySettings() {
@@ -100,6 +109,7 @@ function emptySettings() {
     videoPreviewCacheMaxBytes: normalizeVideoPreviewCacheMaxBytes(undefined),
     useLegacyImagePdfViewers: false,
     spellcheckEnabled: false,
+    loginLockoutEnabled: false,
   };
 }
 
@@ -143,6 +153,7 @@ async function loadStore(portableRoot) {
       videoPreviewCacheMaxBytes: normalizeVideoPreviewCacheMaxBytes(parsed?.videoPreviewCacheMaxBytes),
       useLegacyImagePdfViewers: normalizeUseLegacyImagePdfViewers(parsed?.useLegacyImagePdfViewers),
       spellcheckEnabled: normalizeSpellcheckEnabled(parsed?.spellcheckEnabled),
+      loginLockoutEnabled: normalizeLoginLockoutEnabled(parsed?.loginLockoutEnabled),
     };
   } catch {
     return emptySettings();
@@ -314,6 +325,9 @@ export async function updateAppSettings(patch, portableRoot = getPortableRoot())
   }
   if (patch && 'spellcheckEnabled' in patch) {
     settings.spellcheckEnabled = normalizeSpellcheckEnabled(patch.spellcheckEnabled);
+  }
+  if (patch && 'loginLockoutEnabled' in patch) {
+    settings.loginLockoutEnabled = normalizeLoginLockoutEnabled(patch.loginLockoutEnabled);
   }
   await saveStore(portableRoot, settings);
   return settings;

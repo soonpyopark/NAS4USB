@@ -13,6 +13,8 @@ import {
   IconAlignJustify,
   IconAlignLeft,
   IconAlignRight,
+  IconIndent,
+  IconOutdent,
   IconBold,
   IconClearFormat,
   IconFormatPainter,
@@ -33,6 +35,7 @@ import {
   IconListOrdered,
   IconListTodo,
   IconQuote,
+  IconPullQuote,
   IconRedo,
   IconSearch,
   IconStrike,
@@ -243,9 +246,11 @@ export default function TipTapToolbar({
                           ? 'h6'
                           : editor.isActive('codeBlock')
                             ? 'code'
-                            : editor.isActive('blockquote')
-                              ? 'quote'
-                              : 'p'
+                            : editor.isActive('pullQuote')
+                              ? 'pullQuote'
+                              : editor.isActive('blockquote')
+                                ? 'quote'
+                                : 'p'
             }
             onChange={(event) => {
               const value = event.target.value;
@@ -254,6 +259,7 @@ export default function TipTapToolbar({
               else if (value.startsWith('h')) chain.setHeading({ level: Number(value.slice(1)) }).run();
               else if (value === 'code') chain.toggleCodeBlock().run();
               else if (value === 'quote') chain.toggleBlockquote().run();
+              else if (value === 'pullQuote') chain.togglePullQuote().run();
             }}
           >
             <option value="p">Aa</option>
@@ -264,6 +270,7 @@ export default function TipTapToolbar({
             <option value="h5">H5</option>
             <option value="h6">H6</option>
             <option value="quote">❝</option>
+            <option value="pullQuote">“</option>
             <option value="code">{'</>'}</option>
           </select>
         </ToolbarGroup>
@@ -442,6 +449,20 @@ export default function TipTapToolbar({
           >
             <IconAlignJustify />
           </ToolbarButton>
+          <ToolbarButton
+            title="내어쓰기 (Shift+Tab)"
+            disabled={disabled}
+            onClick={() => editor.chain().focus().outdent().run()}
+          >
+            <IconOutdent />
+          </ToolbarButton>
+          <ToolbarButton
+            title="들여쓰기 (Tab)"
+            disabled={disabled}
+            onClick={() => editor.chain().focus().indent().run()}
+          >
+            <IconIndent />
+          </ToolbarButton>
         </ToolbarGroup>
 
         <ToolbarGroup>
@@ -476,6 +497,14 @@ export default function TipTapToolbar({
             onClick={() => editor.chain().focus().toggleBlockquote().run()}
           >
             <IconQuote />
+          </ToolbarButton>
+          <ToolbarButton
+            title="강조 인용"
+            active={editor.isActive('pullQuote')}
+            disabled={disabled}
+            onClick={() => editor.chain().focus().togglePullQuote().run()}
+          >
+            <IconPullQuote />
           </ToolbarButton>
           <ToolbarButton
             title="토글 (Details)"
@@ -605,7 +634,7 @@ export default function TipTapToolbar({
           <span className="tiptap-toolbar__hint">
             {htmlMode
               ? 'HTML 편집 중 — 적용해야 문서에 반영됩니다'
-              : '`/` 블록 · `:` 이모지 · `$…$` 수식 · 표 안 Tab 이동'}
+              : '`/` 블록 · `:` 이모지 · `$…$` 수식 · Tab 들여쓰기 · 표 안 셀 이동'}
           </span>
         </div>
       </div>

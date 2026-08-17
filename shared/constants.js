@@ -9,7 +9,7 @@ export const APP_VERSION = '1.0.6';
  * Refreshed by `build:release` / `build:msi` / `build:dist:exe` for update checks
  * when the GitHub tag version is unchanged (same-version republish).
  */
-export const APP_BUILD_STAMP = '260816_003131';
+export const APP_BUILD_STAMP = '260816_231647';
 
 /** Application display name. */
 export const APP_NAME = 'NAS4USB';

@@ -25,6 +25,7 @@ const IMPORTANT_NODE_TYPES = new Set([
   'taskItem',
   'codeBlock',
   'blockquote',
+  'pullQuote',
   'horizontalRule',
   'details',
   'emoji',

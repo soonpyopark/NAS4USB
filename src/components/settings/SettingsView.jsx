@@ -284,7 +284,10 @@ export default function SettingsView({ onClose }) {
                     </code>
                     ) 형식을 지원합니다. 서버 PC의{' '}
                     <code className="rounded bg-slate-100 px-1 text-[12px]">127.0.0.1</code> 은
-                    항상 허용됩니다.
+                    항상 허용됩니다. Tailscale 기기는 서버 IP가 아니라 각 기기의 주소로 들어오므로
+                    대역{' '}
+                    <code className="rounded bg-slate-100 px-1 text-[12px]">100.64.0.0/10</code> 을
+                    등록하세요.
                   </p>
                   <div className="flex gap-2">
                     <button

@@ -83,6 +83,26 @@ export const TIPTAP_DOCUMENT_EXPORT_CSS = `
     border-left: 3px solid #c5c5c5;
     color: #333;
   }
+  .tiptap-doc-export blockquote.tiptap-pull-quote {
+    border-left: none;
+    margin: 1.1em auto;
+    max-width: 38em;
+    padding: 0.1em 1em 0.7em;
+    color: #222;
+    text-align: center;
+  }
+  .tiptap-doc-export blockquote.tiptap-pull-quote::before {
+    content: "“";
+    display: block;
+    margin: 0 0 0.15em;
+    color: #c4c4c4;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 2.6em;
+    line-height: 0.85;
+  }
+  .tiptap-doc-export blockquote.tiptap-pull-quote p {
+    text-align: center;
+  }
   .tiptap-doc-export a { color: #0563c1; text-decoration: underline; }
   .tiptap-doc-export code {
     font-family: Consolas, "Courier New", monospace;

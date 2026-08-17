@@ -1180,6 +1180,9 @@ export default function FileExplorer({
       selectOnly(entry.relativePath);
       setLastSelectedPath(entry.relativePath);
     }
+    if (entry && previewOpen) {
+      openPreviewFor(entry, { fromList: true });
+    }
 
     setContextMenu({
       x: event.clientX,

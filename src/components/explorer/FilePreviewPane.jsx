@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { getImageMimeType } from '../../lib/media/mediaTypes.js';
 import { buildMediaStreamUrl } from '../../lib/media/streamUrl.js';
 import { entryExtensionOf, isSecFileName } from '../../lib/filePassword/secPaths.js';
@@ -11,7 +11,7 @@ import {
   folderPreviewParentPath,
   listFolderPreviewEntries,
 } from '../../lib/folderPreview.js';
-import { displayEntryName, getBaseName, getParentPath } from '../../lib/fsPaths.js';
+import { getBaseName, getParentPath } from '../../lib/fsPaths.js';
 import { useFolderOrder } from '../../hooks/useFolderOrder.js';
 import { resolveComicFirstPage } from '../../lib/comicReader/firstPage.js';
 import { resolvePdfFirstPage } from '../../lib/pdf/firstPage.js';
@@ -61,6 +61,7 @@ export default function FilePreviewPane({
   nameBoldMap = {},
 }) {
   const kind = getFilePreviewKind(entry);
+  const locked = Boolean(entry && isSecFileName(entry.relativePath || entry.name));
   const { folderOrderMap } = useFolderOrder();
   const listingPath = entry?.isDirectory
     ? entry.relativePath
@@ -92,7 +93,7 @@ export default function FilePreviewPane({
     /** @type {(() => void | Promise<void>) | null} */
     let revoke = null;
 
-    setLoading(Boolean(open && entry && kind && kind !== 'folder' && canView));
+    setLoading(Boolean(open && entry && kind && kind !== 'folder' && canView && !locked));
     setError('');
     setText('');
     setHtml('');
@@ -102,7 +103,7 @@ export default function FilePreviewPane({
     setTiptapContent(null);
     setTiptapResolveFileUrl(null);
 
-    if (!open || !entry || !kind || kind === 'folder' || !canView) {
+    if (!open || !entry || !kind || kind === 'folder' || !canView || locked) {
       return () => {
         cancelled = true;
       };
@@ -198,7 +199,7 @@ export default function FilePreviewPane({
       cancelled = true;
       void revoke?.();
     };
-  }, [open, entry?.relativePath, kind, canView]);
+  }, [open, entry?.relativePath, kind, canView, locked]);
 
   useEffect(() => {
     let cancelled = false;
@@ -237,6 +238,24 @@ export default function FilePreviewPane({
       cancelled = true;
     };
   }, [open, entry?.relativePath, kind, canView, folderOrderMap]);
+
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onPointerDown = (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest('.file-preview-pane')) return;
+      if (target.closest('[data-explorer-entry]')) return;
+      if (target.closest('[role="dialog"]')) return;
+      if (target.closest('[role="menu"]')) return;
+      onCloseRef.current();
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => document.removeEventListener('pointerdown', onPointerDown);
+  }, [open]);
 
   return (
     <div
@@ -298,6 +317,10 @@ export default function FilePreviewPane({
             <p className="file-preview-pane__empty">미리볼 항목을 선택하세요.</p>
           ) : !canView ? (
             <p className="file-preview-pane__empty">이 항목을 열람할 권한이 없습니다.</p>
+          ) : locked ? (
+            <p className="file-preview-pane__empty">
+              비밀번호가 설정된 파일입니다. 내용을 보려면 [열기]를 누르세요.
+            </p>
           ) : !kind ? (
             <p className="file-preview-pane__empty">이 형식은 아직 미리볼 수 없습니다.</p>
           ) : kind === 'folder' ? (
@@ -334,7 +357,7 @@ export default function FilePreviewPane({
                             }`}
                             title={child.name}
                           >
-                            {displayEntryName(child)}
+                            {child.name}
                           </span>
                         </button>
                       </li>
@@ -355,6 +378,9 @@ export default function FilePreviewPane({
             <p className="file-preview-pane__empty">{error}</p>
           ) : kind === 'image' || kind === 'comic' || kind === 'pdf' ? (
             <div className="file-preview-pane__media">
+              <p className="file-preview-pane__caption" title={entry.name}>
+                {entry.name}
+              </p>
               {imageUrl ? (
                 <img src={imageUrl} alt={entry.name} className="file-preview-pane__image" />
               ) : null}
@@ -363,12 +389,22 @@ export default function FilePreviewPane({
               ) : null}
             </div>
           ) : kind === 'text' ? (
-            <pre className="file-preview-pane__text">{text || '(빈 파일)'}</pre>
+            <>
+              <p className="file-preview-pane__caption" title={entry.name}>
+                {entry.name}
+              </p>
+              <pre className="file-preview-pane__text">{text || '(빈 파일)'}</pre>
+            </>
           ) : kind === 'markdown' ? (
-            <div
-              className="markdown-preview file-preview-pane__rich"
-              dangerouslySetInnerHTML={{ __html: html || '<p>(빈 문서)</p>' }}
-            />
+            <>
+              <p className="file-preview-pane__caption" title={entry.name}>
+                {entry.name}
+              </p>
+              <div
+                className="markdown-preview file-preview-pane__rich"
+                dangerouslySetInnerHTML={{ __html: html || '<p>(빈 문서)</p>' }}
+              />
+            </>
           ) : kind === 'tiptap' && tiptapContent && tiptapResolveFileUrl ? (
             <Suspense
               fallback={<p className="file-preview-pane__empty">문서 준비 중…</p>}

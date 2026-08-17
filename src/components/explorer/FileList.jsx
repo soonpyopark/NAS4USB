@@ -348,6 +348,7 @@ export default function FileList({
             return (
               <tr
                 key={entry.relativePath}
+                data-explorer-entry={entry.relativePath}
                 draggable={reorderable}
                 className={`border-t border-nas-border ${
                   reorderable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'

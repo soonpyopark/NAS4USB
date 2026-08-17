@@ -754,11 +754,14 @@ export async function handleHttpApiRequest(req, res) {
 
     if (method === 'POST' && url.pathname === '/api/auth/login') {
       const body = await readJsonBody(req);
+      const proxied = Boolean(req.headers['x-forwarded-for'] || req.headers['x-real-ip']);
       sendJson(
         res,
         200,
         await loginAdmin(body.id, body.password, getPortableRoot(), {
           remember: Boolean(body.rememberMe),
+          clientIp: req.socket?.remoteAddress ?? '',
+          proxied,
         }),
       );
       return true;

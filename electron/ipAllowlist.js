@@ -54,13 +54,30 @@ export function getClientIpFromRequest(req) {
   return req.socket?.remoteAddress ?? '';
 }
 
-export function ipBlockedHtml() {
+/**
+ * @param {string} [clientIp]
+ */
+export function ipBlockedHtml(clientIp) {
+  const shown = escapeHtml(normalizeClientIp(clientIp ?? '') || String(clientIp ?? '').trim() || '알 수 없음');
   return `<!DOCTYPE html>
 <html lang="ko"><head><meta charset="utf-8"/><title>접속 제한</title>
 <style>body{font-family:"Malgun Gothic",system-ui,sans-serif;margin:2rem;background:#eef2f7;color:#0f172a}
 .box{max-width:28rem;margin:4rem auto;background:#fff;padding:1.75rem 2rem;border-radius:12px;box-shadow:0 8px 24px rgba(15,23,42,.08)}
-h1{font-size:1.25rem;margin:0 0 .75rem}p{margin:.5rem 0;line-height:1.55;color:#475569}</style></head>
+h1{font-size:1.25rem;margin:0 0 .75rem}p{margin:.5rem 0;line-height:1.55;color:#475569}
+code{font-size:.9em}</style></head>
 <body><div class="box"><h1>접속이 허용되지 않은 IP입니다</h1>
-<p>관리자에게 접근 가능 IP 대역 등록을 요청하세요.</p>
+<p>이 기기의 주소 <code>${shown}</code> 는 허용 목록에 없습니다.</p>
+<p>설정 → 접근 가능 IP 대역에 이 주소 또는 대역을 등록하세요. Tailscale이면 <code>100.64.0.0/10</code> 을 넣으면 됩니다.</p>
 <p>서버 PC에서는 <code>127.0.0.1</code> 로 접속할 수 있습니다.</p></div></body></html>`;
+}
+
+/**
+ * @param {string} value
+ */
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
 }

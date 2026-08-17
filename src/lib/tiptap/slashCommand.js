@@ -152,6 +152,26 @@ function buildSlashItems(options, editor) {
       },
     },
     {
+      group: '스타일',
+      title: '들여쓰기',
+      description: '기호 없이 문단만 오른쪽으로',
+      keywords: ['indent', '들여쓰기', 'tab', 'margin'],
+      icon: '→',
+      command: ({ editor: ed, range }) => {
+        clearSlash(ed, range).indent().run();
+      },
+    },
+    {
+      group: '스타일',
+      title: '내어쓰기',
+      description: '들여쓰기를 한 단계 줄임',
+      keywords: ['outdent', '내어쓰기', 'unindent', 'shift-tab'],
+      icon: '←',
+      command: ({ editor: ed, range }) => {
+        clearSlash(ed, range).outdent().run();
+      },
+    },
+    {
       group: '목록',
       title: '글머리 기호 목록',
       description: '간단한 불릿 목록',
@@ -189,6 +209,16 @@ function buildSlashItems(options, editor) {
       icon: '❝',
       command: ({ editor: ed, range }) => {
         clearSlash(ed, range).toggleBlockquote().run();
+      },
+    },
+    {
+      group: '블록',
+      title: '강조 인용',
+      description: '가운데 따옴표 인용',
+      keywords: ['quote', 'pullquote', '인용', '강조', '성경', 'verse'],
+      icon: '“',
+      command: ({ editor: ed, range }) => {
+        clearSlash(ed, range).togglePullQuote().run();
       },
     },
     {

@@ -5,8 +5,16 @@
       "description": "내 공유기 IP 대역"
     },
     {
-      "cidr": "118.235.83.137",
-      "description": "임시"
+      "cidr": "100.78.210.9",
+      "description": "Tailscale IP 주소 (서버)"
+    },
+    {
+      "cidr": "127.0.0.1",
+      "description": "로컬호스트 IP 주소"
+    },
+    {
+      "cidr": "100.64.0.0/10",
+      "description": "Tailscale 전체 대역"
     }
   ],
   "guestPermissions": {
@@ -44,5 +52,6 @@
   "ffmpegPath": "D:\\My_Cursor\\(ffmpeg)\\ffmpeg.exe",
   "videoPreviewCacheMaxBytes": 5368709120,
   "useLegacyImagePdfViewers": false,
-  "spellcheckEnabled": false
+  "spellcheckEnabled": false,
+  "loginLockoutEnabled": false
 }

@@ -1,4 +1,5 @@
 import StarterKit from '@tiptap/starter-kit';
+import Blockquote from '@tiptap/extension-blockquote';
 import Placeholder from '@tiptap/extension-placeholder';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
@@ -29,6 +30,8 @@ import { createTiptapTableExtensions } from './tableExtension.js';
 import { createTiptapEmojiExtension } from './emojiExtension.js';
 import { createTiptapMentionExtension } from './mentionExtension.js';
 import { createPasteMarkdownExtension } from './pasteMarkdown.js';
+import { Indent } from './indentExtension.js';
+import { PullQuote } from './pullQuoteExtension.js';
 
 const lowlight = createLowlight(common);
 
@@ -82,6 +85,44 @@ export function createTiptapExtensions(options = {}) {
       },
       // Replaced by CodeBlockLowlight for syntax highlighting.
       codeBlock: false,
+      // Replaced so pull-quote HTML is not parsed as a normal blockquote.
+      blockquote: false,
+    }),
+    Blockquote.extend({
+      parseHTML() {
+        return [
+          {
+            tag: 'blockquote',
+            getAttrs: (node) => {
+              if (!(node instanceof HTMLElement)) return {};
+              if (node.getAttribute('data-type') === 'pullQuote') return false;
+              if (node.classList.contains('tiptap-pull-quote')) return false;
+              return {};
+            },
+          },
+        ];
+      },
+      addCommands() {
+        return {
+          ...this.parent?.(),
+          setBlockquote:
+            () =>
+            ({ editor, commands }) => {
+              if (editor.isActive('pullQuote')) {
+                return commands.lift('pullQuote') && commands.wrapIn(this.name);
+              }
+              return commands.wrapIn(this.name);
+            },
+          toggleBlockquote:
+            () =>
+            ({ editor, commands }) => {
+              if (editor.isActive('pullQuote')) {
+                return commands.lift('pullQuote') && commands.wrapIn(this.name);
+              }
+              return commands.toggleWrap(this.name);
+            },
+        };
+      },
     }),
     CodeBlockLowlight.configure({
       lowlight,
@@ -126,6 +167,8 @@ export function createTiptapExtensions(options = {}) {
     TextAlign.configure({
       types: ['heading', 'paragraph'],
     }),
+    Indent,
+    PullQuote,
     TextStyleKit.configure({
       backgroundColor: {},
       // OneNote / Word often color the whole paragraph, not a span.

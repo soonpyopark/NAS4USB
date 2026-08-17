@@ -206,6 +206,7 @@ export default function MembersSettingsPanel() {
   const [memberPassword, setMemberPassword] = useState('');
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
   const membersImportInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
+  const [loginLockoutEnabled, setLoginLockoutEnabled] = useState(false);
 
   const applyMembers = useCallback((nextMembers, guestPermissions) => {
     const drafts = (Array.isArray(nextMembers) ? nextMembers : []).map(createMemberDraft);
@@ -232,6 +233,7 @@ export default function MembersSettingsPanel() {
         window.nas4usb.settings.get(),
       ]);
       applyMembers(result?.members ?? [], settings?.guestPermissions);
+      setLoginLockoutEnabled(settings?.loginLockoutEnabled === true);
     } catch (err) {
       setError(err instanceof Error ? err.message : '회원 목록을 불러오지 못했습니다.');
     } finally {
@@ -291,8 +293,26 @@ export default function MembersSettingsPanel() {
       loggedInPermissions: normalizeAccessPermissionsFromUi(
         current?.loggedInPermissions ?? DEFAULT_MEMBER_PERMISSIONS,
       ),
+      loginLockoutEnabled,
     });
     return true;
+  };
+
+  /**
+   * @param {boolean} enabled
+   */
+  const persistLoginLockout = async (enabled) => {
+    if (!window.nas4usb?.settings?.update) return;
+    const previous = loginLockoutEnabled;
+    setLoginLockoutEnabled(enabled);
+    try {
+      await window.nas4usb.settings.update({ loginLockoutEnabled: enabled });
+    } catch (err) {
+      setLoginLockoutEnabled(previous);
+      const message = err instanceof Error ? err.message : '로그인 제한 설정을 저장하지 못했습니다.';
+      setError(message);
+      void appAlert({ title: '회원 관리', body: message });
+    }
   };
 
   /**
@@ -557,6 +577,7 @@ export default function MembersSettingsPanel() {
         loggedInPermissions: normalizeAccessPermissionsFromUi(
           settings?.loggedInPermissions ?? DEFAULT_MEMBER_PERMISSIONS,
         ),
+        loginLockoutEnabled: settings?.loginLockoutEnabled === true,
       });
 
       /** @type {Array<Record<string, unknown>>} */
@@ -640,6 +661,22 @@ export default function MembersSettingsPanel() {
   return (
     <div className="space-y-4">
       {dialog}
+      <section className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-slate-300 accent-nas-accent"
+            checked={loginLockoutEnabled}
+            disabled={loading || saving}
+            onChange={(event) => void persistLoginLockout(event.target.checked)}
+          />
+          로그인 3회 실패 시 5분간 제한
+        </label>
+        <p className="mt-1 pl-6 text-xs text-slate-500">
+          같은 아이디로 비밀번호를 3번 틀리면 5분간 로그인을 막습니다. 서버 PC(127.0.0.1)는
+          제한되지 않습니다.
+        </p>
+      </section>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <p className="text-sm text-slate-600">
           회원별로 보기·읽기·쓰기 권한을 설정합니다. 기본 관리자 아래의 손님(Guest)은 로그인하지

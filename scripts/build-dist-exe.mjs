@@ -6,7 +6,8 @@
  *   NAS4USB_BUILD_STAMP=YYMMDD_HHMMSS
  *   NAS4USB_SKIP_STAMP=1
  *   NAS4USB_SKIP_PUBLISH=1  — reuse .dist-build/release unpack
- *   NAS4USB_RELEASE_PORTABLE=1 — also write msi/NAS4USB v{ver}_{stamp}_portable.zip
+ *   NAS4USB_RELEASE_PORTABLE=1 — write only msi/NAS4USB v{ver}_{stamp}_portable.zip
+ *     (no files under exe/)
  */
 
 import { spawnSync } from 'node:child_process';
@@ -149,17 +150,24 @@ exe 와 같은 폴더를 유지해 주세요.
   await fs.writeFile(path.join(portableDir, 'README-USB.txt'), readme, 'utf8');
   console.log(`\n[build:dist:exe] Windows portable folder ready → ${portableDir}`);
 
-  await zipPortableFolder(portableDir);
-
-  // Release uploads use Neo-style asset names under msi/ (stamp parseable by update check).
-  if (process.env.NAS4USB_RELEASE_PORTABLE === '1') {
+  const releasePortable = process.env.NAS4USB_RELEASE_PORTABLE === '1';
+  if (releasePortable) {
     const releaseZip = path.join(
       projectRoot,
       'msi',
       `${meta.productName} v${meta.version}_${meta.stamp}_portable.zip`,
     );
     await zipPortableFolder(portableDir, releaseZip);
+    await fs.rm(portableDir, { recursive: true, force: true });
+    const parentDir = path.dirname(portableDir);
+    const leftover = await fs.readdir(parentDir).catch(() => []);
+    if (leftover.length === 0) {
+      await fs.rm(parentDir, { recursive: true, force: true });
+    }
+    return;
   }
+
+  await zipPortableFolder(portableDir);
 }
 
 async function main() {
@@ -175,7 +183,11 @@ async function main() {
     console.log(`[build:dist:exe] reusing APP_BUILD_STAMP=${stamp} (NAS4USB_SKIP_STAMP)`);
   }
 
-  const { portableDir, version, productName } = await createVersionedPortableDir('exe', { stamp });
+  const portableBase =
+    process.env.NAS4USB_RELEASE_PORTABLE === '1' ? path.join('.dist-build', 'portable') : 'exe';
+  const { portableDir, version, productName } = await createVersionedPortableDir(portableBase, {
+    stamp,
+  });
 
   let winUnpacked;
   if (shouldSkipPublish()) {

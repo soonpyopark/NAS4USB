@@ -181,6 +181,24 @@ export function IconAlignJustify() {
   );
 }
 
+export function IconIndent() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M3 6h18M11 12h10M3 18h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M3 9.5v5L8 12z" fill="currentColor" />
+    </svg>
+  );
+}
+
+export function IconOutdent() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M3 6h18M11 12h10M3 18h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+      <path d="M8 9.5v5L3 12z" fill="currentColor" />
+    </svg>
+  );
+}
+
 export function IconListBullet() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -225,6 +243,20 @@ export function IconQuote() {
         d="M8 17H5.5A2.5 2.5 0 0 1 3 14.5V11a4 4 0 0 1 4-4h1v4H5.5v2.5H8V17zm11 0h-2.5A2.5 2.5 0 0 1 14 14.5V11a4 4 0 0 1 4-4h1v4h-2.5v2.5H19V17z"
         fill="currentColor"
       />
+    </svg>
+  );
+}
+
+export function IconPullQuote() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M8.2 9.2C8.2 7.2 9.6 5.8 11.6 5.8c1.7 0 2.8 1.1 2.8 2.6 0 2.2-2.2 3.3-3.4 4.4"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <path d="M5 16.2h14M7 19.2h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
     </svg>
   );
 }

@@ -1,21 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
 import { entryExtensionOf } from '../lib/filePassword/secPaths.js';
-import { getParentPath } from '../lib/fsPaths.js';
+import { compareNames, getParentPath } from '../lib/fsPaths.js';
 import { isVideoExtension } from '../lib/media/mediaTypes.js';
-import { selectVideoSeries } from '../lib/media/videoSeries.js';
 
 /**
- * Same-folder videos whose names match except for the number that changes
- * (`귀멸의 칼날 1기 1화.ts` → `2화`, `파이터 01.mp4` → `02`, `1.mp4` → `2.mp4`).
+ * Same-folder videos in name order (`1` < `2` < `10`), for prev/next and
+ * optional continuous play. Series-shaped names are not required.
  *
  * @param {string} relativePath
  * @param {string} fileName
- * @param {string | null | undefined} extension
+ * @param {string | null | undefined} [_extension]
  * @param {boolean} [enabled=true]
  */
-export function useVideoSeriesQueue(relativePath, fileName, extension, enabled = true) {
+export function useVideoSeriesQueue(relativePath, fileName, _extension, enabled = true) {
   const [siblings, setSiblings] = useState(/** @type {import('../types/nas4usb.d.ts').FsEntry[]} */ ([]));
-  const ext = String(extension || '').toLowerCase();
 
   useEffect(() => {
     if (!enabled || !relativePath || !fileName) {
@@ -30,14 +28,10 @@ export function useVideoSeriesQueue(relativePath, fileName, extension, enabled =
       try {
         const entries = await window.nas4usb.fs.readDir(parent);
         if (cancelled) return;
-        const videos = (Array.isArray(entries) ? entries : []).filter((entry) => {
-          if (entry.isDirectory) return false;
-          const entryExt = entryExtensionOf(entry);
-          if (!isVideoExtension(entryExt)) return false;
-          if (ext && entryExt !== ext) return false;
-          return true;
-        });
-        setSiblings(selectVideoSeries(videos, fileName));
+        const videos = (Array.isArray(entries) ? entries : [])
+          .filter((entry) => !entry.isDirectory && isVideoExtension(entryExtensionOf(entry)))
+          .sort((left, right) => compareNames(left.name, right.name));
+        setSiblings(videos);
       } catch {
         if (!cancelled) setSiblings([]);
       }
@@ -47,7 +41,7 @@ export function useVideoSeriesQueue(relativePath, fileName, extension, enabled =
     return () => {
       cancelled = true;
     };
-  }, [relativePath, fileName, ext, enabled]);
+  }, [relativePath, fileName, enabled]);
 
   return useMemo(() => {
     if (!enabled) {

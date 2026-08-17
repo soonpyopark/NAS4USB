@@ -1337,7 +1337,10 @@ ipcMain.handle('editors:update', async (event) => {
 });
 
 ipcMain.handle('auth:login', async (_event, { id, password, rememberMe } = {}) =>
-  loginAdmin(id, password, getPortableRoot(), { remember: Boolean(rememberMe) }),
+  loginAdmin(id, password, getPortableRoot(), {
+    remember: Boolean(rememberMe),
+    clientIp: '127.0.0.1',
+  }),
 );
 
 ipcMain.handle('auth:showDefaultAdminHint', async () =>

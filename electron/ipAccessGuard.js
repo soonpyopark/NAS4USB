@@ -18,7 +18,7 @@ export async function rejectIfIpNotAllowed(req, res) {
     return false;
   }
   res.writeHead(403, { 'Content-Type': 'text/html; charset=utf-8' });
-  res.end(ipBlockedHtml());
+  res.end(ipBlockedHtml(clientIp));
   return true;
 }
 

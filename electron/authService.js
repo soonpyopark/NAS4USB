@@ -4,13 +4,23 @@ import path from 'node:path';
 import { DEFAULT_ADMIN_ID, DEFAULT_ADMIN_PW } from '../shared/constants.js';
 import { getExeRoot, getPortableRoot } from './appContext.js';
 import { resolveAdminCredentials } from './envConfig.js';
+import { normalizeClientIp } from './ipAllowlist.js';
 import {
   findActiveMemberByCredentials,
   hasMemberLoginId,
 } from './membersService.js';
+import { getAppSettings } from './settingsService.js';
 
 const SESSIONS_FILE = '.nas4usb-sessions.json';
 const REMEMBER_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const LOGIN_LOCKOUT_MAX_FAILURES = 3;
+const LOGIN_LOCKOUT_MS = 5 * 60 * 1000;
+
+/**
+ * Failed-login counters keyed by normalized loginId. Process memory only.
+ * @type {Map<string, { failCount: number, lockedUntil: number | null }>}
+ */
+const loginAttempts = new Map();
 
 /**
  * @typedef {{ adminId: string, role?: string, createdAt: number, expiresAt: number | null }} AdminSession
@@ -201,20 +211,103 @@ export function verifyAdminLogin(id, password, portableRoot) {
 }
 
 /**
+ * @param {string} id
+ */
+function normalizeLoginAttemptKey(id) {
+  return String(id ?? '').trim().toLowerCase();
+}
+
+/**
+ * Direct 127.0.0.1 only. Proxied requests (X-Forwarded-For) are not exempt,
+ * so a tunnel in front of localhost cannot bypass the lock.
+ * @param {string | null | undefined} clientIp
+ * @param {{ proxied?: boolean }} [options]
+ */
+function isLoginLockoutExempt(clientIp, { proxied = false } = {}) {
+  if (proxied) return false;
+  return normalizeClientIp(clientIp ?? '') === '127.0.0.1';
+}
+
+/**
+ * @param {string} key
+ */
+function getLoginAttemptState(key) {
+  const state = loginAttempts.get(key);
+  if (!state) return null;
+  if (state.lockedUntil && state.lockedUntil <= Date.now()) {
+    loginAttempts.delete(key);
+    return null;
+  }
+  return state;
+}
+
+/**
+ * @param {{ failCount: number, lockedUntil: number | null }} state
+ */
+function lockedLoginResult(state) {
+  const remainingMs = (state.lockedUntil ?? 0) - Date.now();
+  return {
+    success: false,
+    locked: true,
+    retryAfterSec: Math.max(1, Math.ceil(remainingMs / 1000)),
+  };
+}
+
+/**
+ * @param {string} key
+ */
+function recordLoginFailure(key) {
+  const now = Date.now();
+  const state = getLoginAttemptState(key) ?? { failCount: 0, lockedUntil: null };
+  if (state.lockedUntil && state.lockedUntil > now) return state;
+  state.failCount += 1;
+  if (state.failCount >= LOGIN_LOCKOUT_MAX_FAILURES) {
+    state.lockedUntil = now + LOGIN_LOCKOUT_MS;
+  }
+  loginAttempts.set(key, state);
+  return state;
+}
+
+/**
  * Prefers members.json (including seeded bootstrap admin). When that admin row exists,
  * its password hash overrides the plaintext .env password.
  * @param {string} id
  * @param {string} password
  * @param {string} portableRoot
- * @param {{ remember?: boolean }} [options]
+ * @param {{ remember?: boolean, clientIp?: string, proxied?: boolean }} [options]
  */
-export async function loginAdmin(id, password, portableRoot, { remember = false } = {}) {
+export async function loginAdmin(
+  id,
+  password,
+  portableRoot,
+  { remember = false, clientIp, proxied = false } = {},
+) {
   const providedId = String(id ?? '').trim();
+  const attemptKey = normalizeLoginAttemptKey(providedId);
   const { adminId } = resolveAdminCredentials(getExeRoot());
   const isAdminLogin = providedId.toLowerCase() === String(adminId).trim().toLowerCase();
 
+  let lockoutEnabled = false;
+  try {
+    const settings = await getAppSettings(portableRoot);
+    lockoutEnabled = settings.loginLockoutEnabled === true;
+  } catch {
+    lockoutEnabled = false;
+  }
+
+  const enforceLockout =
+    lockoutEnabled && Boolean(attemptKey) && !isLoginLockoutExempt(clientIp, { proxied });
+
+  if (enforceLockout) {
+    const locked = getLoginAttemptState(attemptKey);
+    if (locked?.lockedUntil && locked.lockedUntil > Date.now()) {
+      return lockedLoginResult(locked);
+    }
+  }
+
   const member = await findActiveMemberByCredentials(id, password, portableRoot);
   if (member) {
+    if (attemptKey) loginAttempts.delete(attemptKey);
     let role = member.role === 'super_admin' || isAdminLogin ? 'super_admin' : member.role;
     const token = createAdminSession(member.loginId, role, remember);
     try {
@@ -237,6 +330,7 @@ export async function loginAdmin(id, password, portableRoot, { remember = false 
     !(await hasMemberLoginId(adminId, portableRoot)) &&
     verifyAdminLogin(id, password, portableRoot)
   ) {
+    if (attemptKey) loginAttempts.delete(attemptKey);
     const token = createAdminSession(adminId, 'super_admin', remember);
     try {
       const { ensureMemberHome } = await import('./memberHomeService.js');
@@ -245,6 +339,13 @@ export async function loginAdmin(id, password, portableRoot, { remember = false 
       console.warn('[auth] ensure member home failed:', err);
     }
     return { success: true, adminId, role: 'super_admin', token };
+  }
+
+  if (enforceLockout) {
+    const state = recordLoginFailure(attemptKey);
+    if (state.lockedUntil && state.lockedUntil > Date.now()) {
+      return lockedLoginResult(state);
+    }
   }
 
   return { success: false };

@@ -208,6 +208,9 @@ export default function TipTapEditorView({
             });
           return true;
         },
+        // ProseMirror default is `\n\n` between blocks. Messengers (KakaoTalk)
+        // treat that as a blank line after every paragraph.
+        clipboardTextSerializer: (slice) => slice.content.textBetween(0, slice.content.size, '\n'),
         transformCopied: (slice) => rewriteCopiedSliceForClipboard(slice, relativePath),
         handlePaste: (view, event, slice) => {
           if (readOnly) return false;

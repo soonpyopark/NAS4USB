@@ -5,7 +5,6 @@
  * Output (same YYMMDD_HHMMSS):
  *   msi/NAS4USB v{version}_{stamp}.msi
  *   msi/NAS4USB v{version}_{stamp}_portable.zip
- *   exe/NAS4USB_{version}_{stamp}/ (+ sibling .zip)
  */
 
 import { execSync } from 'node:child_process';
@@ -57,7 +56,7 @@ function main() {
   run('node scripts/build-dist-exe.mjs', { env });
 
   log(`done — MSI + portable share stamp ${stamp}`);
-  log(`artifacts under msi/ and exe/ (see NAS4USB v*_${stamp}*)`);
+  log(`artifacts under msi/ (see NAS4USB v*_${stamp}*)`);
 }
 
 try {

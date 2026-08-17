@@ -147,7 +147,6 @@ Electron을 **한 번만** 패키징한 뒤, 같은 `YYMMDD_HHMMSS` 스탬프로
 |--------|------|
 | MSI | `msi/NAS4USB v{version}_{stamp}.msi` |
 | Portable zip (GitHub용) | `msi/NAS4USB v{version}_{stamp}_portable.zip` |
-| Portable 폴더 | `exe/NAS4USB_{version}_{stamp}/` |
 
 앱 안의 `APP_BUILD_STAMP`도 같은 값으로 심어져, GitHub Releases **업데이트 확인**이 버전뿐 아니라 빌드 시각을 비교합니다.  
 (같은 태그로 MSI만 다시 올려도 스탬프가 더 새로우면 “새 빌드”로 안내됩니다.)
@@ -212,7 +211,7 @@ npm run build:release
 | `npm run build:dist:exe` | Windows portable 폴더 생성 |
 | `npm run build:dist:mac` | macOS `.app` portable 폴더 생성 |
 | `npm run build:msi` | Windows MSI 설치 패키지 생성 (WiX CLI 필요) |
-| `npm run build:release` | MSI + portable을 동일 빌드 스탬프로 생성 |
+| `npm run build:release` | MSI + portable zip을 `msi/`에 동일 스탬프로 생성 |
 | `npm run sync-version` | `APP_VERSION` → package.json / MSI License 동기화 |
 | `npm run update:all` | 에디터 코어 + npm 의존성 업데이트 |
 | `npm run prepare:hwpx-export` | TipTap/MD→HWPX용 Pandoc·pypandoc-hwpx·pydeps 준비 (호스트 Python 3 필요) |

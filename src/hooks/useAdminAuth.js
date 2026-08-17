@@ -11,6 +11,18 @@ const ADMIN_ROLE_STORAGE_KEY = 'nas4usb.adminRole';
 const ADMIN_REMEMBER_KEY = 'nas4usb.adminRemember';
 
 /**
+ * @param {{ locked?: boolean, retryAfterSec?: number } | null | undefined} result
+ */
+function loginFailureMessage(result) {
+  if (result?.locked) {
+    const sec = Number(result.retryAfterSec);
+    const minutes = Math.max(1, Math.ceil((Number.isFinite(sec) && sec > 0 ? sec : 300) / 60));
+    return `로그인이 일시적으로 제한되었습니다. ${minutes}분 후 다시 시도해 주세요.`;
+  }
+  return '아이디 또는 비밀번호가 올바르지 않습니다.';
+}
+
+/**
  * @param {string} key
  * @param {string} [legacyKey]
  */
@@ -222,7 +234,7 @@ export function useAdminAuth({ onAuthChange } = {}) {
           rememberMe: Boolean(rememberMe),
         });
         if (!result?.success) {
-          setError('아이디 또는 비밀번호가 올바르지 않습니다.');
+          setError(loginFailureMessage(result));
           return false;
         }
 

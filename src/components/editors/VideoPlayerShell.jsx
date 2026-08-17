@@ -291,17 +291,17 @@ export default function VideoPlayerShell({
       </label>
       <AppModalButton
         disabled={!prevInSeries || loading}
-        title={prevInSeries ? `이전화: ${prevInSeries.name} (Shift+←)` : '이전화 없음'}
+        title={prevInSeries ? `이전 파일: ${prevInSeries.name} (Shift+←)` : '이전 파일 없음'}
         onClick={() => openSeriesEntry(prevInSeries)}
       >
-        이전화
+        이전
       </AppModalButton>
       <AppModalButton
         disabled={!nextInSeries || loading}
-        title={nextInSeries ? `다음화: ${nextInSeries.name} (Shift+→)` : '다음화 없음'}
+        title={nextInSeries ? `다음 파일: ${nextInSeries.name} (Shift+→)` : '다음 파일 없음'}
         onClick={() => openSeriesEntry(nextInSeries)}
       >
-        다음화
+        다음
       </AppModalButton>
     </>
   ) : null;
