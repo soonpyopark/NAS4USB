@@ -113,9 +113,14 @@ export async function importOnenoteToFolder(targetPath, fileOrPayload, options =
 
   /** @type {string | null} */
   let firstFilePath = null;
+  /** @type {string[]} */
+  const writtenNames = [];
+  /** @type {{ path: string, level: number }[]} */
+  const levelEntries = [];
   for (const page of packed) {
     const name = existingFolder ? page.fileName : resolveUniqueName(existingNames, page.fileName);
     existingNames.push(name);
+    writtenNames.push(name);
     const relativePath = joinRelativePath(writeFolderPath, name);
     await window.nas4usb.fs.writeFile(relativePath, page.base64);
     try {
@@ -124,7 +129,25 @@ export async function importOnenoteToFolder(targetPath, fileOrPayload, options =
     } catch {
       // ZIP 안에 첨부만 있어도 열 때 다시 풀어집니다.
     }
+    levelEntries.push({ path: relativePath, level: page.level || 0 });
     if (!firstFilePath) firstFilePath = relativePath;
+  }
+
+  try {
+    const leftover = existingNames.filter((name) => !writtenNames.includes(name));
+    await window.nas4usb.folderOrder?.set?.({
+      path: writeFolderPath,
+      names: [...writtenNames, ...leftover],
+    });
+  } catch {
+    // 순서를 못 저장해도 파일은 이미 만들어졌습니다.
+  }
+  if (levelEntries.length && window.nas4usb.folderColors?.setLevels) {
+    try {
+      await window.nas4usb.folderColors.setLevels({ entries: levelEntries });
+    } catch {
+      // 단계는 나중에 우클릭으로 맞출 수 있습니다.
+    }
   }
 
   if (options.keepOriginal) {

@@ -278,6 +278,7 @@ function parseExtensions() {
  * @param {{
  *   title: string,
  *   html: string,
+ *   level?: number,
  *   assets?: { fileName: string, base64: string, originalSrc?: string }[],
  * }} page
  * @param {number} index
@@ -290,7 +291,7 @@ export async function packOnenotePageToTiptap(page, index) {
   const title = page.title || `페이지 ${index + 1}`;
   const fileName = onenotePageFileName(title, index);
   const base64 = await packTiptapContentBase64({ title, content, assets });
-  return { fileName, title, base64, content, assets };
+  return { fileName, title, base64, content, assets, level: Number(page.level) || 0 };
 }
 
 /**
@@ -298,7 +299,7 @@ export async function packOnenotePageToTiptap(page, index) {
  */
 export async function packOnenotePagesToTiptap(pages) {
   const list = Array.isArray(pages) ? pages : [];
-  /** @type {{ fileName: string, title: string, base64: string, content: import('@tiptap/core').JSONContent, assets: { fileName: string, base64: string }[] }[]} */
+  /** @type {{ fileName: string, title: string, base64: string, content: import('@tiptap/core').JSONContent, assets: { fileName: string, base64: string }[], level: number }[]} */
   const packed = [];
   for (let index = 0; index < list.length; index += 1) {
     packed.push(await packOnenotePageToTiptap(list[index], index));

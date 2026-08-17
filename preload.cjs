@@ -101,6 +101,14 @@ contextBridge.exposeInMainWorld('nas4usb', {
     set: ({ path, color }) => ipcRenderer.invoke('folderColors:set', { path, color }),
     getBoldMap: () => ipcRenderer.invoke('folderColors:getBoldMap'),
     setBold: ({ path, bold }) => ipcRenderer.invoke('folderColors:setBold', { path, bold }),
+    getLevelMap: () => ipcRenderer.invoke('folderColors:getLevelMap'),
+    setLevel: ({ path, level }) => ipcRenderer.invoke('folderColors:setLevel', { path, level }),
+    setLevels: ({ entries }) => ipcRenderer.invoke('folderColors:setLevels', { entries }),
+    getCollapsedMap: () => ipcRenderer.invoke('folderColors:getCollapsedMap'),
+    setCollapsed: ({ path, collapsed }) =>
+      ipcRenderer.invoke('folderColors:setCollapsed', { path, collapsed }),
+    setCollapsedMany: ({ entries }) =>
+      ipcRenderer.invoke('folderColors:setCollapsedMany', { entries }),
   },
 
   folderOrder: {

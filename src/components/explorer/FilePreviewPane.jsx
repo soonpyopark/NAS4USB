@@ -16,6 +16,7 @@ import { useFolderOrder } from '../../hooks/useFolderOrder.js';
 import { resolveComicFirstPage } from '../../lib/comicReader/firstPage.js';
 import { resolvePdfFirstPage } from '../../lib/pdf/firstPage.js';
 import FileIcon from './FileIcon.jsx';
+import { FILE_INDENT_STEP_PX } from '../../../shared/fileIndent.js';
 
 /**
  * @param {string} relativePath
@@ -47,6 +48,7 @@ const TEXT_PREVIEW_LIMIT = 400_000;
  *   previewAnchorPath?: string | null,
  *   folderColorMap?: Record<string, string>,
  *   nameBoldMap?: Record<string, boolean>,
+ *   fileLevelMap?: Record<string, number>,
  * }} props
  */
 export default function FilePreviewPane({
@@ -59,6 +61,7 @@ export default function FilePreviewPane({
   previewAnchorPath = null,
   folderColorMap = {},
   nameBoldMap = {},
+  fileLevelMap = {},
 }) {
   const kind = getFilePreviewKind(entry);
   const locked = Boolean(entry && isSecFileName(entry.relativePath || entry.name));
@@ -342,6 +345,13 @@ export default function FilePreviewPane({
                         <button
                           type="button"
                           className="file-preview-pane__folder-item"
+                          style={
+                            !child.isDirectory && fileLevelMap[child.relativePath]
+                              ? {
+                                  paddingLeft: `${0.4 + (fileLevelMap[child.relativePath] * FILE_INDENT_STEP_PX) / 16}rem`,
+                                }
+                              : undefined
+                          }
                           onClick={() => onPreview?.(child)}
                           onDoubleClick={() => onOpenFull?.(child)}
                         >

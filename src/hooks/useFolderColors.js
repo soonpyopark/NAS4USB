@@ -4,12 +4,18 @@ import { useFsSync } from '../context/FsSyncContext.jsx';
 export function useFolderColors() {
   const [folderColorMap, setFolderColorMap] = useState(/** @type {Record<string, string>} */ ({}));
   const [nameBoldMap, setNameBoldMap] = useState(/** @type {Record<string, boolean>} */ ({}));
+  const [fileLevelMap, setFileLevelMap] = useState(/** @type {Record<string, number>} */ ({}));
+  const [fileCollapsedMap, setFileCollapsedMap] = useState(
+    /** @type {Record<string, boolean>} */ ({}),
+  );
   const { generation } = useFsSync();
 
   const refreshFolderColorMap = useCallback(async () => {
     if (!window.nas4usb?.folderColors?.getMap) {
       setFolderColorMap({});
       setNameBoldMap({});
+      setFileLevelMap({});
+      setFileCollapsedMap({});
       return;
     }
 
@@ -22,13 +28,35 @@ export function useFolderColors() {
 
     if (typeof window.nas4usb.folderColors.getBoldMap !== 'function') {
       setNameBoldMap({});
-      return;
+    } else {
+      try {
+        const bold = await window.nas4usb.folderColors.getBoldMap();
+        setNameBoldMap(bold && typeof bold === 'object' ? bold : {});
+      } catch {
+        setNameBoldMap({});
+      }
     }
-    try {
-      const bold = await window.nas4usb.folderColors.getBoldMap();
-      setNameBoldMap(bold && typeof bold === 'object' ? bold : {});
-    } catch {
-      setNameBoldMap({});
+
+    if (typeof window.nas4usb.folderColors.getLevelMap !== 'function') {
+      setFileLevelMap({});
+    } else {
+      try {
+        const levels = await window.nas4usb.folderColors.getLevelMap();
+        setFileLevelMap(levels && typeof levels === 'object' ? levels : {});
+      } catch {
+        setFileLevelMap({});
+      }
+    }
+
+    if (typeof window.nas4usb.folderColors.getCollapsedMap !== 'function') {
+      setFileCollapsedMap({});
+    } else {
+      try {
+        const collapsed = await window.nas4usb.folderColors.getCollapsedMap();
+        setFileCollapsedMap(collapsed && typeof collapsed === 'object' ? collapsed : {});
+      } catch {
+        setFileCollapsedMap({});
+      }
     }
   }, []);
 
@@ -58,11 +86,74 @@ export function useFolderColors() {
     [refreshFolderColorMap],
   );
 
+  const setFileLevel = useCallback(
+    async (relativePath, level) => {
+      if (!window.nas4usb?.folderColors?.setLevel) {
+        throw new Error('파일 단계 API를 사용할 수 없습니다.');
+      }
+      await window.nas4usb.folderColors.setLevel({ path: relativePath, level });
+      await refreshFolderColorMap();
+    },
+    [refreshFolderColorMap],
+  );
+
+  const setFileLevels = useCallback(
+    async (entries) => {
+      if (!window.nas4usb?.folderColors?.setLevels) {
+        throw new Error('파일 단계 API를 사용할 수 없습니다.');
+      }
+      await window.nas4usb.folderColors.setLevels({ entries });
+      await refreshFolderColorMap();
+    },
+    [refreshFolderColorMap],
+  );
+
+  const setFileCollapsed = useCallback(
+    async (relativePath, collapsed) => {
+      if (!window.nas4usb?.folderColors?.setCollapsed) {
+        throw new Error('하위 파일 접기 API를 사용할 수 없습니다.');
+      }
+      await window.nas4usb.folderColors.setCollapsed({
+        path: relativePath,
+        collapsed: Boolean(collapsed),
+      });
+      await refreshFolderColorMap();
+    },
+    [refreshFolderColorMap],
+  );
+
+  const setFileCollapsedMany = useCallback(
+    async (entries) => {
+      if (typeof window.nas4usb?.folderColors?.setCollapsedMany === 'function') {
+        await window.nas4usb.folderColors.setCollapsedMany({ entries });
+        await refreshFolderColorMap();
+        return;
+      }
+      if (!window.nas4usb?.folderColors?.setCollapsed) {
+        throw new Error('하위 파일 접기 API를 사용할 수 없습니다.');
+      }
+      for (const item of entries || []) {
+        await window.nas4usb.folderColors.setCollapsed({
+          path: item.path || item.relativePath,
+          collapsed: Boolean(item.collapsed),
+        });
+      }
+      await refreshFolderColorMap();
+    },
+    [refreshFolderColorMap],
+  );
+
   return {
     folderColorMap,
     nameBoldMap,
+    fileLevelMap,
+    fileCollapsedMap,
     refreshFolderColorMap,
     setFolderColor,
     setNameBold,
+    setFileLevel,
+    setFileLevels,
+    setFileCollapsed,
+    setFileCollapsedMany,
   };
 }

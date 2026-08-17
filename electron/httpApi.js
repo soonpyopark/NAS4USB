@@ -77,6 +77,12 @@ import {
   getEntryBoldMap,
   setFolderColor,
   setEntryBold,
+  getEntryLevelMap,
+  setEntryLevel,
+  setEntryLevels,
+  getEntryCollapsedMap,
+  setEntryCollapsed,
+  setEntryCollapsedMany,
   syncFolderColorsDelete,
   syncFolderColorsMoveTree,
 } from './folderColorsService.js';
@@ -726,6 +732,84 @@ export async function handleHttpApiRequest(req, res) {
       await assertCanEditFile(body.path ?? '', auth, shareToken);
       const result = await setEntryBold(body.path, Boolean(body.bold), getPortableRoot());
       notifyFsChanged(body.path);
+      sendJson(res, 200, result);
+      return true;
+    }
+
+    if (method === 'GET' && url.pathname === '/api/folder-colors/level-map') {
+      const auth = getAccessAuth(req);
+      const perms = await getEffectiveAccessPermissions(auth, getPortableRoot());
+      if (!perms.view && !perms.write) {
+        sendJson(res, 200, {});
+        return true;
+      }
+      sendJson(res, 200, await getEntryLevelMap(getPortableRoot()));
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/folder-colors/set-level') {
+      const body = await readJsonBody(req);
+      const auth = getAccessAuth(req);
+      const shareToken = getShareTokenFromQuery(url);
+      assertHomeSystemPathMutable(body.path, 'mutate');
+      await assertCanEditFile(body.path ?? '', auth, shareToken);
+      const result = await setEntryLevel(body.path, body.level, getPortableRoot());
+      notifyFsChanged(body.path);
+      sendJson(res, 200, result);
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/folder-colors/set-levels') {
+      const body = await readJsonBody(req);
+      const auth = getAccessAuth(req);
+      const shareToken = getShareTokenFromQuery(url);
+      const list = Array.isArray(body.entries) ? body.entries : [];
+      for (const item of list) {
+        const relativePath = item?.path || item?.relativePath;
+        assertHomeSystemPathMutable(relativePath, 'mutate');
+        await assertCanEditFile(relativePath ?? '', auth, shareToken);
+      }
+      const result = await setEntryLevels(list, getPortableRoot());
+      if (result.entries[0]?.relativePath) notifyFsChanged(result.entries[0].relativePath);
+      sendJson(res, 200, result);
+      return true;
+    }
+
+    if (method === 'GET' && url.pathname === '/api/folder-colors/collapsed-map') {
+      const auth = getAccessAuth(req);
+      const perms = await getEffectiveAccessPermissions(auth, getPortableRoot());
+      if (!perms.view && !perms.write) {
+        sendJson(res, 200, {});
+        return true;
+      }
+      sendJson(res, 200, await getEntryCollapsedMap(getPortableRoot()));
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/folder-colors/set-collapsed') {
+      const body = await readJsonBody(req);
+      const auth = getAccessAuth(req);
+      const shareToken = getShareTokenFromQuery(url);
+      assertHomeSystemPathMutable(body.path, 'mutate');
+      await assertCanEditFile(body.path ?? '', auth, shareToken);
+      const result = await setEntryCollapsed(body.path, Boolean(body.collapsed), getPortableRoot());
+      notifyFsChanged(body.path);
+      sendJson(res, 200, result);
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/folder-colors/set-collapsed-many') {
+      const body = await readJsonBody(req);
+      const auth = getAccessAuth(req);
+      const shareToken = getShareTokenFromQuery(url);
+      const list = Array.isArray(body.entries) ? body.entries : [];
+      for (const item of list) {
+        const relativePath = item?.path || item?.relativePath;
+        assertHomeSystemPathMutable(relativePath, 'mutate');
+        await assertCanEditFile(relativePath ?? '', auth, shareToken);
+      }
+      const result = await setEntryCollapsedMany(list, getPortableRoot());
+      if (result.entries[0]?.relativePath) notifyFsChanged(result.entries[0].relativePath);
       sendJson(res, 200, result);
       return true;
     }

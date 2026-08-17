@@ -7,11 +7,21 @@ import { isFavoritesRelativePath, isTrashRelativePath } from '../shared/constant
 import { isFixedFolderOrderPath } from '../shared/folderOrder.js';
 import { isHomesContainerPath, isMemberHomeRootPath } from '../shared/memberHomes.js';
 import { isTiptapAssetSidecarRelativePath } from '../shared/tiptapAssetPaths.js';
+import {
+  normalizeFileCollapsedMap,
+  normalizeFileIndent,
+  normalizeFileLevelMap,
+} from '../shared/fileIndent.js';
 
 const FOLDER_COLORS_FILE = '.nas4usb-folder-colors.json';
 
 /**
- * @typedef {{ colors: Record<string, string>, bold: Record<string, true> }} FolderColorsStore
+ * @typedef {{
+ *   colors: Record<string, string>,
+ *   bold: Record<string, true>,
+ *   levels: Record<string, number>,
+ *   collapsed: Record<string, true>,
+ * }} FolderColorsStore
  */
 
 /**
@@ -24,12 +34,17 @@ async function loadStore(portableRoot) {
     const raw = await fs.readFile(filePath, 'utf8');
     const parsed = JSON.parse(raw);
     if (parsed && parsed.colors && typeof parsed.colors === 'object' && !Array.isArray(parsed.colors)) {
-      return { colors: { ...parsed.colors }, bold: normalizeBoldMap(parsed.bold) };
+      return {
+        colors: { ...parsed.colors },
+        bold: normalizeBoldMap(parsed.bold),
+        levels: normalizeFileLevelMap(parsed.levels),
+        collapsed: normalizeFileCollapsedMap(parsed.collapsed),
+      };
     }
   } catch {
     // fall through
   }
-  return { colors: {}, bold: {} };
+  return { colors: {}, bold: {}, levels: {}, collapsed: {} };
 }
 
 /**
@@ -58,7 +73,9 @@ async function saveStore(portableRoot, store) {
       : {};
   const bold =
     store?.bold && typeof store.bold === 'object' && !Array.isArray(store.bold) ? store.bold : {};
-  await fs.writeFile(filePath, JSON.stringify({ colors, bold }, null, 2), 'utf8');
+  const levels = normalizeFileLevelMap(store?.levels);
+  const collapsed = normalizeFileCollapsedMap(store?.collapsed);
+  await fs.writeFile(filePath, JSON.stringify({ colors, bold, levels, collapsed }, null, 2), 'utf8');
 }
 
 /**
@@ -75,6 +92,22 @@ export async function getFolderColorsMap(portableRoot = getPortableRoot()) {
 export async function getEntryBoldMap(portableRoot = getPortableRoot()) {
   const store = await loadStore(portableRoot);
   return store.bold;
+}
+
+/**
+ * @param {string} [portableRoot]
+ */
+export async function getEntryLevelMap(portableRoot = getPortableRoot()) {
+  const store = await loadStore(portableRoot);
+  return store.levels;
+}
+
+/**
+ * @param {string} [portableRoot]
+ */
+export async function getEntryCollapsedMap(portableRoot = getPortableRoot()) {
+  const store = await loadStore(portableRoot);
+  return store.collapsed;
 }
 
 /**
@@ -183,6 +216,100 @@ export async function setEntryBold(relativePath, bold, portableRoot = getPortabl
 }
 
 /**
+ * @param {FolderColorsStore} store
+ * @param {string} relativePath
+ * @param {number} level
+ */
+function writeEntryLevel(store, relativePath, level) {
+  const next = normalizeFileIndent(level);
+  if (next > 0) store.levels[relativePath] = next;
+  else delete store.levels[relativePath];
+  return next;
+}
+
+/**
+ * OneNote-style indent for files (0 = top-level sibling).
+ * @param {string} relativePath
+ * @param {number} level
+ * @param {string} [portableRoot]
+ */
+export async function setEntryLevel(relativePath, level, portableRoot = getPortableRoot()) {
+  const normalizedPath = String(relativePath ?? '').replace(/\\/g, '/');
+  if (!normalizedPath || normalizedPath === '.') {
+    throw new Error('경로가 올바르지 않습니다.');
+  }
+
+  await fsService.statPath(normalizedPath);
+
+  const store = await loadStore(portableRoot);
+  const next = writeEntryLevel(store, normalizedPath, level);
+  await saveStore(portableRoot, store);
+  return { relativePath: normalizedPath, level: next };
+}
+
+/**
+ * @param {{ path?: string, relativePath?: string, level?: number }[]} entries
+ * @param {string} [portableRoot]
+ */
+export async function setEntryLevels(entries, portableRoot = getPortableRoot()) {
+  const list = Array.isArray(entries) ? entries : [];
+  const store = await loadStore(portableRoot);
+  /** @type {{ relativePath: string, level: number }[]} */
+  const written = [];
+  for (const item of list) {
+    const normalizedPath = String(item?.path || item?.relativePath || '').replace(/\\/g, '/');
+    if (!normalizedPath || normalizedPath === '.') continue;
+    await fsService.statPath(normalizedPath);
+    const next = writeEntryLevel(store, normalizedPath, item?.level);
+    written.push({ relativePath: normalizedPath, level: next });
+  }
+  if (written.length) await saveStore(portableRoot, store);
+  return { entries: written };
+}
+
+/**
+ * @param {string} relativePath
+ * @param {boolean} collapsed
+ * @param {string} [portableRoot]
+ */
+export async function setEntryCollapsed(relativePath, collapsed, portableRoot = getPortableRoot()) {
+  const normalizedPath = String(relativePath ?? '').replace(/\\/g, '/');
+  if (!normalizedPath || normalizedPath === '.') {
+    throw new Error('경로가 올바르지 않습니다.');
+  }
+
+  await fsService.statPath(normalizedPath);
+
+  const store = await loadStore(portableRoot);
+  if (collapsed) store.collapsed[normalizedPath] = true;
+  else delete store.collapsed[normalizedPath];
+  await saveStore(portableRoot, store);
+  return { relativePath: normalizedPath, collapsed: Boolean(collapsed) };
+}
+
+/**
+ * @param {{ path?: string, relativePath?: string, collapsed?: boolean }[]} entries
+ * @param {string} [portableRoot]
+ */
+export async function setEntryCollapsedMany(entries, portableRoot = getPortableRoot()) {
+  const list = Array.isArray(entries) ? entries : [];
+  const store = await loadStore(portableRoot);
+  /** @type {{ relativePath: string, collapsed: boolean }[]} */
+  const written = [];
+  for (const item of list) {
+    const normalizedPath = String(item?.path || item?.relativePath || '').replace(/\\/g, '/');
+    if (!normalizedPath || normalizedPath === '.') continue;
+    await fsService.statPath(normalizedPath);
+    const collapsed = Boolean(item?.collapsed);
+    if (collapsed) store.collapsed[normalizedPath] = true;
+    else delete store.collapsed[normalizedPath];
+    written.push({ relativePath: normalizedPath, collapsed });
+  }
+  if (written.length) await saveStore(portableRoot, store);
+  return { entries: written };
+}
+
+/**
  * @param {string} fromRelative
  * @param {string} toRelative
  * @param {string} [portableRoot]
@@ -197,10 +324,14 @@ export async function syncFolderColorsMoveTree(
   const store = await loadStore(portableRoot);
   const colors = remapPathKeyedRecord(store.colors, fromPath, toPath);
   const bold = remapPathKeyedRecord(store.bold, fromPath, toPath);
-  if (!colors.changed && !bold.changed) return;
+  const levels = remapPathKeyedRecord(store.levels, fromPath, toPath);
+  const collapsed = remapPathKeyedRecord(store.collapsed, fromPath, toPath);
+  if (!colors.changed && !bold.changed && !levels.changed && !collapsed.changed) return;
 
   store.colors = colors.next;
   store.bold = bold.next;
+  store.levels = levels.next;
+  store.collapsed = collapsed.next;
   await saveStore(portableRoot, store);
 }
 
@@ -213,7 +344,9 @@ export async function syncFolderColorsDelete(relativePath, portableRoot = getPor
   const store = await loadStore(portableRoot);
   const colorsChanged = deletePathKeyedRecord(store.colors, normalizedPath);
   const boldChanged = deletePathKeyedRecord(store.bold, normalizedPath);
-  if (colorsChanged || boldChanged) {
+  const levelsChanged = deletePathKeyedRecord(store.levels, normalizedPath);
+  const collapsedChanged = deletePathKeyedRecord(store.collapsed, normalizedPath);
+  if (colorsChanged || boldChanged || levelsChanged || collapsedChanged) {
     await saveStore(portableRoot, store);
   }
 }

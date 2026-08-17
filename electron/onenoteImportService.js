@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { getTempPath } from './appContext.js';
+import { assignOnenotePageLevels } from '../shared/onenotePageLevels.js';
 
 const require = createRequire(import.meta.url);
 
@@ -383,7 +384,7 @@ function loadConverter() {
  *
  * @param {string} base64
  * @param {string} [fileName]
- * @returns {Promise<{ pages: { title: string, html: string, assets: { fileName: string, base64: string, originalSrc: string }[] }[], warnings: string[] }>}
+ * @returns {Promise<{ pages: { title: string, html: string, level?: number, assets: { fileName: string, base64: string, originalSrc: string }[] }[], warnings: string[] }>}
  */
 export async function convertOnenoteBase64(base64, fileName = 'section.one') {
   if (!base64) throw new Error('원노트 파일이 비어 있습니다.');
@@ -420,9 +421,13 @@ export async function convertOnenoteBase64(base64, fileName = 'section.one') {
 
     /** @type {{ htmlPath: string, html: string }[]} */
     const loaded = [];
+    let tocHtml = '';
     for (const htmlPath of htmlFiles) {
       const html = await fs.readFile(htmlPath, 'utf8');
-      if (isSectionIndexHtml(html)) continue;
+      if (isSectionIndexHtml(html)) {
+        if (!tocHtml) tocHtml = html;
+        continue;
+      }
       loaded.push({ htmlPath, html });
     }
 
@@ -439,7 +444,7 @@ export async function convertOnenoteBase64(base64, fileName = 'section.one') {
       throw new Error('원노트에서 페이지를 찾지 못했습니다. 데스크톱 원노트의 .one / .onepkg 파일인지 확인하세요.');
     }
 
-    /** @type {{ title: string, html: string, assets: { fileName: string, base64: string, originalSrc: string }[] }[]} */
+    /** @type {{ title: string, html: string, htmlPath: string, assets: { fileName: string, base64: string, originalSrc: string }[] }[]} */
     const pages = [];
     /** @type {string[]} */
     const missingNames = [];
@@ -450,8 +455,13 @@ export async function convertOnenoteBase64(base64, fileName = 'section.one') {
         `페이지 ${pages.length + 1}`;
       const { assets, missing } = await collectRelativeAssets(item.htmlPath, item.html);
       missingNames.push(...missing);
-      pages.push({ title, html: item.html, assets });
+      pages.push({ title, html: item.html, htmlPath: item.htmlPath, assets });
     }
+    const levels = assignOnenotePageLevels(pages, tocHtml);
+    pages.forEach((page, index) => {
+      page.level = levels[index] || 0;
+      delete page.htmlPath;
+    });
 
     const warnings = [];
     if (converterError) warnings.push(skippedSectionsWarning(converterError, logLines));

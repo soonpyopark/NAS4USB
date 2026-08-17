@@ -353,10 +353,17 @@ export default function TipTapEditorShell({
         } catch {
           existingNames = [];
         }
+        /** @type {{ path: string, level: number }[]} */
+        const levelEntries = [{ path: relativePath, level: first.level || 0 }];
+        /** @type {string[]} */
+        const writtenNames = [];
+        const currentName = relativePath.split('/').pop();
+        if (currentName) writtenNames.push(currentName);
         for (let index = 1; index < pages.length; index += 1) {
           const packed = await packOnenotePageToTiptap(pages[index], index);
           const name = resolveUniqueName(existingNames, packed.fileName);
           existingNames.push(name);
+          writtenNames.push(name);
           const pagePath = joinRelativePath(parent, name);
           await window.nas4usb.fs.writeFile(pagePath, packed.base64);
           try {
@@ -364,6 +371,23 @@ export default function TipTapEditorShell({
             await syncEmbeddedAssetsToSidecar(pagePath, parsed.embeddedAssets);
           } catch {
             // ZIP 안에 첨부만 있어도 열 때 다시 풀어집니다.
+          }
+          levelEntries.push({ path: pagePath, level: packed.level || 0 });
+        }
+        try {
+          const leftover = existingNames.filter((name) => !writtenNames.includes(name));
+          await window.nas4usb.folderOrder?.set?.({
+            path: parent,
+            names: [...writtenNames, ...leftover],
+          });
+        } catch {
+          // 순서를 못 저장해도 파일은 이미 만들어졌습니다.
+        }
+        if (window.nas4usb.folderColors?.setLevels) {
+          try {
+            await window.nas4usb.folderColors.setLevels({ entries: levelEntries });
+          } catch {
+            // 단계는 나중에 우클릭으로 맞출 수 있습니다.
           }
         }
 

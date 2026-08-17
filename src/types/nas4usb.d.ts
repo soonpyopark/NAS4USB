@@ -111,6 +111,12 @@ window.nas4usb = {
     set: ({ path, color }) => {},
     getBoldMap: () => {},
     setBold: ({ path, bold }) => {},
+    getLevelMap: () => {},
+    setLevel: ({ path, level }) => {},
+    setLevels: ({ entries }) => {},
+    getCollapsedMap: () => {},
+    setCollapsed: ({ path, collapsed }) => {},
+    setCollapsedMany: ({ entries }) => {},
   },
   folderOrder: {
     getMap: () => {},

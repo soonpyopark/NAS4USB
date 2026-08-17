@@ -8,6 +8,9 @@ import { entryExtensionOf, isSecFileName } from '../../lib/filePassword/secPaths
 import EntryMenuButton, { BoxedDotsIcon } from './EntryMenuButton.jsx';
 import FileIcon, { fileTypeColorClass } from './FileIcon.jsx';
 import FileEntryStatusBadges, { FILE_STATUS_SLOT_WIDTH } from './FileEntryStatusBadges.jsx';
+import { FILE_INDENT_STEP_PX } from '../../../shared/fileIndent.js';
+
+const COLLAPSE_SLOT_CLASS = 'inline-flex h-8 w-8 min-w-8 shrink-0 items-center justify-center';
 
 const REORDER_MIME = 'application/x-nas4usb-reorder';
 
@@ -107,6 +110,73 @@ function IconMoveDown() {
   );
 }
 
+function IconIndentLeft() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M19 12H5M11 6l-6 6 6 6"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function IconIndentRight() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M5 12h14M13 6l6 6-6 6"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function HeaderIconButton({ disabled, onClick, title, children }) {
+  return (
+    <button
+      type="button"
+      className="inline-flex h-6 items-center px-1.5 text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+      disabled={disabled}
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+    >
+      {children}
+    </button>
+  );
+}
+
+function HeaderButtonGroup({ children }) {
+  return (
+    <div className="inline-flex items-center rounded-md border border-nas-border bg-white normal-case tracking-normal">
+      {children}
+    </div>
+  );
+}
+
+function HeaderButtonDivider() {
+  return <span className="h-3.5 w-px bg-nas-border" aria-hidden="true" />;
+}
+
+function IndentChevron({ expanded }) {
+  return (
+    <svg className="h-5 w-5 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+      {expanded ? (
+        <path d="M4.5 7h11L10 15.5 4.5 7z" />
+      ) : (
+        <path d="M7 4.5v11L15.5 10 7 4.5z" />
+      )}
+    </svg>
+  );
+}
+
 /**
  * @param {{
  *   label: string,
@@ -126,6 +196,9 @@ function SortableHeader({
   className = '',
   extra = null,
   onSort,
+  levelsCollapsed = false,
+  canToggleLevels = false,
+  onToggleLevels,
 }) {
   const active = sortField === column || (column === 'name' && sortField === 'custom');
   const title =
@@ -140,6 +213,37 @@ function SortableHeader({
   return (
     <th className={`font-medium ${className}`}>
       <div className={`flex items-center gap-2 ${column === 'name' ? 'min-h-7' : ''}`}>
+        {column === 'name' ? (
+          <button
+            type="button"
+            className={`inline-flex h-8 w-8 min-w-8 shrink-0 items-center justify-center rounded-md ${
+              canToggleLevels
+                ? 'text-slate-600 hover:bg-slate-200 hover:text-slate-800'
+                : 'cursor-default text-slate-400'
+            }`}
+            title={
+              canToggleLevels
+                ? levelsCollapsed
+                  ? '하위 파일 펼치기'
+                  : '하위 파일 접기'
+                : '레벨'
+            }
+            aria-label={
+              canToggleLevels
+                ? levelsCollapsed
+                  ? '하위 파일 펼치기'
+                  : '하위 파일 접기'
+                : '레벨'
+            }
+            disabled={!canToggleLevels}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleLevels?.();
+            }}
+          >
+            <IndentChevron expanded={!levelsCollapsed} />
+          </button>
+        ) : null}
         <button
           type="button"
           className="inline-flex items-center gap-1 uppercase tracking-wide text-nas-muted hover:text-slate-700"
@@ -194,9 +298,20 @@ export default function FileList({
   onMoveOrderDown,
   showFavoriteLocation = false,
   lockFixedOrder = true,
+  fileIndentInfo = {},
+  onToggleCollapse,
+  canIndent = false,
+  canIndentUp = false,
+  canIndentDown = false,
+  onIndentUp,
+  onIndentDown,
+  canToggleLevels = false,
+  levelsCollapsed = false,
+  onToggleLevels,
 }) {
   const selectAllRef = useRef(null);
   const dragPathRef = useRef(/** @type {string | null} */ (null));
+  const listClicksRef = useRef(/** @type {{ path: string, time: number }[]} */ ([]));
   const [dragPath, setDragPath] = useState(/** @type {string | null} */ (null));
   const [dropHint, setDropHint] = useState(
     /** @type {{ path: string, place: 'before' | 'after' } | null} */ (null),
@@ -244,7 +359,9 @@ export default function FileList({
 
   return (
     <div
-      className="min-h-0 flex-1 overflow-y-auto"
+      className="min-h-0 flex-1 overflow-y-auto outline-none"
+      data-explorer-list="true"
+      tabIndex={0}
       onClick={(event) => {
         if (event.currentTarget === event.target) onBackgroundClick();
       }}
@@ -252,7 +369,7 @@ export default function FileList({
       <table className="w-full table-fixed text-left text-[10pt] [&_td]:align-middle [&_th]:align-middle">
         <thead className="sticky top-0 bg-slate-50 text-[10pt] uppercase tracking-wide text-nas-muted">
           <tr>
-            <th className="w-10 px-2 py-2">
+            <th className="w-8 px-1 py-2">
               <div className="flex min-h-7 items-center justify-center">
                 <input
                   ref={selectAllRef}
@@ -269,34 +386,52 @@ export default function FileList({
               column="name"
               sortField={sortField}
               sortDirection={sortDirection}
-              className="px-4 py-2"
+              className="pl-1 pr-4 py-2"
               onSort={onSort}
+              levelsCollapsed={levelsCollapsed}
+              canToggleLevels={canToggleLevels}
+              onToggleLevels={onToggleLevels}
               extra={
-                canReorder && onMoveOrderUp && onMoveOrderDown ? (
-                  <div className="inline-flex items-center rounded-md border border-nas-border bg-white normal-case tracking-normal">
-                    <button
-                      type="button"
-                      className="inline-flex h-6 items-center px-1.5 text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
-                      disabled={!canMoveOrderUp}
-                      onClick={onMoveOrderUp}
-                      title="선택한 항목을 한 칸 위로"
-                      aria-label="위로"
-                    >
-                      <IconMoveUp />
-                    </button>
-                    <span className="h-3.5 w-px bg-nas-border" aria-hidden="true" />
-                    <button
-                      type="button"
-                      className="inline-flex h-6 items-center px-1.5 text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
-                      disabled={!canMoveOrderDown}
-                      onClick={onMoveOrderDown}
-                      title="선택한 항목을 한 칸 아래로"
-                      aria-label="아래로"
-                    >
-                      <IconMoveDown />
-                    </button>
-                  </div>
-                ) : null
+                <div className="inline-flex items-center gap-1">
+                  {canReorder && onMoveOrderUp && onMoveOrderDown ? (
+                    <HeaderButtonGroup>
+                      <HeaderIconButton
+                        disabled={!canMoveOrderUp}
+                        onClick={onMoveOrderUp}
+                        title="선택한 항목을 한 칸 위로"
+                      >
+                        <IconMoveUp />
+                      </HeaderIconButton>
+                      <HeaderButtonDivider />
+                      <HeaderIconButton
+                        disabled={!canMoveOrderDown}
+                        onClick={onMoveOrderDown}
+                        title="선택한 항목을 한 칸 아래로"
+                      >
+                        <IconMoveDown />
+                      </HeaderIconButton>
+                    </HeaderButtonGroup>
+                  ) : null}
+                  {canIndent && onIndentUp && onIndentDown ? (
+                    <HeaderButtonGroup>
+                      <HeaderIconButton
+                        disabled={!canIndentUp}
+                        onClick={onIndentUp}
+                        title="한 단계 올리기"
+                      >
+                        <IconIndentLeft />
+                      </HeaderIconButton>
+                      <HeaderButtonDivider />
+                      <HeaderIconButton
+                        disabled={!canIndentDown}
+                        onClick={onIndentDown}
+                        title="한 단계 내리기"
+                      >
+                        <IconIndentRight />
+                      </HeaderIconButton>
+                    </HeaderButtonGroup>
+                  ) : null}
+                </div>
               }
             />
             <th
@@ -345,6 +480,10 @@ export default function FileList({
               canReorder && !(lockFixedOrder && isFixedFolderOrderPath(entry.relativePath));
             const dragging = dragPath === entry.relativePath;
             const hintHere = dropHint?.path === entry.relativePath;
+            const indent = fileIndentInfo[entry.relativePath];
+            const indentLevel = entry.isDirectory ? 0 : indent?.level || 0;
+            const hasChildren = Boolean(indent?.hasChildren);
+            const collapsed = Boolean(indent?.collapsed);
 
             return (
               <tr
@@ -366,8 +505,24 @@ export default function FileList({
                       }
                     : undefined
                 }
-                onClick={(event) => onSelect(entry, event)}
-                onDoubleClick={() => onOpen(entry)}
+                onClick={(event) => {
+                  event.currentTarget.closest('[data-explorer-list]')?.focus({ preventScroll: true });
+                  const now = Date.now();
+                  listClicksRef.current = listClicksRef.current
+                    .filter((item) => now - item.time < 700)
+                    .concat({ path: entry.relativePath, time: now });
+                  onSelect(entry, event);
+                }}
+                onDoubleClick={() => {
+                  const recent = listClicksRef.current.slice(-2);
+                  if (
+                    recent.length >= 2 &&
+                    (recent[0].path !== recent[1].path || recent[1].path !== entry.relativePath)
+                  ) {
+                    return;
+                  }
+                  onOpen(entry);
+                }}
                 onContextMenu={(event) => onContextMenu(event, entry)}
                 onDragStart={(event) => {
                   if (!reorderable || isExternalFileDrag(event)) return;
@@ -418,7 +573,7 @@ export default function FileList({
                 }}
               >
                 <td
-                  className="w-10 px-2 py-2"
+                  className="w-8 px-1 py-2"
                   onClick={(event) => event.stopPropagation()}
                   onDoubleClick={(event) => event.stopPropagation()}
                   onDragStart={(event) => event.preventDefault()}
@@ -433,8 +588,27 @@ export default function FileList({
                     />
                   </div>
                 </td>
-                <td className="max-w-0 px-4 py-2">
-                  <div className="flex min-w-0 items-center gap-2 overflow-hidden">
+                <td className="max-w-0 py-2 pl-1 pr-4">
+                  <div
+                    className="flex min-w-0 items-center gap-2 overflow-hidden"
+                    style={indentLevel > 0 ? { paddingLeft: `${indentLevel * FILE_INDENT_STEP_PX}px` } : undefined}
+                  >
+                    {hasChildren ? (
+                      <button
+                        type="button"
+                        className={`${COLLAPSE_SLOT_CLASS} rounded-md text-slate-600 hover:bg-slate-200`}
+                        title={collapsed ? '하위 파일 펼치기' : '하위 파일 접기'}
+                        aria-label={collapsed ? '하위 파일 펼치기' : '하위 파일 접기'}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onToggleCollapse?.(entry);
+                        }}
+                      >
+                        <IndentChevron expanded={!collapsed} />
+                      </button>
+                    ) : (
+                      <span className={COLLAPSE_SLOT_CLASS} aria-hidden="true" />
+                    )}
                     {isWorkspaceRootSystemFolder(entry.relativePath) ? (
                       <EntryMenuButton
                         label={displayEntryName(entry)}

@@ -58,6 +58,17 @@ import {
   isFixedFolderOrderPath,
   resolveFolderOrderParent,
 } from '../../../shared/folderOrder.js';
+import {
+  areAllParentsCollapsed,
+  buildFileIndentInfo,
+  filterCollapsedEntries,
+  parentFilesWithChildren,
+} from '../../../shared/fileIndent.js';
+import {
+  applyFileIndentDelta,
+  canIndentFileDown,
+  canIndentFileUp,
+} from '../../lib/fileIndentActions.js';
 import { resolveFileEntryStatus } from '../../lib/fileEntryStatus.js';
 import { downloadFileEntries } from '../../lib/downloadEntries.js';
 import { moveEntries } from '../../lib/moveEntries.js';
@@ -181,8 +192,18 @@ export default function FileExplorer({
   const { accessMap, refreshAccessMap, setFileAccess } = useFileAccess();
   const { favoritesMap, refreshFavoritesMap, setFavorite, setFavoriteOrder, isFavorite } =
     useFavorites();
-  const { folderColorMap, nameBoldMap, refreshFolderColorMap, setFolderColor, setNameBold } =
-    useFolderColors();
+  const {
+    folderColorMap,
+    nameBoldMap,
+    fileLevelMap,
+    fileCollapsedMap,
+    refreshFolderColorMap,
+    setFolderColor,
+    setNameBold,
+    setFileLevels,
+    setFileCollapsed,
+    setFileCollapsedMany,
+  } = useFolderColors();
   const { folderOrderMap, setFolderOrder } = useFolderOrder();
   const { isAdminLoggedIn, adminId, isSuperAdmin } = useAdminAuthContext();
   const { openLogin } = useLoginDialog();
@@ -295,6 +316,15 @@ export default function FileExplorer({
     currentOrderNames,
     isInFavoritesView,
   ]);
+
+  const fileIndentInfo = useMemo(
+    () => buildFileIndentInfo(visibleEntries, fileLevelMap, fileCollapsedMap),
+    [visibleEntries, fileLevelMap, fileCollapsedMap],
+  );
+  const listEntries = useMemo(() => {
+    if (searchQuery.trim()) return visibleEntries;
+    return filterCollapsedEntries(visibleEntries, fileLevelMap, fileCollapsedMap);
+  }, [visibleEntries, searchQuery, fileLevelMap, fileCollapsedMap]);
 
   const handleListSort = (column) => {
     setListSort((current) => nextExplorerListSort(current, column, allowCustomSort));
@@ -1157,6 +1187,52 @@ export default function FileExplorer({
     }
   };
 
+  const canUseFileIndent =
+    canWrite && !isInTrashView && !isInFavoritesView && typeof setFileLevels === 'function';
+
+  const handleIndentFor = async (entry, delta) => {
+    if (!canUseFileIndent || !entry || entry.isDirectory) return;
+    try {
+      await applyFileIndentDelta({
+        entries: visibleEntries,
+        entry,
+        delta,
+        levelMap: fileLevelMap,
+        setFileLevels,
+      });
+    } catch (err) {
+      nativeAlert(err instanceof Error ? err.message : '파일 단계를 바꾸지 못했습니다.');
+    }
+  };
+
+  const handleToggleCollapseFor = async (entry, nextCollapsed) => {
+    if (!entry || entry.isDirectory || !fileIndentInfo[entry.relativePath]?.hasChildren) return;
+    try {
+      await setFileCollapsed(
+        entry.relativePath,
+        nextCollapsed ?? !fileCollapsedMap[entry.relativePath],
+      );
+    } catch (err) {
+      nativeAlert(err instanceof Error ? err.message : '하위 파일 접기를 바꾸지 못했습니다.');
+    }
+  };
+
+  const levelsCollapsed = areAllParentsCollapsed(visibleEntries, fileLevelMap, fileCollapsedMap);
+  const canToggleLevels =
+    canUseFileIndent && parentFilesWithChildren(visibleEntries, fileLevelMap).length > 0;
+
+  const handleToggleAllLevels = async () => {
+    const parents = parentFilesWithChildren(visibleEntries, fileLevelMap);
+    if (!canUseFileIndent || parents.length === 0) return;
+    try {
+      await setFileCollapsedMany(
+        parents.map((entry) => ({ path: entry.relativePath, collapsed: !levelsCollapsed })),
+      );
+    } catch (err) {
+      nativeAlert(err instanceof Error ? err.message : '하위 파일 접기를 바꾸지 못했습니다.');
+    }
+  };
+
   const handleSelect = (entry, event) => {
     if (event.shiftKey && lastSelectedPath) {
       selectRange(lastSelectedPath, entry.relativePath);
@@ -1242,31 +1318,6 @@ export default function FileExplorer({
         isFavorite: Boolean(contextTarget && isFavorite(contextTarget.relativePath)),
         onSetFolderColor: (color) => handleSetFolderColor(contextTarget, color),
         folderColor: contextTarget ? folderColorMap[contextTarget.relativePath] || '' : '',
-        onMoveOrder: canReorder ? (delta) => handleMoveOrderFor(contextTarget, delta) : undefined,
-        canMoveOrderUp: Boolean(
-          contextTarget &&
-            !isOrderLocked(contextTarget.relativePath) &&
-            canMoveFolderOrder(
-              entries,
-              currentOrderNames,
-              orderKeyOf(contextTarget),
-              -1,
-              orderKeyOf,
-              orderOptions,
-            ),
-        ),
-        canMoveOrderDown: Boolean(
-          contextTarget &&
-            !isOrderLocked(contextTarget.relativePath) &&
-            canMoveFolderOrder(
-              entries,
-              currentOrderNames,
-              orderKeyOf(contextTarget),
-              1,
-              orderKeyOf,
-              orderOptions,
-            ),
-        ),
         canEditOpen: contextTarget
           ? canOpenFileForEdit(
               contextTarget.relativePath,
@@ -1321,12 +1372,21 @@ export default function FileExplorer({
     hasClipboard,
     previewOpen,
     closePreview,
+    canUseFileIndent,
+    handleIndentFor,
+    handleToggleCollapseFor,
+    fileIndentInfo,
   };
 
   useEffect(() => {
     const onKeyDown = (event) => {
       const target = event.target;
-      if (target instanceof HTMLElement && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
+      if (
+        target instanceof HTMLElement &&
+        (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable)
+      ) {
+        return;
+      }
       if (
         isEditorOpen ||
         document.documentElement.classList.contains('wb4s-embed-mode') ||
@@ -1370,6 +1430,32 @@ export default function FileExplorer({
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v' && h.hasClipboard) {
         event.preventDefault();
         h.handlePaste(h.currentPath);
+      }
+
+      const listFocused = Boolean(document.querySelector('[data-explorer-list]')?.contains(target));
+      const selected = h.selectedEntries?.[0];
+      if (
+        listFocused &&
+        h.canUseFileIndent &&
+        h.selectedEntries.length === 1 &&
+        selected &&
+        !selected.isDirectory
+      ) {
+        if (event.key === 'Tab') {
+          event.preventDefault();
+          void h.handleIndentFor(selected, event.shiftKey ? -1 : 1);
+          return;
+        }
+        if (event.key === 'ArrowLeft' && h.fileIndentInfo?.[selected.relativePath]?.hasChildren) {
+          event.preventDefault();
+          void h.handleToggleCollapseFor(selected, true);
+          return;
+        }
+        if (event.key === 'ArrowRight' && h.fileIndentInfo?.[selected.relativePath]?.hasChildren) {
+          event.preventDefault();
+          void h.handleToggleCollapseFor(selected, false);
+          return;
+        }
       }
     };
 
@@ -1558,7 +1644,7 @@ export default function FileExplorer({
         <ViewAccessDeniedPanel isLoggedIn={isAdminLoggedIn} onLogin={() => openLogin()} />
       ) : (
         <FileList
-          entries={visibleEntries}
+          entries={listEntries}
           loading={loading}
           selectedSet={selectedSet}
           accessMap={accessMap}
@@ -1566,10 +1652,12 @@ export default function FileExplorer({
           favoritesMap={favoritesMap}
           folderColorMap={folderColorMap}
           nameBoldMap={nameBoldMap}
+          fileIndentInfo={fileIndentInfo}
+          onToggleCollapse={(entry) => handleToggleCollapseFor(entry)}
           onOpen={handleOpen}
           onSelect={handleSelect}
           onToggleCheckbox={handleToggleCheckbox}
-          onToggleSelectAll={() => toggleSelectAllVisible(visibleEntries)}
+          onToggleSelectAll={() => toggleSelectAllVisible(listEntries)}
           onContextMenu={openContextMenu}
           onBackgroundClick={() => {
             clearSelection();
@@ -1610,6 +1698,20 @@ export default function FileExplorer({
           }
           onMoveOrderUp={() => handleMoveOrderFor(selectedEntries[0], -1)}
           onMoveOrderDown={() => handleMoveOrderFor(selectedEntries[0], 1)}
+          canIndent={canUseFileIndent}
+          canIndentUp={Boolean(
+            selectedEntries.length === 1 &&
+              canIndentFileUp(visibleEntries, selectedEntries[0], fileLevelMap),
+          )}
+          canIndentDown={Boolean(
+            selectedEntries.length === 1 &&
+              canIndentFileDown(visibleEntries, selectedEntries[0], fileLevelMap),
+          )}
+          onIndentUp={() => handleIndentFor(selectedEntries[0], -1)}
+          onIndentDown={() => handleIndentFor(selectedEntries[0], 1)}
+          canToggleLevels={canToggleLevels}
+          levelsCollapsed={levelsCollapsed}
+          onToggleLevels={handleToggleAllLevels}
           showFavoriteLocation={isInFavoritesView}
           lockFixedOrder={!isInFavoritesView}
         />
@@ -1624,6 +1726,7 @@ export default function FileExplorer({
           previewAnchorPath={previewAnchorPath}
           folderColorMap={folderColorMap}
           nameBoldMap={nameBoldMap}
+          fileLevelMap={fileLevelMap}
         />
       </div>
       {contextMenu && contextItems.length > 0 && (

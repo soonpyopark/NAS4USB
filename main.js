@@ -132,6 +132,12 @@ import {
   setFolderColor,
   getEntryBoldMap,
   setEntryBold,
+  getEntryLevelMap,
+  setEntryLevel,
+  setEntryLevels,
+  getEntryCollapsedMap,
+  setEntryCollapsed,
+  setEntryCollapsedMany,
   syncFolderColorsDelete,
   syncFolderColorsMoveTree,
 } from './electron/folderColorsService.js';
@@ -1474,6 +1480,68 @@ ipcMain.handle('folderColors:setBold', async (event, { path: relativePath, bold 
   await assertCanEditFile(relativePath, auth, shareToken);
   const result = await setEntryBold(relativePath, Boolean(bold), getPortableRoot());
   notifyFsChanged(relativePath);
+  return result;
+});
+
+ipcMain.handle('folderColors:getLevelMap', async (event) => {
+  const auth = getAccessAuthFromEvent(event);
+  const perms = await getEffectiveAccessPermissions(auth, getPortableRoot());
+  if (!perms.view && !perms.write) return {};
+  return getEntryLevelMap(getPortableRoot());
+});
+
+ipcMain.handle('folderColors:setLevel', async (event, { path: relativePath, level } = {}) => {
+  const auth = getAccessAuthFromEvent(event);
+  const shareToken = getShareTokenFromEvent(event);
+  assertHomeSystemPathMutable(relativePath, 'mutate');
+  await assertCanEditFile(relativePath, auth, shareToken);
+  const result = await setEntryLevel(relativePath, level, getPortableRoot());
+  notifyFsChanged(relativePath);
+  return result;
+});
+
+ipcMain.handle('folderColors:setLevels', async (event, { entries } = {}) => {
+  const auth = getAccessAuthFromEvent(event);
+  const shareToken = getShareTokenFromEvent(event);
+  const list = Array.isArray(entries) ? entries : [];
+  for (const item of list) {
+    const relativePath = item?.path || item?.relativePath;
+    assertHomeSystemPathMutable(relativePath, 'mutate');
+    await assertCanEditFile(relativePath, auth, shareToken);
+  }
+  const result = await setEntryLevels(list, getPortableRoot());
+  if (result.entries[0]?.relativePath) notifyFsChanged(result.entries[0].relativePath);
+  return result;
+});
+
+ipcMain.handle('folderColors:getCollapsedMap', async (event) => {
+  const auth = getAccessAuthFromEvent(event);
+  const perms = await getEffectiveAccessPermissions(auth, getPortableRoot());
+  if (!perms.view && !perms.write) return {};
+  return getEntryCollapsedMap(getPortableRoot());
+});
+
+ipcMain.handle('folderColors:setCollapsed', async (event, { path: relativePath, collapsed } = {}) => {
+  const auth = getAccessAuthFromEvent(event);
+  const shareToken = getShareTokenFromEvent(event);
+  assertHomeSystemPathMutable(relativePath, 'mutate');
+  await assertCanEditFile(relativePath, auth, shareToken);
+  const result = await setEntryCollapsed(relativePath, Boolean(collapsed), getPortableRoot());
+  notifyFsChanged(relativePath);
+  return result;
+});
+
+ipcMain.handle('folderColors:setCollapsedMany', async (event, { entries } = {}) => {
+  const auth = getAccessAuthFromEvent(event);
+  const shareToken = getShareTokenFromEvent(event);
+  const list = Array.isArray(entries) ? entries : [];
+  for (const item of list) {
+    const relativePath = item?.path || item?.relativePath;
+    assertHomeSystemPathMutable(relativePath, 'mutate');
+    await assertCanEditFile(relativePath, auth, shareToken);
+  }
+  const result = await setEntryCollapsedMany(list, getPortableRoot());
+  if (result.entries[0]?.relativePath) notifyFsChanged(result.entries[0].relativePath);
   return result;
 });
 

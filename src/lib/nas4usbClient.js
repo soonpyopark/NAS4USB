@@ -325,6 +325,28 @@ export function createHttpNas4usbClient() {
           method: 'POST',
           body: JSON.stringify({ path, bold }),
         }),
+      getLevelMap: () => apiFetch('/folder-colors/level-map'),
+      setLevel: ({ path, level }) =>
+        apiFetch('/folder-colors/set-level', {
+          method: 'POST',
+          body: JSON.stringify({ path, level }),
+        }),
+      setLevels: ({ entries }) =>
+        apiFetch('/folder-colors/set-levels', {
+          method: 'POST',
+          body: JSON.stringify({ entries }),
+        }),
+      getCollapsedMap: () => apiFetch('/folder-colors/collapsed-map'),
+      setCollapsed: ({ path, collapsed }) =>
+        apiFetch('/folder-colors/set-collapsed', {
+          method: 'POST',
+          body: JSON.stringify({ path, collapsed }),
+        }),
+      setCollapsedMany: ({ entries }) =>
+        apiFetch('/folder-colors/set-collapsed-many', {
+          method: 'POST',
+          body: JSON.stringify({ entries }),
+        }),
     },
 
     folderOrder: {
