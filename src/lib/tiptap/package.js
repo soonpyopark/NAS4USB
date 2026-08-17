@@ -3,6 +3,7 @@ import { base64ToBytes, bytesToBase64 } from '../bytes.js';
 import { joinRelativePath } from '../fsPaths.js';
 import { createEmptyTiptapDoc, isTiptapDoc } from './document.js';
 import { normalizeTiptapTextMarks } from './textMarks.js';
+import { getLegacySecTiptapAssetSidecarPath } from '../../../shared/tiptapAssetPaths.js';
 import {
   getTiptapAssetsDir,
   normalizeAssetPath,
@@ -175,19 +176,79 @@ export async function packTiptapContentBase64(input) {
  * @param {string} tiptapRelativePath
  * @param {{ path: string, base64: string }[]} embeddedAssets
  */
+/**
+ * @param {string} pathOrName
+ */
+function embeddedAssetFileName(pathOrName) {
+  const raw = String(pathOrName ?? '');
+  const fileName = raw.startsWith(ASSETS_PREFIX) ? raw.slice(ASSETS_PREFIX.length) : raw.split('/').pop();
+  if (!fileName || fileName.includes('/') || fileName.includes('\\') || fileName.includes('..')) {
+    return '';
+  }
+  return fileName;
+}
+
+async function pathExists(relativePath) {
+  try {
+    return Boolean(await window.nas4usb.fs.exists(relativePath));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Move `{doc}.tiptap.sec.assets` → `{doc}.tiptap.assets` when the old folder is left behind.
+ * @param {string} tiptapRelativePath
+ */
+async function migrateLegacySecAssetsDir(tiptapRelativePath) {
+  const legacy = getLegacySecTiptapAssetSidecarPath(tiptapRelativePath);
+  if (!legacy || !(await pathExists(legacy))) return;
+  const canonical = getTiptapAssetsDir(tiptapRelativePath);
+  if (await pathExists(canonical)) {
+    try {
+      const entries = await window.nas4usb.fs.readDir(legacy);
+      for (const entry of entries) {
+        if (entry.isDirectory) continue;
+        const dest = joinRelativePath(canonical, entry.name);
+        if (await pathExists(dest)) continue;
+        await window.nas4usb.fs.copy(joinRelativePath(legacy, entry.name), dest);
+      }
+      await window.nas4usb.fs.delete(legacy);
+    } catch {
+      // keep both rather than lose files
+    }
+    return;
+  }
+  try {
+    await window.nas4usb.fs.rename(legacy, canonical);
+  } catch {
+    // leave the legacy folder; reads still check it via asset URLs
+  }
+}
+
 export async function syncEmbeddedAssetsToSidecar(tiptapRelativePath, embeddedAssets) {
+  await migrateLegacySecAssetsDir(tiptapRelativePath);
   if (!embeddedAssets.length) return;
 
   const assetsDir = getTiptapAssetsDir(tiptapRelativePath);
   await window.nas4usb.fs.mkdir(assetsDir);
 
   for (const asset of embeddedAssets) {
-    const fileName = asset.path.startsWith(ASSETS_PREFIX)
-      ? asset.path.slice(ASSETS_PREFIX.length)
-      : asset.path;
+    const fileName = embeddedAssetFileName(asset.path);
     if (!fileName) continue;
     await window.nas4usb.fs.writeFile(joinRelativePath(assetsDir, fileName), asset.base64);
   }
+}
+
+/**
+ * Decrypt-ready `.tiptap` ZIP bytes → `{name}.tiptap.assets` (image/video/audio/file).
+ * @param {string} tiptapRelativePath
+ * @param {string} packageBase64
+ */
+export async function extractTiptapPackageAssetsToSidecar(tiptapRelativePath, packageBase64) {
+  const parsed = await parseTiptapFileBase64(packageBase64);
+  await syncEmbeddedAssetsToSidecar(tiptapRelativePath, parsed.embeddedAssets);
+  return parsed;
 }
 
 /**
@@ -195,6 +256,7 @@ export async function syncEmbeddedAssetsToSidecar(tiptapRelativePath, embeddedAs
  * @returns {Promise<{ fileName: string, base64: string }[]>}
  */
 export async function readSidecarAssets(tiptapRelativePath) {
+  await migrateLegacySecAssetsDir(tiptapRelativePath);
   const assetsDir = getTiptapAssetsDir(tiptapRelativePath);
   let entries = [];
   try {
@@ -220,6 +282,13 @@ export async function removeTiptapAssetsSidecar(tiptapRelativePath) {
   } catch {
     // already removed
   }
+  const legacy = getLegacySecTiptapAssetSidecarPath(tiptapRelativePath);
+  if (!legacy) return;
+  try {
+    await window.nas4usb.fs.delete(legacy);
+  } catch {
+    // already removed
+  }
 }
 
 /**
@@ -240,6 +309,8 @@ async function readReferencedSidecarAssets(tiptapRelativePath, assetsDir, refere
  *   exportedAt?: string,
  *   content: import('@tiptap/core').JSONContent,
  *   tiptapRelativePath: string,
+ *   embeddedAssets?: { path: string, base64: string }[],
+ *   includeAllAssets?: boolean,
  * }} input
  * @returns {Promise<string>}
  */
@@ -248,11 +319,23 @@ export async function packTiptapFileFromSidecar(input) {
   const assetsDir = getTiptapAssetsDir(input.tiptapRelativePath);
   const referenced = collectReferencedAssetPaths(normalizedContent, input.tiptapRelativePath);
 
-  let assets = await readReferencedSidecarAssets(input.tiptapRelativePath, assetsDir, referenced);
+  let assets = input.includeAllAssets
+    ? await readSidecarAssets(input.tiptapRelativePath)
+    : await readReferencedSidecarAssets(input.tiptapRelativePath, assetsDir, referenced);
 
-  for (let attempt = 0; attempt < 2 && assets.length < referenced.size; attempt += 1) {
+  for (let attempt = 0; attempt < 2 && !input.includeAllAssets && assets.length < referenced.size; attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 150));
     assets = await readReferencedSidecarAssets(input.tiptapRelativePath, assetsDir, referenced);
+  }
+
+  if (Array.isArray(input.embeddedAssets) && input.embeddedAssets.length) {
+    const have = new Set(assets.map((asset) => asset.fileName));
+    for (const embedded of input.embeddedAssets) {
+      const fileName = embeddedAssetFileName(embedded.path);
+      if (!fileName || have.has(fileName)) continue;
+      assets.push({ fileName, base64: embedded.base64 });
+      have.add(fileName);
+    }
   }
 
   const bytes = await packTiptapPackage({

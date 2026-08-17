@@ -25,6 +25,7 @@ function openFileMenuLabel(entry) {
  *   hasClipboard: boolean,
  *   isInTrashView?: boolean,
  *   onOpen: (entry: { relativePath: string, isDirectory: boolean }) => void,
+ *   onOpenContainingFolder?: (entry: { relativePath: string, isDirectory: boolean }) => void,
  *   onOpenSystem?: (entry: { relativePath: string, isDirectory: boolean }) => void,
  *   onUpload?: (targetPath: string) => void,
  *   onCopy: () => void,
@@ -62,6 +63,7 @@ export function buildEntryContextMenuItems({
   hasClipboard,
   isInTrashView = false,
   onOpen,
+  onOpenContainingFolder,
   onOpenSystem,
   onUpload,
   onCopy,
@@ -92,6 +94,18 @@ export function buildEntryContextMenuItems({
   isAdminLoggedIn = true,
   canWrite = true,
 }) {
+  const containingFolderItems =
+    !entry?.isDirectory && onOpenContainingFolder
+      ? [
+          {
+            id: 'open-folder',
+            label: '폴더 열기',
+            disabled: !entry,
+            onClick: () => entry && onOpenContainingFolder(entry),
+          },
+        ]
+      : [];
+
   const showTrashMenu = Boolean(entry && isTrashPath(entry.relativePath));
 
   if (showTrashMenu) {
@@ -147,6 +161,7 @@ export function buildEntryContextMenuItems({
     }
 
     return [
+      ...containingFolderItems,
       {
         id: 'open',
         label: openFileMenuLabel(entry),
@@ -312,6 +327,7 @@ export function buildEntryContextMenuItems({
   }
 
   return [
+    ...containingFolderItems,
     {
       id: 'open',
       label: openFileMenuLabel(entry),

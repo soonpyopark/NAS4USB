@@ -35,9 +35,11 @@ function normalizePath(relativePath) {
  */
 function getExtension(relativePath) {
   const name = normalizePath(relativePath).split('/').pop() ?? '';
-  const index = name.lastIndexOf('.');
+  const lower = name.toLowerCase();
+  const unlocked = lower.endsWith('.sec') ? name.slice(0, -4) : name;
+  const index = unlocked.lastIndexOf('.');
   if (index <= 0) return '';
-  return name.slice(index + 1).toLowerCase();
+  return unlocked.slice(index + 1).toLowerCase();
 }
 
 /**

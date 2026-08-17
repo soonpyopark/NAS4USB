@@ -725,6 +725,14 @@ export default function Sidebar({
         isInFavoritesView,
         hasClipboard,
         onOpen: handleOpen,
+        onOpenContainingFolder:
+          isSearchActive && contextTarget && !contextTarget.isDirectory
+            ? (entry) => {
+                const parent = getParentPath(entry.relativePath);
+                onNavigate(parent);
+                void tree.expandPath(parent);
+              }
+            : undefined,
         onOpenSystem: (entry) => fs.openInSystem(entry.relativePath),
         onUpload: contextTarget?.isDirectory ? triggerUpload : undefined,
         onCopy: () => copyEntries([contextTarget]),

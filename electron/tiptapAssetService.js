@@ -12,7 +12,7 @@ const SIDECAR_LOCKED_MESSAGE =
   'TipTap 편집 중이거나 미디어 파일이 사용 중입니다. .tiptap 편집 창을 닫은 뒤 다시 시도해 주세요.';
 
 /**
- * Images inserted since the last save live only in `{doc}.tiptap.assets/`, not yet in the
+ * Attachments inserted since the last save live only in `{doc}.tiptap.assets/`, not yet in the
  * `.tiptap` package — so the sidecar has to follow the document rather than be dropped.
  *
  * @param {string} fromDocPath

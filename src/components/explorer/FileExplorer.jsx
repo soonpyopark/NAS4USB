@@ -1204,6 +1204,10 @@ export default function FileExplorer({
         isInFavoritesView,
         hasClipboard,
         onOpen: handleOpen,
+        onOpenContainingFolder:
+          contextTarget && !contextTarget.isDirectory
+            ? (entry) => onNavigate(getParentPath(entry.relativePath))
+            : undefined,
         onOpenSystem: (entry) => openInSystem(entry.relativePath),
         onUpload: contextTarget?.isDirectory ? triggerUpload : undefined,
         onCopy: () => handleCopy(contextTarget),

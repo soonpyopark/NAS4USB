@@ -86,6 +86,15 @@ export function collectReferencedAssetPathsFromPmDoc(doc, tiptapRelativePath) {
         }
       }
     }
+    const href = node.attrs?.href;
+    if (typeof href === 'string') {
+      const fileName =
+        assetFileNameFromAnyUrl(href, tiptapRelativePath) ||
+        linkHrefToAssetFileName(href, tiptapRelativePath);
+      if (fileName) {
+        referenced.add(normalizeAssetPath(joinRelativePath(assetsDir, fileName)));
+      }
+    }
     for (const mark of node.marks ?? []) {
       const href = mark.attrs?.href;
       if (typeof href !== 'string') continue;

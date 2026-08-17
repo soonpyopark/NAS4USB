@@ -2,6 +2,7 @@ import JSZip from 'jszip';
 import { base64ToBytes, bytesToBase64 } from '../bytes.js';
 import { getParentPath, joinRelativePath } from '../fsPaths.js';
 import { getFileViewerType, getFileViewerTypeFromName } from '../fileViewerType.js';
+import { readWorkspacePlainBase64 } from '../filePassword/io.js';
 import { entryExtensionOf } from '../filePassword/secPaths.js';
 import { isAudioExtension, isVideoExtension } from '../media/mediaTypes.js';
 import { isExternalHttpUrl } from '../openExternal.js';
@@ -12,6 +13,7 @@ import {
   joinTiptapAssetPath,
   linkHrefToAssetFileName,
 } from './assetUrls.js';
+import { isZipBytes } from './package.js';
 
 /**
  * @param {string} fileName
@@ -107,9 +109,9 @@ export async function ensureTiptapAssetAvailable(tiptapRelativePath, fileName) {
   if (await pathExists(sidecarPath)) return sidecarPath;
 
   try {
-    const base64 = await window.nas4usb.fs.readFile(tiptapRelativePath);
+    const base64 = await readWorkspacePlainBase64(tiptapRelativePath);
     const bytes = base64ToBytes(base64);
-    if (bytes.length >= 2 && bytes[0] === 0x50 && bytes[1] === 0x4b) {
+    if (isZipBytes(bytes)) {
       const zip = await JSZip.loadAsync(bytes);
       const entry = zip.file(`assets/${fileName}`);
       if (entry) {
@@ -120,7 +122,7 @@ export async function ensureTiptapAssetAvailable(tiptapRelativePath, fileName) {
       }
     }
   } catch {
-    // package missing or not a zip — try siblings
+    // package missing, still locked, or not a zip — try siblings
   }
 
   const parent = getParentPath(tiptapRelativePath);

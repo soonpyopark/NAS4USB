@@ -138,9 +138,8 @@ export default function FilePreviewPane({
         } else if (kind === 'tiptap') {
           const { base64ToBytes } = await import('../../lib/bytes.js');
           const { parseTiptapFileBase64, readSidecarAssets } = await import('../../lib/tiptap/package.js');
-          const { packageAssetUrlToFileName, normalizeTiptapAssetUrls } = await import(
-            '../../lib/tiptap/assetUrls.js'
-          );
+          const { packageAssetUrlToFileName, normalizeTiptapAssetUrls, assetFileNameFromAnyUrl } =
+            await import('../../lib/tiptap/assetUrls.js');
           const { guessMimeFromFileName } = await import('../../../shared/mediaTypes.js');
           const plain = await readWorkspacePlainBase64(entry.relativePath);
           const parsed = await parseTiptapFileBase64(plain);
@@ -166,7 +165,8 @@ export default function FilePreviewPane({
           };
           if (!cancelled) {
             setTiptapResolveFileUrl(() => async (url) => {
-              const fileName = packageAssetUrlToFileName(url);
+              const fileName =
+                packageAssetUrlToFileName(url) || assetFileNameFromAnyUrl(url, entry.relativePath);
               if (fileName && blobUrlByFileName.has(fileName)) {
                 return blobUrlByFileName.get(fileName);
               }

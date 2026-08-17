@@ -5,6 +5,7 @@ import { isFixedFolderOrderPath } from '../../../shared/folderOrder.js';
 import { displayEntryName } from '../../lib/fsPaths.js';
 import { favoriteAncestorLabel } from '../../lib/favoritesPaths.js';
 import { entryExtensionOf, isSecFileName } from '../../lib/filePassword/secPaths.js';
+import EntryMenuButton, { BoxedDotsIcon } from './EntryMenuButton.jsx';
 import FileIcon, { fileTypeColorClass } from './FileIcon.jsx';
 import FileEntryStatusBadges, { FILE_STATUS_SLOT_WIDTH } from './FileEntryStatusBadges.jsx';
 
@@ -434,13 +435,27 @@ export default function FileList({
                 </td>
                 <td className="max-w-0 px-4 py-2">
                   <div className="flex min-w-0 items-center gap-2 overflow-hidden">
-                    {isWorkspaceRootSystemFolder(entry.relativePath) ? null : (
-                      <FileIcon
-                        entry={entry}
-                        folderColor={folderColorMap[entry.relativePath]}
-                        nameBold={Boolean(nameBoldMap[entry.relativePath])}
-                        className="h-5 w-5 shrink-0"
-                      />
+                    {isWorkspaceRootSystemFolder(entry.relativePath) ? (
+                      <EntryMenuButton
+                        label={displayEntryName(entry)}
+                        onOpen={(event) => onContextMenu(event, entry)}
+                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-200"
+                      >
+                        <BoxedDotsIcon className="h-4 w-4" />
+                      </EntryMenuButton>
+                    ) : (
+                      <EntryMenuButton
+                        label={displayEntryName(entry)}
+                        onOpen={(event) => onContextMenu(event, entry)}
+                        className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-slate-200"
+                      >
+                        <FileIcon
+                          entry={entry}
+                          folderColor={folderColorMap[entry.relativePath]}
+                          nameBold={Boolean(nameBoldMap[entry.relativePath])}
+                          className="h-5 w-5"
+                        />
+                      </EntryMenuButton>
                     )}
                     <span className="min-w-0 flex-1">
                       <span

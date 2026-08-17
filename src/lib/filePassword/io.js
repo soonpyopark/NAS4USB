@@ -48,7 +48,7 @@ export async function lockFileWithPassword(relativePath, password) {
 
   if (isTiptapDocumentRelativePath(relativePath)) {
     try {
-      const { parseTiptapFileBase64, packTiptapFileFromSidecar, removeTiptapAssetsSidecar } =
+      const { parseTiptapFileBase64, packTiptapFileFromSidecar, extractTiptapPackageAssetsToSidecar } =
         await import('../tiptap/package.js');
       const { getTiptapFileStem } = await import('../tiptap/document.js');
       const parsed = await parseTiptapFileBase64(plain);
@@ -56,8 +56,13 @@ export async function lockFileWithPassword(relativePath, password) {
         title: getTiptapFileStem(relativePath.split('/').pop() || ''),
         content: parsed.content,
         tiptapRelativePath: relativePath,
+        embeddedAssets: parsed.embeddedAssets,
+        includeAllAssets: true,
       });
-      await removeTiptapAssetsSidecar(relativePath);
+      // Keep `{name}.tiptap.assets` beside the new `.tiptap.sec`. Deleting it
+      // here is what dropped images/video/audio/file attachments when the ZIP
+      // was incomplete. Re-extract so every packed attachment is on disk too.
+      await extractTiptapPackageAssetsToSidecar(relativePath, plain);
     } catch {
       // encrypt the on-disk package as-is
     }
@@ -87,6 +92,14 @@ export async function unlockFileWithPassword(relativePath, password) {
   const plain = await decryptSecBase64(packed, password);
   const dest = await uniqueDest(stripSecSuffix(relativePath));
   await window.nas4usb.fs.writeFile(dest, plain);
+  if (isTiptapDocumentRelativePath(dest) || isTiptapDocumentRelativePath(relativePath)) {
+    try {
+      const { extractTiptapPackageAssetsToSidecar } = await import('../tiptap/package.js');
+      await extractTiptapPackageAssetsToSidecar(dest, plain);
+    } catch {
+      // sidecar may already exist from lock; editor open will retry
+    }
+  }
   try {
     await window.nas4usb.fs.delete(relativePath);
   } catch {

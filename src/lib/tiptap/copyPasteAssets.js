@@ -3,7 +3,7 @@ import { base64ToBytes } from '../bytes.js';
 import { joinRelativePath, resolveUniqueName } from '../fsPaths.js';
 import { buildMediaStreamUrl } from '../media/streamUrl.js';
 import { guessMimeFromFileName } from '../../../shared/mediaTypes.js';
-import { TIPTAP_ASSET_SIDECAR_SUFFIX } from '../../../shared/tiptapAssetPaths.js';
+import { isTiptapAssetSidecarRelativePath } from '../../../shared/tiptapAssetPaths.js';
 import {
   getTiptapAssetsDir,
   joinTiptapAssetPath,
@@ -14,7 +14,7 @@ import {
 } from './assetUrls.js';
 
 const ASSET_HTML_HINT =
-  /(?:assets\/|asset\/|\/api\/fs\/stream|\.tiptap\.assets\/|data-nas-asset-path)/i;
+  /(?:assets\/|asset\/|\/api\/fs\/stream|\.tiptap(?:\.sec)?\.assets\/|data-nas-asset-path)/i;
 
 const MEDIA_SRC_SELECTOR = 'img[src], video[src], audio[src], source[src]';
 
@@ -474,7 +474,9 @@ function isSidecarAssetPath(path) {
   const normalized = normalizeAssetPath(path);
   if (!normalized || normalized.includes('..')) return false;
   if (/^[a-zA-Z]:/.test(normalized)) return false;
-  return normalized.includes(`${TIPTAP_ASSET_SIDECAR_SUFFIX}/`);
+  const slash = normalized.lastIndexOf('/');
+  if (slash < 0) return false;
+  return isTiptapAssetSidecarRelativePath(normalized.slice(0, slash));
 }
 
 /**

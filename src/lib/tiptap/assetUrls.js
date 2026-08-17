@@ -1,5 +1,8 @@
 import { joinRelativePath } from '../fsPaths.js';
-import { getTiptapAssetSidecarPath } from '../../../shared/tiptapAssetPaths.js';
+import {
+  getLegacySecTiptapAssetSidecarPath,
+  getTiptapAssetSidecarPath,
+} from '../../../shared/tiptapAssetPaths.js';
 
 export const TIPTAP_ASSET_URL_PREFIX = 'assets/';
 
@@ -24,8 +27,15 @@ export function toPackageAssetUrl(fileName) {
  */
 export function packageAssetUrlToFileName(url) {
   if (!url || typeof url !== 'string') return null;
-  if (!url.startsWith(TIPTAP_ASSET_URL_PREFIX)) return null;
-  const fileName = url.slice(TIPTAP_ASSET_URL_PREFIX.length);
+  const normalized = normalizeAssetPath(url);
+  const lower = normalized.toLowerCase();
+  const prefix = lower.startsWith(TIPTAP_ASSET_URL_PREFIX)
+    ? TIPTAP_ASSET_URL_PREFIX
+    : lower.startsWith('asset/')
+      ? 'asset/'
+      : '';
+  if (!prefix) return null;
+  const fileName = normalized.slice(prefix.length);
   if (!fileName || fileName.includes('/') || fileName.includes('\\') || fileName.includes('..')) {
     return null;
   }
@@ -72,24 +82,43 @@ export function linkHrefToAssetFileName(href, tiptapRelativePath = '') {
  * @param {string} tiptapRelativePath
  * @returns {string | null}
  */
+/**
+ * @param {string} tiptapRelativePath
+ */
+function assetDirPrefixes(tiptapRelativePath) {
+  const dirs = [normalizeAssetPath(getTiptapAssetsDir(tiptapRelativePath))];
+  const legacy = getLegacySecTiptapAssetSidecarPath(tiptapRelativePath);
+  if (legacy) dirs.push(normalizeAssetPath(legacy));
+  return dirs;
+}
+
+/**
+ * @param {string} candidate
+ * @param {string[]} dirs
+ */
+function fileNameUnderAssetDirs(candidate, dirs) {
+  const normalized = normalizeAssetPath(candidate);
+  for (const assetsDir of dirs) {
+    if (normalized.startsWith(`${assetsDir}/`)) {
+      return normalized.slice(assetsDir.length + 1).split('/').pop() ?? null;
+    }
+  }
+  return null;
+}
+
 export function assetFileNameFromAnyUrl(url, tiptapRelativePath) {
   const packageName = packageAssetUrlToFileName(url);
   if (packageName) return packageName;
 
-  const assetsDir = normalizeAssetPath(getTiptapAssetsDir(tiptapRelativePath));
-  const normalizedUrl = normalizeAssetPath(url);
-  if (normalizedUrl.startsWith(`${assetsDir}/`)) {
-    return normalizedUrl.slice(assetsDir.length + 1).split('/').pop() ?? null;
-  }
+  const dirs = assetDirPrefixes(tiptapRelativePath);
+  const fromPath = fileNameUnderAssetDirs(url, dirs);
+  if (fromPath) return fromPath;
 
   try {
     const parsed = new URL(url, 'http://local.invalid');
     const pathParam = parsed.searchParams.get('path');
     if (pathParam) {
-      const normalizedPath = normalizeAssetPath(decodeURIComponent(pathParam));
-      if (normalizedPath.startsWith(`${assetsDir}/`)) {
-        return normalizedPath.slice(assetsDir.length + 1).split('/').pop() ?? null;
-      }
+      return fileNameUnderAssetDirs(decodeURIComponent(pathParam), dirs);
     }
   } catch {
     // ignore
@@ -99,7 +128,8 @@ export function assetFileNameFromAnyUrl(url, tiptapRelativePath) {
 }
 
 /**
- * Walk TipTap JSON and rewrite media `src` attrs to package-relative `assets/<file>`.
+ * Walk TipTap JSON and rewrite media `src` / link `href` to package-relative `assets/<file>`.
+ * Covers image, video, audio, fileAttachment, and attachment links.
  * @param {import('@tiptap/core').JSONContent} doc
  * @param {string} tiptapRelativePath
  */
@@ -110,18 +140,37 @@ export function normalizeTiptapAssetUrls(doc, tiptapRelativePath) {
 }
 
 /**
+ * @param {Record<string, unknown> | undefined} attrs
+ * @param {string} key
+ * @param {string} tiptapRelativePath
+ */
+function rewriteUrlAttr(attrs, key, tiptapRelativePath) {
+  const value = attrs?.[key];
+  if (typeof value !== 'string') return attrs;
+  const fileName =
+    assetFileNameFromAnyUrl(value, tiptapRelativePath) ||
+    (key === 'href' ? linkHrefToAssetFileName(value, tiptapRelativePath) : null);
+  if (!fileName) return attrs;
+  return { ...attrs, [key]: toPackageAssetUrl(fileName) };
+}
+
+/**
  * @param {import('@tiptap/core').JSONContent} node
  * @param {string} tiptapRelativePath
  */
 function rewriteNodeAssetUrls(node, tiptapRelativePath) {
   if (!node || typeof node !== 'object') return;
 
-  const src = node.attrs?.src;
-  if (typeof src === 'string') {
-    const fileName = assetFileNameFromAnyUrl(src, tiptapRelativePath);
-    if (fileName) {
-      node.attrs = { ...node.attrs, src: toPackageAssetUrl(fileName) };
-    }
+  if (node.attrs) {
+    node.attrs = rewriteUrlAttr(node.attrs, 'src', tiptapRelativePath);
+    node.attrs = rewriteUrlAttr(node.attrs, 'href', tiptapRelativePath);
+  }
+
+  if (Array.isArray(node.marks)) {
+    node.marks = node.marks.map((mark) => {
+      if (!mark?.attrs) return mark;
+      return { ...mark, attrs: rewriteUrlAttr(mark.attrs, 'href', tiptapRelativePath) };
+    });
   }
 
   if (Array.isArray(node.content)) {

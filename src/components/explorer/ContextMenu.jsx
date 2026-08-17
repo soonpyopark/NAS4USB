@@ -73,12 +73,12 @@ export default function ContextMenu({ x, y, items, onClose }) {
       if (event.key === 'Escape') onClose();
     };
 
-    window.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('pointerdown', handlePointerDown, true);
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('scroll', onClose, true);
 
     return () => {
-      window.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('pointerdown', handlePointerDown, true);
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('scroll', onClose, true);
     };
@@ -90,6 +90,7 @@ export default function ContextMenu({ x, y, items, onClose }) {
       className="fixed z-50 min-w-[180px] rounded-lg border border-nas-border bg-white py-1 shadow-lg"
       style={{ left: position.left, top: position.top }}
       role="menu"
+      onContextMenu={(event) => event.preventDefault()}
     >
       {items.map((item) =>
         item.type === 'swatches' ? (

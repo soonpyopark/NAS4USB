@@ -1,5 +1,6 @@
 import { EXTERNAL_FOLDER, SHARED_FOLDER } from '../../../shared/constants.js';
 import { HOMES_FOLDER } from '../../../shared/memberHomes.js';
+import EntryMenuButton from '../explorer/EntryMenuButton.jsx';
 import FileIcon from '../explorer/FileIcon.jsx';
 import { displayEntryName } from '../../lib/fsPaths.js';
 
@@ -48,6 +49,7 @@ function TreeNode({
   const isInActiveBranch =
     currentPath === entry.relativePath || currentPath.startsWith(`${entry.relativePath}/`);
   const isTopLevel = depth === 0;
+  const label = displayEntryName(entry);
 
   const children = childrenMap[entry.relativePath] ?? [];
 
@@ -68,40 +70,53 @@ function TreeNode({
 
   return (
     <div>
-      <button
-        type="button"
-        className={`flex w-full items-center gap-1 rounded-md text-left text-[10pt] transition-colors ${rowClass} ${
-          isTopLevel ? 'px-3 py-2' : 'py-1.5 pr-2'
+      <div
+        className={`flex w-full items-center gap-0.5 rounded-md ${rowClass} ${
+          isTopLevel ? 'pl-3 pr-1 py-1' : 'py-0.5 pr-1'
         }`}
         style={isTopLevel ? undefined : { paddingLeft: `${depth * 12}px` }}
-        onClick={handleClick}
         onContextMenu={(event) => onContextMenu(event, entry)}
       >
-        {isFolder && isRootExpandableFolder(entry.relativePath) ? (
-          <span
-            className="inline-flex h-4 w-4 shrink-0 items-center justify-center"
-            onClick={(event) => {
-              event.stopPropagation();
-              onToggleExpand(entry.relativePath);
-            }}
-          >
-            <Chevron expanded={isExpanded} loading={isLoading && !children.length} />
+        <button
+          type="button"
+          className={`flex min-w-0 flex-1 items-center gap-1 rounded-md text-left text-[10pt] transition-colors ${
+            isTopLevel ? 'py-1' : 'py-1'
+          }`}
+          onClick={handleClick}
+        >
+          {isFolder && isRootExpandableFolder(entry.relativePath) ? (
+            <span
+              className="inline-flex h-4 w-4 shrink-0 items-center justify-center"
+              onClick={(event) => {
+                event.stopPropagation();
+                onToggleExpand(entry.relativePath);
+              }}
+            >
+              <Chevron expanded={isExpanded} loading={isLoading && !children.length} />
+            </span>
+          ) : (
+            <span className="inline-block h-4 w-4 shrink-0" />
+          )}
+          {isTopLevel ? null : (
+            <FileIcon
+              entry={entry}
+              folderColor={folderColorMap[entry.relativePath]}
+              nameBold={Boolean(nameBoldMap[entry.relativePath])}
+              className={`h-4 w-4 shrink-0 ${isActive ? '!text-white' : ''}`}
+            />
+          )}
+          <span className={`truncate ${isTopLevel || nameBoldMap[entry.relativePath] ? 'font-bold' : ''}`}>
+            {label}
           </span>
-        ) : (
-          <span className="inline-block h-4 w-4 shrink-0" />
-        )}
-        {isTopLevel ? null : (
-          <FileIcon
-            entry={entry}
-            folderColor={folderColorMap[entry.relativePath]}
-            nameBold={Boolean(nameBoldMap[entry.relativePath])}
-            className={`h-4 w-4 shrink-0 ${isActive ? '!text-white' : ''}`}
-          />
-        )}
-        <span className={`truncate ${isTopLevel || nameBoldMap[entry.relativePath] ? 'font-bold' : ''}`}>
-          {displayEntryName(entry)}
-        </span>
-      </button>
+        </button>
+        <EntryMenuButton
+          label={label}
+          onOpen={(event) => onContextMenu(event, entry)}
+          className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${
+            isActive ? 'text-white/90 hover:bg-white/15' : 'text-slate-400 hover:bg-white/10 hover:text-white'
+          }`}
+        />
+      </div>
 
       {isFolder && isExpanded && (
         <div>

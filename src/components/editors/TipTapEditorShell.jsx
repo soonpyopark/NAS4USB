@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
+import { Component, Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import EditorModal from './EditorModal.jsx';
 import HistoryModal from './HistoryModal.jsx';
 import { useAwarenessPeerCount } from '../../hooks/useAwarenessPeerCount.js';
@@ -13,12 +13,38 @@ import { seedTiptapRoomFromDisk, setTiptapDiskRevision } from '../../lib/tiptap/
 import {
   packTiptapFileFromSidecar,
   parseTiptapFileBase64,
-  removeTiptapAssetsSidecar,
   syncEmbeddedAssetsToSidecar,
 } from '../../lib/tiptap/package.js';
 import { persistAndCloseEditor } from '../../lib/persistOnEditorClose.js';
 
 const TipTapEditorView = lazy(() => import('./TipTapEditorView.jsx'));
+
+class TipTapLoadErrorBoundary extends Component {
+  /** @param {{ children: import('react').ReactNode }} props */
+  constructor(props) {
+    super(props);
+    this.state = { error: /** @type {Error | null} */ (null) };
+  }
+
+  /** @param {Error} error */
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center text-sm text-red-700">
+          <p>문서를 표시하지 못했습니다. 창을 닫고 다시 열어 주세요.</p>
+          <p className="max-w-lg text-xs text-slate-500">
+            {this.state.error instanceof Error ? this.state.error.message : String(this.state.error)}
+          </p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 /**
  * @param {{
@@ -91,10 +117,7 @@ export default function TipTapEditorShell({
         if (cancelled) return;
 
         const parsed = await parseTiptapFileBase64(base64);
-        if (parsed.embeddedAssets.length > 0) {
-          await removeTiptapAssetsSidecar(relativePath);
-          await syncEmbeddedAssetsToSidecar(relativePath, parsed.embeddedAssets);
-        }
+        await syncEmbeddedAssetsToSidecar(relativePath, parsed.embeddedAssets);
 
         diskRevisionRef.current = nextDiskRevision;
         setInitialContent(normalizeTiptapAssetUrls(parsed.content, relativePath));
@@ -208,10 +231,9 @@ export default function TipTapEditorShell({
   const handleRestoreHistory = useCallback(
     async (base64) => {
       const parsed = await parseTiptapFileBase64(base64);
-      await removeTiptapAssetsSidecar(relativePath);
-      if (parsed.embeddedAssets.length > 0) {
-        await syncEmbeddedAssetsToSidecar(relativePath, parsed.embeddedAssets);
-      }
+      // Merge ZIP assets into the sidecar. Do not wipe first — an incomplete
+      // history ZIP would drop video/audio/file attachments still on disk.
+      await syncEmbeddedAssetsToSidecar(relativePath, parsed.embeddedAssets);
       const normalized = normalizeTiptapAssetUrls(parsed.content, relativePath);
 
       let nextDiskRevision = '';
@@ -531,34 +553,38 @@ export default function TipTapEditorShell({
         </div>
 
         <div className="relative flex min-h-0 flex-1 flex-col">
-          {isLoading && (
+          {(isLoading || waitingSync) && (
             <div className="absolute inset-0 z-10 flex items-center justify-center bg-white text-sm text-nas-muted">
-              파일 로드 및 Y.js 세션 준비 중…
+              {waitingSync && !isLoading
+                ? 'Y.js 동기화 후 편집할 수 있습니다…'
+                : '파일 로드 및 Y.js 세션 준비 중…'}
             </div>
           )}
 
           {contentReady && initialContent && roomReady && (
-            <Suspense
-              fallback={
-                <div className="flex flex-1 items-center justify-center text-sm text-nas-muted">
-                  TipTap 모듈 로드 중…
-                </div>
-              }
-            >
-              <TipTapEditorView
-                relativePath={relativePath}
-                initialContent={initialContent}
-                collaboration={
-                  collaborationEnabled && doc && provider
-                    ? { doc, provider, user: collabUser }
-                    : null
+            <TipTapLoadErrorBoundary>
+              <Suspense
+                fallback={
+                  <div className="flex flex-1 items-center justify-center text-sm text-nas-muted">
+                    TipTap 모듈 로드 중…
+                  </div>
                 }
-                readOnly={readOnly}
-                onReady={handleEditorReady}
-                onSave={handleSave}
-                syncInfo={syncInfo}
-              />
-            </Suspense>
+              >
+                <TipTapEditorView
+                  relativePath={relativePath}
+                  initialContent={initialContent}
+                  collaboration={
+                    collaborationEnabled && doc && provider
+                      ? { doc, provider, user: collabUser }
+                      : null
+                  }
+                  readOnly={readOnly}
+                  onReady={handleEditorReady}
+                  onSave={handleSave}
+                  syncInfo={syncInfo}
+                />
+              </Suspense>
+            </TipTapLoadErrorBoundary>
           )}
         </div>
       </EditorModal>

@@ -11,6 +11,7 @@ import { decodeTextBase64 } from '../../lib/text/textIO.js';
 import { parseTiptapFileBase64 } from '../../lib/tiptap/package.js';
 import {
   packageAssetUrlToFileName as tiptapPackageAssetUrlToFileName,
+  assetFileNameFromAnyUrl,
   normalizeTiptapAssetUrls,
 } from '../../lib/tiptap/assetUrls.js';
 import { loadRhwpModule } from '../../lib/rhwp/loadRhwp.js';
@@ -169,7 +170,8 @@ export default function HistoryPreviewModal({
           }
 
           setTiptapResolveFileUrl(() => async (url) => {
-            const fileNameForUrl = tiptapPackageAssetUrlToFileName(url);
+            const fileNameForUrl =
+              tiptapPackageAssetUrlToFileName(url) || assetFileNameFromAnyUrl(url, relativePath);
             if (fileNameForUrl && blobUrlByFileName.has(fileNameForUrl)) {
               return blobUrlByFileName.get(fileNameForUrl);
             }
