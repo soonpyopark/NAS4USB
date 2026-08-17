@@ -1573,6 +1573,30 @@ ipcMain.handle('settings:update', async (event, patch = {}) => {
   return result;
 });
 
+ipcMain.handle('backup:status', async (event) => {
+  assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
+  const { getWorkspaceBackupStatus } = await import('./electron/workspaceBackupService.js');
+  return getWorkspaceBackupStatus();
+});
+
+ipcMain.handle('backup:saveConfig', async (event, patch = {}) => {
+  assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
+  const { saveWorkspaceBackupSettings } = await import('./electron/workspaceBackupService.js');
+  return saveWorkspaceBackupSettings(patch);
+});
+
+ipcMain.handle('backup:runNow', async (event) => {
+  assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
+  const { runWorkspaceBackup } = await import('./electron/workspaceBackupService.js');
+  return runWorkspaceBackup('manual');
+});
+
+ipcMain.handle('backup:delete', async (event, fileName) => {
+  assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
+  const { deleteWorkspaceBackup } = await import('./electron/workspaceBackupService.js');
+  return deleteWorkspaceBackup(fileName);
+});
+
 /**
  * Persist workspace root under 설정 → 일반, then relaunch so open files / Yjs rooms
  * bind to the new tree. Pass null/empty to fall back to `{portableRoot}`
@@ -1752,6 +1776,13 @@ if (gotSingleInstanceLock) {
       await pruneRememberedSessions(exeRoot);
     } catch (err) {
       console.warn('[auth] session prune failed:', err);
+    }
+
+    try {
+      const { startWorkspaceBackupScheduler } = await import('./electron/workspaceBackupService.js');
+      startWorkspaceBackupScheduler();
+    } catch (err) {
+      console.warn('[backup] scheduler start failed:', err);
     }
 
     try {

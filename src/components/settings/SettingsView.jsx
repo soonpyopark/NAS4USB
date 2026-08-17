@@ -15,10 +15,11 @@ import ViewerModal from '../editors/ViewerModal.jsx';
 import GeneralSettingsPanel from './GeneralSettingsPanel.jsx';
 import MembersSettingsPanel from './MembersSettingsPanel.jsx';
 import ServerSettingsPanel from './ServerSettingsPanel.jsx';
+import BackupSettingsPanel from './BackupSettingsPanel.jsx';
 
 /**
  * @typedef {{ cidr: string, description?: string }} AllowedIpEntry
- * @typedef {'general' | 'ip' | 'members' | 'server'} SettingsTabId
+ * @typedef {'general' | 'ip' | 'members' | 'server' | 'backup'} SettingsTabId
  */
 
 /** @type {{ id: SettingsTabId, label: string }[]} */
@@ -27,6 +28,7 @@ const SETTINGS_TABS = [
   { id: 'server', label: '서버 관리' },
   { id: 'ip', label: '접근 가능 IP 대역' },
   { id: 'members', label: '회원 관리' },
+  { id: 'backup', label: '백업 관리' },
 ];
 
 export default function SettingsView({ onClose }) {
@@ -253,6 +255,12 @@ export default function SettingsView({ onClose }) {
         {activeTab === 'server' ? (
           <div role="tabpanel">
             <ServerSettingsPanel />
+          </div>
+        ) : null}
+
+        {activeTab === 'backup' ? (
+          <div role="tabpanel">
+            <BackupSettingsPanel />
           </div>
         ) : null}
 

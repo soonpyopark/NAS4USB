@@ -14,6 +14,7 @@ import { normalizeWebServerMode, normalizeWebServerPort } from '../shared/webSer
 import { DEFAULT_ACCENT_COLOR, normalizeAccentColor } from '../shared/theme.js';
 import { normalizeExternalFolders } from '../shared/externalFolders.js';
 import { normalizeVideoPreviewCacheMaxBytes } from '../shared/videoPreviewCache.js';
+import { normalizeWorkspaceBackup } from '../shared/workspaceBackup.js';
 
 const SETTINGS_FILE = '.nas4usb-settings.json';
 
@@ -36,6 +37,7 @@ const SETTINGS_FILE = '.nas4usb-settings.json';
  *   useLegacyImagePdfViewers: boolean,
  *   spellcheckEnabled: boolean,
  *   loginLockoutEnabled: boolean,
+ *   workspaceBackup: import('../shared/workspaceBackup.js').WorkspaceBackupSettings,
  * }} AppSettings
  *
  * @typedef {{ isLoggedIn?: boolean, loginId?: string | null, role?: string | null } | boolean} AccessAuth
@@ -110,6 +112,7 @@ function emptySettings() {
     useLegacyImagePdfViewers: false,
     spellcheckEnabled: false,
     loginLockoutEnabled: false,
+    workspaceBackup: normalizeWorkspaceBackup(null),
   };
 }
 
@@ -154,6 +157,7 @@ async function loadStore(portableRoot) {
       useLegacyImagePdfViewers: normalizeUseLegacyImagePdfViewers(parsed?.useLegacyImagePdfViewers),
       spellcheckEnabled: normalizeSpellcheckEnabled(parsed?.spellcheckEnabled),
       loginLockoutEnabled: normalizeLoginLockoutEnabled(parsed?.loginLockoutEnabled),
+      workspaceBackup: normalizeWorkspaceBackup(parsed?.workspaceBackup),
     };
   } catch {
     return emptySettings();
@@ -328,6 +332,9 @@ export async function updateAppSettings(patch, portableRoot = getPortableRoot())
   }
   if (patch && 'loginLockoutEnabled' in patch) {
     settings.loginLockoutEnabled = normalizeLoginLockoutEnabled(patch.loginLockoutEnabled);
+  }
+  if (patch && 'workspaceBackup' in patch) {
+    settings.workspaceBackup = normalizeWorkspaceBackup(patch.workspaceBackup);
   }
   await saveStore(portableRoot, settings);
   return settings;

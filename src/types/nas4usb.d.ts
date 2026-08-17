@@ -138,6 +138,12 @@ window.nas4usb = {
     update: (patch) => {},
     applyDataRoot: (path) => {},
   },
+  backup: {
+    getStatus: () => {},
+    saveConfig: (patch) => {},
+    runNow: () => {},
+    delete: (fileName) => {},
+  },
   spellcheck: {
     setEnabled: (enabled) => {},
   },
