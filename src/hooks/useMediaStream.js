@@ -217,6 +217,7 @@ export function useMediaStream(relativePath, options = {}) {
           const reported = Number(data.startSeconds) > 0 ? Number(data.startSeconds) : 0;
           setStartSeconds((current) => {
             if (current > 0.5 && reported < 0.5) return current;
+            if (Math.abs(current - reported) < 0.5) return current;
             return reported;
           });
         }

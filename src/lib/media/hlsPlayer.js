@@ -42,7 +42,7 @@ export function attachHlsPlayback(video, url, handlers = {}) {
   const hls = new Hls({
     enableWorker: false,
     lowLatencyMode: false,
-    startPosition: -1,
+    startPosition: 0,
     // EVENT playlists look "live" while FFmpeg appends. Never snap to the
     // transcode edge or back to 0 — the timeline is treated as VOD.
     liveSyncMode: 'buffered',
@@ -82,6 +82,8 @@ export function attachHlsPlayback(video, url, handlers = {}) {
   };
 
   video.addEventListener('timeupdate', rememberPosition);
+  video.addEventListener('seeking', rememberPosition);
+  video.addEventListener('seeked', rememberPosition);
 
   hls.attachMedia(video);
   hls.on(Hls.Events.MEDIA_ATTACHED, () => {
@@ -92,11 +94,16 @@ export function attachHlsPlayback(video, url, handlers = {}) {
     restorePosition();
     void video.play().catch(() => {});
   });
+  hls.on(Hls.Events.LEVEL_UPDATED, restorePosition);
+  hls.on(Hls.Events.BUFFER_FLUSHED, () => {
+    window.setTimeout(restorePosition, 0);
+  });
   hls.on(Hls.Events.ERROR, (_event, data) => {
     if (destroyed || !data?.fatal) return;
     rememberPosition();
     if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
       hls.startLoad();
+      window.setTimeout(restorePosition, 80);
       return;
     }
     if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
@@ -110,6 +117,8 @@ export function attachHlsPlayback(video, url, handlers = {}) {
   return () => {
     destroyed = true;
     video.removeEventListener('timeupdate', rememberPosition);
+    video.removeEventListener('seeking', rememberPosition);
+    video.removeEventListener('seeked', rememberPosition);
     hls.destroy();
   };
 }

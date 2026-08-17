@@ -8,6 +8,11 @@ import { attachHlsPlayback } from '../../lib/media/hlsPlayer.js';
 import { isIosWebKit } from '../../lib/media/iosPlayback.js';
 import { getVideoMimeType } from '../../lib/media/mediaTypes.js';
 import { loadSiblingSubtitleTracks, shiftWebVttCues, vttToTrackUrl } from '../../lib/media/subtitles.js';
+import {
+  readShowingSubtitleLabel,
+  refreshShowingSubtitles,
+  replaceRemoteSubtitles,
+} from '../../lib/media/videoJsSubtitles.js';
 import { mountVideoJsPlayer } from '../../lib/media/videoJsPlayer.js';
 
 const PLAY_NEXT_STORAGE_KEY = 'nas4usb.videoPlayer.playNextInSeries';
@@ -48,6 +53,8 @@ export default function VideoPlayerShell({
   const durationRef = useRef(/** @type {number | null} */ (null));
   const startSecondsRef = useRef(0);
   const seekToRef = useRef(/** @type {(seconds: number) => unknown} */ (() => {}));
+  const handleEndedRef = useRef(() => {});
+  const subtitleChoiceRef = useRef(/** @type {string | null} */ (null));
   const {
     streamUrl,
     loadError,
@@ -105,6 +112,7 @@ export default function VideoPlayerShell({
     if (!playNextInSeries || !nextInSeries) return;
     openSeriesEntry(nextInSeries);
   }, [isStreamingPreview, nextInSeries, openSeriesEntry, playNextInSeries]);
+  handleEndedRef.current = handleEnded;
 
   useEffect(() => {
     if (!hasSeries) return undefined;
@@ -131,6 +139,7 @@ export default function VideoPlayerShell({
     setSubtitleSources([]);
     setSubtitleTracks([]);
     setSubtitleNote('');
+    subtitleChoiceRef.current = null;
 
     (async () => {
       try {
@@ -160,7 +169,9 @@ export default function VideoPlayerShell({
     });
     setSubtitleTracks(tracks);
     return () => {
-      for (const url of urls) URL.revokeObjectURL(url);
+      window.setTimeout(() => {
+        for (const url of urls) URL.revokeObjectURL(url);
+      }, 1500);
     };
   }, [subtitleSources, startSeconds]);
 
@@ -186,7 +197,19 @@ export default function VideoPlayerShell({
     video.addEventListener('error', mediaHandlers.onError);
     video.addEventListener('waiting', onWaiting);
     video.addEventListener('playing', onPlaying);
-    video.addEventListener('ended', handleEnded);
+    const onEnded = () => handleEndedRef.current();
+    const onSeeked = () => refreshShowingSubtitles(mounted.player);
+    let trackChangeTimer = 0;
+    const onTrackChange = () => {
+      window.clearTimeout(trackChangeTimer);
+      trackChangeTimer = window.setTimeout(() => {
+        const label = readShowingSubtitleLabel(mounted.player);
+        if (label != null) subtitleChoiceRef.current = label;
+      }, 300);
+    };
+    video.addEventListener('ended', onEnded);
+    video.addEventListener('seeked', onSeeked);
+    mounted.player.textTracks()?.addEventListener('change', onTrackChange);
 
     if (playerKind !== 'hls') {
       mounted.player.src({ src: streamUrl, type: mimeType });
@@ -236,12 +259,15 @@ export default function VideoPlayerShell({
       video.removeEventListener('error', mediaHandlers.onError);
       video.removeEventListener('waiting', onWaiting);
       video.removeEventListener('playing', onPlaying);
-      video.removeEventListener('ended', handleEnded);
+      video.removeEventListener('ended', onEnded);
+      video.removeEventListener('seeked', onSeeked);
+      window.clearTimeout(trackChangeTimer);
+      mounted.player.textTracks()?.removeEventListener('change', onTrackChange);
       mounted.dispose();
       videoRef.current = null;
       playerRef.current = null;
     };
-  }, [handleEnded, mimeType, playerKind, relativePath, streamUrl]);
+  }, [mimeType, playerKind, relativePath, streamUrl]);
 
   useEffect(() => {
     playerRef.current?.trigger('durationchange');
@@ -250,23 +276,7 @@ export default function VideoPlayerShell({
   useEffect(() => {
     const player = playerRef.current;
     if (!player) return undefined;
-
-    const existing = player.remoteTextTracks();
-    for (let i = existing.length - 1; i >= 0; i -= 1) {
-      player.removeRemoteTextTrack(existing[i]);
-    }
-    subtitleTracks.forEach((track, index) => {
-      player.addRemoteTextTrack(
-        {
-          kind: 'subtitles',
-          src: track.src,
-          srclang: 'ko',
-          label: track.label,
-          default: index === 0,
-        },
-        false,
-      );
-    });
+    replaceRemoteSubtitles(player, subtitleTracks, subtitleChoiceRef.current);
     return undefined;
   }, [subtitleTracks, streamUrl]);
 
