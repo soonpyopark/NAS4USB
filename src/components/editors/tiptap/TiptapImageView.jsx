@@ -1,5 +1,6 @@
 import { NodeViewWrapper } from '@tiptap/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { formatWorkspaceLink } from '../../../lib/tiptap/workspaceLinks.js';
 import TiptapImageEditModal from './TiptapImageEditModal.jsx';
 
 const MIN_WIDTH = 48;
@@ -28,6 +29,7 @@ function clamp(value, min, max) {
  *   extension: { options: {
  *     resolveFileUrl?: (url: string) => Promise<string>,
  *     uploadFile?: (file: File) => Promise<string>,
+ *     documentPath?: string,
  *   } },
  * }} props
  */
@@ -158,6 +160,37 @@ export default function TiptapImageView({
     [canEditPixels],
   );
 
+  const copyImageLink = useCallback(
+    async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      let id = typeof node.attrs.id === 'string' ? node.attrs.id.trim() : '';
+      if (!id) {
+        id = crypto.randomUUID();
+        updateAttributes({ id });
+      }
+      const href = formatWorkspaceLink(extension.options.documentPath || '', id);
+      try {
+        await navigator.clipboard.writeText(href);
+      } catch {
+        try {
+          const field = document.createElement('textarea');
+          field.value = href;
+          field.setAttribute('readonly', '');
+          field.style.position = 'fixed';
+          field.style.left = '-9999px';
+          document.body.appendChild(field);
+          field.select();
+          document.execCommand('copy');
+          document.body.removeChild(field);
+        } catch {
+          window.alert(`링크를 복사하지 못했습니다.\n${href}`);
+        }
+      }
+    },
+    [extension.options.documentPath, node.attrs.id, updateAttributes],
+  );
+
   const applyEditedFile = useCallback(
     async (file) => {
       if (!uploadFile) return;
@@ -241,6 +274,16 @@ export default function TiptapImageView({
               onClick={resetSize}
             >
               원본
+            </button>
+            <button
+              type="button"
+              title="이 이미지 위치 링크 복사"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={(event) => {
+                void copyImageLink(event);
+              }}
+            >
+              링크주소 복사
             </button>
             <button
               type="button"

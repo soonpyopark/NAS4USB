@@ -220,6 +220,19 @@
   cursor: pointer;
 }
 
+.tiptap-editor-shell .tiptap-anchor-flash {
+  animation: tiptap-anchor-flash 1.4s ease;
+}
+
+@keyframes tiptap-anchor-flash {
+  0% {
+    background-color: #dbeafe;
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
 .tiptap-editor-shell .tiptap mark {
   border-radius: 2px;
   padding: 0.05em 0.15em;
@@ -765,8 +778,8 @@
   display: inline-block;
   line-height: 1;
   border-radius: 2px;
-  padding: 0 1px;
-  background: rgba(254, 240, 138, 0.55);
+  padding: 1px 2px;
+  background: #fde047;
 }
 
 .tiptap-swatch__bar {
@@ -1081,7 +1094,7 @@
   z-index: 50;
 }
 
-.tiptap-bubble-menu button {
+.tiptap-bubble-menu > button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1095,10 +1108,20 @@
   cursor: pointer;
 }
 
-.tiptap-bubble-menu button:hover,
-.tiptap-bubble-menu button.is-active {
+.tiptap-bubble-menu > button:hover,
+.tiptap-bubble-menu > button.is-active {
   background: #eff6ff;
   color: #1d4ed8;
+}
+
+.tiptap-bubble-menu .tiptap-swatch__trigger:hover,
+.tiptap-bubble-menu .tiptap-swatch__trigger.is-open {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.tiptap-bubble-menu .tiptap-swatch__panel {
+  z-index: 90;
 }
 
 /* Slash menu */

@@ -1,17 +1,29 @@
-import { lazy, Suspense } from 'react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { getFileViewerType, getFileViewerTypeFromName } from '../../lib/fileViewerType.js';
 import { entryExtensionOf } from '../../lib/filePassword/secPaths.js';
 import { isImageExtension } from '../../lib/media/mediaTypes.js';
 import { shouldUseLegacyImagePdfViewers } from '../../lib/comicReader/legacyViewerFlag.js';
 
-const XlsxEditorShell = lazy(() => import('./XlsxEditorShell.jsx'));
-const TextEditorShell = lazy(() => import('./TextEditorShell.jsx'));
-const HwpxEditorShell = lazy(() => import('./HwpxEditorShell.jsx'));
-const TipTapEditorShell = lazy(() => import('./TipTapEditorShell.jsx'));
-const PdfViewerShell = lazy(() => import('./PdfViewerShell.jsx'));
-const HtmlViewerShell = lazy(() => import('./HtmlViewerShell.jsx'));
-const ImageViewerShell = lazy(() => import('./ImageViewerShell.jsx'));
-const ComicReaderShell = lazy(() => import('./ComicReaderShell.jsx'));
+/**
+ * @param {string} type
+ * @param {string} extension
+ */
+function loadOverlayEditor(type, extension) {
+  if (type === 'xlsx') return import('./XlsxEditorShell.jsx');
+  if (type === 'text') return import('./TextEditorShell.jsx');
+  if (type === 'hwpx') return import('./HwpxEditorShell.jsx');
+  if (type === 'tiptap') return import('./TipTapEditorShell.jsx');
+  if (type === 'pdf') return import('./PdfViewerShell.jsx');
+  if (type === 'html') return import('./HtmlViewerShell.jsx');
+  if (type === 'reader') {
+    if (shouldUseLegacyImagePdfViewers() && isImageExtension(extension)) {
+      return import('./ImageViewerShell.jsx');
+    }
+    return import('./ComicReaderShell.jsx');
+  }
+  return null;
+}
 
 /**
  * @param {{
@@ -21,10 +33,12 @@ const ComicReaderShell = lazy(() => import('./ComicReaderShell.jsx'));
  *     fileName?: string,
  *     extension?: string,
  *     type?: string,
+ *     linkHash?: string,
  *   },
  *   syncInfo?: object | null,
  *   readOnly?: boolean,
  *   onClose: () => void,
+ *   onOpenFile?: (entry: object) => void | Promise<boolean>,
  * }} props
  */
 export default function AttachmentEditorOverlay({
@@ -32,6 +46,7 @@ export default function AttachmentEditorOverlay({
   syncInfo = null,
   readOnly = false,
   onClose,
+  onOpenFile,
 }) {
   const fileName = entry.name || entry.fileName || entry.relativePath.split('/').pop() || '파일';
   const extension =
@@ -41,127 +56,65 @@ export default function AttachmentEditorOverlay({
     entry.type ||
     getFileViewerTypeFromName(entry.name || entry.fileName || entry.relativePath) ||
     getFileViewerType(extension);
-  const fallback = (
-    <div className="flex min-h-[12rem] items-center justify-center text-sm text-nas-muted">
-      첨부 편집기 여는 중…
+
+  const [Editor, setEditor] = useState(/** @type {import('react').ComponentType<any> | null} */ (null));
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+    setEditor(null);
+    setError('');
+    const loader = loadOverlayEditor(type, extension);
+    if (!loader) {
+      setError('이 형식은 여기서 열 수 없습니다.');
+      return undefined;
+    }
+    loader
+      .then((mod) => {
+        if (!cancelled) setEditor(() => mod.default);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : '편집기를 불러오지 못했습니다.');
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [type, extension, entry.relativePath]);
+
+  const status = (
+    <div className="modal-overlay modal-overlay--raised" onClick={onClose}>
+      <div
+        className="modal-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-label="문서 열기"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <p className="text-sm text-slate-700">{error || '문서를 여는 중…'}</p>
+        <div className="mt-4 flex justify-end">
+          <button type="button" className="modal-btn modal-btn--secondary" onClick={onClose}>
+            닫기
+          </button>
+        </div>
+      </div>
     </div>
   );
 
-  if (type === 'xlsx') {
-    return (
-      <Suspense fallback={fallback}>
-        <XlsxEditorShell
-          relativePath={entry.relativePath}
-          fileName={fileName}
-          syncInfo={syncInfo}
-          onClose={onClose}
-          raised
-          readOnly={readOnly}
-        />
-      </Suspense>
-    );
-  }
+  const editor = Editor ? (
+    <Editor
+      relativePath={entry.relativePath}
+      fileName={fileName}
+      extension={extension || 'txt'}
+      syncInfo={syncInfo}
+      onClose={onClose}
+      raised
+      readOnly={readOnly}
+      onOpenFile={onOpenFile}
+      linkHash={entry.linkHash || ''}
+    />
+  ) : null;
 
-  if (type === 'text') {
-    return (
-      <Suspense fallback={fallback}>
-        <TextEditorShell
-          relativePath={entry.relativePath}
-          fileName={fileName}
-          extension={extension || 'txt'}
-          syncInfo={syncInfo}
-          onClose={onClose}
-          raised
-          readOnly={readOnly}
-        />
-      </Suspense>
-    );
-  }
-
-  if (type === 'hwpx') {
-    return (
-      <Suspense fallback={fallback}>
-        <HwpxEditorShell
-          relativePath={entry.relativePath}
-          fileName={fileName}
-          syncInfo={syncInfo}
-          onClose={onClose}
-          raised
-          readOnly={readOnly}
-        />
-      </Suspense>
-    );
-  }
-
-  if (type === 'tiptap') {
-    return (
-      <Suspense fallback={fallback}>
-        <TipTapEditorShell
-          relativePath={entry.relativePath}
-          fileName={fileName}
-          syncInfo={syncInfo}
-          onClose={onClose}
-          raised
-          readOnly={readOnly}
-        />
-      </Suspense>
-    );
-  }
-
-  if (type === 'pdf') {
-    return (
-      <Suspense fallback={fallback}>
-        <PdfViewerShell
-          relativePath={entry.relativePath}
-          fileName={fileName}
-          extension={extension || 'pdf'}
-          onClose={onClose}
-          raised
-        />
-      </Suspense>
-    );
-  }
-
-  if (type === 'html') {
-    return (
-      <Suspense fallback={fallback}>
-        <HtmlViewerShell
-          relativePath={entry.relativePath}
-          fileName={fileName}
-          extension={extension || 'html'}
-          onClose={onClose}
-          raised
-        />
-      </Suspense>
-    );
-  }
-
-  if (type === 'reader') {
-    if (shouldUseLegacyImagePdfViewers() && isImageExtension(extension)) {
-      return (
-        <Suspense fallback={fallback}>
-          <ImageViewerShell
-            relativePath={entry.relativePath}
-            fileName={fileName}
-            extension={extension}
-            onClose={onClose}
-            raised
-          />
-        </Suspense>
-      );
-    }
-    return (
-      <Suspense fallback={fallback}>
-        <ComicReaderShell
-          relativePath={entry.relativePath}
-          fileName={fileName}
-          extension={extension}
-          onClose={onClose}
-          raised
-        />
-      </Suspense>
-    );
-  }
-
-  return null;
+  return createPortal(editor || status, document.body);
 }

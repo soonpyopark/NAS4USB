@@ -138,6 +138,8 @@ function OpenEditorLayer({
           fullscreen={fullscreen}
           shareMode={shareMode}
           readOnly={shareViewOnly}
+          onOpenFile={onOpenFile}
+          linkHash={openEditor.linkHash || ''}
         />
       </Suspense>
     );
@@ -367,6 +369,7 @@ function Nas4usbAppMain() {
           name: entry.name,
           extension: innerExt || entry.extension,
           shareMode: resolveOpenShareMode(entry.mode),
+          linkHash: entry.linkHash ? String(entry.linkHash).replace(/^#/, '') : undefined,
         });
         return true;
       }
@@ -402,6 +405,7 @@ function Nas4usbAppMain() {
           name,
           extension: 'tiptap',
           shareMode: resolveOpenShareMode(entry.mode),
+          linkHash: entry.linkHash ? String(entry.linkHash).replace(/^#/, '') : undefined,
         });
         notifyRemoteChange({ paths: [imported.folderPath, imported.firstFilePath] });
         return true;
@@ -419,6 +423,7 @@ function Nas4usbAppMain() {
         name: entry.name,
         extension: entry.extension,
         shareMode: resolveOpenShareMode(entry.mode),
+        linkHash: entry.linkHash ? String(entry.linkHash).replace(/^#/, '') : undefined,
       });
       return true;
     }

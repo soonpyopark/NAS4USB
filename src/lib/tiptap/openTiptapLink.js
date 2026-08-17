@@ -14,6 +14,7 @@ import {
   linkHrefToAssetFileName,
 } from './assetUrls.js';
 import { isZipBytes } from './package.js';
+import { parseWorkspaceLink } from './workspaceLinks.js';
 
 /**
  * @param {string} fileName
@@ -29,6 +30,15 @@ function extensionOf(fileName) {
  *   kind: 'external',
  *   url: string,
  * } | {
+ *   kind: 'anchor',
+ *   id: string,
+ * } | {
+ *   kind: 'workspace',
+ *   relativePath: string,
+ *   fileName: string,
+ *   extension: string,
+ *   id: string | null,
+ * } | {
  *   kind: 'audio' | 'video' | 'file',
  *   relativePath: string,
  *   fileName: string,
@@ -38,6 +48,19 @@ function extensionOf(fileName) {
 export function resolveTiptapLinkClick(href, tiptapRelativePath) {
   const raw = String(href ?? '').trim();
   if (!raw) return null;
+  const parsed = parseWorkspaceLink(raw);
+  if (parsed.kind === 'anchor') {
+    return { kind: 'anchor', id: parsed.id || '' };
+  }
+  if (parsed.kind === 'workspace' && parsed.relativePath) {
+    return {
+      kind: 'workspace',
+      relativePath: parsed.relativePath,
+      id: parsed.id || null,
+      fileName: parsed.relativePath.split('/').pop() || parsed.relativePath,
+      extension: extensionOf(parsed.relativePath),
+    };
+  }
   if (isExternalHttpUrl(raw)) return { kind: 'external', url: raw };
 
   const fileName = linkHrefToAssetFileName(raw, tiptapRelativePath);

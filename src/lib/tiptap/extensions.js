@@ -51,7 +51,8 @@ const lowlight = createLowlight(common);
  *   includeImageNodeView?: boolean,
  *   includeMediaNodeView?: boolean,
  *   enableSuggestionUi?: boolean,
- *   mentions?: { id: string, label: string }[],
+   *   mentions?: { id: string, label: string }[],
+ *   documentPath?: string,
  * }} [options]
  */
 export function createTiptapExtensions(options = {}) {
@@ -64,6 +65,7 @@ export function createTiptapExtensions(options = {}) {
     includeMediaNodeView = includeImageNodeView,
     enableSuggestionUi = true,
     mentions,
+    documentPath = '',
   } = options;
 
   /** @type {import('@tiptap/core').Extensions} */
@@ -77,11 +79,19 @@ export function createTiptapExtensions(options = {}) {
         enableClickSelection: true,
         autolink: true,
         defaultProtocol: 'https',
+        protocols: [{ scheme: 'nas4usb', optionalSlashes: true }],
+        isAllowedUri: (url, ctx) => {
+          const raw = String(url ?? '').trim();
+          if (!raw) return false;
+          if (raw.startsWith('#')) return true;
+          if (/^nas4usb:/i.test(raw)) return true;
+          return Boolean(ctx.defaultValidate(raw));
+        },
         HTMLAttributes: {
           class: 'tiptap-link',
           rel: 'noopener noreferrer',
           target: '_blank',
-          title: '열기 · 편집 중에는 Ctrl(⌘)+클릭 (웹은 브라우저, 첨부는 편집기·다운로드)',
+          title: '열기 · 이 문서 위치는 클릭, 다른 파일·웹은 편집 중 Ctrl(⌘)+클릭',
         },
       },
       // Replaced by CodeBlockLowlight for syntax highlighting.
@@ -140,6 +150,7 @@ export function createTiptapExtensions(options = {}) {
       resolveFileUrl,
       uploadFile,
       includeNodeView: includeImageNodeView,
+      documentPath,
     }),
     createTiptapVideoExtension({
       resolveFileUrl,
@@ -196,7 +207,7 @@ export function createTiptapExtensions(options = {}) {
       HTMLAttributes: { class: 'tiptap-details-content' },
     }),
     UniqueID.configure({
-      types: ['heading'],
+      types: ['heading', 'paragraph', 'blockquote', 'pullQuote', 'codeBlock', 'listItem', 'taskItem', 'details', 'image'],
       filterTransaction: collaboration
         ? (transaction) => !isChangeOrigin(transaction)
         : null,

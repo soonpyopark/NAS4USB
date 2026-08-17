@@ -289,6 +289,27 @@ export function IconLink() {
   );
 }
 
+export function IconCopyLink() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M10 13a5 5 0 0 0 7.07 0l1.4-1.4"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M14 11a5 5 0 0 0-7.07 0L5.5 12.43"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <rect x="3.5" y="14.5" width="7" height="6" rx="1" stroke="currentColor" strokeWidth="1.7" />
+      <path d="M6 17.5h2.2" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function IconImage() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">

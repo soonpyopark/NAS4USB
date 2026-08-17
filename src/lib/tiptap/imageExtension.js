@@ -40,10 +40,11 @@ function readImageSize(element, dimension) {
  *   resolveFileUrl?: (url: string) => Promise<string>,
  *   uploadFile?: (file: File) => Promise<string>,
  *   includeNodeView?: boolean,
+ *   documentPath?: string,
  * }} [options]
  */
 export function createTiptapImageExtension(options = {}) {
-  const { resolveFileUrl, uploadFile, includeNodeView = true } = options;
+  const { resolveFileUrl, uploadFile, includeNodeView = true, documentPath = '' } = options;
 
   return Image.extend({
     addOptions() {
@@ -51,6 +52,7 @@ export function createTiptapImageExtension(options = {}) {
         ...this.parent?.(),
         resolveFileUrl,
         uploadFile,
+        documentPath,
       };
     },
 

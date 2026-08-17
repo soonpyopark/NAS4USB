@@ -25,6 +25,7 @@ import {
   IconImage,
   IconInvisibleChars,
   IconItalic,
+  IconCopyLink,
   IconLink,
   IconAudio,
   IconMarkdown,
@@ -124,6 +125,7 @@ const LINE_HEIGHTS = [
  *   htmlMode?: boolean,
  *   onToggleHtml?: () => void,
  *   onEditLink?: () => void,
+ *   onCopyBlockLink?: () => void,
  * }} props
  */
 export default function TipTapToolbar({
@@ -145,6 +147,7 @@ export default function TipTapToolbar({
   htmlMode = false,
   onToggleHtml,
   onEditLink,
+  onCopyBlockLink,
 }) {
   useTiptapEditorTick(editor);
   const disabled = !editor || readOnly || !editor.isEditable || htmlMode;
@@ -532,6 +535,13 @@ export default function TipTapToolbar({
         <ToolbarGroup>
           <ToolbarButton title="링크" active={editor.isActive('link')} disabled={disabled} onClick={setLink}>
             <IconLink />
+          </ToolbarButton>
+          <ToolbarButton
+            title="이곳 링크 복사"
+            disabled={disabled}
+            onClick={() => onCopyBlockLink?.()}
+          >
+            <IconCopyLink />
           </ToolbarButton>
           <TipTapEmojiPicker editor={editor} disabled={disabled} openRequest={emojiOpenRequest} />
           <ToolbarButton title="이미지 업로드" disabled={disabled} onClick={() => onUploadImage?.()}>

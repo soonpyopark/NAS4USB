@@ -229,6 +229,7 @@ export default function FileExplorer({
   const uploadTargetPathRef = useRef('.');
   const containerRef = useRef(null);
   const keyHandlersRef = useRef({});
+  const restorePreviewAfterEditorRef = useRef(false);
 
   const contentSearch = useFolderContentSearch(entries, searchQuery, searchContents);
   const orderParentPath = useMemo(
@@ -317,10 +318,14 @@ export default function FileExplorer({
 
   useEffect(() => {
     if (isEditorOpen) {
+      restorePreviewAfterEditorRef.current = previewOpen;
       setPreviewOpen(false);
-      setPreviewEntry(null);
-      setPreviewAnchorPath(null);
+      return;
     }
+    if (restorePreviewAfterEditorRef.current && previewEntry) {
+      setPreviewOpen(true);
+    }
+    restorePreviewAfterEditorRef.current = false;
   }, [isEditorOpen]);
 
   const canPreviewView = (entry) => {

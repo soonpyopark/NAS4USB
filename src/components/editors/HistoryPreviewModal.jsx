@@ -285,6 +285,7 @@ export default function HistoryPreviewModal({
               readOnly
               resolveFileUrl={tiptapResolveFileUrl}
               onReady={() => {}}
+              allowLinkedEditors={false}
             />
           </Suspense>
         )}

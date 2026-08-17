@@ -417,6 +417,18 @@ export default function FilePreviewPane({
                 readOnly
                 resolveFileUrl={tiptapResolveFileUrl}
                 onReady={() => {}}
+                openLinkedAsOverlay={false}
+                onOpenFile={(next) => {
+                  onOpenFull?.({
+                    name: next.name || next.fileName || next.relativePath.split('/').pop() || next.relativePath,
+                    relativePath: next.relativePath,
+                    isDirectory: false,
+                    size: 0,
+                    modifiedAt: '',
+                    extension: next.extension ?? null,
+                    linkHash: next.linkHash,
+                  });
+                }}
               />
             </Suspense>
           ) : null}

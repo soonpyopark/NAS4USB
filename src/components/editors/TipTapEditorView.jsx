@@ -33,14 +33,22 @@ import TipTapToolbar, { TipTapZoomControls } from './tiptap/TipTapToolbar.jsx';
 import TipTapSearchBar from './tiptap/TipTapSearchBar.jsx';
 import TipTapBubbleMenus from './tiptap/TipTapBubbleMenus.jsx';
 import TipTapLinkDialog from './tiptap/TipTapLinkDialog.jsx';
-import { applyTiptapLink, snapshotTiptapLinkSelection } from '../../lib/tiptap/editLink.js';
+import { applyTiptapLink, insertPastedWorkspaceLink, snapshotTiptapLinkSelection } from '../../lib/tiptap/editLink.js';
+import {
+  ensureAnchorAtSelection,
+  formatWorkspaceLink,
+  jumpToTiptapAnchor,
+  normalizeWorkspaceLinkPath,
+  parseWorkspaceLink,
+  workspaceLinkDisplayLabel,
+} from '../../lib/tiptap/workspaceLinks.js';
 import TipTapHtmlSourcePanel from './tiptap/TipTapHtmlSourcePanel.jsx';
 import TipTapTocPanel from './tiptap/TipTapTocPanel.jsx';
 import { formatTiptapHtml } from '../../lib/tiptap/formatHtml.js';
 import { importHtmlIntoEditor } from '../../lib/tiptap/importHtml.js';
 import { IconSearch } from './tiptap/TipTapIcons.jsx';
 import { openExternalUrl } from '../../lib/openExternal.js';
-import { getFileViewerType } from '../../lib/fileViewerType.js';
+import { getFileViewerType, getFileViewerTypeFromName } from '../../lib/fileViewerType.js';
 import {
   ensureTiptapAssetAvailable,
   openTiptapAttachment,
@@ -80,6 +88,10 @@ function stepZoom(zoom, direction) {
  *   onReady?: (editor: import('@tiptap/core').Editor) => void,
  *   onSave?: () => void,
  *   syncInfo?: object | null,
+ *   onOpenFile?: (entry: object) => void | Promise<boolean>,
+ *   initialLinkHash?: string,
+ *   allowLinkedEditors?: boolean,
+ *   openLinkedAsOverlay?: boolean,
  * }} props
  */
 export default function TipTapEditorView({
@@ -91,6 +103,10 @@ export default function TipTapEditorView({
   onReady,
   onSave,
   syncInfo = null,
+  onOpenFile,
+  initialLinkHash = '',
+  allowLinkedEditors = true,
+  openLinkedAsOverlay = true,
 }) {
   const imageInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   const videoInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
@@ -163,6 +179,7 @@ export default function TipTapEditorView({
       uploadFile: readOnly ? undefined : uploadFile,
       includeImageNodeView: true,
       includeMediaNodeView: true,
+      documentPath: relativePath,
     });
     base.push(createTiptapSearchExtension());
     if (!readOnly) {
@@ -221,6 +238,25 @@ export default function TipTapEditorView({
           if (readOnly) return false;
           const clipboard = event.clipboardData;
           if (!clipboard) return false;
+
+          const pastedText = String(clipboard.getData('text/plain') || '').trim();
+          const pastedLink = parseWorkspaceLink(pastedText);
+          if (
+            (pastedLink.kind === 'workspace' && pastedLink.relativePath) ||
+            (pastedLink.kind === 'anchor' && pastedLink.id)
+          ) {
+            const htmlPreview = String(clipboard.getData('text/html') || '');
+            const richCopy = /data-pm-slice|data-nas-asset-path/i.test(htmlPreview);
+            if (!richCopy) {
+              event.preventDefault();
+              insertPastedWorkspaceLink(
+                view,
+                pastedLink.href,
+                workspaceLinkDisplayLabel(pastedLink, relativePath),
+              );
+              return true;
+            }
+          }
 
           const html = clipboard.getData('text/html') || '';
           const annotatedHtml = /data-nas-asset-path/i.test(html);
@@ -458,6 +494,49 @@ export default function TipTapEditorView({
     setLinkDialog(snapshot);
   }, [editor]);
 
+  const copyBlockLink = useCallback(async () => {
+    const anchor = ensureAnchorAtSelection(editor);
+    if (!anchor) {
+      window.alert('커서가 있는 블록에 링크를 만들 수 없습니다.');
+      return;
+    }
+    const href = formatWorkspaceLink(relativePath, anchor.id);
+    try {
+      await navigator.clipboard.writeText(href);
+    } catch {
+      try {
+        const field = document.createElement('textarea');
+        field.value = href;
+        field.setAttribute('readonly', '');
+        field.style.position = 'fixed';
+        field.style.left = '-9999px';
+        document.body.appendChild(field);
+        field.select();
+        document.execCommand('copy');
+        document.body.removeChild(field);
+      } catch {
+        window.alert(`링크를 복사하지 못했습니다.\n${href}`);
+        return;
+      }
+    }
+  }, [editor, relativePath]);
+
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return undefined;
+    const raw = String(initialLinkHash ?? '').trim();
+    if (!raw) return undefined;
+    const id = raw.startsWith('#') ? raw.slice(1) : raw;
+    if (!id) return undefined;
+    let attempts = 0;
+    const tryJump = () => jumpToTiptapAnchor(editor, id);
+    if (tryJump()) return undefined;
+    const timer = window.setInterval(() => {
+      attempts += 1;
+      if (tryJump() || attempts > 20) window.clearInterval(timer);
+    }, 120);
+    return () => window.clearInterval(timer);
+  }, [editor, initialLinkHash, relativePath]);
+
   const handleMediaPicked = async (event) => {
     const file = event.target.files?.[0];
     event.target.value = '';
@@ -469,6 +548,22 @@ export default function TipTapEditorView({
       window.alert(err instanceof Error ? err.message : '파일 업로드에 실패했습니다.');
     }
   };
+
+  const openLinkedWorkspaceEntry = useCallback((entry) => {
+    const name = entry.name || entry.fileName || entry.relativePath;
+    const extension = entry.extension || '';
+    const viewerType = getFileViewerTypeFromName(name) || getFileViewerType(extension);
+    if (!viewerType) return false;
+    setOverlayEditor({
+      relativePath: entry.relativePath,
+      fileName: entry.name || entry.fileName,
+      name: entry.name || entry.fileName,
+      extension,
+      type: viewerType,
+      linkHash: entry.linkHash || undefined,
+    });
+    return true;
+  }, []);
 
   const handleEditorClick = useCallback(
     (event) => {
@@ -483,11 +578,60 @@ export default function TipTapEditorView({
         target.kind === 'file' ||
         anchor?.getAttribute('data-type') === 'file-attachment' ||
         anchor?.classList.contains('tiptap-file');
-      if (!readOnly && !isAttachment && !(event.ctrlKey || event.metaKey)) return;
+      const sameDocumentWorkspace =
+        target.kind === 'workspace' &&
+        normalizeWorkspaceLinkPath(target.relativePath) === normalizeWorkspaceLinkPath(relativePath);
+      const isInDocJump = target.kind === 'anchor' || sameDocumentWorkspace;
+
       event.preventDefault();
       event.stopPropagation();
+
+      if (isInDocJump) {
+        const id = target.kind === 'anchor' ? target.id : target.id;
+        if (id) jumpToTiptapAnchor(editor, id);
+        return;
+      }
+
+      if (!allowLinkedEditors) return;
+      if (!readOnly && !isAttachment && !(event.ctrlKey || event.metaKey)) return;
       if (target.kind === 'external') {
         void openExternalUrl(target.url).catch(() => {});
+        return;
+      }
+      if (target.kind === 'workspace') {
+        const entry = {
+          relativePath: target.relativePath,
+          name: target.fileName,
+          fileName: target.fileName,
+          extension: target.extension,
+          isDirectory: false,
+          linkHash: target.id || undefined,
+        };
+        if (openLinkedAsOverlay) {
+          const opened = openLinkedWorkspaceEntry(entry);
+          if (!opened) window.alert('이 파일은 편집 창 위에 미리 열 수 없습니다.');
+          return;
+        }
+        if (!onOpenFile) return;
+        void Promise.resolve(onOpenFile(entry)).catch((err) => {
+          window.alert(err instanceof Error ? err.message : '파일을 열 수 없습니다.');
+        });
+        return;
+      }
+      if (!openLinkedAsOverlay) {
+        if (!onOpenFile) return;
+        void ensureTiptapAssetAvailable(relativePath, target.fileName)
+          .then((resolvedPath) =>
+            onOpenFile({
+              relativePath: resolvedPath,
+              name: target.fileName,
+              extension: target.extension,
+              isDirectory: false,
+            }),
+          )
+          .catch((err) => {
+            window.alert(err instanceof Error ? err.message : '첨부 파일을 열 수 없습니다.');
+          });
         return;
       }
       void ensureTiptapAssetAvailable(relativePath, target.fileName)
@@ -508,7 +652,15 @@ export default function TipTapEditorView({
           window.alert(err instanceof Error ? err.message : '첨부 파일을 열 수 없습니다.');
         });
     },
-    [readOnly, relativePath],
+    [
+      allowLinkedEditors,
+      editor,
+      onOpenFile,
+      openLinkedAsOverlay,
+      openLinkedWorkspaceEntry,
+      readOnly,
+      relativePath,
+    ],
   );
 
   const openImagePicker = () => imageInputRef.current?.click();
@@ -551,6 +703,9 @@ export default function TipTapEditorView({
           htmlMode={htmlMode}
           onToggleHtml={toggleHtmlMode}
           onEditLink={openLinkDialog}
+          onCopyBlockLink={() => {
+            void copyBlockLink();
+          }}
         />
       ) : (
         <div className="tiptap-toolbar tiptap-toolbar--zoom-only" role="toolbar" aria-label="보기 배율">
@@ -583,7 +738,14 @@ export default function TipTapEditorView({
       />
 
       {htmlMode ? null : (
-        <TipTapBubbleMenus editor={editor} readOnly={readOnly} onEditLink={openLinkDialog} />
+        <TipTapBubbleMenus
+          editor={editor}
+          readOnly={readOnly}
+          onEditLink={openLinkDialog}
+          onCopyBlockLink={() => {
+            void copyBlockLink();
+          }}
+        />
       )}
 
       <div className="tiptap-editor-shell__body">
@@ -657,6 +819,8 @@ export default function TipTapEditorView({
       <TipTapLinkDialog
         open={Boolean(linkDialog)}
         href={linkDialog?.href ?? ''}
+        editor={editor}
+        currentPath={relativePath}
         onApply={(href) => {
           if (linkDialog) applyTiptapLink(editor, linkDialog, href);
           setLinkDialog(null);
@@ -674,6 +838,7 @@ export default function TipTapEditorView({
           syncInfo={syncInfo}
           readOnly={readOnly}
           onClose={() => setOverlayEditor(null)}
+          onOpenFile={openLinkedWorkspaceEntry}
         />
       ) : null}
     </div>

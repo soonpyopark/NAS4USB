@@ -200,6 +200,10 @@
       {
         "from": "build/icon.png",
         "to": "icon.png"
+      },
+      {
+        "from": "node_modules/7zip-bin/win/x64/7za.exe",
+        "to": "bin/7za.exe"
       }
     ],
     "win": {

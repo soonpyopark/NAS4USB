@@ -1,8 +1,14 @@
 import { BubbleMenu } from '@tiptap/react/menus';
+import { useTiptapEditorTick } from '../../../hooks/useTiptapEditorTick.js';
+import {
+  TIPTAP_HIGHLIGHT_COLORS,
+  TIPTAP_TEXT_COLORS,
+} from '../../../lib/tiptap/colorPalettes.js';
+import TipTapColorSwatchPicker from './TipTapColorSwatchPicker.jsx';
 import {
   IconBold,
   IconCode,
-  IconHighlight,
+  IconCopyLink,
   IconItalic,
   IconLink,
   IconStrike,
@@ -19,10 +25,16 @@ import {
  *   readOnly?: boolean,
  *   onUploadImage?: () => void,
  *   onEditLink?: () => void,
+ *   onCopyBlockLink?: () => void,
  * }} props
  */
-export default function TipTapBubbleMenus({ editor, readOnly = false, onEditLink }) {
+export default function TipTapBubbleMenus({ editor, readOnly = false, onEditLink, onCopyBlockLink }) {
+  useTiptapEditorTick(editor);
   if (!editor || readOnly) return null;
+
+  const textColor = editor.getAttributes('textStyle').color || '';
+  const highlightColor =
+    editor.getAttributes('highlight').color || (editor.isActive('highlight') ? '#fef08a' : '');
 
   const setLink = () => {
     if (onEditLink) {
@@ -102,15 +114,26 @@ export default function TipTapBubbleMenus({ editor, readOnly = false, onEditLink
       >
         <IconCode />
       </button>
-      <button
-        type="button"
+      <TipTapColorSwatchPicker
+        title="글자 색"
+        mode="text"
+        value={textColor}
+        colors={TIPTAP_TEXT_COLORS}
+        onChange={(next) => {
+          if (!next) editor.chain().focus().unsetColor().run();
+          else editor.chain().focus().setColor(next).run();
+        }}
+      />
+      <TipTapColorSwatchPicker
         title="하이라이트"
-        aria-label="하이라이트"
-        className={editor.isActive('highlight') ? 'is-active' : ''}
-        onClick={() => editor.chain().focus().toggleHighlight({ color: '#fef08a' }).run()}
-      >
-        <IconHighlight />
-      </button>
+        mode="highlight"
+        value={highlightColor}
+        colors={TIPTAP_HIGHLIGHT_COLORS}
+        onChange={(next) => {
+          if (!next) editor.chain().focus().unsetHighlight().run();
+          else editor.chain().focus().toggleHighlight({ color: next }).run();
+        }}
+      />
       <button
         type="button"
         title="링크"
@@ -119,6 +142,14 @@ export default function TipTapBubbleMenus({ editor, readOnly = false, onEditLink
         onClick={setLink}
       >
         <IconLink />
+      </button>
+      <button
+        type="button"
+        title="이곳 링크 복사"
+        aria-label="이곳 링크 복사"
+        onClick={() => onCopyBlockLink?.()}
+      >
+        <IconCopyLink />
       </button>
     </BubbleMenu>
   );

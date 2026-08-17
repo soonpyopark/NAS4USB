@@ -84,8 +84,12 @@ export default function TipTapColorSwatchPicker({
           </span>
         ) : mode === 'highlight' ? (
           <span className="tiptap-swatch__glyph" aria-hidden="true">
-            <span className="tiptap-swatch__marker">A</span>
-            <span className="tiptap-swatch__bar" style={{ background: value || '#d1d5db' }} />
+            <span
+              className="tiptap-swatch__marker"
+              style={{ background: value || '#fde047' }}
+            >
+              A
+            </span>
           </span>
         ) : (
           <span

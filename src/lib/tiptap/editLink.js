@@ -41,3 +41,29 @@ export function applyTiptapLink(editor, range, href) {
     .setMeta('preventAutolink', true)
     .run();
 }
+
+/**
+ * Insert a workspace / in-doc link from a pasted href. Never opens the file.
+ * Selected text keeps its wording; an empty caret gets `label`.
+ * @param {import('prosemirror-view').EditorView | null | undefined} view
+ * @param {string} href
+ * @param {string} label
+ */
+export function insertPastedWorkspaceLink(view, href, label) {
+  const markType = view?.state?.schema?.marks?.link;
+  if (!view || !markType) return false;
+  const hrefValue = String(href ?? '').trim();
+  if (!hrefValue) return false;
+  const { from, to } = view.state.selection;
+  const tr = view.state.tr;
+  const mark = markType.create({ href: hrefValue });
+  if (from !== to) {
+    tr.addMark(from, to, mark);
+  } else {
+    const text = String(label || hrefValue).trim() || hrefValue;
+    tr.replaceSelectionWith(view.state.schema.text(text, [mark]), false);
+  }
+  tr.setMeta('preventAutolink', true);
+  view.dispatch(tr.scrollIntoView());
+  return true;
+}
