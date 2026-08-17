@@ -423,6 +423,27 @@ export function createHttpNas4usbClient() {
       },
     },
 
+    backup: {
+      getStatus: async () => {
+        throw new Error('백업 상태는 서버 PC의 NAS4USB 앱에서만 볼 수 있습니다.');
+      },
+      saveConfig: () => {
+        throw new Error('백업 설정은 서버 PC의 NAS4USB 앱에서만 바꿀 수 있습니다.');
+      },
+      runNow: () => {
+        throw new Error('문서 백업은 서버 PC의 NAS4USB 앱에서만 실행할 수 있습니다.');
+      },
+      delete: () => {
+        throw new Error('문서 백업 삭제는 서버 PC의 NAS4USB 앱에서만 할 수 있습니다.');
+      },
+      exportPcSettings: () => {
+        throw new Error('PC 설정 내보내기는 서버 PC의 NAS4USB 앱에서만 할 수 있습니다.');
+      },
+      importPcSettings: () => {
+        throw new Error('PC 설정 가져오기는 서버 PC의 NAS4USB 앱에서만 할 수 있습니다.');
+      },
+    },
+
     spellcheck: {
       setEnabled: () => {},
     },

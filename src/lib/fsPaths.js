@@ -111,7 +111,19 @@ export function readFileAsBase64(file) {
       }
       resolve(result.split(',')[1] ?? '');
     };
-    reader.onerror = () => reject(reader.error ?? new Error('Failed to read file'));
+    reader.onerror = () => {
+      const err = reader.error;
+      const message = err instanceof Error ? err.message : String(err ?? '');
+      if (/could not be found at the time an operation was processed/i.test(message)) {
+        reject(
+          new Error(
+            `'${file.name}'은(는) 폴더이거나 지금 읽을 수 없습니다. 폴더를 통째로 끌어다 놓아 주세요.`,
+          ),
+        );
+        return;
+      }
+      reject(err ?? new Error('Failed to read file'));
+    };
     reader.readAsDataURL(file);
   });
 }

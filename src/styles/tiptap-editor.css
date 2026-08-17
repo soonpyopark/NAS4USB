@@ -241,15 +241,17 @@
 .tiptap-editor-shell .tableWrapper {
   overflow-x: auto;
   margin: 0.35rem 0;
+  scrollbar-gutter: stable;
 }
 
 .tiptap-editor-shell .tiptap table,
 .tiptap-editor-shell .tiptap-table {
   border-collapse: collapse;
-  width: 100%;
+  /* auto + min-width: 100% — width:100% fights columnResizing and jitters the drag line */
+  width: auto;
+  min-width: 100%;
   margin: 0.35rem 0;
   table-layout: fixed;
-  overflow: hidden;
 }
 
 .tiptap-editor-shell .tiptap table td,

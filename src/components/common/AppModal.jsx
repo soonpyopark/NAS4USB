@@ -214,9 +214,11 @@ export function AppConfirmDialog({
  *   title?: string,
  *   body?: string | import('react').ReactNode,
  *   primaryLabel?: string,
+ *   extraLabel?: string,
  *   secondaryLabel?: string,
  *   cancelLabel?: string,
  *   onPrimary: () => void,
+ *   onExtra?: () => void,
  *   onSecondary: () => void,
  *   onCancel: () => void,
  * }} props
@@ -226,24 +228,35 @@ export function AppChoiceDialog({
   title = '선택',
   body = '',
   primaryLabel = '확인',
+  extraLabel = '',
   secondaryLabel = '다른 방법',
   cancelLabel = '취소',
   onPrimary,
+  onExtra,
   onSecondary,
   onCancel,
 }) {
+  const hasExtra = Boolean(extraLabel);
+
   return (
-    <AppModal open={open} onClose={onCancel} title={title} raised>
+    <AppModal
+      open={open}
+      onClose={onCancel}
+      title={title}
+      raised
+      className={hasExtra ? 'modal-dialog--choice' : ''}
+    >
       {body &&
         (typeof body === 'string' ? (
           <p className="modal-body whitespace-pre-line">{body}</p>
         ) : (
           body
         ))}
-      <AppModalActions className="flex-wrap">
+      <AppModalActions className={hasExtra ? 'flex-nowrap' : 'flex-wrap'}>
         <AppModalButton variant="primary" onClick={onPrimary}>
           {primaryLabel}
         </AppModalButton>
+        {extraLabel ? <AppModalButton onClick={onExtra}>{extraLabel}</AppModalButton> : null}
         <AppModalButton onClick={onSecondary}>{secondaryLabel}</AppModalButton>
         <AppModalButton onClick={onCancel}>{cancelLabel}</AppModalButton>
       </AppModalActions>

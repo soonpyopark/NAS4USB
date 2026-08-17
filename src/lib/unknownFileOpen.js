@@ -1,4 +1,5 @@
 import { downloadFileEntry } from './downloadEntries.js';
+import { isInternetShortcutExtension, openInternetShortcutEntry } from './internetShortcut.js';
 import { showAppAlert, showAppChoice } from './nativeDialog.js';
 import { isElectronRenderer } from './runtime.js';
 
@@ -6,25 +7,29 @@ import { isElectronRenderer } from './runtime.js';
  * Ask how to open a file type that has no dedicated in-app viewer.
  * - Electron: text editor vs external program
  * - Web / browser client: text editor vs download
+ * - URL shortcuts also offer opening in the browser
  *
  * @param {{ relativePath: string, name?: string, extension?: string | null }} entry
- * @returns {Promise<'text' | 'external' | 'download' | null>}
+ * @returns {Promise<'text' | 'browser' | 'external' | 'download' | null>}
  */
 export async function promptUnknownFileOpen(entry) {
   const fileName = entry.name || entry.relativePath.split('/').pop() || '파일';
   const ext = String(entry.extension ?? '').trim();
   const formatLabel = ext ? `.${ext}` : '알 수 없는 형식';
   const electron = isElectronRenderer();
+  const canOpenInBrowser = isInternetShortcutExtension(ext);
 
   const choice = await showAppChoice({
     title: '파일 열기',
     body: `'${fileName}' (${formatLabel})은(는) 앱에서 바로 볼 수 있는 형식이 아닙니다.\n어떻게 여시겠습니까?`,
     primaryLabel: '텍스트로 열기',
+    extraLabel: canOpenInBrowser ? '브라우저로 열기' : '',
     secondaryLabel: electron ? '외부 프로그램으로 열기' : '다운로드',
     cancelLabel: '취소',
   });
 
   if (choice === 'primary') return 'text';
+  if (choice === 'extra') return 'browser';
   if (choice === 'secondary') return electron ? 'external' : 'download';
   return null;
 }
@@ -57,7 +62,9 @@ export async function resolveUnknownFileOpenAction(entry) {
   if (action === 'text') return 'text';
 
   try {
-    if (action === 'external') {
+    if (action === 'browser') {
+      await openInternetShortcutEntry(entry);
+    } else if (action === 'external') {
       await openUnknownFileExternally(entry);
     } else if (action === 'download') {
       await downloadUnknownFile(entry);

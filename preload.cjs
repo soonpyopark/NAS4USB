@@ -151,6 +151,8 @@ contextBridge.exposeInMainWorld('nas4usb', {
     saveConfig: (patch) => ipcRenderer.invoke('backup:saveConfig', patch),
     runNow: () => ipcRenderer.invoke('backup:runNow'),
     delete: (fileName) => ipcRenderer.invoke('backup:delete', fileName),
+    exportPcSettings: () => ipcRenderer.invoke('backup:exportPcSettings'),
+    importPcSettings: (options) => ipcRenderer.invoke('backup:importPcSettings', options),
   },
 
   spellcheck: {

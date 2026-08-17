@@ -149,15 +149,28 @@
   }
 
   .file-preview-pane__title {
+    display: flex;
     min-width: 0;
     flex: 1;
+    align-items: baseline;
+    gap: 0.35rem;
     margin: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
     font-size: 0.8125rem;
     font-weight: 600;
     color: #323130;
+  }
+
+  .file-preview-pane__title-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .file-preview-pane__title-size {
+    flex-shrink: 0;
+    font-weight: 500;
+    color: #605e5c;
   }
 
   .file-preview-pane__actions {
@@ -601,6 +614,11 @@
 
 .modal-dialog--wide {
   max-width: 32rem;
+}
+
+/* 4-button choice (텍스트로 열기 / 브라우저로 열기 / 다운로드 / 취소) */
+.modal-dialog--choice {
+  max-width: 40rem;
 }
 
 /* Editor-core version table: long npm package@version lists need more width. */

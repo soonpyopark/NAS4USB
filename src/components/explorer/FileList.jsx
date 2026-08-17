@@ -20,9 +20,37 @@ function isExternalFileDrag(event) {
   return Array.from(types).includes('Files');
 }
 
-function dropPlaceFromEvent(event) {
+function dropPlaceFromEvent(event, { allowInto = false } = {}) {
   const rect = event.currentTarget.getBoundingClientRect();
-  return event.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+  const y = event.clientY - rect.top;
+  const ratio = rect.height > 0 ? y / rect.height : 0.5;
+  if (allowInto && ratio >= 0.28 && ratio <= 0.72) return 'into';
+  return ratio < 0.5 ? 'before' : 'after';
+}
+
+/**
+ * @param {import('../../types/nas4usb.d.ts').FsEntry | undefined} source
+ * @param {import('../../types/nas4usb.d.ts').FsEntry} target
+ * @param {React.DragEvent} event
+ * @param {{ path: string, place: 'before' | 'after' | 'into' } | null} hinted
+ */
+function resolveInternalDrop(source, target, event, hinted) {
+  if (!source || source.relativePath === target.relativePath) return null;
+  if (target.isDirectory) {
+    const place =
+      hinted?.path === target.relativePath
+        ? hinted.place
+        : dropPlaceFromEvent(event, { allowInto: true });
+    if (place === 'into' || source.isDirectory !== target.isDirectory) {
+      return { kind: 'into' };
+    }
+    return { kind: 'reorder', place };
+  }
+  if (source.isDirectory !== target.isDirectory) return null;
+  const place =
+    hinted?.path === target.relativePath ? hinted.place : dropPlaceFromEvent(event);
+  if (place === 'into') return null;
+  return { kind: 'reorder', place };
 }
 
 function formatSize(bytes) {
@@ -289,6 +317,8 @@ export default function FileList({
   onPropertiesClick,
   canReorder = false,
   onReorder,
+  canMoveInto = false,
+  onMoveInto,
   sortField = 'custom',
   sortDirection = 'asc',
   onSort,
@@ -314,7 +344,7 @@ export default function FileList({
   const listClicksRef = useRef(/** @type {{ path: string, time: number }[]} */ ([]));
   const [dragPath, setDragPath] = useState(/** @type {string | null} */ (null));
   const [dropHint, setDropHint] = useState(
-    /** @type {{ path: string, place: 'before' | 'after' } | null} */ (null),
+    /** @type {{ path: string, place: 'before' | 'after' | 'into' } | null} */ (null),
   );
   const selectedVisibleCount = entries.filter((entry) => selectedSet.has(entry.relativePath)).length;
   const allVisibleSelected = entries.length > 0 && selectedVisibleCount === entries.length;
@@ -327,8 +357,8 @@ export default function FileList({
   };
 
   useEffect(() => {
-    if (!canReorder) clearReorderDrag();
-  }, [canReorder]);
+    if (!canReorder && !canMoveInto) clearReorderDrag();
+  }, [canReorder, canMoveInto]);
 
   useEffect(() => {
     if (selectAllRef.current) {
@@ -478,6 +508,7 @@ export default function FileList({
               : '';
             const reorderable =
               canReorder && !(lockFixedOrder && isFixedFolderOrderPath(entry.relativePath));
+            const draggable = (reorderable || canMoveInto) && !isWorkspaceRootSystemFolder(entry.relativePath);
             const dragging = dragPath === entry.relativePath;
             const hintHere = dropHint?.path === entry.relativePath;
             const indent = fileIndentInfo[entry.relativePath];
@@ -489,21 +520,23 @@ export default function FileList({
               <tr
                 key={entry.relativePath}
                 data-explorer-entry={entry.relativePath}
-                draggable={reorderable}
+                draggable={draggable}
                 className={`border-t border-nas-border ${
-                  reorderable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
+                  draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
                 } ${selected ? 'bg-nas-accentSoft' : 'hover:bg-slate-50'} ${
                   dragging ? 'opacity-50' : ''
                 }`}
                 style={
-                  hintHere
-                    ? {
-                        boxShadow:
-                          dropHint.place === 'before'
-                            ? 'inset 0 2px 0 0 rgb(var(--nas-accent))'
-                            : 'inset 0 -2px 0 0 rgb(var(--nas-accent))',
-                      }
-                    : undefined
+                  hintHere && dropHint.place === 'into'
+                    ? { boxShadow: 'inset 0 0 0 2px rgb(var(--nas-accent))' }
+                    : hintHere
+                      ? {
+                          boxShadow:
+                            dropHint.place === 'before'
+                              ? 'inset 0 2px 0 0 rgb(var(--nas-accent))'
+                              : 'inset 0 -2px 0 0 rgb(var(--nas-accent))',
+                        }
+                      : undefined
                 }
                 onClick={(event) => {
                   event.currentTarget.closest('[data-explorer-list]')?.focus({ preventScroll: true });
@@ -525,7 +558,7 @@ export default function FileList({
                 }}
                 onContextMenu={(event) => onContextMenu(event, entry)}
                 onDragStart={(event) => {
-                  if (!reorderable || isExternalFileDrag(event)) return;
+                  if (!draggable || isExternalFileDrag(event)) return;
                   event.dataTransfer.effectAllowed = 'move';
                   event.dataTransfer.setData(REORDER_MIME, entry.relativePath);
                   event.dataTransfer.setData('text/plain', entry.relativePath);
@@ -535,21 +568,21 @@ export default function FileList({
                 onDragEnd={clearReorderDrag}
                 onDragOver={(event) => {
                   const sourcePath = dragPathRef.current;
-                  if (!canReorder || isExternalFileDrag(event) || !sourcePath) return;
-                  if (!reorderable || sourcePath === entry.relativePath) {
-                    if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
-                    if (dropHint) setDropHint(null);
-                    return;
-                  }
+                  if (isExternalFileDrag(event) || !sourcePath) return;
                   const source = entries.find((item) => item.relativePath === sourcePath);
-                  if (!source || source.isDirectory !== entry.isDirectory) {
+                  const drop = resolveInternalDrop(source, entry, event, null);
+                  const allow =
+                    drop &&
+                    ((drop.kind === 'into' && canMoveInto) ||
+                      (drop.kind === 'reorder' && canReorder && reorderable));
+                  if (!allow) {
                     if (event.dataTransfer) event.dataTransfer.dropEffect = 'none';
                     if (dropHint) setDropHint(null);
                     return;
                   }
                   event.preventDefault();
                   if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-                  const place = dropPlaceFromEvent(event);
+                  const place = drop.kind === 'into' ? 'into' : drop.place;
                   if (dropHint?.path !== entry.relativePath || dropHint.place !== place) {
                     setDropHint({ path: entry.relativePath, place });
                   }
@@ -561,15 +594,19 @@ export default function FileList({
                 }}
                 onDrop={(event) => {
                   const sourcePath = dragPathRef.current;
-                  if (!canReorder || isExternalFileDrag(event) || !sourcePath) return;
-                  event.preventDefault();
+                  if (isExternalFileDrag(event) || !sourcePath) return;
                   const source = entries.find((item) => item.relativePath === sourcePath);
-                  const place = dropHint?.path === entry.relativePath
-                    ? dropHint.place
-                    : dropPlaceFromEvent(event);
+                  const drop = resolveInternalDrop(source, entry, event, dropHint);
                   clearReorderDrag();
-                  if (!source || !reorderable) return;
-                  onReorder?.(source, entry, place);
+                  if (!drop) return;
+                  event.preventDefault();
+                  if (drop.kind === 'into') {
+                    if (!canMoveInto || !source) return;
+                    onMoveInto?.(source, entry);
+                    return;
+                  }
+                  if (!canReorder || !reorderable || !source) return;
+                  onReorder?.(source, entry, drop.place);
                 }}
               >
                 <td

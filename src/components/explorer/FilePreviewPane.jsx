@@ -17,6 +17,7 @@ import { resolveComicFirstPage } from '../../lib/comicReader/firstPage.js';
 import { resolvePdfFirstPage } from '../../lib/pdf/firstPage.js';
 import FileIcon from './FileIcon.jsx';
 import { FILE_INDENT_STEP_PX } from '../../../shared/fileIndent.js';
+import { formatByteSize } from '../../../shared/videoPreviewCache.js';
 
 /**
  * @param {string} relativePath
@@ -268,7 +269,10 @@ export default function FilePreviewPane({
       <aside className="file-preview-pane" aria-label="미리보기" inert={open ? undefined : true}>
         <header className="file-preview-pane__header">
           <p className="file-preview-pane__title" title={entry?.name}>
-            {entry?.name || '미리보기'}
+            <span className="file-preview-pane__title-name">{entry?.name || '미리보기'}</span>
+            {entry && !entry.isDirectory ? (
+              <span className="file-preview-pane__title-size">({formatByteSize(entry.size)})</span>
+            ) : null}
           </p>
           <div className="file-preview-pane__actions">
             {parentPath && typeof onPreview === 'function' ? (
@@ -389,7 +393,7 @@ export default function FilePreviewPane({
           ) : kind === 'image' || kind === 'comic' || kind === 'pdf' ? (
             <div className="file-preview-pane__media">
               <p className="file-preview-pane__caption" title={entry.name}>
-                {entry.name}
+                {entry.name} ({formatByteSize(entry.size)})
               </p>
               {imageUrl ? (
                 <img src={imageUrl} alt={entry.name} className="file-preview-pane__image" />
@@ -401,14 +405,14 @@ export default function FilePreviewPane({
           ) : kind === 'text' ? (
             <>
               <p className="file-preview-pane__caption" title={entry.name}>
-                {entry.name}
+                {entry.name} ({formatByteSize(entry.size)})
               </p>
               <pre className="file-preview-pane__text">{text || '(빈 파일)'}</pre>
             </>
           ) : kind === 'markdown' ? (
             <>
               <p className="file-preview-pane__caption" title={entry.name}>
-                {entry.name}
+                {entry.name} ({formatByteSize(entry.size)})
               </p>
               <div
                 className="markdown-preview file-preview-pane__rich"

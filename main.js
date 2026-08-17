@@ -1665,6 +1665,38 @@ ipcMain.handle('backup:delete', async (event, fileName) => {
   return deleteWorkspaceBackup(fileName);
 });
 
+ipcMain.handle('backup:exportPcSettings', async (event) => {
+  assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
+  const parentWindow = BrowserWindow.fromWebContents(event.sender);
+  const { pcSettingsBackupFileName } = await import('./shared/pcSettingsBackup.js');
+  const result = await dialog.showSaveDialog(parentWindow ?? undefined, {
+    title: 'PC 설정 내보내기',
+    defaultPath: pcSettingsBackupFileName(),
+    filters: [{ name: 'NAS4USB 설정', extensions: ['zip'] }],
+  });
+  if (result.canceled || !result.filePath) return null;
+  const { exportPcSettings } = await import('./electron/pcSettingsBackupService.js');
+  return exportPcSettings(result.filePath);
+});
+
+ipcMain.handle('backup:importPcSettings', async (event, options = {}) => {
+  assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
+  const zipPath = typeof options?.zipPath === 'string' ? options.zipPath.trim() : '';
+  if (!zipPath) {
+    throw new Error('가져올 설정 파일을 선택해 주세요.');
+  }
+  const { importPcSettings } = await import('./electron/pcSettingsBackupService.js');
+  const imported = await importPcSettings(zipPath, {
+    keepLocalPaths: options?.keepLocalPaths === true,
+  });
+  setImmediate(() => {
+    isQuitting = true;
+    app.relaunch();
+    app.exit(0);
+  });
+  return { ...imported, willRelaunch: true };
+});
+
 /**
  * Persist workspace root under 설정 → 일반, then relaunch so open files / Yjs rooms
  * bind to the new tree. Pass null/empty to fall back to `{portableRoot}`

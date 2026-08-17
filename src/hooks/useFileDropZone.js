@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { collectDroppedPayload } from '../lib/droppedFiles.js';
+import { nativeAlert } from '../lib/nativeDialog.js';
 
 function isExternalFileDrag(event) {
   const types = event.dataTransfer?.types;
@@ -7,7 +9,7 @@ function isExternalFileDrag(event) {
 }
 
 /**
- * @param {(files: File[]) => void | Promise<void>} onDrop
+ * @param {(files: File[], meta?: { emptyDirs: string[] }) => void | Promise<void>} onDrop
  * @param {{ enabled?: boolean }} [options]
  */
 export function useFileDropZone(onDrop, { enabled = true } = {}) {
@@ -61,9 +63,13 @@ export function useFileDropZone(onDrop, { enabled = true } = {}) {
       event.preventDefault();
       reset();
       if (!enabled) return;
-      const files = Array.from(event.dataTransfer.files ?? []);
-      if (files.length) {
-        await onDrop(files);
+      try {
+        const { files, emptyDirs } = await collectDroppedPayload(event.dataTransfer);
+        if (files.length || emptyDirs.length) {
+          await onDrop(files, { emptyDirs });
+        }
+      } catch (err) {
+        nativeAlert(err instanceof Error ? err.message : '파일을 읽지 못했습니다.');
       }
     },
     [enabled, onDrop, reset],

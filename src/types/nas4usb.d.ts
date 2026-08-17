@@ -149,6 +149,8 @@ window.nas4usb = {
     saveConfig: (patch) => {},
     runNow: () => {},
     delete: (fileName) => {},
+    exportPcSettings: () => {},
+    importPcSettings: (options) => {},
   },
   spellcheck: {
     setEnabled: (enabled) => {},

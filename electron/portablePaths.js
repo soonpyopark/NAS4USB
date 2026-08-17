@@ -10,7 +10,7 @@ import { app } from 'electron';
  */
 export const PORTABLE_MARKER = '.nas4usb-portable';
 
-const STATE_FILES = [
+export const STATE_FILES = [
   '.nas4usb-settings.json',
   '.nas4usb-members.json',
   '.nas4usb-sessions.json',
@@ -22,7 +22,13 @@ const STATE_FILES = [
   '.nas4usb-trash.json',
 ];
 
-const STATE_DIRS = ['.nas4usb'];
+export const STATE_DIRS = ['.nas4usb'];
+
+/** Login sessions are machine-specific; do not migrate them. */
+export const PC_SETTINGS_SKIP_FILES = ['.nas4usb-sessions.json'];
+
+/** Document history lives here and can be huge — not PC settings. */
+export const PC_SETTINGS_SKIP_DIR_CHILDREN = ['file-history', 'hwpx-history'];
 
 /**
  * Folder that contains NAS4USB.exe (or the project root in dev).

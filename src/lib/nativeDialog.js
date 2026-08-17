@@ -12,9 +12,10 @@ let alertHandler = null;
  *   title?: string,
  *   body?: string,
  *   primaryLabel?: string,
+ *   extraLabel?: string,
  *   secondaryLabel?: string,
  *   cancelLabel?: string,
- * }) => Promise<'primary' | 'secondary' | null>)}
+ * }) => Promise<'primary' | 'extra' | 'secondary' | null>)}
  */
 let choiceHandler = null;
 
@@ -34,9 +35,10 @@ export function registerAppAlertHandler(handler) {
  *   title?: string,
  *   body?: string,
  *   primaryLabel?: string,
+ *   extraLabel?: string,
  *   secondaryLabel?: string,
  *   cancelLabel?: string,
- * }) => Promise<'primary' | 'secondary' | null>} handler
+ * }) => Promise<'primary' | 'extra' | 'secondary' | null>} handler
  * @returns {() => void}
  */
 export function registerAppChoiceHandler(handler) {
@@ -51,10 +53,11 @@ export function registerAppChoiceHandler(handler) {
  *   title?: string,
  *   body?: string,
  *   primaryLabel?: string,
+ *   extraLabel?: string,
  *   secondaryLabel?: string,
  *   cancelLabel?: string,
  * }} options
- * @returns {Promise<'primary' | 'secondary' | null>}
+ * @returns {Promise<'primary' | 'extra' | 'secondary' | null>}
  */
 export async function showAppChoice(options) {
   if (choiceHandler) {

@@ -21,6 +21,7 @@ export default function AppDialogHost() {
         title: options.title,
         body: options.body,
         primaryLabel: options.primaryLabel,
+        extraLabel: options.extraLabel,
         secondaryLabel: options.secondaryLabel,
         cancelLabel: options.cancelLabel,
       }),

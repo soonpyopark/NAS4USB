@@ -493,13 +493,16 @@ export default function FileExplorer({
     });
   };
 
-  const handleFileDrop = async (files) => {
+  const handleFileDrop = async (files, meta) => {
     if (isInTrashView || isInFavoritesView) return;
     if (transfer) return;
 
     try {
       setTransfer({ kind: 'upload', current: 0, total: files.length, fileName: files[0]?.name });
-      const uploaded = await uploadFiles(files, { onProgress: reportTransferProgress('upload') });
+      const uploaded = await uploadFiles(files, {
+        onProgress: reportTransferProgress('upload'),
+        emptyDirs: meta?.emptyDirs,
+      });
       await refreshAll();
       if (uploaded?.openPath) {
         const name = uploaded.openPath.split('/').pop() || uploaded.openPath;
@@ -982,6 +985,25 @@ export default function FileExplorer({
       return;
     }
     setMoveDialogEntries(targets);
+  };
+
+  const handleMoveInto = async (dragged, destinationFolder) => {
+    if (!destinationFolder?.isDirectory) return;
+    const movingEntries = selectedSet.has(dragged.relativePath)
+      ? selectedEntries.filter(
+          (entry) =>
+            !isOrderLocked(entry.relativePath) &&
+            entry.relativePath !== destinationFolder.relativePath,
+        )
+      : [dragged];
+    if (!movingEntries.length) return;
+    try {
+      await moveEntries(movingEntries, destinationFolder.relativePath);
+      clearSelection();
+      await refreshAll();
+    } catch (err) {
+      nativeAlert(err instanceof Error ? err.message : '이동에 실패했습니다.');
+    }
   };
 
   const handleMoveConfirm = async (destinationPath) => {
@@ -1667,6 +1689,8 @@ export default function FileExplorer({
           onPropertiesClick={handleShowProperties}
           canReorder={canReorder}
           onReorder={handlePlaceOrder}
+          canMoveInto={!isInTrashView && !isInFavoritesView && canWrite}
+          onMoveInto={handleMoveInto}
           sortField={listSort.field}
           sortDirection={listSort.direction}
           onSort={handleListSort}

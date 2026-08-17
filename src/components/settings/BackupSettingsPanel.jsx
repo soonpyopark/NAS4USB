@@ -21,7 +21,8 @@ function formatWhen(iso) {
 }
 
 export default function BackupSettingsPanel() {
-  const { alert: appAlert, confirm: appConfirm, dialog: backupDialog } = useAppConfirm();
+  const { alert: appAlert, confirm: appConfirm, choose: appChoose, dialog: backupDialog } =
+    useAppConfirm();
   const electron = isElectronRenderer();
   const [config, setConfig] = useState(DEFAULT_WORKSPACE_BACKUP);
   const [timeDraft, setTimeDraft] = useState('18:00');
@@ -115,6 +116,69 @@ export default function BackupSettingsPanel() {
     }
   };
 
+  const exportPcSettings = async () => {
+    if (!electron) return;
+    setBusy(true);
+    try {
+      const result = await window.nas4usb.backup.exportPcSettings();
+      if (!result) return;
+      void appAlert({
+        title: 'PC 설정 내보내기',
+        body: `저장했습니다.\n${result.filePath}\n\n회원·폴더 색/레벨·즐겨찾기·공유 링크·허용 IP 등이 들어 있습니다. 로그인 세션과 문서 이력은 넣지 않았습니다.`,
+      });
+    } catch (error) {
+      void appAlert({
+        title: 'PC 설정 내보내기',
+        body: error instanceof Error ? error.message : '설정을 내보내지 못했습니다.',
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const importPcSettings = async () => {
+    if (!electron) return;
+    const zipPath = await window.nas4usb.dialog.pickFile({
+      title: 'PC 설정 가져오기',
+      filters: [
+        { name: 'NAS4USB 설정', extensions: ['zip'] },
+        { name: 'All Files', extensions: ['*'] },
+      ],
+    });
+    if (!zipPath) return;
+
+    const choice = await appChoose({
+      title: 'PC 설정 가져오기',
+      body: '이 PC의 설정 파일을 덮어씁니다. 회원 비밀번호 해시가 포함됩니다.\n\n새 PC의 드라이브/폴더가 다르면 「이 PC 경로 유지」를 고르세요. (데이터 루트·외부폴더·백업 폴더·FFmpeg 경로)',
+      primaryLabel: '전부 덮어쓰기',
+      secondaryLabel: '이 PC 경로 유지',
+      cancelLabel: '취소',
+    });
+    if (!choice) return;
+
+    const ok = await appConfirm({
+      title: 'PC 설정 가져오기',
+      body: '가져오면 앱이 다시 시작됩니다. 계속할까요?',
+      confirmLabel: '가져오고 다시 시작',
+      confirmVariant: 'danger',
+    });
+    if (!ok) return;
+
+    setBusy(true);
+    try {
+      await window.nas4usb.backup.importPcSettings({
+        zipPath,
+        keepLocalPaths: choice === 'secondary',
+      });
+    } catch (error) {
+      void appAlert({
+        title: 'PC 설정 가져오기',
+        body: error instanceof Error ? error.message : '설정을 가져오지 못했습니다.',
+      });
+      setBusy(false);
+    }
+  };
+
   const runNow = async () => {
     if (!config.destPath) {
       void appAlert({ title: '백업 관리', body: '백업 폴더를 먼저 지정해 주세요.' });
@@ -158,6 +222,38 @@ export default function BackupSettingsPanel() {
           </button>
         </div>
       ) : null}
+
+      <section className="space-y-3">
+        <h3 className="text-sm font-semibold text-slate-800">PC 설정 (이사)</h3>
+        <p className="text-sm leading-relaxed text-slate-600">
+          다른 PC에 설치한 뒤 이 파일을 가져와 덮어쓰면 회원·폴더 설정·파일 레벨·즐겨찾기·공유
+          링크·허용 IP가 그대로 이어집니다. 문서(share/private)는 아래 백업으로 따로 옮기세요.
+        </p>
+        {!electron ? (
+          <p className="rounded-lg border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-500">
+            PC 설정 내보내기/가져오기는 서버가 실행 중인 PC의 NAS4USB 앱에서만 할 수 있습니다.
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              className={BUTTON_CLASS}
+              disabled={busy}
+              onClick={() => void exportPcSettings()}
+            >
+              설정 내보내기…
+            </button>
+            <button
+              type="button"
+              className={BUTTON_CLASS}
+              disabled={busy}
+              onClick={() => void importPcSettings()}
+            >
+              설정 가져오기…
+            </button>
+          </div>
+        )}
+      </section>
 
       <section className="space-y-3">
         <h3 className="text-sm font-semibold text-slate-800">백업 대상</h3>

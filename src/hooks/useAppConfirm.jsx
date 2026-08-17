@@ -20,7 +20,7 @@ export function useAppConfirm() {
   const [confirmConfig, setConfirmConfig] = useState(null);
   /** @type {[{ title?: string, body?: string | import('react').ReactNode, confirmLabel?: string, resolve: () => void } | null, Function]} */
   const [alertConfig, setAlertConfig] = useState(null);
-  /** @type {[{ title?: string, body?: string | import('react').ReactNode, primaryLabel?: string, secondaryLabel?: string, cancelLabel?: string, resolve: (value: 'primary' | 'secondary' | null) => void } | null, Function]} */
+  /** @type {[{ title?: string, body?: string | import('react').ReactNode, primaryLabel?: string, extraLabel?: string, secondaryLabel?: string, cancelLabel?: string, resolve: (value: 'primary' | 'extra' | 'secondary' | null) => void } | null, Function]} */
   const [choiceConfig, setChoiceConfig] = useState(null);
 
   const confirm = useCallback((options) => {
@@ -53,10 +53,11 @@ export function useAppConfirm() {
    *   title?: string,
    *   body?: string | import('react').ReactNode,
    *   primaryLabel?: string,
+   *   extraLabel?: string,
    *   secondaryLabel?: string,
    *   cancelLabel?: string,
    * }} options
-   * @returns {Promise<'primary' | 'secondary' | null>}
+   * @returns {Promise<'primary' | 'extra' | 'secondary' | null>}
    */
   const choose = useCallback((options) => {
     return new Promise((resolve) => {
@@ -64,6 +65,7 @@ export function useAppConfirm() {
         title: options.title ?? '선택',
         body: options.body ?? '',
         primaryLabel: options.primaryLabel ?? '확인',
+        extraLabel: options.extraLabel ?? '',
         secondaryLabel: options.secondaryLabel ?? '다른 방법',
         cancelLabel: options.cancelLabel ?? '취소',
         resolve,
@@ -116,9 +118,11 @@ export function useAppConfirm() {
         title={choiceConfig?.title}
         body={choiceConfig?.body}
         primaryLabel={choiceConfig?.primaryLabel}
+        extraLabel={choiceConfig?.extraLabel}
         secondaryLabel={choiceConfig?.secondaryLabel}
         cancelLabel={choiceConfig?.cancelLabel}
         onPrimary={() => closeChoice('primary')}
+        onExtra={() => closeChoice('extra')}
         onSecondary={() => closeChoice('secondary')}
         onCancel={() => closeChoice(null)}
       />

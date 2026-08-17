@@ -237,12 +237,13 @@ export default function Sidebar({
     });
   };
 
-  const handleUploadFiles = async (files, targetPath = dialogTargetPathRef.current) => {
+  const handleUploadFiles = async (files, targetPath = dialogTargetPathRef.current, meta) => {
     if (transfer) return;
     try {
       setTransfer({ kind: 'upload', current: 0, total: files.length, fileName: files[0]?.name });
       const uploaded = await uploadFilesAtPath(targetPath, files, {
         onProgress: reportTransferProgress('upload'),
+        emptyDirs: meta?.emptyDirs,
       });
       await tree.expandPath(targetPath);
       await notifyChange();
@@ -263,7 +264,7 @@ export default function Sidebar({
   };
 
   const { isFileDragOver, dropZoneProps } = useFileDropZone(
-    (files) => handleUploadFiles(files, currentPath),
+    (files, meta) => handleUploadFiles(files, currentPath, meta),
     { enabled: !isInTrashView && canWrite && !transfer },
   );
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Breadcrumb from './Breadcrumb.jsx';
 import {
   formatDataPath,
@@ -43,11 +43,18 @@ export default function MoveItemsDialog({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const browsePathRef = useRef(browsePath);
+  browsePathRef.current = browsePath;
+
+  const goTo = (folderPath) => {
+    browsePathRef.current = folderPath;
+    setBrowsePath(folderPath);
+  };
 
   useEffect(() => {
     if (!open) return undefined;
 
-    setBrowsePath(initialPath);
+    goTo(initialPath);
     setError('');
     setSubmitting(false);
     return undefined;
@@ -88,11 +95,12 @@ export default function MoveItemsDialog({
   const handleSubmit = async () => {
     if (!canMove) return;
 
+    const dest = browsePathRef.current;
     setSubmitting(true);
     setError('');
 
     try {
-      await onConfirm(browsePath);
+      await onConfirm(dest);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : '이동에 실패했습니다.');
@@ -121,12 +129,12 @@ export default function MoveItemsDialog({
           type="button"
           className="nas-btn-ghost"
           disabled={browsePath === '.' || submitting}
-          onClick={() => setBrowsePath(getParentPath(browsePath))}
+          onClick={() => goTo(getParentPath(browsePath))}
         >
           상위
         </button>
         <div className="min-w-0 flex-1">
-          <Breadcrumb currentPath={browsePath} onNavigate={setBrowsePath} />
+          <Breadcrumb currentPath={browsePath} onNavigate={goTo} />
         </div>
       </div>
 
@@ -150,7 +158,7 @@ export default function MoveItemsDialog({
                 disabled={blocked || submitting}
                 title={blocked ? '이동할 수 없는 폴더입니다' : folder.name}
                 className="flex w-full items-center gap-2 border-b border-[#edebe9] px-3 py-2 text-left text-[10pt] text-[#323130] transition-colors last:border-b-0 enabled:hover:bg-[#f3f2f1] disabled:cursor-not-allowed disabled:opacity-40"
-                onClick={() => setBrowsePath(folder.relativePath)}
+                onClick={() => goTo(folder.relativePath)}
               >
                 <svg className="h-4 w-4 shrink-0 text-amber-500" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                   <path d="M3 7a2 2 0 0 1 2-2h5l2 2h9a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />

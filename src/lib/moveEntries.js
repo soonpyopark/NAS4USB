@@ -1,6 +1,7 @@
 import { getParentPath, joinRelativePath, resolveUniqueName } from './fsPaths.js';
 import { sortEntriesByFolderOrder } from './folderOrder.js';
 import { filterTiptapAssetSidecarFromEntries } from '../../shared/tiptapAssetPaths.js';
+import { isHomesContainerPath, isMemberHomeRootPath } from '../../shared/memberHomes.js';
 import { isTrashPath, TRASH_FOLDER } from './trashPaths.js';
 
 /**
@@ -75,6 +76,17 @@ export function isBlockedMoveFolder(folderPath, entries) {
 }
 
 /**
+ * 개인폴더 화면 경로는 `개인폴더`이지만 실제 부모는 `개인폴더/<id>` 이다.
+ * @param {import('../types/nas4usb.d.ts').FsEntry} entry
+ * @param {string} destinationPath
+ */
+export function isAlreadyInDestination(entry, destinationPath) {
+  const parent = getParentPath(entry.relativePath);
+  if (parent === destinationPath) return true;
+  return isHomesContainerPath(destinationPath) && isMemberHomeRootPath(parent);
+}
+
+/**
  * @param {import('../types/nas4usb.d.ts').FsEntry[]} entries
  * @param {string} destinationPath
  * @returns {Promise<Array<{ from: string, to: string, entry: import('../types/nas4usb.d.ts').FsEntry }>>}
@@ -91,17 +103,20 @@ export async function moveEntries(entries, destinationPath) {
   const results = [];
 
   for (const entry of entries) {
-    const parent = getParentPath(entry.relativePath);
     const uniqueName = resolveUniqueName(names, entry.name, entry.isDirectory);
     const destination = joinRelativePath(destinationPath, uniqueName);
 
-    if (parent === destinationPath && uniqueName === entry.name) {
+    if (isAlreadyInDestination(entry, destinationPath) && uniqueName === entry.name) {
       continue;
     }
 
     names.add(uniqueName);
     await window.nas4usb.fs.move(entry.relativePath, destination);
     results.push({ from: entry.relativePath, to: destination, entry });
+  }
+
+  if (results.length === 0) {
+    throw new Error('이미 이 폴더에 있는 항목입니다. 다른 폴더를 선택해 주세요.');
   }
 
   return results;
