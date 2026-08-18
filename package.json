@@ -1,6 +1,6 @@
 {
   "name": "nas4usb",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Offline LAN NAS & real-time collaborative HWPX editor",
   "main": "main.js",
   "type": "module",

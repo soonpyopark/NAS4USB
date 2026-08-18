@@ -6,7 +6,7 @@ components that NAS4USB uses or ships with. Each component remains under its
 own license.
 
 Versions below reflect the dependency tree at the time this file was last
-updated (NAS4USB **1.0.6**). Exact resolved versions are in `package-lock.json`.
+updated (NAS4USB **1.0.7**). Exact resolved versions are in `package-lock.json`.
 
 ---
 
