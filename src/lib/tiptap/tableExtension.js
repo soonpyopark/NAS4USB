@@ -1,5 +1,18 @@
 import { Table, TableCell, TableHeader, TableRow } from '@tiptap/extension-table';
 import { columnResizing, tableEditing } from '@tiptap/pm/tables';
+import { createFullWidthResizePlugin } from './tableFullWidthResize.js';
+
+function parseTableFullWidth(element) {
+  const table =
+    element instanceof HTMLElement && element.tagName === 'TABLE'
+      ? element
+      : element instanceof HTMLElement
+        ? element.querySelector('table')
+        : null;
+  const target = table || element;
+  if (!(target instanceof HTMLElement)) return false;
+  return target.getAttribute('data-full-width') === 'true';
+}
 
 /**
  * OneNote uses `background: rgb(...)` shorthand; some DOMs leave
@@ -69,6 +82,17 @@ export const TiptapTableRow = TableRow;
  * bootstrap would permanently lose resize handles after setEditable(true).
  */
 export const TiptapTable = Table.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      fullWidth: {
+        default: false,
+        parseHTML: parseTableFullWidth,
+        renderHTML: (attributes) =>
+          attributes.fullWidth ? { 'data-full-width': 'true' } : {},
+      },
+    };
+  },
   addProseMirrorPlugins() {
     const isResizable = this.options.resizable;
     return [
@@ -81,6 +105,7 @@ export const TiptapTable = Table.extend({
               View: this.options.View,
               lastColumnResizable: this.options.lastColumnResizable,
             }),
+            createFullWidthResizePlugin(this.options.cellMinWidth),
           ]
         : []),
       tableEditing({

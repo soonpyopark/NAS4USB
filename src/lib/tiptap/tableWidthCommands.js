@@ -1,4 +1,4 @@
-const CELL_MIN_WIDTH = 80;
+export const CELL_MIN_WIDTH = 80;
 
 /**
  * @param {import('@tiptap/pm/state').EditorState} state
@@ -80,7 +80,7 @@ export function equalColumnWidths(count, target, min = CELL_MIN_WIDTH) {
  * @param {number} colCount
  * @param {number} [fallback]
  */
-function readColumnWidths(table, colCount, fallback = CELL_MIN_WIDTH) {
+export function readColumnWidths(table, colCount, fallback = CELL_MIN_WIDTH) {
   /** @type {Array<number | null>} */
   const widths = Array.from({ length: colCount }, () => null);
   const firstRow = table.firstChild;
@@ -118,18 +118,47 @@ function measureWrapperWidth(editor, tablePos) {
 }
 
 /**
- * @param {import('@tiptap/core').Editor} editor
+ * Move width between a dragged column and its neighbor so the table sum stays
+ * the same (Word-style 100% tables). Last column uses the previous neighbor.
  * @param {number[]} widths
+ * @param {number} col
+ * @param {number} nextWidth
+ * @param {number} [min]
  */
-function applyColumnWidths(editor, widths) {
-  const found = findTableNearSelection(editor.state);
-  if (!found || widths.length === 0) return false;
+export function redistributeFullWidthColumns(widths, col, nextWidth, min = CELL_MIN_WIDTH) {
+  const next = widths.slice();
+  if (col < 0 || col >= next.length) return next;
+  const neighbor = col < next.length - 1 ? col + 1 : col > 0 ? col - 1 : -1;
+  const desired = Math.max(min, Math.round(nextWidth));
+  if (neighbor < 0) {
+    next[col] = desired;
+    return next;
+  }
+  const delta = desired - next[col];
+  const neighborNext = next[neighbor] - delta;
+  if (neighborNext < min) {
+    next[col] = Math.max(min, next[col] + (next[neighbor] - min));
+    next[neighbor] = min;
+    return next;
+  }
+  next[col] = desired;
+  next[neighbor] = neighborNext;
+  return next;
+}
 
-  const { tr } = editor.state;
+/**
+ * @param {import('@tiptap/pm/state').Transaction} tr
+ * @param {number} tablePos
+ * @param {import('@tiptap/pm/model').Node} table
+ * @param {number[]} widths
+ * @param {{ fullWidth?: boolean }} [options]
+ */
+export function writeTableColumnWidths(tr, tablePos, table, widths, options) {
+  if (!table || widths.length === 0) return false;
   let changed = false;
 
-  found.node.forEach((row, rowOffset) => {
-    const rowPos = found.pos + 1 + rowOffset;
+  table.forEach((row, rowOffset) => {
+    const rowPos = tablePos + 1 + rowOffset;
     let col = 0;
     row.forEach((cell, cellOffset) => {
       const span = Math.max(1, Number(cell.attrs.colspan) || 1);
@@ -151,6 +180,41 @@ function applyColumnWidths(editor, widths) {
     });
   });
 
+  if (options?.fullWidth && !table.attrs.fullWidth) {
+    tr.setNodeMarkup(tablePos, undefined, { ...table.attrs, fullWidth: true });
+    changed = true;
+  }
+
+  return changed;
+}
+
+/**
+ * @param {number[]} left
+ * @param {number[]} right
+ */
+export function singleChangedColumnIndex(left, right) {
+  if (left.length !== right.length) return -1;
+  let changed = -1;
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) {
+      if (changed !== -1) return -1;
+      changed = index;
+    }
+  }
+  return changed;
+}
+
+/**
+ * @param {import('@tiptap/core').Editor} editor
+ * @param {number[]} widths
+ * @param {{ fullWidth?: boolean }} [options]
+ */
+function applyColumnWidths(editor, widths, options) {
+  const found = findTableNearSelection(editor.state);
+  if (!found || widths.length === 0) return false;
+
+  const { tr } = editor.state;
+  const changed = writeTableColumnWidths(tr, found.pos, found.node, widths, options);
   if (!changed) return true;
   editor.view.dispatch(tr);
   return true;
@@ -167,7 +231,7 @@ export function fitTableToFullWidth(editor) {
   if (colCount <= 0) return false;
   const current = readColumnWidths(found.node, colCount);
   const target = measureWrapperWidth(editor, found.pos);
-  return applyColumnWidths(editor, scaleColumnWidths(current, target));
+  return applyColumnWidths(editor, scaleColumnWidths(current, target), { fullWidth: true });
 }
 
 /**
