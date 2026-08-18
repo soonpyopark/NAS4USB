@@ -1,5 +1,6 @@
 import TipTapColorSwatchPicker from './TipTapColorSwatchPicker.jsx';
 import { TIPTAP_CELL_BG_COLORS } from '../../../lib/tiptap/colorPalettes.js';
+import { equalizeTableColumns, fitTableToFullWidth } from '../../../lib/tiptap/tableWidthCommands.js';
 import {
   IconAlignCenter,
   IconAlignLeft,
@@ -9,6 +10,7 @@ import {
   IconColAfter,
   IconColBefore,
   IconColDelete,
+  IconEqualColumns,
   IconFixTable,
   IconHeaderCell,
   IconHeaderCol,
@@ -20,6 +22,7 @@ import {
   IconRowDelete,
   IconSplitCell,
   IconTable,
+  IconTableFullWidth,
   IconTrash,
 } from './TipTapIcons.jsx';
 
@@ -186,6 +189,26 @@ export default function TipTapTableControls({ editor, disabled = false }) {
       </ToolbarGroup>
 
       <ToolbarGroup>
+        <ToolbarButton
+          title="표 너비 100%"
+          disabled={disabled}
+          onClick={() => {
+            editor.chain().focus().run();
+            fitTableToFullWidth(editor);
+          }}
+        >
+          <IconTableFullWidth />
+        </ToolbarButton>
+        <ToolbarButton
+          title="열 너비 균등"
+          disabled={disabled}
+          onClick={() => {
+            editor.chain().focus().run();
+            equalizeTableColumns(editor);
+          }}
+        >
+          <IconEqualColumns />
+        </ToolbarButton>
         <ToolbarButton
           title="다음 셀 (Tab)"
           disabled={disabled || !editor.can().goToNextCell()}

@@ -1,8 +1,9 @@
 # Third-Party Notices
 
-NAS4USB itself is licensed under the **MIT License**
-(see [`LICENSE`](LICENSE)). This document lists open-source components that
-NAS4USB uses or ships with. Each component remains under its own license.
+NAS4USB itself is licensed under the **GNU Affero General Public License v3.0**
+(AGPL-3.0-only; see [`LICENSE`](LICENSE)). This document lists open-source
+components that NAS4USB uses or ships with. Each component remains under its
+own license.
 
 Versions below reflect the dependency tree at the time this file was last
 updated (NAS4USB **1.0.6**). Exact resolved versions are in `package-lock.json`.
@@ -128,8 +129,8 @@ but used by the app):
 
 ## Notices
 
-- MIT applies to **NAS4USB first-party source** (application code in this
-  repository). It does **not** relicense third-party components.
+- AGPL-3.0-only applies to **NAS4USB first-party source** (application code in
+  this repository). It does **not** relicense third-party components.
 - When you distribute binaries, keep `LICENSE`, this file, and (for Electron
   builds) `LICENSE.electron.txt` / `LICENSES.chromium.html` available to users.
 - When shipping HWPX export tools, also keep Pandoc’s GPL terms and the

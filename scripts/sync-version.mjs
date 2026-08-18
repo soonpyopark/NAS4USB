@@ -148,7 +148,7 @@ function syncMsiLicenseRtf(version) {
     `${APP_NAME} v${version}`,
     'Offline LAN NAS & real-time collaborative editor',
     'Copyright (C) 2026 Daniel Park',
-    'MIT License',
+    'GNU Affero General Public License v3.0 (AGPL-3.0-only)',
     'Full license text: LICENSE in the product / source repository',
     'Third-party notices: THIRD_PARTY_NOTICES.md',
     'https://github.com/soonpyopark/NAS4USB',

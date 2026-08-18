@@ -36,7 +36,7 @@
     "hwpx"
   ],
   "author": "Daniel Park",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.4",
     "@xmldom/xmldom": "^0.9.10",

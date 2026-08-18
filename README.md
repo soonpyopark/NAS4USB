@@ -243,7 +243,7 @@ NAS4USB/
 │   └── private/            개인폴더 디스크명
 ├── tools/hwpx-export/      TipTap·MD → HWPX (Pandoc + pypandoc-hwpx)
 ├── build/                  앱 아이콘 (prepare:icons)
-├── LICENSE                 MIT (+ Third-Party Components)
+├── LICENSE                 AGPL-3.0-only (+ Third-Party Components)
 ├── THIRD_PARTY_NOTICES.md  사용 오픈소스 고지
 ├── msi/                    MSI·portable zip 산출
 └── exe/                    build:dist:exe 출력
@@ -273,12 +273,12 @@ HWPX 내보내기 준비: `npm run prepare:hwpx-export` (자세한 내용 [`tool
 
 ## 라이선스
 
-이 프로젝트(NAS4USB)는 **[MIT License](LICENSE)**입니다.
+이 프로젝트(NAS4USB)는 **[GNU Affero General Public License v3.0](LICENSE)** (AGPL-3.0-only)입니다.
 
 - 전체 전문: [`LICENSE`](LICENSE)
 - 사용·번들하는 오픈소스 고지: [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)
 
-Electron/Chromium 및 npm 패키지 등 서드파티는 각 라이선스를 따르며, MIT이 해당 컴포넌트를 재라이선스하지 않습니다.
+Electron/Chromium 및 npm 패키지 등 서드파티는 각 라이선스를 따르며, AGPL-3.0이 해당 컴포넌트를 재라이선스하지 않습니다.
 
 주요 서드파티(요약):
 

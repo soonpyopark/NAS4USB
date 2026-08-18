@@ -563,6 +563,32 @@ export function IconCellPrev() {
   );
 }
 
+export function IconTableFullWidth() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="5.5" y="6" width="13" height="12" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M9.5 6v12M14.5 6v12" stroke="currentColor" strokeWidth="1.6" />
+      <path
+        d="M3 12H1m22 0h-2M3 12l2-2M3 12l2 2M21 12l-2-2M21 12l-2 2"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+export function IconEqualColumns() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="3.5" y="5.5" width="17" height="13" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M9.5 5.5v13M14.5 5.5v13" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M6.2 12h2.6M11.2 12h1.6M15.2 12h2.6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export function IconFixTable() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">

@@ -35,6 +35,7 @@ export const TIPTAP_TEXT_COLORS = [
   { label: '파랑', value: '#2563eb' },
 
   { label: '인디고', value: '#4f46e5' },
+  { label: '남색', value: '#1e4e79' },
   { label: '보라', value: '#7c3aed' },
   { label: '진한 보라', value: '#6d28d9' },
   { label: '자홍', value: '#c026d3' },

@@ -27,6 +27,7 @@ export default function TipTapColorSwatchPicker({
   const [hexDraft, setHexDraft] = useState('');
   const rootRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   const customInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
+  const hexInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   const pickingRef = useRef(false);
   const listId = useId();
 
@@ -41,6 +42,7 @@ export default function TipTapColorSwatchPicker({
 
   useEffect(() => {
     if (!open) return undefined;
+    if (document.activeElement === hexInputRef.current) return undefined;
     setHexDraft(normalizeHexColor(value) || '');
   }, [open, value]);
 
@@ -178,6 +180,7 @@ export default function TipTapColorSwatchPicker({
               <label className="tiptap-swatch__hex-row">
                 <span>HEX</span>
                 <input
+                  ref={hexInputRef}
                   type="text"
                   spellCheck={false}
                   autoCapitalize="off"
@@ -188,12 +191,28 @@ export default function TipTapColorSwatchPicker({
                   placeholder="#RRGGBB"
                   aria-label={`${title} HEX`}
                   onChange={(event) => {
-                    const next = event.target.value.replace(/[^#0-9a-fA-F]/g, '').slice(0, 7);
+                    const next = sanitizeHexDraft(event.target.value);
                     setHexDraft(next);
-                    const normalized = normalizeHexColor(next);
-                    if (normalized) onChange(normalized);
+                    const complete = parseHexColor(next, { allowShort: false });
+                    if (complete) onChange(complete);
                   }}
-                  onKeyDown={(event) => event.stopPropagation()}
+                  onBlur={() => {
+                    const committed = parseHexColor(hexDraft, { allowShort: true });
+                    if (committed) {
+                      setHexDraft(committed);
+                      if (committed !== value) onChange(committed);
+                    }
+                  }}
+                  onKeyDown={(event) => {
+                    event.stopPropagation();
+                    if (event.key !== 'Enter') return;
+                    event.preventDefault();
+                    const committed = parseHexColor(hexDraft, { allowShort: true });
+                    if (committed) {
+                      setHexDraft(committed);
+                      if (committed !== value) onChange(committed);
+                    }
+                  }}
                 />
               </label>
             </>
@@ -207,14 +226,30 @@ export default function TipTapColorSwatchPicker({
 }
 
 /** @param {string} value */
-function normalizeHexColor(value) {
+function sanitizeHexDraft(value) {
+  const raw = String(value ?? '');
+  const hash = raw.includes('#') ? '#' : '';
+  const digits = raw.replace(/[^0-9a-fA-F]/g, '').slice(0, 6);
+  return `${hash}${digits}`.slice(0, 7);
+}
+
+/**
+ * @param {string} value
+ * @param {{ allowShort?: boolean }} [options]
+ */
+function parseHexColor(value, options = {}) {
   if (!value || typeof value !== 'string') return '';
   let trimmed = value.trim();
   if (!trimmed.startsWith('#')) trimmed = `#${trimmed}`;
   if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) return trimmed;
-  if (/^#[0-9a-fA-F]{3}$/.test(trimmed)) {
+  if (options.allowShort && /^#[0-9a-fA-F]{3}$/.test(trimmed)) {
     const [, r, g, b] = trimmed;
     return `#${r}${r}${g}${g}${b}${b}`;
   }
   return '';
+}
+
+/** @param {string} value */
+function normalizeHexColor(value) {
+  return parseHexColor(value, { allowShort: true });
 }
