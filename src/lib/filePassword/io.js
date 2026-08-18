@@ -70,11 +70,18 @@ export async function lockFileWithPassword(relativePath, password) {
 
   const encrypted = await encryptSecBase64(plain, password);
   const dest = await uniqueDest(toSecPath(relativePath));
-  await window.nas4usb.fs.writeFile(dest, encrypted);
+  // Rename in place so folder order, indent, favorites, and access follow
+  // the file. Write+delete treated it as a new item at the bottom.
+  await window.nas4usb.fs.rename(relativePath, dest);
   try {
-    await window.nas4usb.fs.delete(relativePath);
-  } catch {
-    // original may already be gone
+    await window.nas4usb.fs.writeFile(dest, encrypted);
+  } catch (err) {
+    try {
+      await window.nas4usb.fs.rename(dest, relativePath);
+    } catch {
+      // leave the renamed file so it is not lost
+    }
+    throw err;
   }
   rememberFilePassword(dest, password);
   return dest;
@@ -91,7 +98,17 @@ export async function unlockFileWithPassword(relativePath, password) {
   const packed = await window.nas4usb.fs.readFile(relativePath);
   const plain = await decryptSecBase64(packed, password);
   const dest = await uniqueDest(stripSecSuffix(relativePath));
-  await window.nas4usb.fs.writeFile(dest, plain);
+  await window.nas4usb.fs.rename(relativePath, dest);
+  try {
+    await window.nas4usb.fs.writeFile(dest, plain);
+  } catch (err) {
+    try {
+      await window.nas4usb.fs.rename(dest, relativePath);
+    } catch {
+      // leave the renamed file so it is not lost
+    }
+    throw err;
+  }
   if (isTiptapDocumentRelativePath(dest) || isTiptapDocumentRelativePath(relativePath)) {
     try {
       const { extractTiptapPackageAssetsToSidecar } = await import('../tiptap/package.js');
@@ -99,11 +116,6 @@ export async function unlockFileWithPassword(relativePath, password) {
     } catch {
       // sidecar may already exist from lock; editor open will retry
     }
-  }
-  try {
-    await window.nas4usb.fs.delete(relativePath);
-  } catch {
-    // ignore
   }
   return dest;
 }

@@ -50,6 +50,7 @@ import {
   folderOrderKindByName,
   folderOrderKey,
   folderOrderNamesAfterRename,
+  folderOrderNamesAfterRenames,
   materializeFolderOrder,
   moveFolderOrderName,
   placeFolderOrderNames,
@@ -1098,11 +1099,50 @@ export default function FileExplorer({
     const targets = entry ? getTargetEntries(entry) : selectedEntries;
     const files = targets.filter((item) => !item.isDirectory);
     if (!files.length) return;
-    if (files.every(canRemoveFilePassword)) {
-      await removePasswordFromEntries(files);
-    } else {
-      await setPasswordOnEntries(files.filter(canSetFilePassword));
+
+    const canKeepPlace =
+      !isInTrashView &&
+      (isInFavoritesView
+        ? isAdminLoggedIn
+        : canChangeFolderOrder(currentPath, { isSuperAdmin, loginId: adminId }));
+    const sortedAll = sortEntries(entries, listSort.field, listSort.direction, currentOrderNames, {
+      pinWorkspaceRoots: !isInFavoritesView,
+    });
+
+    const results = files.every(canRemoveFilePassword)
+      ? await removePasswordFromEntries(files)
+      : await setPasswordOnEntries(files.filter(canSetFilePassword));
+
+    if (canKeepPlace && results.length) {
+      try {
+        const pairs = results.map(({ from, to }) => ({
+          fromKey: isInFavoritesView ? from : from.split('/').pop() || from,
+          toKey: isInFavoritesView ? to : to.split('/').pop() || to,
+        }));
+        const nextOrder = folderOrderNamesAfterRenames(
+          sortedAll,
+          pairs,
+          orderKeyOf,
+          orderOptions,
+        );
+        if (isInFavoritesView) {
+          const toKeys = new Set(pairs.map((pair) => pair.toKey));
+          const sameKind = nextOrder.filter((key) => {
+            if (toKeys.has(key)) return true;
+            return entries.some((item) => item.relativePath === key && !item.isDirectory);
+          });
+          await setFavoriteOrder('file', sameKind);
+        } else {
+          await setFolderOrder(orderParentPath, nextOrder);
+        }
+        if (listSort.field !== 'custom') {
+          setListSort(DEFAULT_CUSTOM_LIST_SORT);
+        }
+      } catch {
+        // Password already applied; keep the file even if order persist fails.
+      }
     }
+
     await refreshAll();
   };
 

@@ -48,6 +48,7 @@ import {
 } from '../../lib/fsPaths.js';
 import {
   folderOrderNamesAfterRename,
+  folderOrderNamesAfterRenames,
   sortEntriesByFolderOrder,
 } from '../../lib/folderOrder.js';
 import { canChangeFolderOrder, resolveFolderOrderParent } from '../../../shared/folderOrder.js';
@@ -728,11 +729,45 @@ export default function Sidebar({
 
   const handleSetPassword = async (entry) => {
     if (!entry || entry.isDirectory) return;
-    if (canRemoveFilePassword(entry)) {
-      await removePasswordFromEntries([entry]);
-    } else if (canSetFilePassword(entry)) {
-      await setPasswordOnEntries([entry]);
+    const parent = getParentPath(entry.relativePath);
+    const canKeepPlace =
+      !isTrashPath(parent) &&
+      !isFavoritesPath(parent) &&
+      canChangeFolderOrder(parent, { isSuperAdmin, loginId: adminId });
+
+    let siblings = null;
+    let orderParent = null;
+    if (canKeepPlace) {
+      const raw = await window.nas4usb.fs.readDir(parent === '.' ? '' : parent);
+      siblings = filterPdfViewerSidecarFromEntries(
+        filterFortuneSidecarFromEntries(
+          filterTiptapAssetSidecarFromEntries(filterTrashFromEntries(raw, parent)),
+        ),
+      );
+      orderParent = resolveFolderOrderParent(parent, adminId, siblings[0]?.relativePath);
     }
+
+    const results = canRemoveFilePassword(entry)
+      ? await removePasswordFromEntries([entry])
+      : canSetFilePassword(entry)
+        ? await setPasswordOnEntries([entry])
+        : [];
+
+    if (canKeepPlace && siblings && orderParent && results[0]) {
+      try {
+        const sorted = sortEntriesByFolderOrder(siblings, parent, folderOrderMap, adminId);
+        const nextOrder = folderOrderNamesAfterRenames(sorted, [
+          {
+            fromKey: results[0].from.split('/').pop() || results[0].from,
+            toKey: results[0].to.split('/').pop() || results[0].to,
+          },
+        ]);
+        await setFolderOrder(orderParent, nextOrder);
+      } catch {
+        // Password already applied; keep the file even if order persist fails.
+      }
+    }
+
     notifyChange();
   };
 

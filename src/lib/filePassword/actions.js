@@ -36,6 +36,7 @@ export async function verifySecPassword(entry) {
 
 /**
  * @param {Array<{ relativePath: string, name?: string, isDirectory?: boolean }>} entries
+ * @returns {Promise<Array<{ from: string, to: string }>>}
  */
 export async function setPasswordOnEntries(entries) {
   const targets = entries.filter(canSetFilePassword);
@@ -53,11 +54,13 @@ export async function setPasswordOnEntries(entries) {
   });
   if (!password) return [];
 
+  /** @type {Array<{ from: string, to: string }>} */
   const locked = [];
   const errors = [];
   for (const entry of targets) {
     try {
-      locked.push(await lockFileWithPassword(entry.relativePath, password));
+      const to = await lockFileWithPassword(entry.relativePath, password);
+      locked.push({ from: entry.relativePath, to });
     } catch (err) {
       errors.push(`${entry.name || entry.relativePath}: ${err instanceof Error ? err.message : err}`);
     }
@@ -73,6 +76,7 @@ export async function setPasswordOnEntries(entries) {
 
 /**
  * @param {Array<{ relativePath: string, name?: string, isDirectory?: boolean }>} entries
+ * @returns {Promise<Array<{ from: string, to: string }>>}
  */
 export async function removePasswordFromEntries(entries) {
   const targets = entries.filter(canRemoveFilePassword);
@@ -80,6 +84,7 @@ export async function removePasswordFromEntries(entries) {
     await showAppAlert({ title: '비밀번호 해제', body: '비밀번호가 설정된 파일을 선택해 주세요.' });
     return [];
   }
+  /** @type {Array<{ from: string, to: string }>} */
   const unlocked = [];
   const errors = [];
   for (const entry of targets) {
@@ -89,7 +94,8 @@ export async function removePasswordFromEntries(entries) {
         fileName: entry.name || entry.relativePath.split('/').pop(),
       });
       if (!password) continue;
-      unlocked.push(await unlockFileWithPassword(entry.relativePath, password));
+      const to = await unlockFileWithPassword(entry.relativePath, password);
+      unlocked.push({ from: entry.relativePath, to });
     } catch (err) {
       errors.push(`${entry.name || entry.relativePath}: ${err instanceof Error ? err.message : err}`);
     }

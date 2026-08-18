@@ -89,13 +89,33 @@ export function folderOrderNamesAfterRename(
   getKey = folderOrderKey,
   options,
 ) {
-  const snapshot = materializeFolderOrder(
+  return folderOrderNamesAfterRenames(entries, [{ fromKey, toKey }], getKey, options);
+}
+
+/**
+ * Same as `folderOrderNamesAfterRename` for several name/path changes
+ * (password lock/unlock adds or strips `.sec`).
+ * @param {import('../types/nas4usb.d.ts').FsEntry[]} entries
+ * @param {Array<{ fromKey: string, toKey: string }>} renames
+ * @param {(entry: import('../types/nas4usb.d.ts').FsEntry) => string} [getKey]
+ * @param {FolderOrderOptions} [options]
+ */
+export function folderOrderNamesAfterRenames(
+  entries,
+  renames,
+  getKey = folderOrderKey,
+  options,
+) {
+  let next = materializeFolderOrder(
     entries,
     (entries || []).map((entry) => getKey(entry)),
     getKey,
     options,
   );
-  return renameFolderOrderKey(snapshot, fromKey, toKey);
+  for (const rename of renames || []) {
+    next = renameFolderOrderKey(next, rename.fromKey, rename.toKey);
+  }
+  return next;
 }
 
 /**
