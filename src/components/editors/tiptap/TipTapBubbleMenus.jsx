@@ -1,4 +1,5 @@
 import { BubbleMenu } from '@tiptap/react/menus';
+import { CellSelection } from '@tiptap/pm/tables';
 import { useTiptapEditorTick } from '../../../hooks/useTiptapEditorTick.js';
 import {
   TIPTAP_HIGHLIGHT_COLORS,
@@ -16,9 +17,8 @@ import {
 } from './TipTapIcons.jsx';
 
 /**
- * Text-selection bubble only (tiptap.dev style).
- * Table / empty-line floating bubbles are intentionally omitted —
- * table tools live in the toolbar; block insert uses "/" and the "+" handle.
+ * Text-selection bubble (including text inside a table cell).
+ * Hidden for CellSelection (grid), code, and media.
  *
  * @param {{
  *   editor: import('@tiptap/core').Editor,
@@ -60,8 +60,8 @@ export default function TipTapBubbleMenus({ editor, readOnly = false, onEditLink
         const { selection } = state;
         if (!current.isEditable) return false;
         if (selection.empty) return false;
+        if (selection instanceof CellSelection) return false;
         if (current.isActive('codeBlock')) return false;
-        if (current.isActive('table')) return false;
         if (current.isActive('image')) return false;
         if (current.isActive('video')) return false;
         if (current.isActive('audio')) return false;

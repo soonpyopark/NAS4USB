@@ -18,6 +18,7 @@ import { useShareLinks } from '../../hooks/useShareLinks.js';
 import { useFileAccess } from '../../hooks/useFileAccess.js';
 import { useFavorites } from '../../hooks/useFavorites.js';
 import { useFolderColors } from '../../hooks/useFolderColors.js';
+import { useFolderOrder } from '../../hooks/useFolderOrder.js';
 import { useTrash } from '../../hooks/useTrash.js';
 import { useFileDropZone } from '../../hooks/useFileDropZone.js';
 import { useAdminAuthContext } from '../../context/AdminAuthContext.jsx';
@@ -45,6 +46,13 @@ import {
   joinRelativePath,
   resolveUniqueName,
 } from '../../lib/fsPaths.js';
+import {
+  folderOrderNamesAfterRename,
+  sortEntriesByFolderOrder,
+} from '../../lib/folderOrder.js';
+import { canChangeFolderOrder, resolveFolderOrderParent } from '../../../shared/folderOrder.js';
+import { filterFortuneSidecarFromEntries } from '../../../shared/fortuneSheetSidecar.js';
+import { filterPdfViewerSidecarFromEntries } from '../../../shared/pdfViewerSidecar.js';
 import { resolveFileEntryStatus } from '../../lib/fileEntryStatus.js';
 import { canOpenFileForEdit, VIEW_OPEN_DENIED_MESSAGE, GUEST_READ_DENIED_MESSAGE } from '../../lib/fileEditAccess.js';
 import { useGuestPermissions } from '../../hooks/useGuestPermissions.js';
@@ -57,7 +65,7 @@ import {
 } from '../../lib/filePassword/actions.js';
 import { moveEntries } from '../../lib/moveEntries.js';
 import { TRASH_ACCESS_DENIED_MESSAGE } from '../../../shared/constants.js';
-import { isTrashPath, isTrashSubfolder, SHARED_FOLDER, TRASH_FOLDER } from '../../lib/trashPaths.js';
+import { filterTrashFromEntries, isTrashPath, isTrashSubfolder, SHARED_FOLDER, TRASH_FOLDER } from '../../lib/trashPaths.js';
 import {
   FAVORITES_FILES_FOLDER,
   FAVORITES_FOLDERS_FOLDER,
@@ -78,7 +86,7 @@ import {
   EXTERNAL_MOUNT_DELETE_HINT,
   isExternalContentPath,
 } from '../../lib/externalFoldersUi.js';
-import { isTiptapDocumentRelativePath } from '../../../shared/tiptapAssetPaths.js';
+import { filterTiptapAssetSidecarFromEntries, isTiptapDocumentRelativePath } from '../../../shared/tiptapAssetPaths.js';
 import { guardOpenFileEntry } from '../../lib/openFileGuard.js';
 import { nativeAlert } from '../../lib/nativeDialog.js';
 import {
@@ -116,7 +124,8 @@ export default function Sidebar({
   } = useFavorites();
   const { folderColorMap, nameBoldMap, refreshFolderColorMap, setFolderColor, setNameBold } =
     useFolderColors();
-  const { isAdminLoggedIn, adminId } = useAdminAuthContext();
+  const { folderOrderMap, refreshFolderOrderMap, setFolderOrder } = useFolderOrder();
+  const { isAdminLoggedIn, adminId, isSuperAdmin } = useAdminAuthContext();
   const { openLogin } = useLoginDialog();
   const { effectivePermissions } = useGuestPermissions();
   const globalWrite = Boolean(effectivePermissions.write);
@@ -158,6 +167,7 @@ export default function Sidebar({
     await refreshAccessMap();
     await refreshFavoritesMap();
     await refreshFolderColorMap();
+    await refreshFolderOrderMap();
     await refreshTrash();
   };
 
@@ -365,7 +375,35 @@ export default function Sidebar({
       throw new Error('같은 이름의 항목이 이미 있습니다.');
     }
 
+    const canKeepPlace =
+      !isTrashPath(parent) &&
+      !isFavoritesPath(parent) &&
+      canChangeFolderOrder(parent, { isSuperAdmin, loginId: adminId });
+
+    let nextOrder = null;
+    let orderParent = null;
+    if (canKeepPlace) {
+      const raw = await window.nas4usb.fs.readDir(parent);
+      const siblings = filterPdfViewerSidecarFromEntries(
+        filterFortuneSidecarFromEntries(
+          filterTiptapAssetSidecarFromEntries(filterTrashFromEntries(raw, parent)),
+        ),
+      );
+      orderParent = resolveFolderOrderParent(parent, adminId, siblings[0]?.relativePath);
+      const sorted = sortEntriesByFolderOrder(siblings, parent, folderOrderMap, adminId);
+      nextOrder = folderOrderNamesAfterRename(sorted, target.name, nextName);
+    }
+
     await fs.rename(target.relativePath, normalized);
+
+    if (canKeepPlace && nextOrder && orderParent) {
+      try {
+        await setFolderOrder(orderParent, nextOrder);
+      } catch {
+        // Rename already succeeded; keep the new name even if order persist fails.
+      }
+    }
+
     setRenameEntry(null);
     await notifyChange();
 

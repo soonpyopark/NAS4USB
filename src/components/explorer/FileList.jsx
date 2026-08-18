@@ -13,6 +13,38 @@ import { FILE_INDENT_STEP_PX } from '../../../shared/fileIndent.js';
 const COLLAPSE_SLOT_CLASS = 'inline-flex h-8 w-8 min-w-8 shrink-0 items-center justify-center';
 
 const REORDER_MIME = 'application/x-nas4usb-reorder';
+const DRAG_SCROLL_MIN_PX = 6;
+const DRAG_SCROLL_MAX_PX = 22;
+const DRAG_SCROLL_ABOVE_PX = 36;
+
+/**
+ * Sticky thead occupies the scrollport's top edge, so Chromium's native
+ * HTML5 drag autoscroll only fires at the bottom. Scroll up while the
+ * pointer sits on (or just above) the header band.
+ * @param {number} clientY
+ * @param {HTMLElement | null} scroller
+ */
+function dragAutoScrollDelta(clientY, scroller) {
+  if (!scroller) return 0;
+  const rect = scroller.getBoundingClientRect();
+  if (rect.height <= 0) return 0;
+  const header = scroller.querySelector('thead');
+  const headerH = header instanceof HTMLElement ? header.getBoundingClientRect().height : 0;
+  const topEdge = Math.max(48, headerH + 12);
+  if (clientY < rect.top - DRAG_SCROLL_ABOVE_PX || clientY > rect.bottom) return 0;
+  const topDist = clientY - rect.top;
+  if (topDist >= topEdge) return 0;
+  const intensity = 1 - Math.max(0, topDist) / topEdge;
+  return -Math.max(DRAG_SCROLL_MIN_PX, Math.round(DRAG_SCROLL_MAX_PX * intensity));
+}
+
+/**
+ * @param {number} clientX
+ * @param {DOMRect} rect
+ */
+function isDragPointerOverListX(clientX, rect) {
+  return clientX >= rect.left - 16 && clientX <= rect.right + 16;
+}
 
 function isExternalFileDrag(event) {
   const types = event.dataTransfer?.types;
@@ -340,7 +372,10 @@ export default function FileList({
   onToggleLevels,
 }) {
   const selectAllRef = useRef(null);
+  const listScrollRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   const dragPathRef = useRef(/** @type {string | null} */ (null));
+  const dragPointerRef = useRef(/** @type {{ x: number, y: number } | null} */ (null));
+  const dragScrollRafRef = useRef(0);
   const listClicksRef = useRef(/** @type {{ path: string, time: number }[]} */ ([]));
   const [dragPath, setDragPath] = useState(/** @type {string | null} */ (null));
   const [dropHint, setDropHint] = useState(
@@ -350,8 +385,17 @@ export default function FileList({
   const allVisibleSelected = entries.length > 0 && selectedVisibleCount === entries.length;
   const someVisibleSelected = selectedVisibleCount > 0 && !allVisibleSelected;
 
+  const stopDragScroll = () => {
+    dragPointerRef.current = null;
+    if (dragScrollRafRef.current) {
+      cancelAnimationFrame(dragScrollRafRef.current);
+      dragScrollRafRef.current = 0;
+    }
+  };
+
   const clearReorderDrag = () => {
     dragPathRef.current = null;
+    stopDragScroll();
     setDragPath(null);
     setDropHint(null);
   };
@@ -359,6 +403,52 @@ export default function FileList({
   useEffect(() => {
     if (!canReorder && !canMoveInto) clearReorderDrag();
   }, [canReorder, canMoveInto]);
+
+  useEffect(() => {
+    if (!dragPath) {
+      stopDragScroll();
+      return undefined;
+    }
+
+    const tick = () => {
+      dragScrollRafRef.current = 0;
+      const scroller = listScrollRef.current;
+      const pointer = dragPointerRef.current;
+      if (!scroller || !pointer || !dragPathRef.current) return;
+      const rect = scroller.getBoundingClientRect();
+      if (isDragPointerOverListX(pointer.x, rect)) {
+        const delta = dragAutoScrollDelta(pointer.y, scroller);
+        if (delta) scroller.scrollTop += delta;
+      }
+      dragScrollRafRef.current = requestAnimationFrame(tick);
+    };
+
+    const onDragOver = (event) => {
+      if (!dragPathRef.current || isExternalFileDrag(event)) return;
+      const scroller = listScrollRef.current;
+      if (!scroller) return;
+      const rect = scroller.getBoundingClientRect();
+      if (!isDragPointerOverListX(event.clientX, rect)) return;
+      dragPointerRef.current = { x: event.clientX, y: event.clientY };
+      if (
+        event.clientY >= rect.top - DRAG_SCROLL_ABOVE_PX &&
+        event.clientY <= rect.bottom &&
+        event.cancelable
+      ) {
+        event.preventDefault();
+        if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+      }
+      if (!dragScrollRafRef.current) {
+        dragScrollRafRef.current = requestAnimationFrame(tick);
+      }
+    };
+
+    document.addEventListener('dragover', onDragOver);
+    return () => {
+      document.removeEventListener('dragover', onDragOver);
+      stopDragScroll();
+    };
+  }, [dragPath]);
 
   useEffect(() => {
     if (selectAllRef.current) {
@@ -389,11 +479,18 @@ export default function FileList({
 
   return (
     <div
+      ref={listScrollRef}
       className="min-h-0 flex-1 overflow-y-auto outline-none"
       data-explorer-list="true"
       tabIndex={0}
       onClick={(event) => {
         if (event.currentTarget === event.target) onBackgroundClick();
+      }}
+      onDragOver={(event) => {
+        if (!dragPathRef.current || isExternalFileDrag(event)) return;
+        event.preventDefault();
+        if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+        dragPointerRef.current = { x: event.clientX, y: event.clientY };
       }}
     >
       <table className="w-full table-fixed text-left text-[10pt] [&_td]:align-middle [&_th]:align-middle">

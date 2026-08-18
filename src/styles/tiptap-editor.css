@@ -1085,7 +1085,7 @@
   opacity: 0.9;
 }
 
-/* Selection bubble menu — light, icon-only (hidden in tables) */
+/* Selection bubble menu — light, icon-only (also text inside a table cell) */
 .tiptap-bubble-menu {
   display: flex;
   gap: 2px;

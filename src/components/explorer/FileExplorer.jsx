@@ -49,6 +49,7 @@ import {
   favoriteOrderKey,
   folderOrderKindByName,
   folderOrderKey,
+  folderOrderNamesAfterRename,
   materializeFolderOrder,
   moveFolderOrderName,
   placeFolderOrderNames,
@@ -204,7 +205,7 @@ export default function FileExplorer({
     setFileCollapsed,
     setFileCollapsedMany,
   } = useFolderColors();
-  const { folderOrderMap, setFolderOrder } = useFolderOrder();
+  const { folderOrderMap, refreshFolderOrderMap, setFolderOrder } = useFolderOrder();
   const { isAdminLoggedIn, adminId, isSuperAdmin } = useAdminAuthContext();
   const { openLogin } = useLoginDialog();
   const { effectivePermissions } = useGuestPermissions();
@@ -466,6 +467,7 @@ export default function FileExplorer({
     await refreshAccessMap();
     await refreshFavoritesMap();
     await refreshFolderColorMap();
+    await refreshFolderOrderMap();
     await refreshTrash();
   };
 
@@ -796,7 +798,47 @@ export default function FileExplorer({
       throw new Error('같은 이름의 항목이 이미 있습니다.');
     }
 
+    const fromKey = orderKeyOf(renameEntry);
+    const toKey = isInFavoritesView ? normalized : nextName;
+    const canKeepPlace =
+      !isInTrashView &&
+      (isInFavoritesView
+        ? isAdminLoggedIn
+        : canChangeFolderOrder(currentPath, { isSuperAdmin, loginId: adminId }));
+    const sortedAll = sortEntries(entries, listSort.field, listSort.direction, currentOrderNames, {
+      pinWorkspaceRoots: !isInFavoritesView,
+    });
+    const nextOrder = folderOrderNamesAfterRename(
+      sortedAll,
+      fromKey,
+      toKey,
+      orderKeyOf,
+      orderOptions,
+    );
+
     await rename(renameEntry.relativePath, normalized);
+
+    if (canKeepPlace) {
+      try {
+        if (isInFavoritesView) {
+          const sameKind = nextOrder.filter((key) => {
+            if (key === toKey) return true;
+            return entries.some(
+              (entry) =>
+                entry.relativePath === key && entry.isDirectory === renameEntry.isDirectory,
+            );
+          });
+          await setFavoriteOrder(renameEntry.isDirectory ? 'folder' : 'file', sameKind);
+        } else {
+          await setFolderOrder(orderParentPath, nextOrder);
+        }
+        if (listSort.field !== 'custom') {
+          setListSort(DEFAULT_CUSTOM_LIST_SORT);
+        }
+      } catch {
+        // Rename already succeeded; keep the new name even if order persist fails.
+      }
+    }
 
     if (currentPath === renameEntry.relativePath || currentPath.startsWith(`${renameEntry.relativePath}/`)) {
       onNavigate(normalized);
