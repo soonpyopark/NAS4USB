@@ -87,6 +87,56 @@ async function waitForImagesToSettle(container, timeoutMs = 8000) {
   ]);
 }
 
+/**
+ * @param {string | null} url
+ * @param {Map<string, string>} dataUrlByFileName
+ */
+function assetDataUrl(url, dataUrlByFileName) {
+  if (!url || url.startsWith('data:')) return null;
+
+  const fileName = packageAssetUrlToFileName(url);
+  if (fileName) return dataUrlByFileName.get(fileName) ?? null;
+
+  let decoded = url;
+  try {
+    decoded = decodeURIComponent(url);
+  } catch {
+    return null;
+  }
+  if (decoded === url) return null;
+  const decodedName = packageAssetUrlToFileName(decoded);
+  return decodedName ? dataUrlByFileName.get(decodedName) ?? null : null;
+}
+
+/**
+ * The media node views start from the stored `assets/…` path and swap in the inlined
+ * data URL from an effect, so a heavy document can still hold the unresolved path when
+ * the DOM is read — a note with 39 images shipped every `src` unresolved, because the
+ * failed `assets/…` requests let `waitForImagesToSettle` return before React committed
+ * the swap. Rewrite the markup here instead of waiting on that race.
+ *
+ * @param {HTMLElement} container
+ * @param {Map<string, string>} dataUrlByFileName
+ */
+function inlineAssetUrls(container, dataUrlByFileName) {
+  if (dataUrlByFileName.size === 0) return;
+
+  for (const el of Array.from(container.querySelectorAll('img, video, audio, source'))) {
+    const dataUrl = assetDataUrl(el.getAttribute('src'), dataUrlByFileName);
+    if (!dataUrl) continue;
+    el.setAttribute('src', dataUrl);
+    // The image node view raises its failure notice on the unresolved path and never
+    // clears it, so the caption would ship next to an image that now loads.
+    el.closest('.tiptap-image-wrap')?.querySelector('.tiptap-image-missing')?.remove();
+  }
+
+  // File attachments keep the package path so the resolved href stays recoverable.
+  for (const anchor of Array.from(container.querySelectorAll('a[data-asset-src]'))) {
+    const dataUrl = assetDataUrl(anchor.getAttribute('data-asset-src'), dataUrlByFileName);
+    if (dataUrl) anchor.setAttribute('href', dataUrl);
+  }
+}
+
 /** @param {string} value */
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"]/g, (ch) =>
@@ -239,6 +289,7 @@ async function buildTiptapExportHtml({
     });
 
     await waitForImagesToSettle(container);
+    inlineAssetUrls(container, dataUrlByFileName);
 
     const bodyHtml = container.innerHTML;
     const css = [tiptapEditorCss, BASE_CSS].join('\n');

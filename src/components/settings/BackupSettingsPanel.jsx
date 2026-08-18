@@ -11,6 +11,14 @@ import {
 const BUTTON_CLASS =
   'rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50';
 
+/** Archives are listed as `YYYYMMDD/파일명`; ones made before day folders have no prefix. */
+function splitArchiveName(name) {
+  const raw = String(name ?? '');
+  const slash = raw.lastIndexOf('/');
+  if (slash < 0) return { folder: '', base: raw };
+  return { folder: raw.slice(0, slash), base: raw.slice(slash + 1) };
+}
+
 function formatWhen(iso) {
   if (!iso) return '';
   try {
@@ -297,12 +305,15 @@ export default function BackupSettingsPanel() {
       <section className="space-y-3">
         <h3 className="text-sm font-semibold text-slate-800">지금 백업</h3>
         <p className="text-sm leading-relaxed text-slate-600">
+          백업 폴더 아래 <code className="rounded bg-slate-100 px-1 text-[12px]">YYYYMMDD</code>{' '}
+          폴더를 만들고 그 안에{' '}
           <code className="rounded bg-slate-100 px-1 text-[12px]">NAS4USB_백업_share_YYMMDD_HHMMSS.zip</code>
           과{' '}
           <code className="rounded bg-slate-100 px-1 text-[12px]">
             NAS4USB_백업_private_아이디_YYMMDD_HHMMSS.zip
           </code>
-          을 만듭니다. 같은 날 백업 횟수가 하루 한도를 넘으면 오래된 회차부터 지웁니다.
+          을 넣습니다. 같은 날 백업 횟수가 하루 한도를 넘으면 그 폴더에서 오래된 회차부터
+          지웁니다.
         </p>
         <button
           type="button"
@@ -403,30 +414,34 @@ export default function BackupSettingsPanel() {
           <p className="text-sm text-slate-500">아직 백업 파일이 없습니다.</p>
         ) : (
           <ul className="space-y-2">
-            {archives.map((item) => (
-              <li
-                key={item.fileName}
-                className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
-              >
-                <div className="min-w-0">
-                  <p className="truncate font-mono text-sm font-semibold text-slate-800" title={item.fileName}>
-                    {item.fileName}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    {formatWhen(item.at)}
-                    {typeof item.bytes === 'number' ? ` · ${formatByteSize(item.bytes)}` : ''}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="shrink-0 rounded-md border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
-                  disabled={busy || running || !electron}
-                  onClick={() => void deleteArchive(item.fileName)}
+            {archives.map((item) => {
+              const { folder, base } = splitArchiveName(item.fileName);
+              return (
+                <li
+                  key={item.fileName}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
                 >
-                  삭제
-                </button>
-              </li>
-            ))}
+                  <div className="min-w-0">
+                    <p className="truncate font-mono text-sm font-semibold text-slate-800" title={item.fileName}>
+                      {base}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {folder ? `${folder} · ` : ''}
+                      {formatWhen(item.at)}
+                      {typeof item.bytes === 'number' ? ` · ${formatByteSize(item.bytes)}` : ''}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="shrink-0 rounded-md border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                    disabled={busy || running || !electron}
+                    onClick={() => void deleteArchive(item.fileName)}
+                  >
+                    삭제
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>

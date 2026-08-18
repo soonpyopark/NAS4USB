@@ -110,6 +110,7 @@ const LINE_HEIGHTS = [
  *   editor: import('@tiptap/core').Editor,
  *   readOnly?: boolean,
  *   tocOpen?: boolean,
+ *   tocAvailable?: boolean,
  *   onToggleToc?: () => void,
  *   searchOpen?: boolean,
  *   onToggleSearch?: () => void,
@@ -132,6 +133,7 @@ export default function TipTapToolbar({
   editor,
   readOnly = false,
   tocOpen = false,
+  tocAvailable = false,
   onToggleToc,
   searchOpen = false,
   onToggleSearch,
@@ -582,9 +584,9 @@ export default function TipTapToolbar({
             <IconSearch />
           </ToolbarButton>
           <ToolbarButton
-            title="목차 패널"
-            active={tocOpen}
-            disabled={false}
+            title={tocAvailable ? '목차 패널' : '목차 패널 (창이 좁아 표시할 수 없음)'}
+            active={tocOpen && tocAvailable}
+            disabled={!tocAvailable}
             onClick={() => onToggleToc?.()}
           >
             <IconToc />

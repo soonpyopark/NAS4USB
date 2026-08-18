@@ -7,11 +7,12 @@ import {
   backupPrivateFileName,
   backupShareFileName,
   backupSlotKey,
-  extractBackupDay,
   extractBackupStamp,
-  formatBackupDay,
+  formatBackupDayFolder,
+  isWorkspaceBackupDayFolder,
   isWorkspaceBackupFileName,
   normalizeWorkspaceBackup,
+  parseWorkspaceBackupPath,
 } from '../shared/workspaceBackup.js';
 
 const STATE_FILE = path.join('.nas4usb', 'workspace-backup-state.json');
@@ -100,21 +101,20 @@ async function saveState(state, portableRoot = getPortableRoot()) {
 }
 
 /**
- * @param {string} destDir
+ * The day folder holds exactly one day of runs, so every archive in it counts toward the
+ * limit. Archives left in the destination root by older versions are not touched.
+ *
+ * @param {string} dayDir
  * @param {number} maxPerDay
- * @param {Date} [now]
  */
-async function pruneDayBackups(destDir, maxPerDay, now = new Date()) {
-  const day = formatBackupDay(now);
+async function pruneDayBackups(dayDir, maxPerDay) {
   let names = [];
   try {
-    names = await fs.readdir(destDir);
+    names = await fs.readdir(dayDir);
   } catch {
     return;
   }
-  const zips = names.filter(
-    (name) => isWorkspaceBackupFileName(name) && extractBackupDay(name) === day,
-  );
+  const zips = names.filter((name) => isWorkspaceBackupFileName(name));
   /** @type {Map<string, string[]>} */
   const byStamp = new Map();
   for (const name of zips) {
@@ -129,7 +129,7 @@ async function pruneDayBackups(destDir, maxPerDay, now = new Date()) {
   if (extra <= 0) return;
   for (const stamp of stamps.slice(0, extra)) {
     for (const name of byStamp.get(stamp) ?? []) {
-      await fs.rm(path.join(destDir, name), { force: true }).catch(() => {});
+      await fs.rm(path.join(dayDir, name), { force: true }).catch(() => {});
     }
   }
 }
@@ -196,6 +196,8 @@ export async function runWorkspaceBackup(trigger = 'manual') {
   await fs.mkdir(destDir, { recursive: true });
 
   const now = new Date();
+  const dayFolder = formatBackupDayFolder(now);
+  const dayDir = path.join(destDir, dayFolder);
   /** @type {Array<{ fileName: string, sourceAbs: string }>} */
   const jobs = [];
   if (await isExistingDirectory(getDataRoot())) {
@@ -217,6 +219,8 @@ export async function runWorkspaceBackup(trigger = 'manual') {
     throw new Error('백업할 share/private 폴더가 없습니다.');
   }
 
+  await fs.mkdir(dayDir, { recursive: true });
+
   /** @type {string[]} */
   const created = [];
   running = true;
@@ -224,17 +228,19 @@ export async function runWorkspaceBackup(trigger = 'manual') {
     /** @type {Array<{ fileName: string, filePath: string, bytes: number }>} */
     const files = [];
     for (const job of jobs) {
-      const destZip = path.join(destDir, job.fileName);
+      const destZip = path.join(dayDir, job.fileName);
       await zipBackupSource(destZip, job.sourceAbs);
       created.push(destZip);
       const stat = await fs.stat(destZip);
       files.push({
-        fileName: job.fileName,
+        // Carries the day folder so the settings list and its delete button, which only
+        // ever see this name, can find the archive again.
+        fileName: `${dayFolder}/${job.fileName}`,
         filePath: destZip,
         bytes: stat.size,
       });
     }
-    await pruneDayBackups(destDir, settings.maxPerDay);
+    await pruneDayBackups(dayDir, settings.maxPerDay);
     const bytes = files.reduce((sum, item) => sum + item.bytes, 0);
     lastResult = {
       at: new Date().toISOString(),
@@ -251,8 +257,8 @@ export async function runWorkspaceBackup(trigger = 'manual') {
   } catch (error) {
     lastResult = {
       at: new Date().toISOString(),
-      fileName: jobs.map((job) => job.fileName).join('\n'),
-      filePath: destDir,
+      fileName: jobs.map((job) => `${dayFolder}/${job.fileName}`).join('\n'),
+      filePath: dayDir,
       bytes: 0,
       trigger,
       error: error instanceof Error ? error.message : String(error),
@@ -321,29 +327,65 @@ export function startWorkspaceBackupScheduler() {
 }
 
 /**
+ * Archives from day folders, plus any left in the destination root by versions that
+ * wrote them flat.
+ *
+ * @param {string} destDir
+ * @returns {Promise<Array<{ fileName: string, filePath: string }>>}
+ */
+async function collectBackupArchives(destDir) {
+  let entries = [];
+  try {
+    entries = await fs.readdir(destDir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+
+  /** @type {Array<{ fileName: string, filePath: string }>} */
+  const found = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) {
+      if (isWorkspaceBackupFileName(entry.name)) {
+        found.push({ fileName: entry.name, filePath: path.join(destDir, entry.name) });
+      }
+      continue;
+    }
+    if (!isWorkspaceBackupDayFolder(entry.name)) continue;
+
+    let dayNames = [];
+    try {
+      dayNames = await fs.readdir(path.join(destDir, entry.name));
+    } catch {
+      continue;
+    }
+    for (const name of dayNames) {
+      if (!isWorkspaceBackupFileName(name)) continue;
+      found.push({
+        fileName: `${entry.name}/${name}`,
+        filePath: path.join(destDir, entry.name, name),
+      });
+    }
+  }
+  return found;
+}
+
+/**
  * @returns {Promise<Array<{ fileName: string, filePath: string, bytes: number, at: string }>>}
  */
 export async function listWorkspaceBackups() {
   const settings = normalizeWorkspaceBackup((await getAppSettings()).workspaceBackup);
   if (!settings.destPath) return [];
   const destDir = assertBackupDestAllowed(settings.destPath);
-  let names = [];
-  try {
-    names = await fs.readdir(destDir);
-  } catch {
-    return [];
-  }
+
   /** @type {Array<{ fileName: string, filePath: string, bytes: number, at: string }>} */
   const items = [];
-  for (const name of names) {
-    if (!isWorkspaceBackupFileName(name)) continue;
-    const filePath = path.join(destDir, name);
+  for (const archive of await collectBackupArchives(destDir)) {
     try {
-      const stat = await fs.stat(filePath);
+      const stat = await fs.stat(archive.filePath);
       if (!stat.isFile()) continue;
       items.push({
-        fileName: name,
-        filePath,
+        fileName: archive.fileName,
+        filePath: archive.filePath,
         bytes: stat.size,
         at: stat.mtime.toISOString(),
       });
@@ -361,11 +403,23 @@ export async function listWorkspaceBackups() {
 }
 
 /**
- * @param {string} fileName
+ * @param {string} dayDir
+ */
+async function removeEmptyDayFolder(dayDir) {
+  try {
+    const names = await fs.readdir(dayDir);
+    if (names.length === 0) await fs.rmdir(dayDir);
+  } catch {
+    // leave the folder rather than fail the delete that already succeeded
+  }
+}
+
+/**
+ * @param {string} fileName `YYYYMMDD/NAS4USB_백업_….zip`, or a bare name for older archives
  */
 export async function deleteWorkspaceBackup(fileName) {
-  const base = path.basename(String(fileName ?? ''));
-  if (!isWorkspaceBackupFileName(base)) {
+  const parsed = parseWorkspaceBackupPath(fileName);
+  if (!parsed) {
     throw new Error('백업 파일이 아닙니다.');
   }
   const settings = normalizeWorkspaceBackup((await getAppSettings()).workspaceBackup);
@@ -373,14 +427,20 @@ export async function deleteWorkspaceBackup(fileName) {
     throw new Error('백업 폴더를 먼저 지정해 주세요.');
   }
   const destDir = assertBackupDestAllowed(settings.destPath);
-  const destZip = path.join(destDir, base);
+  const dayDir = parsed.dayFolder ? path.join(destDir, parsed.dayFolder) : destDir;
+  const destZip = path.join(dayDir, parsed.fileName);
   if (!isEqualOrInside(destZip, destDir)) {
     throw new Error('잘못된 백업 파일입니다.');
   }
   await fs.rm(destZip);
+  if (parsed.dayFolder) await removeEmptyDayFolder(dayDir);
+
+  const relativeName = parsed.dayFolder
+    ? `${parsed.dayFolder}/${parsed.fileName}`
+    : parsed.fileName;
   if (
-    lastResult?.fileName === base ||
-    lastResult?.files?.some((item) => item.fileName === base)
+    lastResult?.fileName === relativeName ||
+    lastResult?.files?.some((item) => item.fileName === relativeName)
   ) {
     lastResult = null;
     const state = await loadState();

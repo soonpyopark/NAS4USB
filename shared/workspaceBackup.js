@@ -105,6 +105,24 @@ export function formatBackupDayPrefix(date = new Date()) {
 }
 
 /**
+ * Folder one run's archives land in: `YYYYMMDD`. Every run used to drop its share and
+ * per-user zips straight into the destination, so a folder holding a few days of runs
+ * was hard to read at a glance.
+ * @param {Date} [date]
+ */
+export function formatBackupDayFolder(date = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}`;
+}
+
+/**
+ * @param {string} name
+ */
+export function isWorkspaceBackupDayFolder(name) {
+  return /^\d{8}$/.test(String(name ?? ''));
+}
+
+/**
  * Stamp at the end: `YYMMDD_HHMMSS` (legacy and split archives).
  * @param {string} name
  * @returns {string | null}
@@ -167,6 +185,26 @@ export function isWorkspaceBackupFileName(name) {
     /^share_\d{6}_\d{6}$/i.test(rest) ||
     /^private_.+_\d{6}_\d{6}$/i.test(rest)
   );
+}
+
+/**
+ * Splits `YYYYMMDD/NAS4USB_백업_….zip`, and also the bare file name archives written
+ * before day folders existed.
+ * @param {string} name
+ * @returns {{ dayFolder: string, fileName: string } | null}
+ */
+export function parseWorkspaceBackupPath(name) {
+  const parts = String(name ?? '')
+    .replace(/\\/g, '/')
+    .split('/')
+    .filter(Boolean);
+  if (parts.length === 0 || parts.length > 2) return null;
+
+  const fileName = parts[parts.length - 1];
+  if (!isWorkspaceBackupFileName(fileName)) return null;
+  const dayFolder = parts.length === 2 ? parts[0] : '';
+  if (dayFolder && !isWorkspaceBackupDayFolder(dayFolder)) return null;
+  return { dayFolder, fileName };
 }
 
 /**

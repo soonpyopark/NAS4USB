@@ -61,6 +61,12 @@ import VideoPlayerShell from './VideoPlayerShell.jsx';
 const MIN_ZOOM = 0.5;
 const MAX_ZOOM = 2;
 const ZOOM_STEP = 1.1;
+/**
+ * The 220px table-of-contents panel is worth its space as long as the canvas keeps a
+ * readable column: 1180px leaves 960px, narrower than the 297mm (≈1123px) page but
+ * still comfortable to edit. Below that the panel would squeeze the page instead.
+ */
+const TOC_MIN_BODY_WIDTH = 1180;
 
 /**
  * @param {number} zoom
@@ -113,7 +119,9 @@ export default function TipTapEditorView({
   const audioInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   const fileInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   const scrollRef = useRef(/** @type {HTMLDivElement | null} */ (null));
+  const bodyRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   const [tocOpen, setTocOpen] = useState(true);
+  const [tocFits, setTocFits] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchFocusNonce, setSearchFocusNonce] = useState(0);
   const [assetPlayer, setAssetPlayer] = useState(
@@ -332,6 +340,25 @@ export default function TipTapEditorView({
   useEffect(() => {
     if (editor) onReady?.(editor);
   }, [editor, onReady]);
+
+  /**
+   * Measure the body rather than the window: the same view also runs inside the preview
+   * pane and linked-document overlays, where the window width says nothing about the
+   * room the canvas actually has. The panel lives inside the body, so hiding it does not
+   * change what is measured. `editor` is a dependency because the body only exists once
+   * the editor replaces the loading placeholder.
+   */
+  useEffect(() => {
+    if (readOnly || !editor) return undefined;
+    const body = bodyRef.current;
+    if (!body) return undefined;
+
+    const observer = new ResizeObserver(([entry]) => {
+      setTocFits(entry.contentRect.width >= TOC_MIN_BODY_WIDTH);
+    });
+    observer.observe(body);
+    return () => observer.disconnect();
+  }, [editor, readOnly]);
 
   useEffect(() => {
     const dom = editor?.view?.dom;
@@ -685,6 +712,7 @@ export default function TipTapEditorView({
           editor={editor}
           readOnly={readOnly}
           tocOpen={tocOpen}
+          tocAvailable={tocFits}
           onToggleToc={() => setTocOpen((prev) => !prev)}
           searchOpen={searchOpen}
           onToggleSearch={() => {
@@ -748,7 +776,7 @@ export default function TipTapEditorView({
         />
       )}
 
-      <div className="tiptap-editor-shell__body">
+      <div className="tiptap-editor-shell__body" ref={bodyRef}>
         {htmlMode ? (
           <TipTapHtmlSourcePanel
             value={htmlDraft}
@@ -770,7 +798,7 @@ export default function TipTapEditorView({
             <EditorContent editor={editor} />
           </div>
         </div>
-        {htmlMode ? null : (
+        {htmlMode || readOnly || !tocFits ? null : (
           <TipTapTocPanel editor={editor} open={tocOpen} onClose={() => setTocOpen(false)} />
         )}
       </div>
