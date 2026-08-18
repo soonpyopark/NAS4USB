@@ -29,6 +29,8 @@ export default function TipTapColorSwatchPicker({
   const customInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   const hexInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   const pickingRef = useRef(false);
+  const hexDraftRef = useRef(hexDraft);
+  hexDraftRef.current = hexDraft;
   const listId = useId();
 
   const paletteValues = useMemo(
@@ -54,17 +56,37 @@ export default function TipTapColorSwatchPicker({
       if (!rootRef.current?.contains(event.target)) setOpen(false);
     };
     const onKeyDown = (event) => {
+      const hexInput = hexInputRef.current;
+      const hexFocused = hexInput && document.activeElement === hexInput;
+
+      if (hexFocused) {
+        if (event.key === 'Escape') return;
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          event.stopPropagation();
+          commitHexDraft(hexDraftRef, value, onChange, setHexDraft);
+          return;
+        }
+        const inserted = hexCharFromEvent(event);
+        if (inserted) {
+          event.preventDefault();
+          event.stopPropagation();
+          applyHexInsert(hexInput, hexDraftRef, inserted, onChange, setHexDraft);
+        }
+        return;
+      }
+
       if (event.key !== 'Escape') return;
       if (event.target instanceof HTMLInputElement) return;
       setOpen(false);
     };
     window.addEventListener('pointerdown', onPointerDown);
-    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keydown', onKeyDown, true);
     return () => {
       window.removeEventListener('pointerdown', onPointerDown);
-      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keydown', onKeyDown, true);
     };
-  }, [open]);
+  }, [open, onChange, value]);
 
   return (
     <div className="tiptap-swatch" ref={rootRef}>
@@ -182,9 +204,12 @@ export default function TipTapColorSwatchPicker({
                 <input
                   ref={hexInputRef}
                   type="text"
-                  spellCheck={false}
+                  lang="en"
+                  inputMode="text"
+                  autoComplete="off"
                   autoCapitalize="off"
                   autoCorrect="off"
+                  spellCheck={false}
                   maxLength={7}
                   className="tiptap-swatch__hex"
                   value={hexDraft}
@@ -196,23 +221,21 @@ export default function TipTapColorSwatchPicker({
                     const complete = parseHexColor(next, { allowShort: false });
                     if (complete) onChange(complete);
                   }}
-                  onBlur={() => {
-                    const committed = parseHexColor(hexDraft, { allowShort: true });
-                    if (committed) {
-                      setHexDraft(committed);
-                      if (committed !== value) onChange(committed);
-                    }
-                  }}
-                  onKeyDown={(event) => {
-                    event.stopPropagation();
-                    if (event.key !== 'Enter') return;
+                  onPaste={(event) => {
                     event.preventDefault();
-                    const committed = parseHexColor(hexDraft, { allowShort: true });
-                    if (committed) {
-                      setHexDraft(committed);
-                      if (committed !== value) onChange(committed);
-                    }
+                    const pasted = event.clipboardData?.getData('text') ?? '';
+                    applyHexInsert(
+                      event.currentTarget,
+                      hexDraftRef,
+                      sanitizeHexDraft(pasted).replace(/^#/, ''),
+                      onChange,
+                      setHexDraft,
+                    );
                   }}
+                  onCompositionStart={(event) => event.preventDefault()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                  onKeyUp={(event) => event.stopPropagation()}
+                  onBlur={() => commitHexDraft(hexDraftRef, value, onChange, setHexDraft)}
                 />
               </label>
             </>
@@ -223,6 +246,81 @@ export default function TipTapColorSwatchPicker({
       )}
     </div>
   );
+}
+
+const HEX_CODE_CHARS = {
+  Digit0: '0',
+  Digit1: '1',
+  Digit2: '2',
+  Digit3: '3',
+  Digit4: '4',
+  Digit5: '5',
+  Digit6: '6',
+  Digit7: '7',
+  Digit8: '8',
+  Digit9: '9',
+  Numpad0: '0',
+  Numpad1: '1',
+  Numpad2: '2',
+  Numpad3: '3',
+  Numpad4: '4',
+  Numpad5: '5',
+  Numpad6: '6',
+  Numpad7: '7',
+  Numpad8: '8',
+  Numpad9: '9',
+  KeyA: 'a',
+  KeyB: 'b',
+  KeyC: 'c',
+  KeyD: 'd',
+  KeyE: 'e',
+  KeyF: 'f',
+};
+
+/**
+ * Physical key → hex char so Hangul IME cannot swallow A–F.
+ * @param {KeyboardEvent} event
+ */
+function hexCharFromEvent(event) {
+  if (event.ctrlKey || event.metaKey || event.altKey) return '';
+  if (event.key === '#') return '#';
+  return HEX_CODE_CHARS[event.code] ?? '';
+}
+
+/**
+ * @param {HTMLInputElement} input
+ * @param {{ current: string }} draftRef
+ * @param {string} chunk
+ * @param {(value: string) => void} onChange
+ * @param {(value: string) => void} setHexDraft
+ */
+function applyHexInsert(input, draftRef, chunk, onChange, setHexDraft) {
+  const current = draftRef.current;
+  const start = input.selectionStart ?? current.length;
+  const end = input.selectionEnd ?? current.length;
+  const next = sanitizeHexDraft(`${current.slice(0, start)}${chunk}${current.slice(end)}`);
+  draftRef.current = next;
+  setHexDraft(next);
+  const complete = parseHexColor(next, { allowShort: false });
+  if (complete) onChange(complete);
+  const caret = Math.min(start + chunk.length, next.length);
+  queueMicrotask(() => {
+    input.setSelectionRange(caret, caret);
+  });
+}
+
+/**
+ * @param {{ current: string }} draftRef
+ * @param {string} value
+ * @param {(value: string) => void} onChange
+ * @param {(value: string) => void} setHexDraft
+ */
+function commitHexDraft(draftRef, value, onChange, setHexDraft) {
+  const committed = parseHexColor(draftRef.current, { allowShort: true });
+  if (!committed) return;
+  draftRef.current = committed;
+  setHexDraft(committed);
+  if (committed !== value) onChange(committed);
 }
 
 /** @param {string} value */

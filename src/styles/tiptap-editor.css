@@ -901,6 +901,7 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   color: #111827;
   outline: none;
+  ime-mode: disabled;
 }
 
 .tiptap-swatch__hex:focus {
