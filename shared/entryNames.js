@@ -119,11 +119,25 @@ export function validateRenameEntryName(nextName, originalName, isDirectory) {
 }
 
 /**
+ * Setting a file password stores the file as `{name}.sec`, so lock/unlock is a
+ * rename that adds or drops that marker. Every other extension change stays blocked.
+ * @param {string} fromName
+ * @param {string} toName
+ */
+function isSecMarkerChange(fromName, toName) {
+  const from = splitEntryExtension(String(fromName ?? '')).extension.toLowerCase();
+  const to = splitEntryExtension(String(toName ?? '')).extension.toLowerCase();
+  if (!from || !to) return false;
+  return to === `${from}.sec` || from === `${to}.sec`;
+}
+
+/**
  * @param {string} fromName
  * @param {string} toName
  * @param {boolean} isDirectory
  */
 export function assertRenamePreservesExtension(fromName, toName, isDirectory) {
+  if (!isDirectory && isSecMarkerChange(fromName, toName)) return;
   const result = validateRenameEntryName(toName, fromName, isDirectory);
   if (!result.ok) {
     throw new Error(result.error);

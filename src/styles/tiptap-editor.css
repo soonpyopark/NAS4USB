@@ -272,6 +272,30 @@
   font-weight: 600;
 }
 
+/* 「표 너비 100%」 stores pixel widths measured in the editor, so a narrower pane
+   (preview) would scroll sideways — a tall table hides that bar far below the
+   viewport. Read-only refits to the container; `table-layout: fixed` scales the
+   colgroup widths, keeping column ratios. The node view writes an inline
+   `width: <sum>px`, hence `!important`. */
+.tiptap-editor-shell .tiptap[contenteditable='false'] table[data-full-width='true'] {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100%;
+}
+
+.tiptap-editor-shell .tiptap[contenteditable='false'] table[data-full-width='true'] > tbody > tr > td,
+.tiptap-editor-shell .tiptap[contenteditable='false'] table[data-full-width='true'] > tbody > tr > th {
+  min-width: 0;
+}
+
+/* Nothing overflows once refitted, so drop the reserved scrollbar strip. `auto`
+   stays as a fallback rather than clipping unreachable columns. */
+.tiptap-editor-shell
+  .tiptap[contenteditable='false']
+  .tableWrapper:has(> table[data-full-width='true']) {
+  scrollbar-gutter: auto;
+}
+
 /* Nested tables act as filled boxes inside a cell — keep them compact */
 .tiptap-editor-shell .tiptap td .tableWrapper,
 .tiptap-editor-shell .tiptap th .tableWrapper {
