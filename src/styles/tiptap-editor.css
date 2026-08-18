@@ -272,27 +272,42 @@
   font-weight: 600;
 }
 
-/* 「표 너비 100%」 stores pixel widths measured in the editor, so a narrower pane
-   (preview) would scroll sideways — a tall table hides that bar far below the
-   viewport. Read-only refits to the container; `table-layout: fixed` scales the
-   colgroup widths, keeping column ratios. The node view writes an inline
-   `width: <sum>px`, hence `!important`. */
-.tiptap-editor-shell .tiptap[contenteditable='false'] table[data-full-width='true'] {
-  width: 100% !important;
+/* Read-only surfaces — preview pane, history preview, exported HTML — are usually
+   narrower than the editor these column pixels were measured against, so a wide
+   table scrolls sideways, and on a tall table that bar sits far below the viewport
+   where it cannot be reached. Refit to the container instead.
+   `max-width` alone cannot do it: while a table's own width is definite, a fixed
+   layout never shrinks below the sum of its `<col>` widths — `width: 100%`
+   measured 988px in a 499px pane. With `width: auto` the colgroup compresses and
+   column ratios hold to about a percentage point. The node view writes that width
+   inline, or an inline `min-width` of 80px × columns when a column is unsized. */
+.tiptap-editor-shell .tiptap[contenteditable='false'] table {
+  width: auto !important;
   min-width: 0 !important;
   max-width: 100%;
 }
 
-.tiptap-editor-shell .tiptap[contenteditable='false'] table[data-full-width='true'] > tbody > tr > td,
-.tiptap-editor-shell .tiptap[contenteditable='false'] table[data-full-width='true'] > tbody > tr > th {
+/* 「표 너비 100%」 recorded the intent to fill the pane, so let those grow back
+   when the surface is wider than the stored pixels — exported HTML often is. */
+.tiptap-editor-shell .tiptap[contenteditable='false'] table[data-full-width='true'] {
+  min-width: 100% !important;
+}
+
+.tiptap-editor-shell .tiptap[contenteditable='false'] table > tbody > tr > td,
+.tiptap-editor-shell .tiptap[contenteditable='false'] table > tbody > tr > th {
+  /* The 80px floor would re-inflate the table past the width it just fitted;
+     with it, anything over ~12 columns keeps a scrollbar. */
   min-width: 0;
+  /* Refitted columns can no longer widen for a long URL, and fixed layout spills
+     it over the cell border rather than growing. Read-only line breaks already
+     differ from the editor once the refit changes column widths, so breaking
+     mid-word adds no divergence the refit did not introduce. */
+  overflow-wrap: anywhere;
 }
 
 /* Nothing overflows once refitted, so drop the reserved scrollbar strip. `auto`
-   stays as a fallback rather than clipping unreachable columns. */
-.tiptap-editor-shell
-  .tiptap[contenteditable='false']
-  .tableWrapper:has(> table[data-full-width='true']) {
+   stays as a fallback rather than clipping columns that would be unreachable. */
+.tiptap-editor-shell .tiptap[contenteditable='false'] .tableWrapper {
   scrollbar-gutter: auto;
 }
 
@@ -1517,6 +1532,22 @@
   .tiptap-editor-shell .tiptap table,
   .tiptap-editor-shell .tiptap-table {
     overflow: visible !important;
+  }
+
+  /* Paper has no scrollbar, so a table dragged wider than the text column is cut
+     off at the page edge instead. Same refit as read-only, and for the same
+     reason it needs `width: auto` rather than `max-width` alone. */
+  .tiptap-editor-shell .tiptap table,
+  .tiptap-editor-shell .tiptap-table {
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: 100%;
+  }
+
+  .tiptap-editor-shell .tiptap table > tbody > tr > td,
+  .tiptap-editor-shell .tiptap table > tbody > tr > th {
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   .tiptap-editor-shell .tiptap-image,
