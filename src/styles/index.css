@@ -43,6 +43,57 @@
   }
 }
 
+/*
+ * Slim overlay-style scrollbars (Chromium + Firefox). Kept outside @layer so
+ * ::-webkit-scrollbar is not buried under Tailwind preflight.
+ */
+:root {
+  --nas-scroll-size: 10px;
+  --nas-scroll-thumb: rgb(15 23 42 / 0.22);
+  --nas-scroll-thumb-hover: rgb(15 23 42 / 0.4);
+  --nas-scroll-thumb-active: rgb(15 23 42 / 0.55);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--nas-scroll-thumb) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: var(--nas-scroll-size);
+  height: var(--nas-scroll-size);
+}
+
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--nas-scroll-thumb);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--nas-scroll-thumb-hover);
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:active {
+  background-color: var(--nas-scroll-thumb-active);
+  background-clip: padding-box;
+}
+
+.sidebar-panel,
+.bg-nas-sidebar,
+.bg-slate-950 {
+  --nas-scroll-thumb: rgb(248 250 252 / 0.24);
+  --nas-scroll-thumb-hover: rgb(248 250 252 / 0.42);
+  --nas-scroll-thumb-active: rgb(248 250 252 / 0.58);
+}
+
 @layer components {
   .nas-panel {
     @apply rounded-lg border border-nas-border bg-white shadow-sm;

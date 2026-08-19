@@ -116,6 +116,20 @@
   list-style-position: outside;
 }
 
+/* Indent-then-list: keep the disc/number with the indented text, not at column 0.
+   Saved docs may still store indent on the inner paragraph; :has() covers those. */
+.tiptap-editor-shell .tiptap li:has(> [data-indent='1']) { margin-left: 24px; }
+.tiptap-editor-shell .tiptap li:has(> [data-indent='2']) { margin-left: 48px; }
+.tiptap-editor-shell .tiptap li:has(> [data-indent='3']) { margin-left: 72px; }
+.tiptap-editor-shell .tiptap li:has(> [data-indent='4']) { margin-left: 96px; }
+.tiptap-editor-shell .tiptap li:has(> [data-indent='5']) { margin-left: 120px; }
+.tiptap-editor-shell .tiptap li:has(> [data-indent='6']) { margin-left: 144px; }
+.tiptap-editor-shell .tiptap li:has(> [data-indent='7']) { margin-left: 168px; }
+.tiptap-editor-shell .tiptap li:has(> [data-indent='8']) { margin-left: 192px; }
+.tiptap-editor-shell .tiptap li:has(> [data-indent]) > [data-indent] {
+  margin-left: 0 !important;
+}
+
 /* Tailwind Preflight sets `ul, ol { list-style: none }`, so markers must be restored. */
 .tiptap-editor-shell .tiptap ul {
   list-style-type: disc;
@@ -370,7 +384,8 @@
 
 .tiptap-table-resize-hint {
   position: fixed;
-  z-index: 80;
+  /* Above EditorModal `.modal-overlay` (1000); same band as the slash menu. */
+  z-index: 11000;
   pointer-events: none;
   transform: translate(-50%, calc(-100% - 12px));
   padding: 0.22rem 0.5rem;
