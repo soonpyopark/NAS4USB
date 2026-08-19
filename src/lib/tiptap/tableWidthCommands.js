@@ -1,6 +1,13 @@
 export const CELL_MIN_WIDTH = 80;
 
 /**
+ * @param {import('@tiptap/pm/model').Node | null | undefined} node
+ */
+export function isTableNode(node) {
+  return Boolean(node && (node.type.name === 'table' || node.type.spec.tableRole === 'table'));
+}
+
+/**
  * @param {import('@tiptap/pm/state').EditorState} state
  * @returns {{ node: import('@tiptap/pm/model').Node, pos: number } | null}
  */
@@ -118,6 +125,107 @@ function measureWrapperWidth(editor, tablePos) {
 }
 
 /**
+ * Horizontal padding + border inside a cell. Nested tables fill the content box.
+ * @param {import('@tiptap/core').Editor} editor
+ * @param {number} cellPos
+ */
+function cellBoxInsets(editor, cellPos, { includeBorder = false } = {}) {
+  const dom = editor.view.nodeDOM(cellPos);
+  if (!(dom instanceof HTMLElement)) return includeBorder ? 20 : 16;
+  const style = getComputedStyle(dom);
+  const padding =
+    (Number.parseFloat(style.paddingLeft) || 0) + (Number.parseFloat(style.paddingRight) || 0);
+  if (!includeBorder) return padding;
+  return (
+    padding +
+    (Number.parseFloat(style.borderLeftWidth) || 0) +
+    (Number.parseFloat(style.borderRightWidth) || 0)
+  );
+}
+
+/**
+ * @param {import('@tiptap/pm/model').Node} doc
+ * @param {number} pos
+ */
+function ancestorTablePos(doc, pos) {
+  const $pos = doc.resolve(pos);
+  for (let depth = $pos.depth; depth > 0; depth -= 1) {
+    if (isTableNode($pos.node(depth))) return $pos.before(depth);
+  }
+  return null;
+}
+
+/**
+ * @param {import('@tiptap/pm/model').Node} doc
+ * @param {number} tablePos
+ */
+function parentCellAt(doc, tablePos) {
+  const $pos = doc.resolve(tablePos);
+  for (let depth = $pos.depth; depth > 0; depth -= 1) {
+    const name = $pos.node(depth).type.name;
+    if (name === 'tableCell' || name === 'tableHeader') {
+      return { node: $pos.node(depth), pos: $pos.before(depth) };
+    }
+  }
+  return null;
+}
+
+/**
+ * @param {import('@tiptap/pm/model').Node} table
+ * @param {number} tablePos
+ * @param {number} cellPos
+ */
+function columnIndexOfCell(table, tablePos, cellPos) {
+  let found = -1;
+  table.forEach((row, rowOffset) => {
+    if (found >= 0) return;
+    const rowPos = tablePos + 1 + rowOffset;
+    let col = 0;
+    row.forEach((cell, cellOffset) => {
+      if (rowPos + 1 + cellOffset === cellPos) found = col;
+      col += Math.max(1, Number(cell.attrs.colspan) || 1);
+    });
+  });
+  return found;
+}
+
+/**
+ * Editor width for top-level tables; parent cell content width for nested ones.
+ * @param {import('@tiptap/core').Editor} editor
+ * @param {number} tablePos
+ */
+export function measureTableTargetWidth(editor, tablePos) {
+  const cell = parentCellAt(editor.state.doc, tablePos);
+  if (cell) {
+    const dom = editor.view.nodeDOM(cell.pos);
+    if (dom instanceof HTMLElement && dom.clientWidth > 0) {
+      const inner = Math.round(dom.clientWidth - cellBoxInsets(editor, cell.pos));
+      if (inner > 0) return Math.max(CELL_MIN_WIDTH, inner);
+    }
+  }
+  return measureWrapperWidth(editor, tablePos);
+}
+
+/**
+ * @param {import('@tiptap/pm/model').Node} doc
+ * @returns {Array<{ node: import('@tiptap/pm/model').Node, pos: number, depth: number }>}
+ */
+export function collectDocumentTables(doc) {
+  /** @type {Array<{ node: import('@tiptap/pm/model').Node, pos: number, depth: number }>} */
+  const tables = [];
+  doc.descendants((node, pos) => {
+    if (!isTableNode(node)) return;
+    const $pos = doc.resolve(pos);
+    let depth = 0;
+    for (let level = $pos.depth; level > 0; level -= 1) {
+      if (isTableNode($pos.node(level))) depth += 1;
+    }
+    tables.push({ node, pos, depth });
+  });
+  return tables;
+}
+
+/**
  * Move width between a dragged column and its neighbor so the table sum stays
  * the same (Word-style 100% tables). Last column uses the previous neighbor.
  * @param {number[]} widths
@@ -230,8 +338,65 @@ export function fitTableToFullWidth(editor) {
   const colCount = tableColumnCount(found.node);
   if (colCount <= 0) return false;
   const current = readColumnWidths(found.node, colCount);
-  const target = measureWrapperWidth(editor, found.pos);
+  const target = measureTableTargetWidth(editor, found.pos);
   return applyColumnWidths(editor, scaleColumnWidths(current, target), { fullWidth: true });
+}
+
+/**
+ * Stretch every table to 100% of its container. Top-level tables use the
+ * editor width; nested tables use the parent cell after the outer table is
+ * scaled, so one undo step covers the whole document.
+ * @param {import('@tiptap/core').Editor} editor
+ */
+export function fitAllTablesToFullWidth(editor) {
+  const collected = collectDocumentTables(editor.state.doc);
+  if (collected.length === 0) return false;
+
+  collected.sort((left, right) => left.depth - right.depth || left.pos - right.pos);
+
+  const { tr } = editor.state;
+  /** @type {Map<number, number[]>} */
+  const fittedWidths = new Map();
+  let changed = false;
+
+  for (const item of collected) {
+    const table = tr.doc.nodeAt(item.pos);
+    if (!isTableNode(table)) continue;
+    const colCount = tableColumnCount(table);
+    if (colCount <= 0) continue;
+
+    const parent = parentCellAt(tr.doc, item.pos);
+    const parentTablePos = parent ? ancestorTablePos(tr.doc, parent.pos) : null;
+    const parentWidths = parentTablePos != null ? fittedWidths.get(parentTablePos) : null;
+    const parentTable = parentTablePos != null ? tr.doc.nodeAt(parentTablePos) : null;
+
+    let target = measureTableTargetWidth(editor, item.pos);
+    if (parent && parentTable && isTableNode(parentTable) && parentWidths) {
+      const col = columnIndexOfCell(parentTable, parentTablePos, parent.pos);
+      const span = Math.max(1, Number(parent.node.attrs.colspan) || 1);
+      if (col >= 0) {
+        const cellWidth = parentWidths
+          .slice(col, col + span)
+          .reduce((total, width) => total + width, 0);
+        if (cellWidth > 0) {
+          target = Math.max(
+            CELL_MIN_WIDTH,
+            Math.round(cellWidth - cellBoxInsets(editor, parent.pos, { includeBorder: true })),
+          );
+        }
+      }
+    }
+
+    const widths = scaleColumnWidths(readColumnWidths(table, colCount), target);
+    fittedWidths.set(item.pos, widths);
+    if (writeTableColumnWidths(tr, item.pos, table, widths, { fullWidth: true })) {
+      changed = true;
+    }
+  }
+
+  if (!changed) return true;
+  editor.view.dispatch(tr);
+  return true;
 }
 
 /**

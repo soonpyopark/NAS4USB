@@ -579,6 +579,24 @@ export function IconTableFullWidth() {
   );
 }
 
+export function IconAllTablesFullWidth() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="6" y="4" width="12" height="8.5" rx="1.2" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M10 4v8.5M14 4v8.5" stroke="currentColor" strokeWidth="1.4" />
+      <rect x="8" y="14" width="8" height="6" rx="1" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M10.7 14v6M13.3 14v6" stroke="currentColor" strokeWidth="1.3" />
+      <path
+        d="M3 12H1.2m21.8 0H21M3 12l1.5-1.5M3 12l1.5 1.5M21 12l-1.5-1.5M21 12l-1.5 1.5"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export function IconEqualColumns() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
