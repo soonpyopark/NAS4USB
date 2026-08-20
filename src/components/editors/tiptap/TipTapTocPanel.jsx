@@ -38,7 +38,9 @@ export default function TipTapTocPanel({ editor, open = true, onClose }) {
               }`}
               style={{ paddingLeft: `${8 + Math.max(0, item.level - 1) * 12}px` }}
               onClick={() => {
-                editor.chain().focus().setTextSelection(item.pos + 1).run();
+                if (editor.isEditable) {
+                  editor.chain().focus().setTextSelection(item.pos + 1).run();
+                }
                 item.dom?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
               }}
             >

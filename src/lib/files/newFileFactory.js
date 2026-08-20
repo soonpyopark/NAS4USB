@@ -9,7 +9,7 @@ import { resolveUniqueName } from '../fsPaths.js';
 export const NEW_FILE_TYPES = /** @type {const} */ ([
   { id: 'hwpx', label: 'HWPX 문서', extension: 'hwpx', description: '한글 HWPX 협업 편집' },
   { id: 'xlsx', label: 'Excel', extension: 'xlsx', description: '스프레드시트' },
-  { id: 'tiptap', label: 'TipTap 문서', extension: 'tiptap', description: 'Notion-like TipTap 에디터' },
+  { id: 'tiptap', label: 'TipTap 문서(HTML 편집기)', extension: 'tiptap', description: 'Notion-like TipTap 에디터' },
   { id: 'wb4s', label: '화이트보드', extension: 'wb4s', description: 'WhiteBoard4Share' },
   { id: 'md', label: 'Markdown', extension: 'md', description: '마크다운 텍스트' },
   { id: 'txt', label: '텍스트', extension: 'txt', description: '일반 텍스트' },

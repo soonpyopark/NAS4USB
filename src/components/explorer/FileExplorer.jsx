@@ -4,6 +4,7 @@ import ContextMenu from './ContextMenu.jsx';
 import FileExplorerToolbar from './FileExplorerToolbar.jsx';
 import FileList from './FileList.jsx';
 import FilePreviewPane from './FilePreviewPane.jsx';
+import { useTouchUi } from '../../hooks/useTouchUi.js';
 import { canPreviewEntry } from '../../lib/filePreview.js';
 import FilePropertiesDialog from './FilePropertiesDialog.jsx';
 import NewFileDialog from './NewFileDialog.jsx';
@@ -246,6 +247,7 @@ export default function FileExplorer({
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewEntry, setPreviewEntry] = useState(/** @type {import('../../types/nas4usb.d.ts').FsEntry | null} */ (null));
   const [previewAnchorPath, setPreviewAnchorPath] = useState(/** @type {string | null} */ (null));
+  const touchUi = useTouchUi();
 
   const uploadInputRef = useRef(null);
   const onenoteInputRef = useRef(null);
@@ -379,12 +381,16 @@ export default function FileExplorer({
 
   const openPreviewFor = (entry, { fromList = false } = {}) => {
     if (!entry) return;
+    if (touchUi && entry.isDirectory) {
+      onNavigate(entry.relativePath);
+      return;
+    }
     if (isInTrashView || isInFavoritesView) return;
     if (fromList) {
       setPreviewAnchorPath(entry.isDirectory ? entry.relativePath : currentPath);
     }
     setPreviewEntry(entry);
-    if (canPreviewView(entry) && (canPreviewEntry(entry) || previewOpen)) {
+    if (canPreviewView(entry) && (touchUi || canPreviewEntry(entry) || previewOpen)) {
       setPreviewOpen(true);
     }
   };
@@ -1310,7 +1316,7 @@ export default function FileExplorer({
   };
 
   const handleToggleCollapseFor = async (entry, nextCollapsed) => {
-    if (!entry || entry.isDirectory || !fileIndentInfo[entry.relativePath]?.hasChildren) return;
+    if (!entry || entry.isDirectory) return;
     try {
       await setFileCollapsed(
         entry.relativePath,
@@ -1344,7 +1350,7 @@ export default function FileExplorer({
       toggleSelection(entry.relativePath);
     } else {
       selectOnly(entry.relativePath);
-      if (previewOpen || canPreviewEntry(entry)) {
+      if (touchUi || previewOpen || canPreviewEntry(entry)) {
         openPreviewFor(entry, { fromList: true });
       }
     }
@@ -1641,7 +1647,7 @@ export default function FileExplorer({
           {compactMode && typeof onShowFolders === 'function' ? (
             <button
               type="button"
-              className="inline-flex h-8 shrink-0 items-center gap-1 rounded-md border border-nas-border bg-white px-2.5 text-[10pt] text-nas-text hover:bg-nas-sidebarHover"
+              className={`inline-flex ${touchUi ? 'h-11' : 'h-8'} shrink-0 items-center gap-1 rounded-md border border-nas-border bg-white px-2.5 text-[10pt] text-nas-text hover:bg-nas-sidebarHover`}
               onClick={onShowFolders}
               title="폴더 목록으로"
               aria-label="폴더 목록으로"
@@ -1833,6 +1839,8 @@ export default function FileExplorer({
           folderColorMap={folderColorMap}
           nameBoldMap={nameBoldMap}
           fileLevelMap={fileLevelMap}
+          fileCollapsedMap={fileCollapsedMap}
+          onToggleCollapse={handleToggleCollapseFor}
         />
       </div>
       {contextMenu && contextItems.length > 0 && (

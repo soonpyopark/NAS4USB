@@ -1,4 +1,5 @@
 import { AppModal, AppModalActions, AppModalButton } from '../common/AppModal.jsx';
+import { IconClose } from './EditorModalIcons.jsx';
 
 export default function ViewerModal({
   title,
@@ -34,7 +35,11 @@ export default function ViewerModal({
 
         <AppModalActions className="!mb-0 shrink-0">
           {actions}
-          {allowClose && <AppModalButton onClick={onClose}>닫기</AppModalButton>}
+          {allowClose && (
+            <AppModalButton className="modal-btn--icon" title="닫기" aria-label="닫기" onClick={onClose}>
+              <IconClose />
+            </AppModalButton>
+          )}
         </AppModalActions>
       </header>
 

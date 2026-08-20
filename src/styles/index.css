@@ -243,7 +243,7 @@
     flex: 1;
     flex-direction: column;
     overflow: auto;
-    background: #f8fafc;
+    background: #fff;
   }
 
   .file-preview-pane__empty {
@@ -324,40 +324,86 @@
 
   .file-preview-pane__folder {
     display: flex;
-    min-height: 0;
-    flex: 1;
+    min-height: 100%;
+    flex: 1 0 auto;
     flex-direction: column;
     background: #fff;
   }
 
   .file-preview-pane__folder-meta {
     margin: 0;
-    padding: 0.5rem 0.75rem 0.35rem;
+    padding: 0.45rem 0.7rem 0.3rem;
     font-size: 0.75rem;
     color: #64748b;
   }
 
+  .file-preview-pane__folder-head,
+  .file-preview-pane__folder-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 5.6rem 3.4rem;
+    align-items: center;
+    column-gap: 0.4rem;
+    min-height: 2.25rem;
+    padding: 0 0.55rem;
+  }
+
+  .file-preview-pane__folder-head {
+    border-bottom: 1px solid #e2e8f0;
+    color: #64748b;
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+
   .file-preview-pane__folder-list {
     margin: 0;
-    padding: 0 0.4rem 0.75rem;
+    padding: 0 0 0.5rem;
     list-style: none;
   }
 
   .file-preview-pane__folder-item {
-    display: flex;
     width: 100%;
-    align-items: center;
-    gap: 0.45rem;
     border: 0;
-    border-radius: 0.35rem;
+    border-bottom: 1px solid #f1f5f9;
     background: transparent;
-    padding: 0.35rem 0.4rem;
+    color: inherit;
     text-align: left;
     cursor: pointer;
   }
 
-  .file-preview-pane__folder-item:hover {
-    background: #f1f5f9;
+  .file-preview-pane__folder-item:hover,
+  .file-preview-pane__folder-item:focus-visible {
+    background: #f8fafc;
+    outline: none;
+  }
+
+  .file-preview-pane__folder-main {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 0.3rem;
+  }
+
+  .file-preview-pane__folder-chevron-slot {
+    display: inline-flex;
+    width: 1.25rem;
+    height: 1.25rem;
+    min-width: 1.25rem;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #475569;
+  }
+
+  .file-preview-pane__folder-chevron-slot.is-button {
+    border-radius: 0.25rem;
+    cursor: pointer;
+  }
+
+  .file-preview-pane__folder-chevron-slot.is-button:hover {
+    background: #e2e8f0;
   }
 
   .file-preview-pane__folder-name {
@@ -366,11 +412,29 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 0.8125rem;
+    font-weight: 500;
     color: #334155;
   }
 
+  .file-preview-pane__folder-name.is-bold {
+    font-weight: 700;
+  }
+
+  .file-preview-pane__folder-date,
+  .file-preview-pane__folder-size {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.75rem;
+    color: #64748b;
+  }
+
+  .file-preview-pane__folder-size {
+    text-align: right;
+  }
+
   .file-preview-pane__folder-more {
-    padding: 0 0.75rem 0.85rem;
+    padding: 0.35rem 0.7rem 0.85rem;
   }
 
   .file-preview-pane__text {
@@ -389,12 +453,22 @@
     background: #fff;
   }
 
-  .file-preview-pane .tiptap-toolbar,
-  .file-preview-pane .tiptap-search-bar,
   .file-preview-pane .tiptap-bubble-menu,
-  .file-preview-pane .tiptap-floating-menu,
-  .file-preview-pane .tiptap-toc-panel {
+  .file-preview-pane .tiptap-floating-menu {
     display: none !important;
+  }
+
+  .file-preview-pane .tiptap-editor-shell__body {
+    position: relative;
+  }
+
+  .file-preview-pane .tiptap-toc-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 6;
+    box-shadow: -6px 0 16px rgba(15, 23, 42, 0.08);
   }
 
   .file-preview-pane .tiptap-editor-shell {
@@ -1426,4 +1500,106 @@
   body:has(.markdown-preview) .cm-editor {
     display: none !important;
   }
+}
+
+html.touch-ui {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html.touch-ui [data-explorer-list] {
+  touch-action: manipulation;
+}
+
+html.touch-ui [data-explorer-entry] td {
+  padding-top: 0.65rem;
+  padding-bottom: 0.65rem;
+}
+
+html.touch-ui [data-explorer-entry] input[type='checkbox'] {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+html.touch-ui .file-preview-overlay--open {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: auto;
+}
+
+html.touch-ui .file-preview-pane {
+  width: 100%;
+  min-width: 0;
+  border-left: 0;
+  box-shadow: none;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+html.touch-ui .file-preview-pane__header {
+  flex-wrap: wrap;
+  min-height: 3.25rem;
+}
+
+html.touch-ui .file-preview-pane__btn {
+  min-height: 2.75rem;
+  min-width: 3.25rem;
+  padding: 0 0.85rem;
+  font-size: 0.875rem;
+}
+
+html.touch-ui .file-preview-pane__folder-head,
+html.touch-ui .file-preview-pane__folder-item {
+  min-height: 2.75rem;
+}
+
+html.touch-ui .file-preview-pane__folder-chevron-slot {
+  width: 2.75rem;
+  height: 2.75rem;
+  min-width: 2.75rem;
+}
+
+html.touch-ui .desktop-pane-tab {
+  min-height: 2.75rem;
+}
+
+html.touch-ui .nas-desktop-main {
+  padding: 0.5rem;
+}
+
+html.touch-ui .text-editor-toolbar .nas-btn-ghost,
+html.touch-ui .text-editor-toolbar button,
+html.touch-ui .text-editor-toolbar select {
+  min-height: 2.75rem;
+}
+
+html.touch-ui .file-explorer-toolbar--touch {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.2rem;
+  overflow: hidden;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 0.45rem 0.55rem;
+}
+
+html.touch-ui .file-explorer-toolbar--touch .nas-btn-ghost {
+  min-height: 2.75rem;
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 0 0.45rem;
+  white-space: nowrap;
+}
+
+html.touch-ui .file-explorer-toolbar__more {
+  flex: 0 0 2.75rem;
+  min-width: 2.75rem;
+  margin-left: auto;
+  padding: 0;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+html.touch-ui .file-explorer-toolbar__more.is-open {
+  background: #e2e8f0;
 }

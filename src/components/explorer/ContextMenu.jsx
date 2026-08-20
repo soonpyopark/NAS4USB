@@ -66,7 +66,10 @@ export default function ContextMenu({ x, y, items, onClose }) {
 
   useEffect(() => {
     const handlePointerDown = (event) => {
-      if (menuRef.current?.contains(event.target)) return;
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (menuRef.current?.contains(target)) return;
+      if (target.closest('[data-menu-trigger]')) return;
       onClose();
     };
     const handleKeyDown = (event) => {

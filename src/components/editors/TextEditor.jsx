@@ -17,6 +17,7 @@ import {
   openGotoLineOnce,
 } from '../../lib/text/codeMirrorSetup.js';
 import { useSpellcheckEnabled } from '../../hooks/useSpellcheckEnabled.js';
+import { detectTouchUi, useTouchUi } from '../../hooks/useTouchUi.js';
 
 /**
  * @typedef {'edit' | 'split' | 'preview'} TextEditorViewMode
@@ -59,8 +60,10 @@ export default function TextEditor({
   const [tabSize, setTabSize] = useState(2);
   const [showWhitespace, setShowWhitespace] = useState(false);
   const [darkTheme, setDarkTheme] = useState(false);
+  const touchUi = useTouchUi();
+  const [toolsOpen, setToolsOpen] = useState(() => !detectTouchUi());
   const [viewMode, setViewMode] = useState(
-    /** @type {TextEditorViewMode} */ (isMarkdown ? 'split' : 'edit'),
+    /** @type {TextEditorViewMode} */ (isMarkdown && !detectTouchUi() ? 'split' : 'edit'),
   );
   const [cursorOffset, setCursorOffset] = useState(0);
   const [isEditable, setIsEditable] = useState(false);
@@ -68,6 +71,10 @@ export default function TextEditor({
     getLanguageLabel({ fileName, isMarkdown }),
   );
   const spellcheckEnabled = useSpellcheckEnabled();
+
+  useEffect(() => {
+    if (touchUi && viewMode === 'split') setViewMode('edit');
+  }, [touchUi, viewMode]);
 
   onSaveRef.current = onSave;
   onReadyRef.current = onReady;
@@ -290,10 +297,23 @@ export default function TextEditor({
   return (
     <div className={`flex min-h-0 flex-1 flex-col ${darkTheme ? 'bg-slate-900' : 'bg-slate-100'}`}>
       <div
-        className={`print-hide flex flex-wrap items-center gap-2 border-b px-3 py-2 ${
+        className={`text-editor-toolbar print-hide flex flex-wrap items-center gap-2 border-b px-3 py-2 ${
           darkTheme ? 'border-slate-700 bg-slate-900' : 'border-slate-200 bg-white'
         }`}
       >
+        {touchUi ? (
+          <button
+            type="button"
+            className={`nas-btn-ghost text-xs ${toolsOpen ? 'bg-slate-100' : ''} ${
+              darkTheme ? 'text-slate-200 hover:bg-slate-800' : ''
+            }`}
+            onClick={() => setToolsOpen((value) => !value)}
+          >
+            {toolsOpen ? '도구 접기' : '도구'}
+          </button>
+        ) : null}
+        {!touchUi || toolsOpen ? (
+          <>
         <button
           type="button"
           className={`nas-btn-ghost text-xs ${wordWrap ? 'bg-slate-100' : ''} ${
@@ -356,13 +376,15 @@ export default function TextEditor({
         <span className={`text-[11px] ${darkTheme ? 'text-slate-500' : 'text-slate-400'}`}>
           CodeMirror 전체 기능
         </span>
+          </>
+        ) : null}
         {isMarkdown && (
           <div
             className={`ml-auto flex items-center gap-1 rounded-md border p-0.5 ${
               darkTheme ? 'border-slate-600' : 'border-slate-200'
             }`}
           >
-            {(['edit', 'split', 'preview']).map((mode) => (
+            {(touchUi ? ['edit', 'preview'] : ['edit', 'split', 'preview']).map((mode) => (
               <button
                 key={mode}
                 type="button"

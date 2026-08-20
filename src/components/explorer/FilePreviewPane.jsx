@@ -1,4 +1,5 @@
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { useTouchUi } from '../../hooks/useTouchUi.js';
 import { getImageMimeType } from '../../lib/media/mediaTypes.js';
 import { buildMediaStreamUrl } from '../../lib/media/streamUrl.js';
 import { entryExtensionOf, isSecFileName } from '../../lib/filePassword/secPaths.js';
@@ -16,8 +17,30 @@ import { useFolderOrder } from '../../hooks/useFolderOrder.js';
 import { resolveComicFirstPage } from '../../lib/comicReader/firstPage.js';
 import { resolvePdfFirstPage } from '../../lib/pdf/firstPage.js';
 import FileIcon from './FileIcon.jsx';
-import { FILE_INDENT_STEP_PX } from '../../../shared/fileIndent.js';
+import { buildFileIndentInfo, filterCollapsedEntries } from '../../../shared/fileIndent.js';
 import { formatByteSize } from '../../../shared/videoPreviewCache.js';
+
+const PREVIEW_INDENT_STEP_PX = 20;
+const PREVIEW_COLLAPSE_SLOT = 'file-preview-pane__folder-chevron-slot';
+
+function formatPreviewDate(iso) {
+  if (!iso) return '—';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleDateString('ko-KR', { year: '2-digit', month: '2-digit', day: '2-digit' });
+}
+
+function PreviewIndentChevron({ expanded }) {
+  return (
+    <svg className="h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+      {expanded ? (
+        <path d="M4.5 7h11L10 15.5 4.5 7z" />
+      ) : (
+        <path d="M7 4.5v11L15.5 10 7 4.5z" />
+      )}
+    </svg>
+  );
+}
 
 /**
  * @param {string} relativePath
@@ -50,6 +73,8 @@ const TEXT_PREVIEW_LIMIT = 400_000;
  *   folderColorMap?: Record<string, string>,
  *   nameBoldMap?: Record<string, boolean>,
  *   fileLevelMap?: Record<string, number>,
+ *   fileCollapsedMap?: Record<string, boolean>,
+ *   onToggleCollapse?: (entry: import('../../types/nas4usb.d.ts').FsEntry, nextCollapsed?: boolean) => void,
  * }} props
  */
 export default function FilePreviewPane({
@@ -63,9 +88,12 @@ export default function FilePreviewPane({
   folderColorMap = {},
   nameBoldMap = {},
   fileLevelMap = {},
+  fileCollapsedMap = {},
+  onToggleCollapse,
 }) {
   const kind = getFilePreviewKind(entry);
   const locked = Boolean(entry && isSecFileName(entry.relativePath || entry.name));
+  const touchUi = useTouchUi();
   const { folderOrderMap } = useFolderOrder();
   const listingPath = entry?.isDirectory
     ? entry.relativePath
@@ -91,6 +119,14 @@ export default function FilePreviewPane({
   const [folderCounts, setFolderCounts] = useState({ folders: 0, files: 0, total: 0, truncated: false });
   const [folderLoading, setFolderLoading] = useState(false);
   const [folderError, setFolderError] = useState('');
+  const folderIndentInfo = useMemo(
+    () => buildFileIndentInfo(folderEntries, fileLevelMap, fileCollapsedMap),
+    [folderEntries, fileLevelMap, fileCollapsedMap],
+  );
+  const visibleFolderEntries = useMemo(
+    () => filterCollapsedEntries(folderEntries, fileLevelMap, fileCollapsedMap),
+    [folderEntries, fileLevelMap, fileCollapsedMap],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -247,7 +283,7 @@ export default function FilePreviewPane({
   onCloseRef.current = onClose;
 
   useEffect(() => {
-    if (!open) return undefined;
+    if (!open || touchUi) return undefined;
     const onPointerDown = (event) => {
       const target = event.target;
       if (!(target instanceof Element)) return;
@@ -259,7 +295,7 @@ export default function FilePreviewPane({
     };
     document.addEventListener('pointerdown', onPointerDown);
     return () => document.removeEventListener('pointerdown', onPointerDown);
-  }, [open]);
+  }, [open, touchUi]);
 
   return (
     <div
@@ -275,6 +311,11 @@ export default function FilePreviewPane({
             ) : null}
           </p>
           <div className="file-preview-pane__actions">
+            {touchUi ? (
+              <button type="button" className="nas-btn-ghost file-preview-pane__btn" onClick={onClose}>
+                뒤로
+              </button>
+            ) : null}
             {parentPath && typeof onPreview === 'function' ? (
               <button
                 type="button"
@@ -293,9 +334,11 @@ export default function FilePreviewPane({
                 {entry.isDirectory ? '폴더 열기' : '열기'}
               </button>
             ) : null}
-            <button type="button" className="nas-btn-ghost file-preview-pane__btn" onClick={onClose}>
-              닫기
-            </button>
+            {touchUi ? null : (
+              <button type="button" className="nas-btn-ghost file-preview-pane__btn" onClick={onClose}>
+                닫기
+              </button>
+            )}
           </div>
         </header>
         {open && entry && crumbs.length > 0 ? (
@@ -343,40 +386,85 @@ export default function FilePreviewPane({
                 {folderEntries.length === 0 ? (
                   <p className="file-preview-pane__empty">폴더가 비어 있습니다.</p>
                 ) : (
-                  <ul className="file-preview-pane__folder-list">
-                    {folderEntries.map((child) => (
-                      <li key={child.relativePath}>
-                        <button
-                          type="button"
-                          className="file-preview-pane__folder-item"
-                          style={
-                            !child.isDirectory && fileLevelMap[child.relativePath]
-                              ? {
-                                  paddingLeft: `${0.4 + (fileLevelMap[child.relativePath] * FILE_INDENT_STEP_PX) / 16}rem`,
+                  <>
+                    <div className="file-preview-pane__folder-head" aria-hidden="true">
+                      <span className="file-preview-pane__folder-name">이름</span>
+                      <span className="file-preview-pane__folder-date">수정한 날짜</span>
+                      <span className="file-preview-pane__folder-size">크기</span>
+                    </div>
+                    <ul className="file-preview-pane__folder-list">
+                      {visibleFolderEntries.map((child) => {
+                        const indent = child.isDirectory
+                          ? null
+                          : folderIndentInfo[child.relativePath];
+                        const indentLevel = indent?.level || 0;
+                        const hasChildren = Boolean(indent?.hasChildren);
+                        const collapsed = Boolean(indent?.collapsed);
+                        return (
+                          <li key={child.relativePath}>
+                            <div
+                              className="file-preview-pane__folder-item"
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => onPreview?.(child)}
+                              onDoubleClick={() => onOpenFull?.(child)}
+                              onKeyDown={(event) => {
+                                if (event.key !== 'Enter' && event.key !== ' ') return;
+                                event.preventDefault();
+                                onPreview?.(child);
+                              }}
+                            >
+                              <span
+                                className="file-preview-pane__folder-main"
+                                style={
+                                  indentLevel > 0
+                                    ? { paddingLeft: `${indentLevel * PREVIEW_INDENT_STEP_PX}px` }
+                                    : undefined
                                 }
-                              : undefined
-                          }
-                          onClick={() => onPreview?.(child)}
-                          onDoubleClick={() => onOpenFull?.(child)}
-                        >
-                          <FileIcon
-                            entry={child}
-                            folderColor={folderColorMap[child.relativePath]}
-                            nameBold={Boolean(nameBoldMap[child.relativePath])}
-                            className="h-4 w-4 shrink-0"
-                          />
-                          <span
-                            className={`file-preview-pane__folder-name${
-                              nameBoldMap[child.relativePath] ? ' font-bold' : ''
-                            }`}
-                            title={child.name}
-                          >
-                            {child.name}
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
+                              >
+                                {hasChildren ? (
+                                  <button
+                                    type="button"
+                                    className={`${PREVIEW_COLLAPSE_SLOT} is-button`}
+                                    title={collapsed ? '하위 파일 펼치기' : '하위 파일 접기'}
+                                    aria-label={collapsed ? '하위 파일 펼치기' : '하위 파일 접기'}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      onToggleCollapse?.(child, !collapsed);
+                                    }}
+                                  >
+                                    <PreviewIndentChevron expanded={!collapsed} />
+                                  </button>
+                                ) : (
+                                  <span className={PREVIEW_COLLAPSE_SLOT} aria-hidden="true" />
+                                )}
+                                <FileIcon
+                                  entry={child}
+                                  folderColor={folderColorMap[child.relativePath]}
+                                  nameBold={Boolean(nameBoldMap[child.relativePath])}
+                                  className="h-5 w-5 shrink-0"
+                                />
+                                <span
+                                  className={`file-preview-pane__folder-name${
+                                    nameBoldMap[child.relativePath] ? ' is-bold' : ''
+                                  }`}
+                                  title={child.name}
+                                >
+                                  {child.name}
+                                </span>
+                              </span>
+                              <span className="file-preview-pane__folder-date">
+                                {formatPreviewDate(child.modifiedAt)}
+                              </span>
+                              <span className="file-preview-pane__folder-size">
+                                {child.isDirectory ? '—' : formatByteSize(child.size)}
+                              </span>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </>
                 )}
                 {folderCounts.truncated ? (
                   <p className="file-preview-pane__caption file-preview-pane__folder-more">
@@ -403,22 +491,12 @@ export default function FilePreviewPane({
               ) : null}
             </div>
           ) : kind === 'text' ? (
-            <>
-              <p className="file-preview-pane__caption" title={entry.name}>
-                {entry.name} ({formatByteSize(entry.size)})
-              </p>
-              <pre className="file-preview-pane__text">{text || '(빈 파일)'}</pre>
-            </>
+            <pre className="file-preview-pane__text">{text || '(빈 파일)'}</pre>
           ) : kind === 'markdown' ? (
-            <>
-              <p className="file-preview-pane__caption" title={entry.name}>
-                {entry.name} ({formatByteSize(entry.size)})
-              </p>
-              <div
-                className="markdown-preview file-preview-pane__rich"
-                dangerouslySetInnerHTML={{ __html: html || '<p>(빈 문서)</p>' }}
-              />
-            </>
+            <div
+              className="markdown-preview file-preview-pane__rich"
+              dangerouslySetInnerHTML={{ __html: html || '<p>(빈 문서)</p>' }}
+            />
           ) : kind === 'tiptap' && tiptapContent && tiptapResolveFileUrl ? (
             <Suspense
               fallback={<p className="file-preview-pane__empty">문서 준비 중…</p>}

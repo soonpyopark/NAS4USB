@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTouchUi } from '../../hooks/useTouchUi.js';
 import { EXTERNAL_FOLDER, SHARED_FOLDER } from '../../../shared/constants.js';
 import { HOMES_FOLDER } from '../../../shared/memberHomes.js';
 import { isFixedFolderOrderPath } from '../../../shared/folderOrder.js';
-import { displayEntryName } from '../../lib/fsPaths.js';
 import { favoriteAncestorLabel } from '../../lib/favoritesPaths.js';
 import { entryExtensionOf, isSecFileName } from '../../lib/filePassword/secPaths.js';
 import EntryMenuButton, { BoxedDotsIcon } from './EntryMenuButton.jsx';
@@ -371,12 +371,17 @@ export default function FileList({
   levelsCollapsed = false,
   onToggleLevels,
 }) {
+  const touchUi = useTouchUi();
   const selectAllRef = useRef(null);
   const listScrollRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   const dragPathRef = useRef(/** @type {string | null} */ (null));
   const dragPointerRef = useRef(/** @type {{ x: number, y: number } | null} */ (null));
   const dragScrollRafRef = useRef(0);
   const listClicksRef = useRef(/** @type {{ path: string, time: number }[]} */ ([]));
+  const longPressRef = useRef(
+    /** @type {{ timer: ReturnType<typeof setTimeout>, x: number, y: number } | null} */ (null),
+  );
+  const longPressOpenedRef = useRef(false);
   const [dragPath, setDragPath] = useState(/** @type {string | null} */ (null));
   const [dropHint, setDropHint] = useState(
     /** @type {{ path: string, place: 'before' | 'after' | 'into' } | null} */ (null),
@@ -403,6 +408,13 @@ export default function FileList({
   useEffect(() => {
     if (!canReorder && !canMoveInto) clearReorderDrag();
   }, [canReorder, canMoveInto]);
+
+  useEffect(
+    () => () => {
+      if (longPressRef.current?.timer) clearTimeout(longPressRef.current.timer);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!dragPath) {
@@ -604,8 +616,13 @@ export default function FileList({
                 })
               : '';
             const reorderable =
-              canReorder && !(lockFixedOrder && isFixedFolderOrderPath(entry.relativePath));
-            const draggable = (reorderable || canMoveInto) && !isWorkspaceRootSystemFolder(entry.relativePath);
+              !touchUi &&
+              canReorder &&
+              !(lockFixedOrder && isFixedFolderOrderPath(entry.relativePath));
+            const draggable =
+              !touchUi &&
+              (reorderable || canMoveInto) &&
+              !isWorkspaceRootSystemFolder(entry.relativePath);
             const dragging = dragPath === entry.relativePath;
             const hintHere = dropHint?.path === entry.relativePath;
             const indent = fileIndentInfo[entry.relativePath];
@@ -636,6 +653,10 @@ export default function FileList({
                       : undefined
                 }
                 onClick={(event) => {
+                  if (longPressOpenedRef.current) {
+                    longPressOpenedRef.current = false;
+                    return;
+                  }
                   event.currentTarget.closest('[data-explorer-list]')?.focus({ preventScroll: true });
                   const now = Date.now();
                   listClicksRef.current = listClicksRef.current
@@ -644,6 +665,7 @@ export default function FileList({
                   onSelect(entry, event);
                 }}
                 onDoubleClick={() => {
+                  if (touchUi) return;
                   const recent = listClicksRef.current.slice(-2);
                   if (
                     recent.length >= 2 &&
@@ -654,6 +676,45 @@ export default function FileList({
                   onOpen(entry);
                 }}
                 onContextMenu={(event) => onContextMenu(event, entry)}
+                onPointerDown={(event) => {
+                  if (!touchUi || event.pointerType === 'mouse' || event.button !== 0) return;
+                  if (longPressRef.current?.timer) clearTimeout(longPressRef.current.timer);
+                  const { clientX, clientY } = event;
+                  longPressRef.current = {
+                    x: clientX,
+                    y: clientY,
+                    timer: setTimeout(() => {
+                      longPressRef.current = null;
+                      longPressOpenedRef.current = true;
+                      onContextMenu(
+                        {
+                          clientX,
+                          clientY,
+                          preventDefault() {},
+                          stopPropagation() {},
+                        },
+                        entry,
+                      );
+                    }, 480),
+                  };
+                }}
+                onPointerMove={(event) => {
+                  const hold = longPressRef.current;
+                  if (!hold) return;
+                  if (Math.hypot(event.clientX - hold.x, event.clientY - hold.y) < 10) return;
+                  clearTimeout(hold.timer);
+                  longPressRef.current = null;
+                }}
+                onPointerUp={() => {
+                  if (!longPressRef.current) return;
+                  clearTimeout(longPressRef.current.timer);
+                  longPressRef.current = null;
+                }}
+                onPointerCancel={() => {
+                  if (!longPressRef.current) return;
+                  clearTimeout(longPressRef.current.timer);
+                  longPressRef.current = null;
+                }}
                 onDragStart={(event) => {
                   if (!draggable || isExternalFileDrag(event)) return;
                   event.dataTransfer.effectAllowed = 'move';
@@ -745,7 +806,7 @@ export default function FileList({
                     )}
                     {isWorkspaceRootSystemFolder(entry.relativePath) ? (
                       <EntryMenuButton
-                        label={displayEntryName(entry)}
+                        label={entry.name}
                         onOpen={(event) => onContextMenu(event, entry)}
                         className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-slate-500 hover:bg-slate-200"
                       >
@@ -753,7 +814,7 @@ export default function FileList({
                       </EntryMenuButton>
                     ) : (
                       <EntryMenuButton
-                        label={displayEntryName(entry)}
+                        label={entry.name}
                         onOpen={(event) => onContextMenu(event, entry)}
                         className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-slate-200"
                       >
@@ -775,7 +836,7 @@ export default function FileList({
                         }`}
                         title={entry.name}
                       >
-                        {displayEntryName(entry)}
+                        {entry.name}
                       </span>
                       {locationLabel ? (
                         <span

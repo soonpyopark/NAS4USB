@@ -726,6 +726,16 @@
   gap: 6px;
 }
 
+.tiptap-toolbar__row--chrome {
+  justify-content: space-between;
+}
+
+html.touch-ui .tiptap-toolbar__btn,
+html.touch-ui .tiptap-toolbar__select {
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+}
+
 .tiptap-toolbar__row--table {
   padding-top: 2px;
   border-top: 1px dashed #e2e8f0;
@@ -1020,7 +1030,11 @@
 }
 
 .tiptap-toolbar--zoom-only {
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
   justify-content: flex-end;
+  gap: 2px;
   padding-block: 6px;
 }
 

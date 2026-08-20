@@ -1,4 +1,5 @@
 import { Children, cloneElement, isValidElement, useCallback, useEffect, useRef, useState } from 'react';
+import { useTouchUi } from '../../hooks/useTouchUi.js';
 import Sidebar from './Sidebar.jsx';
 import TopBar from './TopBar.jsx';
 import StatusBar from './StatusBar.jsx';
@@ -37,8 +38,9 @@ export default function DesktopShell({
   const [isResizing, setIsResizing] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed);
   const [mobilePane, setMobilePane] = useState(/** @type {'folders' | 'files'} */ ('files'));
+  const touchUi = useTouchUi();
 
-  const isCompact = layoutWidth > 0 && layoutWidth < COMPACT_LAYOUT_MAX;
+  const isCompact = touchUi || (layoutWidth > 0 && layoutWidth < COMPACT_LAYOUT_MAX);
 
   const clampSidebarWidth = useCallback((nextWidth, containerWidth) => {
     const maxWidth = Math.max(SIDEBAR_MIN_WIDTH, containerWidth * SIDEBAR_MAX_RATIO);

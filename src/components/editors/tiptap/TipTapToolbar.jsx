@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+import { detectTouchUi, useTouchUi } from '../../../hooks/useTouchUi.js';
 import { useTiptapEditorTick } from '../../../hooks/useTiptapEditorTick.js';
 import { useTiptapFormatPainter } from '../../../hooks/useTiptapFormatPainter.js';
 import TipTapTableInsertPicker from './TipTapTableInsertPicker.jsx';
@@ -152,8 +154,14 @@ export default function TipTapToolbar({
   onCopyBlockLink,
 }) {
   useTiptapEditorTick(editor);
+  const touchUi = useTouchUi();
+  const [formatOpen, setFormatOpen] = useState(() => !detectTouchUi());
   const disabled = !editor || readOnly || !editor.isEditable || htmlMode;
   const formatPainter = useTiptapFormatPainter(editor, disabled);
+
+  useEffect(() => {
+    if (touchUi) setFormatOpen(false);
+  }, [touchUi]);
 
   if (!editor) return null;
   const chars = editor.storage.characterCount?.characters?.() ?? 0;
@@ -216,8 +224,59 @@ export default function TipTapToolbar({
     }
   };
 
+  const showFullFormat = !touchUi || formatOpen;
+
   return (
     <div className="tiptap-toolbar" role="toolbar" aria-label="TipTap 서식">
+      {touchUi ? (
+        <div className="tiptap-toolbar__row tiptap-toolbar__row--chrome">
+          <ToolbarGroup>
+            <ToolbarButton
+              title={formatOpen ? '서식 접기' : '서식 펼치기'}
+              active={formatOpen}
+              onClick={() => setFormatOpen((value) => !value)}
+            >
+              서식
+            </ToolbarButton>
+            {!formatOpen ? (
+              <>
+                <ToolbarButton
+                  title="실행 취소 (Ctrl+Z)"
+                  disabled={disabled || typeof editor.commands.undo !== 'function' || !editor.can().undo()}
+                  onClick={() => editor.commands.undo?.()}
+                >
+                  <IconUndo />
+                </ToolbarButton>
+                <ToolbarButton
+                  title="다시 실행 (Ctrl+Shift+Z)"
+                  disabled={disabled || typeof editor.commands.redo !== 'function' || !editor.can().redo()}
+                  onClick={() => editor.commands.redo?.()}
+                >
+                  <IconRedo />
+                </ToolbarButton>
+                {tocAvailable ? (
+                  <ToolbarButton title="목차 패널" active={tocOpen} onClick={() => onToggleToc?.()}>
+                    <IconToc />
+                  </ToolbarButton>
+                ) : null}
+                <ToolbarButton title="본문 검색 (Ctrl+F)" active={searchOpen} onClick={() => onToggleSearch?.()}>
+                  <IconSearch />
+                </ToolbarButton>
+              </>
+            ) : null}
+          </ToolbarGroup>
+          {!formatOpen ? (
+            <TipTapZoomControls
+              zoom={zoom}
+              onZoomIn={onZoomIn}
+              onZoomOut={onZoomOut}
+              onZoomReset={onZoomReset}
+            />
+          ) : null}
+        </div>
+      ) : null}
+      {showFullFormat ? (
+      <>
       <div className="tiptap-toolbar__row">
         <ToolbarGroup>
           <ToolbarButton
@@ -656,6 +715,8 @@ export default function TipTapToolbar({
           </span>
         </div>
       </div>
+      </>
+      ) : null}
     </div>
   );
 }

@@ -22,6 +22,7 @@ import { FsSyncProvider, useFsSync } from './context/FsSyncContext.jsx';
 import AppDialogHost from './components/common/AppDialogHost.jsx';
 import FilePasswordHost from './components/common/FilePasswordHost.jsx';
 import { useAppInfo } from './hooks/useAppInfo.js';
+import { useTouchUi } from './hooks/useTouchUi.js';
 import { useFsChangeSync } from './hooks/useFsChangeSync.js';
 import { hasNas4usbApi } from './lib/runtime.js';
 import { guardOpenFileEntry } from './lib/openFileGuard.js';
@@ -560,6 +561,7 @@ function Nas4usbAppMain() {
 }
 
 function Nas4usbApp() {
+  useTouchUi();
   return (
     <FsSyncProvider>
       <AppDialogHost />

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import ViewerModal from './ViewerModal.jsx';
 import { AppModal, AppModalActions, AppModalBody, AppModalButton } from '../common/AppModal.jsx';
+import { IconSave } from './EditorModalIcons.jsx';
 import { usePlaintextObjectUrl } from '../../hooks/usePlaintextObjectUrl.js';
 import { readWorkspacePlainBase64, writeWorkspacePlainBase64 } from '../../lib/filePassword/io.js';
 import { getPdfMimeType } from '../../lib/media/mediaTypes.js';
@@ -58,8 +59,6 @@ import {
   IconPdfSearch,
   IconPdfSearchClose,
   IconPdfThumbs,
-  IconPdfTriangleDown,
-  IconPdfTriangleUp,
   IconPdfTwoPages,
   IconPdfZoomIn,
   IconPdfZoomOut,
@@ -70,6 +69,7 @@ import {
   viewportRectsToPdfUserRects,
 } from '../../lib/pdf/embedPdfMarkups.js';
 import { base64ToBytes, bytesToBase64 } from '../../lib/bytes.js';
+import { detectTouchUi, useTouchUi } from '../../hooks/useTouchUi.js';
 
 /**
  * @typedef {'fitWidth' | 'fitHeight' | 'fitPage' | 'custom'} PdfZoomMode
@@ -96,6 +96,40 @@ const PDF_SIDE_RAIL_WIDTH_PX = 220;
  *   fullscreen?: boolean,
  * }} props
  */
+/**
+ * Onyx/Android page-turn hardware keys are often remapped to volume.
+ * Chrome may deliver them as Volume* names or Android keyCodes 24/25.
+ * A web page cannot stop the system volume change — only consume the event for paging.
+ * @param {KeyboardEvent} event
+ * @returns {'up' | 'down' | null}
+ */
+function physicalPageKeyDirection(event) {
+  const key = String(event.key || '');
+  const code = String(event.code || '');
+  const keyCode = Number(event.keyCode || event.which || 0);
+  if (
+    key === 'AudioVolumeDown' ||
+    key === 'VolumeDown' ||
+    code === 'AudioVolumeDown' ||
+    code === 'VolumeDown' ||
+    keyCode === 25 ||
+    keyCode === 174
+  ) {
+    return 'down';
+  }
+  if (
+    key === 'AudioVolumeUp' ||
+    key === 'VolumeUp' ||
+    code === 'AudioVolumeUp' ||
+    code === 'VolumeUp' ||
+    keyCode === 24 ||
+    keyCode === 175
+  ) {
+    return 'up';
+  }
+  return null;
+}
+
 export default function PdfViewerShell({
   relativePath,
   fileName,
@@ -175,7 +209,10 @@ export default function PdfViewerShell({
   const [rotation, setRotation] = useState(0);
   const [twoPageView, setTwoPageView] = useState(false);
   const [docReady, setDocReady] = useState(false);
-  const [sidePanel, setSidePanel] = useState(/** @type {PdfSidePanel} */ ('thumbs'));
+  const touchUi = useTouchUi();
+  const [sidePanel, setSidePanel] = useState(
+    /** @type {PdfSidePanel} */ (() => (detectTouchUi() ? null : 'thumbs')),
+  );
   const [highlightColorId, setHighlightColorId] = useState('yellow');
   const [underlineColorId, setUnderlineColorId] = useState('red');
   const [markups, setMarkups] = useState(
@@ -260,6 +297,19 @@ export default function PdfViewerShell({
 
   const showThumbnails = sidePanel === 'thumbs';
   const showMarksPanel = sidePanel === 'marks';
+  const sortedMarkups = useMemo(
+    () =>
+      [...markups].sort((a, b) => {
+        const pageDelta = (a.pageNumber || 0) - (b.pageNumber || 0);
+        if (pageDelta !== 0) return pageDelta;
+        const aRect = a.rects?.[0];
+        const bRect = b.rects?.[0];
+        const topDelta = (aRect?.top ?? 0) - (bRect?.top ?? 0);
+        if (topDelta !== 0) return topDelta;
+        return (aRect?.left ?? 0) - (bRect?.left ?? 0);
+      }),
+    [markups],
+  );
 
   const toggleSidePanel = useCallback((panel) => {
     setSidePanel((prev) => (prev === panel ? null : panel));
@@ -1525,7 +1575,7 @@ export default function PdfViewerShell({
       };
       setMarkups((prev) => [...prev, entry]);
       setActiveMarkupId(id);
-      setSidePanel('marks');
+      if (!touchUi) setSidePanel('marks');
       setSaveMessage('');
       clearAllLiveSelections();
       selectionDragRef.current = null;
@@ -1533,7 +1583,7 @@ export default function PdfViewerShell({
       setSelectionMenu(null);
       window.setTimeout(() => showMarkupSelection(entry), 50);
     },
-    [clearAllLiveSelections, showMarkupSelection],
+    [clearAllLiveSelections, showMarkupSelection, touchUi],
   );
 
   const copySelectionText = useCallback(async () => {
@@ -1673,8 +1723,6 @@ export default function PdfViewerShell({
       if (!(target instanceof Element)) return;
       if (target.closest('[data-pdf-selection-menu]')) return;
       if (target.closest('[data-pdf-marks-menu]')) return;
-      if (target.closest('.pdf-page-fab')) return;
-
       const pageWrap = target.closest('[data-pdf-page]');
       if (!(pageWrap instanceof HTMLElement) || !scroller.contains(pageWrap)) return;
       if (pageWrap.dataset.pdfReady !== '1') return;
@@ -2265,22 +2313,16 @@ export default function PdfViewerShell({
         }
       }
 
-      if (event.key === 'PageDown' || event.key === 'ArrowRight') {
+      if (event.key === 'PageDown') {
+        event.preventDefault();
+        handleFabNavigate('down');
+      } else if (event.key === 'PageUp') {
+        event.preventDefault();
+        handleFabNavigate('up');
+      } else if (event.key === 'ArrowRight') {
         event.preventDefault();
         goToPage(currentPage + 1);
-      } else if (event.key === 'PageUp' || event.key === 'ArrowLeft') {
-        event.preventDefault();
-        goToPage(currentPage - 1);
-      } else if (
-        !window.nas4usb?.pdfViewer?.setVolumeKeysForPaging &&
-        (event.key === 'AudioVolumeDown' || event.key === 'VolumeDown')
-      ) {
-        event.preventDefault();
-        goToPage(currentPage + 1);
-      } else if (
-        !window.nas4usb?.pdfViewer?.setVolumeKeysForPaging &&
-        (event.key === 'AudioVolumeUp' || event.key === 'VolumeUp')
-      ) {
+      } else if (event.key === 'ArrowLeft') {
         event.preventDefault();
         goToPage(currentPage - 1);
       }
@@ -2300,10 +2342,37 @@ export default function PdfViewerShell({
     removeMarkup,
     resetZoom,
     showSearchBar,
+    handleFabNavigate,
     zoomBy,
   ]);
 
-  // Tablet: volume down = next page, volume up = previous (while PDF viewer is open).
+  // Browser (Onyx Chrome): capture volume-shaped page keys. Cannot mute system volume.
+  useEffect(() => {
+    if (!docReady) return undefined;
+    if (window.nas4usb?.pdfViewer?.setVolumeKeysForPaging) return undefined;
+
+    const onPhysicalPageKey = (event) => {
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+      ) {
+        return;
+      }
+      const direction = physicalPageKeyDirection(event);
+      if (!direction) return;
+      event.preventDefault();
+      event.stopPropagation();
+      handleFabNavigate(direction);
+    };
+
+    window.addEventListener('keydown', onPhysicalPageKey, { capture: true });
+    return () => {
+      window.removeEventListener('keydown', onPhysicalPageKey, { capture: true });
+    };
+  }, [docReady, handleFabNavigate]);
+
+  // Electron: intercept volume keys before the OS changes volume.
   useEffect(() => {
     if (!docReady) return undefined;
     const api = window.nas4usb?.pdfViewer;
@@ -2311,22 +2380,22 @@ export default function PdfViewerShell({
 
     void api.setVolumeKeysForPaging(true);
     const unsubscribe = api.subscribeVolumePageTurn((direction) => {
-      const page = currentPageRef.current;
-      if (direction === 'next') goToPage(page + 1);
-      else if (direction === 'prev') goToPage(page - 1);
+      if (direction === 'next') handleFabNavigate('down');
+      else if (direction === 'prev') handleFabNavigate('up');
     });
 
     return () => {
       unsubscribe?.();
       void api.setVolumeKeysForPaging(false);
     };
-  }, [docReady, goToPage]);
+  }, [docReady, handleFabNavigate]);
 
   useEffect(() => {
     if (!docReady) return undefined;
     const timer = window.setTimeout(() => updateScrollEdges(), 80);
     return () => window.clearTimeout(timer);
   }, [docReady, zoomMode, displayScale, pageCount, rendering, updateScrollEdges]);
+
 
   const matchLabel =
     matches.length > 0 && activeMatch >= 0
@@ -2351,11 +2420,20 @@ export default function PdfViewerShell({
       raised={raised}
       actions={
         <AppModalButton
+          className="modal-btn--icon"
           onClick={() => void handleSaveToFile()}
           disabled={!canSaveToFile}
-          title="형광펜·밑줄을 원본 PDF에 저장 (Ctrl+S)"
+          title={savingToFile ? '저장 중…' : '저장 (Ctrl+S)'}
+          aria-label={savingToFile ? '저장 중…' : '저장'}
         >
-          {savingToFile ? '저장 중…' : '저장'}
+          {savingToFile ? (
+            <span
+              className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+              aria-hidden="true"
+            />
+          ) : (
+            <IconSave />
+          )}
         </AppModalButton>
       }
     >
@@ -2435,10 +2513,13 @@ export default function PdfViewerShell({
         <button
           type="button"
           className="pdf-tb-btn"
-          disabled={busy || currentPage <= 1}
-          onClick={() => goToPage(currentPage - 1)}
-          title="이전 페이지"
-          aria-label="이전 페이지"
+          disabled={
+            busy ||
+            (zoomMode === 'fitWidth' ? scrollEdges.atTop : currentPage <= 1)
+          }
+          onClick={() => handleFabNavigate('up')}
+          title={zoomMode === 'fitWidth' ? '위로 스크롤' : '이전 페이지'}
+          aria-label={zoomMode === 'fitWidth' ? '위로 스크롤' : '이전 페이지'}
         >
           <IconPdfChevronLeft />
         </button>
@@ -2468,10 +2549,13 @@ export default function PdfViewerShell({
         <button
           type="button"
           className="pdf-tb-btn"
-          disabled={busy || currentPage >= pageCount}
-          onClick={() => goToPage(currentPage + 1)}
-          title="다음 페이지"
-          aria-label="다음 페이지"
+          disabled={
+            busy ||
+            (zoomMode === 'fitWidth' ? scrollEdges.atBottom : currentPage >= pageCount)
+          }
+          onClick={() => handleFabNavigate('down')}
+          title={zoomMode === 'fitWidth' ? '아래로 스크롤' : '다음 페이지'}
+          aria-label={zoomMode === 'fitWidth' ? '아래로 스크롤' : '다음 페이지'}
         >
           <IconPdfChevronRight />
         </button>
@@ -2734,7 +2818,7 @@ export default function PdfViewerShell({
                 </p>
               ) : (
                 <ul className="flex flex-col gap-1.5">
-                  {markups.map((entry) => {
+                  {sortedMarkups.map((entry) => {
                     const active = entry.id === activeMarkupId;
                     return (
                       <li key={entry.id}>
@@ -2781,41 +2865,6 @@ export default function PdfViewerShell({
             </p>
           )}
           <div ref={scrollRef} className="pdf-scroll h-full min-h-0 overflow-auto p-3" />
-
-          {docReady && pageCount > 0 && (
-            <div
-              className="pdf-page-fab"
-              role="group"
-              aria-label={zoomMode === 'fitWidth' ? '화면 스크롤' : '페이지 이동'}
-            >
-              <button
-                type="button"
-                className="pdf-page-fab__btn"
-                disabled={
-                  busy ||
-                  (zoomMode === 'fitWidth' ? scrollEdges.atTop : currentPage <= 1)
-                }
-                onClick={() => handleFabNavigate('up')}
-                title={zoomMode === 'fitWidth' ? '위로 스크롤' : '이전 페이지'}
-                aria-label={zoomMode === 'fitWidth' ? '위로 스크롤' : '이전 페이지'}
-              >
-                <IconPdfTriangleUp />
-              </button>
-              <button
-                type="button"
-                className="pdf-page-fab__btn"
-                disabled={
-                  busy ||
-                  (zoomMode === 'fitWidth' ? scrollEdges.atBottom : currentPage >= pageCount)
-                }
-                onClick={() => handleFabNavigate('down')}
-                title={zoomMode === 'fitWidth' ? '아래로 스크롤' : '다음 페이지'}
-                aria-label={zoomMode === 'fitWidth' ? '아래로 스크롤' : '다음 페이지'}
-              >
-                <IconPdfTriangleDown />
-              </button>
-            </div>
-          )}
 
           {selectionMenu &&
             createPortal(
@@ -2952,43 +3001,6 @@ export default function PdfViewerShell({
 
       <style>{`
         .pdf-scroll { scrollbar-gutter: stable; }
-        .pdf-page-fab {
-          position: absolute;
-          right: 14px;
-          top: 50%;
-          bottom: auto;
-          transform: translateY(-50%);
-          z-index: 20;
-          display: flex;
-          flex-direction: column;
-          gap: 20px;
-          pointer-events: none;
-        }
-        .pdf-page-fab__btn {
-          pointer-events: auto;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          width: 46px;
-          height: 46px;
-          border-radius: 9999px;
-          border: 1px solid rgba(15, 23, 42, 0.12);
-          background: rgba(255, 255, 255, 0.42);
-          color: rgba(15, 23, 42, 0.72);
-          backdrop-filter: blur(6px);
-          -webkit-backdrop-filter: blur(6px);
-          box-shadow: 0 2px 10px rgba(15, 23, 42, 0.12);
-          cursor: pointer;
-          transition: background 0.15s ease, color 0.15s ease, opacity 0.15s ease;
-        }
-        .pdf-page-fab__btn:hover:not(:disabled) {
-          background: rgba(255, 255, 255, 0.7);
-          color: rgba(15, 23, 42, 0.92);
-        }
-        .pdf-page-fab__btn:disabled {
-          opacity: 0.35;
-          cursor: default;
-        }
         .pdf-spread-row {
           display: flex;
           justify-content: center;
@@ -3135,6 +3147,10 @@ export default function PdfViewerShell({
           opacity: 0.45;
           mix-blend-mode: multiply;
           border-radius: 1px;
+        }
+        html.touch-ui .pdf-markup--highlight {
+          opacity: 0.72;
+          mix-blend-mode: multiply;
         }
         .pdf-markup--underline {
           background: transparent;

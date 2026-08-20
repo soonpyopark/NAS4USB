@@ -1,3 +1,7 @@
+import { useState } from 'react';
+import { useTouchUi } from '../../hooks/useTouchUi.js';
+import ContextMenu from './ContextMenu.jsx';
+
 export default function FileExplorerToolbar({
   hasSelection,
   canRename = false,
@@ -34,10 +38,130 @@ export default function FileExplorerToolbar({
   canEmptyTrash = true,
   showTrashDelete = true,
 }) {
+  const touchUi = useTouchUi();
+  const [moreMenu, setMoreMenu] = useState(/** @type {null | { x: number, y: number }} */ (null));
   const showWriteActions = canWrite && !isInTrashView && !isInFavoritesView;
   const showTrashAdminActions = canWrite && isInTrashView;
   const showDeleteAction =
     (showWriteActions || showTrashAdminActions) && !isInFavoritesView;
+
+  const overflowItems = [];
+  if (showWriteActions) {
+    overflowItems.push(
+      { id: 'download', label: '다운로드', disabled: !canDownload, onClick: onDownloadClick },
+      { id: 'rename', label: '이름 변경', disabled: !canRename, onClick: onRename },
+      { id: 'copy', label: '복사', disabled: !hasSelection, onClick: onCopy },
+      { id: 'cut', label: '잘라내기', disabled: !hasSelection, onClick: onCut },
+      { id: 'move', label: '이동', disabled: !hasSelection, onClick: onMove },
+      { id: 'paste', label: '붙여넣기', disabled: !hasClipboard, onClick: onPaste },
+      { id: 'duplicate', label: '복제', disabled: !canRename, onClick: onDuplicate },
+    );
+  }
+  if (hasSelection && showTrashAdminActions) {
+    overflowItems.push({
+      id: 'restore',
+      label: '복원',
+      onClick: onRestore,
+    });
+  }
+  if (hasSelection && showDeleteAction && showTrashDelete && !isInTrashView) {
+    overflowItems.push({
+      id: 'delete',
+      label: '삭제',
+      danger: true,
+      onClick: onDelete,
+    });
+  }
+  if (showDeleteAction) {
+    overflowItems.push({
+      id: 'delete-permanent',
+      label: '삭제(영구)',
+      danger: true,
+      disabled: !hasSelection,
+      onClick: onPermanentDelete ?? onDelete,
+    });
+  }
+  if (showTrashAdminActions && canEmptyTrash) {
+    overflowItems.push({
+      id: 'empty-trash',
+      label: '휴지통 비우기',
+      danger: true,
+      onClick: onEmptyTrash,
+    });
+  }
+  overflowItems.push({
+    id: 'properties',
+    label: '속성',
+    disabled: !canShowProperties,
+    onClick: onProperties,
+  });
+  if (showWriteActions && onImportOnenote) {
+    overflowItems.push({
+      id: 'onenote',
+      label: importingOnenote ? '가져오는 중…' : '원노트 가져오기',
+      disabled: importingOnenote,
+      onClick: onImportOnenote,
+    });
+  }
+  if (showWriteActions && onClearFolderBackups) {
+    overflowItems.push({
+      id: 'clear-backups',
+      label: clearingFolderBackups ? '제거 중…' : '백업 일괄 제거',
+      danger: true,
+      disabled: clearingFolderBackups,
+      onClick: onClearFolderBackups,
+    });
+  }
+
+  if (touchUi) {
+    return (
+      <div className="file-explorer-toolbar file-explorer-toolbar--touch">
+        <button type="button" className="nas-btn-ghost" onClick={onRefresh} title="F5">
+          새로고침
+        </button>
+        {showWriteActions ? (
+          <>
+            <button type="button" className="nas-btn-ghost" onClick={onCreateFolder}>
+              새 폴더
+            </button>
+            <button type="button" className="nas-btn-ghost" onClick={onCreateFile}>
+              새 파일
+            </button>
+            <button type="button" className="nas-btn-ghost" onClick={onUploadClick}>
+              업로드
+            </button>
+          </>
+        ) : null}
+        <button
+          type="button"
+          data-menu-trigger="more"
+          className={`nas-btn-ghost file-explorer-toolbar__more${moreMenu ? ' is-open' : ''}`}
+          title="더보기"
+          aria-label="더보기"
+          aria-haspopup="menu"
+          aria-expanded={Boolean(moreMenu)}
+          onClick={(event) => {
+            if (moreMenu) {
+              setMoreMenu(null);
+              return;
+            }
+            const rect = event.currentTarget.getBoundingClientRect();
+            setMoreMenu({ x: rect.right, y: rect.bottom + 4 });
+          }}
+        >
+          ⋯
+        </button>
+        {moreMenu ? (
+          <ContextMenu
+            x={moreMenu.x}
+            y={moreMenu.y}
+            items={overflowItems}
+            onClose={() => setMoreMenu(null)}
+          />
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-nas-border px-4 py-3">

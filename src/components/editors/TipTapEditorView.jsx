@@ -46,7 +46,7 @@ import TipTapHtmlSourcePanel from './tiptap/TipTapHtmlSourcePanel.jsx';
 import TipTapTocPanel from './tiptap/TipTapTocPanel.jsx';
 import { formatTiptapHtml } from '../../lib/tiptap/formatHtml.js';
 import { importHtmlIntoEditor } from '../../lib/tiptap/importHtml.js';
-import { IconSearch } from './tiptap/TipTapIcons.jsx';
+import { IconSearch, IconToc } from './tiptap/TipTapIcons.jsx';
 import { openExternalUrl } from '../../lib/openExternal.js';
 import { getFileViewerType, getFileViewerTypeFromName } from '../../lib/fileViewerType.js';
 import {
@@ -120,7 +120,7 @@ export default function TipTapEditorView({
   const fileInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   const scrollRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   const bodyRef = useRef(/** @type {HTMLDivElement | null} */ (null));
-  const [tocOpen, setTocOpen] = useState(true);
+  const [tocOpen, setTocOpen] = useState(!readOnly);
   const [tocFits, setTocFits] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchFocusNonce, setSearchFocusNonce] = useState(0);
@@ -349,7 +349,11 @@ export default function TipTapEditorView({
    * the editor replaces the loading placeholder.
    */
   useEffect(() => {
-    if (readOnly || !editor) return undefined;
+    if (!editor) return undefined;
+    if (readOnly) {
+      setTocFits(true);
+      return undefined;
+    }
     const body = bodyRef.current;
     if (!body) return undefined;
 
@@ -736,7 +740,15 @@ export default function TipTapEditorView({
           }}
         />
       ) : (
-        <div className="tiptap-toolbar tiptap-toolbar--zoom-only" role="toolbar" aria-label="보기 배율">
+        <div className="tiptap-toolbar tiptap-toolbar--zoom-only" role="toolbar" aria-label="미리보기">
+          <button
+            type="button"
+            className={`tiptap-toolbar__btn${tocOpen ? ' is-active' : ''}`}
+            title="목차 패널"
+            onClick={() => setTocOpen((prev) => !prev)}
+          >
+            <IconToc />
+          </button>
           <button
             type="button"
             className={`tiptap-toolbar__btn${searchOpen ? ' is-active' : ''}`}
@@ -798,7 +810,7 @@ export default function TipTapEditorView({
             <EditorContent editor={editor} />
           </div>
         </div>
-        {htmlMode || readOnly || !tocFits ? null : (
+        {htmlMode || !tocFits ? null : (
           <TipTapTocPanel editor={editor} open={tocOpen} onClose={() => setTocOpen(false)} />
         )}
       </div>

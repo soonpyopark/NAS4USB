@@ -25,6 +25,18 @@ export function IconHistory() {
   );
 }
 
+/** 저장 — floppy disk */
+export function IconSave() {
+  return (
+    <Glyph>
+      <path
+        fill="currentColor"
+        d="M5 3h11l3 3v15H5Zm2 2v4h8V5Zm1 0v3h2V5Zm-1 8v6h10v-6Z"
+      />
+    </Glyph>
+  );
+}
+
 /** 백업 생성 — save disk with a plus */
 export function IconBackupCreate() {
   return (

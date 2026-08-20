@@ -48,10 +48,10 @@ function FolderBarSvg({ className, style }) {
   );
 }
 
-function FileStarSvg({ className }) {
+function FileDiscSvg({ className }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-      <path d="M12 3.1 14.4 9h6.3l-5.1 3.8 1.9 6.1L12 15.4 6.5 18.9 8.4 12.8 3.3 9h6.3L12 3.1z" />
+      <circle cx="12" cy="12" r="5" />
     </svg>
   );
 }
@@ -133,7 +133,7 @@ export default function FileIcon({ entry, className = 'h-5 w-5', folderColor, na
   const extension = isSecFileName(entry.name || entry.relativePath)
     ? innerExtensionOf(entry.name || entry.relativePath)
     : entry.extension;
-  const Icon = nameBold ? FileStarSvg : FileRingSvg;
+  const Icon = nameBold ? FileDiscSvg : FileRingSvg;
 
   return <Icon className={`${fileTypeColorClass(extension)} ${className}`} />;
 }
