@@ -69,10 +69,6 @@ function backfillMergeMarkers(celldata, merge) {
 }
 
 /**
- * @param {import('@fortune-sheet/core').Sheet} sheet
- * @returns {import('@fortune-sheet/core').Sheet}
- */
-/**
  * FortuneSheet's bottom ADD grows the live `data` matrix but does not bump `row`/`column`.
  * Empty added rows never appear in `celldata`, so dropping `data` without copying the
  * matrix size makes the next Workbook init keep the old grid — Add looks like a no-op.
@@ -87,16 +83,22 @@ function matrixSize(data) {
   return { row: data.length, column };
 }
 
+/**
+ * @param {import('@fortune-sheet/core').Sheet} sheet
+ * @returns {import('@fortune-sheet/core').Sheet}
+ */
 function normalizeSheetForEditor(sheet) {
   if (!sheet || typeof sheet !== 'object') return sheet;
 
   /** @type {import('@fortune-sheet/core').Sheet} */
   const next = { ...sheet };
-  const hasCelldata = Array.isArray(next.celldata) && next.celldata.length > 0;
   const hasData = Array.isArray(next.data) && next.data.length > 0;
   const size = matrixSize(next.data);
 
-  if (!hasCelldata && hasData) {
+  // Live edits/deletes update `data` and leave the original `celldata` stale.
+  // Rebuilding only when celldata is empty would remount ADD from the old list
+  // and bring deleted cells back.
+  if (hasData) {
     next.celldata = dataMatrixToCelldata(next.data);
   }
 
