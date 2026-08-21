@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Workbook } from '@fortune-sheet/react';
 import '@fortune-sheet/react/dist/index.css';
 import '../../styles/fortune-sheet.css';
-import { cloneFortuneSheets } from '../../lib/xlsx/cloneFortuneSheets.js';
+import { cloneFortuneSheets, fortuneSheetGridGrew } from '../../lib/xlsx/cloneFortuneSheets.js';
 
 // FortuneSheet's built-in toolbar "insert image" button (see insertImage/saveImage in
 // @fortune-sheet/core) embeds the picked file as a raw base64 data URL directly in the sheet's
@@ -64,9 +64,13 @@ export default function FortuneSheetGrid({ initialSheets, onReady }) {
     applyingRemoteRef.current = true;
     try {
       workbookRef.current.applyOp(ops);
+      const previous = sheetsRef.current;
       const mutableSheets = cloneFortuneSheets(workbookRef.current.getAllSheets());
       sheetsRef.current = mutableSheets;
       setSheets(mutableSheets);
+      if (fortuneSheetGridGrew(previous, mutableSheets)) {
+        setWorkbookEpoch((epoch) => epoch + 1);
+      }
     } finally {
       applyingRemoteRef.current = false;
     }
@@ -154,9 +158,13 @@ export default function FortuneSheetGrid({ initialSheets, onReady }) {
   }, []);
 
   const handleChange = useCallback((newData) => {
+    const previous = sheetsRef.current;
     const mutableSheets = cloneFortuneSheets(newData);
     sheetsRef.current = mutableSheets;
     setSheets(mutableSheets);
+    if (fortuneSheetGridGrew(previous, mutableSheets)) {
+      setWorkbookEpoch((epoch) => epoch + 1);
+    }
   }, []);
 
   const hooks = useMemo(

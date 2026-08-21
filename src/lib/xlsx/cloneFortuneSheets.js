@@ -72,6 +72,21 @@ function backfillMergeMarkers(celldata, merge) {
  * @param {import('@fortune-sheet/core').Sheet} sheet
  * @returns {import('@fortune-sheet/core').Sheet}
  */
+/**
+ * FortuneSheet's bottom ADD grows the live `data` matrix but does not bump `row`/`column`.
+ * Empty added rows never appear in `celldata`, so dropping `data` without copying the
+ * matrix size makes the next Workbook init keep the old grid — Add looks like a no-op.
+ * @param {import('@fortune-sheet/core').CellMatrix | null | undefined} data
+ */
+function matrixSize(data) {
+  if (!Array.isArray(data) || data.length === 0) return null;
+  let column = 0;
+  for (const row of data) {
+    if (Array.isArray(row) && row.length > column) column = row.length;
+  }
+  return { row: data.length, column };
+}
+
 function normalizeSheetForEditor(sheet) {
   if (!sheet || typeof sheet !== 'object') return sheet;
 
@@ -79,9 +94,15 @@ function normalizeSheetForEditor(sheet) {
   const next = { ...sheet };
   const hasCelldata = Array.isArray(next.celldata) && next.celldata.length > 0;
   const hasData = Array.isArray(next.data) && next.data.length > 0;
+  const size = matrixSize(next.data);
 
   if (!hasCelldata && hasData) {
     next.celldata = dataMatrixToCelldata(next.data);
+  }
+
+  if (size) {
+    next.row = Math.max(Number(next.row) || 0, size.row);
+    next.column = Math.max(Number(next.column) || 0, size.column);
   }
 
   if (next.config?.merge && Array.isArray(next.celldata)) {
@@ -112,4 +133,19 @@ export function normalizeFortuneSheetsForEditor(sheets) {
 export function cloneFortuneSheets(sheets) {
   if (!Array.isArray(sheets)) return [];
   return normalizeFortuneSheetsForEditor(JSON.parse(JSON.stringify(sheets)));
+}
+
+/**
+ * @param {import('@fortune-sheet/core').Sheet[] | null | undefined} prev
+ * @param {import('@fortune-sheet/core').Sheet[] | null | undefined} next
+ */
+export function fortuneSheetGridGrew(prev, next) {
+  const prevById = new Map((Array.isArray(prev) ? prev : []).map((sheet) => [sheet?.id, sheet]));
+  return (Array.isArray(next) ? next : []).some((sheet) => {
+    const before = prevById.get(sheet?.id);
+    return (
+      (Number(sheet?.row) || 0) > (Number(before?.row) || 0) ||
+      (Number(sheet?.column) || 0) > (Number(before?.column) || 0)
+    );
+  });
 }
