@@ -1,4 +1,5 @@
-import { joinRelativePath, readFileAsBase64, resolveUniqueName } from '../fsPaths.js';
+import { joinRelativePath, resolveUniqueName } from '../fsPaths.js';
+import { uploadFileToPath } from '../uploadFileToPath.js';
 import { buildMediaStreamUrl } from '../media/streamUrl.js';
 import {
   assetFileNameFromAnyUrl,
@@ -33,8 +34,7 @@ export function createTiptapUploadFile(tiptapRelativePath) {
 
     const fileName = resolveUniqueName(existingNames, resolveTiptapUploadFileName(file));
     const assetPath = joinRelativePath(assetsDir, fileName);
-    const base64 = await readFileAsBase64(file);
-    await window.nas4usb.fs.writeFile(assetPath, base64);
+    await uploadFileToPath(assetPath, file);
 
     return toPackageAssetUrl(fileName);
   };

@@ -249,11 +249,77 @@ export async function readFileBase64(relativePath) {
 }
 
 export async function writeFileBase64(relativePath, base64 = '') {
+  return writeFileBuffer(relativePath, Buffer.from(base64, 'base64'));
+}
+
+/**
+ * @param {string} relativePath
+ * @param {Buffer | Uint8Array} data
+ */
+export async function writeFileBuffer(relativePath, data) {
   assertNotTrashTarget(relativePath);
   const absolute = resolvePortablePath(relativePath);
   await ensureParentDir(absolute);
   const existed = await pathExists(relativePath);
-  await fs.writeFile(absolute, Buffer.from(base64, 'base64'));
+  try {
+    await fs.writeFile(absolute, data);
+  } catch (error) {
+    throw toUserFsError(error);
+  }
+  if (!existed) {
+    const { purgeYjsRoomForPath } = await import('./yjsRoom.js');
+    purgeYjsRoomForPath(relativePath);
+  }
+  return true;
+}
+
+/**
+ * Move a completed upload onto the workspace path. Overwrites if the dest exists.
+ * @param {string} relativePath
+ * @param {string} sourceAbsolute
+ */
+export async function replaceFileFromAbsolute(relativePath, sourceAbsolute) {
+  assertNotTrashTarget(relativePath);
+  const absolute = resolvePortablePath(relativePath);
+  await ensureParentDir(absolute);
+  const existed = await pathExists(relativePath);
+  try {
+    await fs.rename(sourceAbsolute, absolute);
+  } catch (error) {
+    const code = error && typeof error === 'object' && 'code' in error ? error.code : null;
+    if (code === 'EXDEV') {
+      try {
+        await fs.copyFile(sourceAbsolute, absolute);
+        await fs.unlink(sourceAbsolute);
+      } catch (copyError) {
+        throw toUserFsError(copyError);
+      }
+    } else {
+      throw toUserFsError(error);
+    }
+  }
+  if (!existed) {
+    const { purgeYjsRoomForPath } = await import('./yjsRoom.js');
+    purgeYjsRoomForPath(relativePath);
+  }
+  return true;
+}
+
+/**
+ * Copy a host-absolute file into the workspace without moving the original.
+ * @param {string} relativePath
+ * @param {string} sourceAbsolute
+ */
+export async function copyAbsoluteToRelative(relativePath, sourceAbsolute) {
+  assertNotTrashTarget(relativePath);
+  const absolute = resolvePortablePath(relativePath);
+  await ensureParentDir(absolute);
+  const existed = await pathExists(relativePath);
+  try {
+    await fs.copyFile(sourceAbsolute, absolute);
+  } catch (error) {
+    throw toUserFsError(error);
+  }
   if (!existed) {
     const { purgeYjsRoomForPath } = await import('./yjsRoom.js');
     purgeYjsRoomForPath(relativePath);

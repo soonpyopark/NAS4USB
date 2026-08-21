@@ -104,7 +104,8 @@ export async function startDevServer() {
   });
 
   server.on('request', async (req, res) => {
-    req.setTimeout(180000, () => {
+    const isUploadPart = (req.url ?? '').includes('/api/fs/upload/');
+    req.setTimeout(isUploadPart ? 10 * 60 * 1000 : 180000, () => {
       if (!res.headersSent) {
         res.writeHead(408, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ error: 'Request timeout' }));

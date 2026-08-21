@@ -7,6 +7,8 @@ import { X509Certificate } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { getPortableRoot, getWorkspaceRoot } from './appContext.js';
 import { getLocalIPv4Addresses } from './lanAddresses.js';
+import { getAppSettings } from './settingsService.js';
+import { normalizeTlsHostnames } from '../shared/httpsConfig.js';
 
 const require = createRequire(import.meta.url);
 const forge = require('node-forge');
@@ -108,10 +110,13 @@ function generateKeyPair() {
 /**
  * @returns {string[]}
  */
-export function desiredTlsSans() {
+export function desiredTlsSans(extraHostnames = []) {
   const sans = new Set(['localhost', '127.0.0.1']);
   for (const address of getLocalIPv4Addresses()) {
     if (address) sans.add(address);
+  }
+  for (const host of normalizeTlsHostnames(extraHostnames)) {
+    sans.add(host);
   }
   return [...sans];
 }
@@ -240,7 +245,9 @@ export async function ensureTlsMaterial(options = {}) {
   await migrateLegacyTlsDir(root);
   const files = filePaths(root);
   const ca = await ensureCa(root);
-  const sans = desiredTlsSans();
+  const extraHostnames =
+    options.extraSans ?? (await getAppSettings(getPortableRoot()).then((s) => s.tlsHostnames));
+  const sans = desiredTlsSans(extraHostnames);
   const meta = readMeta(root);
   const haveServer = existsSync(files.serverCert) && existsSync(files.serverKey);
   const needsNewServer = Boolean(options.forceServer) || !haveServer || !sansCover(sans, meta?.sans);

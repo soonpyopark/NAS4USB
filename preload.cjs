@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer, webFrame } = require('electron');
+const { contextBridge, ipcRenderer, webFrame, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('nas4usb', {
   __source: 'electron',
@@ -33,6 +33,18 @@ contextBridge.exposeInMainWorld('nas4usb', {
     exists: (relativePath) => ipcRenderer.invoke('fs:exists', relativePath),
     readFile: (relativePath) => ipcRenderer.invoke('fs:readFile', relativePath),
     writeFile: (relativePath, base64) => ipcRenderer.invoke('fs:writeFile', relativePath, base64),
+    uploadInit: (payload) => ipcRenderer.invoke('fs:uploadInit', payload),
+    uploadPart: (payload) => ipcRenderer.invoke('fs:uploadPart', payload),
+    uploadCommit: (uploadId) => ipcRenderer.invoke('fs:uploadCommit', uploadId),
+    uploadAbort: (uploadId) => ipcRenderer.invoke('fs:uploadAbort', uploadId),
+    importLocalFile: (payload) => ipcRenderer.invoke('fs:importLocalFile', payload),
+    getPathForFile: (file) => {
+      try {
+        return webUtils.getPathForFile(file) || '';
+      } catch {
+        return typeof file?.path === 'string' ? file.path : '';
+      }
+    },
     copy: (fromRelative, toRelative) => ipcRenderer.invoke('fs:copy', fromRelative, toRelative),
     move: (fromRelative, toRelative) => ipcRenderer.invoke('fs:move', fromRelative, toRelative),
     stat: (relativePath) => ipcRenderer.invoke('fs:stat', relativePath),
@@ -63,6 +75,7 @@ contextBridge.exposeInMainWorld('nas4usb', {
 
   pdf: {
     fromHtml: (payload) => ipcRenderer.invoke('pdf:fromHtml', payload ?? {}),
+    embedMarkups: (payload) => ipcRenderer.invoke('pdf:embedMarkups', payload ?? {}),
   },
 
   auth: {

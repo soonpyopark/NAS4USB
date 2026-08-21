@@ -207,6 +207,10 @@ export async function assertCanAccessFile(
   if (isExternalFolderContainerPath(normalizedPath)) return;
   if (isExternalMountRootPath(normalizedPath)) return;
 
+  if (await canAccessViaShareToken(normalizedPath, shareToken, portableRoot)) {
+    return;
+  }
+
   const homeAccess = resolveHomePathAccess(normalizedPath, homeAuthFrom(auth));
   if (homeAccess === 'deny') {
     throw new Error(ACCESS_DENIED_MESSAGE);
@@ -233,10 +237,6 @@ export async function assertCanAccessFile(
     throw new Error(TRASH_ACCESS_DENIED_MESSAGE);
   }
   if (isTrashRelativePath(normalizedPath) && (elevatedAccess || canUseLimitedTrash)) {
-    return;
-  }
-
-  if (await canAccessViaShareToken(normalizedPath, shareToken, portableRoot)) {
     return;
   }
 

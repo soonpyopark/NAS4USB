@@ -9,7 +9,7 @@ import {
   normalizeAccessPermissionsFromUi,
 } from '../shared/guestPermissions.js';
 import { getMemberAccessPermissionsByLoginId } from './membersService.js';
-import { normalizeHttpsEnabled } from '../shared/httpsConfig.js';
+import { normalizeHttpsEnabled, normalizeTlsHostnames } from '../shared/httpsConfig.js';
 import { normalizeWebServerMode, normalizeWebServerPort } from '../shared/webServerConfig.js';
 import { DEFAULT_ACCENT_COLOR, normalizeAccentColor } from '../shared/theme.js';
 import { normalizeExternalFolders } from '../shared/externalFolders.js';
@@ -29,6 +29,7 @@ const SETTINGS_FILE = '.nas4usb-settings.json';
  *   webServerPort: number | null,
  *   webServerMode: import('../shared/webServerConfig.js').WebServerMode | null,
  *   httpsEnabled: boolean,
+ *   tlsHostnames: string[],
  *   themeAccentColor: string,
  *   dataRoot: string | null,
  *   externalFolders: import('../shared/externalFolders.js').ExternalFolderMount[],
@@ -104,6 +105,7 @@ function emptySettings() {
     webServerPort: null,
     webServerMode: null,
     httpsEnabled: false,
+    tlsHostnames: [],
     themeAccentColor: DEFAULT_ACCENT_COLOR,
     dataRoot: null,
     externalFolders: [],
@@ -149,6 +151,7 @@ async function loadStore(portableRoot) {
       webServerPort: normalizeWebServerPort(parsed?.webServerPort),
       webServerMode: normalizeWebServerMode(parsed?.webServerMode),
       httpsEnabled: normalizeHttpsEnabled(parsed?.httpsEnabled),
+      tlsHostnames: normalizeTlsHostnames(parsed?.tlsHostnames),
       themeAccentColor: normalizeAccentColor(parsed?.themeAccentColor),
       dataRoot: normalizeConfiguredDataRoot(parsed?.dataRoot),
       externalFolders: normalizeExternalFolders(parsed?.externalFolders),
@@ -304,6 +307,9 @@ export async function updateAppSettings(patch, portableRoot = getPortableRoot())
   }
   if (patch && 'httpsEnabled' in patch) {
     settings.httpsEnabled = normalizeHttpsEnabled(patch.httpsEnabled);
+  }
+  if (patch && 'tlsHostnames' in patch) {
+    settings.tlsHostnames = normalizeTlsHostnames(patch.tlsHostnames);
   }
   if (patch && 'themeAccentColor' in patch) {
     settings.themeAccentColor = normalizeAccentColor(patch.themeAccentColor);

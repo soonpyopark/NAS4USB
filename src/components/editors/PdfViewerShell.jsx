@@ -4,7 +4,6 @@ import ViewerModal from './ViewerModal.jsx';
 import { AppModal, AppModalActions, AppModalBody, AppModalButton } from '../common/AppModal.jsx';
 import { IconSave } from './EditorModalIcons.jsx';
 import { usePlaintextObjectUrl } from '../../hooks/usePlaintextObjectUrl.js';
-import { readWorkspacePlainBase64, writeWorkspacePlainBase64 } from '../../lib/filePassword/io.js';
 import { getPdfMimeType } from '../../lib/media/mediaTypes.js';
 import {
   PDF_MAX_SCALE,
@@ -64,11 +63,9 @@ import {
   IconPdfZoomOut,
 } from './pdf/PdfToolbarIcons.jsx';
 import {
-  embedMarkupsIntoPdfBytes,
   isSamePdfAnnotTarget,
   viewportRectsToPdfUserRects,
 } from '../../lib/pdf/embedPdfMarkups.js';
-import { base64ToBytes, bytesToBase64 } from '../../lib/bytes.js';
 import { detectTouchUi, useTouchUi } from '../../hooks/useTouchUi.js';
 
 /**
@@ -2181,7 +2178,7 @@ export default function PdfViewerShell({
 
     try {
       const rot = rotationRef.current;
-      /** @type {Array<{ pageNumber: number, kind: 'highlight' | 'underline', color: string, text?: string, pdfRects: import('../../lib/pdf/embedPdfMarkups.js').PdfUserRect[] }>} */
+      /** @type {Array<{ id: string, pageNumber: number, kind: 'highlight' | 'underline', color: string, text?: string, pdfRects: import('../../lib/pdf/embedPdfMarkups.js').PdfUserRect[] }>} */
       const embedEntries = [];
 
       for (const entry of pending) {
@@ -2189,6 +2186,7 @@ export default function PdfViewerShell({
         const pdfRects = await viewportRectsToPdfUserRects(page, entry.rects, rot);
         if (!pdfRects.length) continue;
         embedEntries.push({
+          id: entry.id,
           pageNumber: entry.pageNumber,
           kind: entry.kind,
           color: entry.color,
@@ -2201,14 +2199,31 @@ export default function PdfViewerShell({
         throw new Error('저장할 형광펜 변경을 만들지 못했습니다.');
       }
 
-      const sourceBase64 = await readWorkspacePlainBase64(relativePath);
-      const nextBytes = await embedMarkupsIntoPdfBytes(
-        base64ToBytes(sourceBase64),
-        embedEntries,
-        pendingRemove,
-      );
-      await writeWorkspacePlainBase64(relativePath, bytesToBase64(nextBytes));
+      const embedBridge = window.nas4usb?.pdf?.embedMarkups;
+      if (typeof embedBridge !== 'function') {
+        throw new Error('이 환경에서는 PDF 원본 저장을 지원하지 않습니다.');
+      }
+      await embedBridge({
+        path: relativePath,
+        markups: embedEntries,
+        remove: pendingRemove,
+      });
 
+      const embeddedById = new Map(embedEntries.map((entry) => [entry.id, entry]));
+      setMarkups((prev) =>
+        prev.map((entry) => {
+          const embedded = embeddedById.get(entry.id);
+          if (!embedded) return entry;
+          const first = embedded.pdfRects[0];
+          return {
+            ...entry,
+            source: 'pdf',
+            pdfRect: first
+              ? [first.x, first.y, first.x + first.width, first.y + first.height]
+              : entry.pdfRect,
+          };
+        }),
+      );
       setRemovedPdfMarkups([]);
       await writePdfViewerSidecar(relativePath, {
         view: {
@@ -2223,7 +2238,7 @@ export default function PdfViewerShell({
       });
 
       setSaveMessage('원본 PDF에 저장했습니다.');
-      setDocumentEpoch((prev) => prev + 1);
+      skipViewerSaveRef.current = false;
     } catch (err) {
       console.warn('[pdf] save to file failed:', err);
       setSaveMessage(err instanceof Error ? err.message : '원본 저장에 실패했습니다.');

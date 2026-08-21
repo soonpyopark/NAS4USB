@@ -1,4 +1,5 @@
 import { joinRelativePath, readFileAsBase64, resolveUniqueName, validateFolderName } from './fsPaths.js';
+import { uploadFileToPath } from './uploadFileToPath.js';
 import { isTrashPath } from './trashPaths.js';
 import { buildNewFileContent, resolveNewFileName } from './files/newFileFactory.js';
 import { convertHwpBase64ToHwpx, isHwpFileName, toHwpxFileName } from '@nas4usb/rhwp/hwpConvert.js';
@@ -151,6 +152,9 @@ export async function uploadFilesAtPath(targetPath, files, options = {}) {
     await window.nas4usb.fs.mkdir(joinRelativePath(targetPath, dir));
   }
 
+  const totalBytes = list.reduce((sum, file) => sum + (Number(file.size) || 0), 0);
+  let completedBytes = 0;
+
   for (let index = 0; index < list.length; index += 1) {
     const file = list[index];
     const remapped = remapUploadPath(uploadRelativePath(file), rootRename);
@@ -158,6 +162,8 @@ export async function uploadFilesAtPath(targetPath, files, options = {}) {
       current: index + 1,
       total,
       fileName: remapped || file.name,
+      bytes: completedBytes,
+      totalBytes,
     });
 
     if (isOnenoteFileName(file.name)) {
@@ -176,20 +182,41 @@ export async function uploadFilesAtPath(targetPath, files, options = {}) {
         { keepOriginal: false },
       );
       if (imported?.firstFilePath && !openPath) openPath = imported.firstFilePath;
+      completedBytes += Number(file.size) || 0;
       continue;
     }
 
-    let base64 = await readFileAsBase64(file);
     let destRel = remapped;
 
     if (isHwpFileName(file.name)) {
+      let base64 = await readFileAsBase64(file);
       base64 = await convertHwpBase64ToHwpx(base64, file.name);
       const parts = destRel.split('/');
       parts[parts.length - 1] = toHwpxFileName(parts[parts.length - 1] || file.name);
       destRel = parts.join('/');
+      await window.nas4usb.fs.writeFile(joinRelativePath(targetPath, destRel), base64);
+    } else {
+      await uploadFileToPath(joinRelativePath(targetPath, destRel), file, {
+        onByteProgress: ({ bytes }) => {
+          options.onProgress?.({
+            current: index + 1,
+            total,
+            fileName: remapped || file.name,
+            bytes: completedBytes + bytes,
+            totalBytes,
+          });
+        },
+      });
     }
 
-    await window.nas4usb.fs.writeFile(joinRelativePath(targetPath, destRel), base64);
+    completedBytes += Number(file.size) || 0;
+    options.onProgress?.({
+      current: index + 1,
+      total,
+      fileName: remapped || file.name,
+      bytes: completedBytes,
+      totalBytes,
+    });
   }
 
   return { openPath };

@@ -73,6 +73,8 @@ export async function startSyncServer(distRoot) {
     res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end(`${APP_NAME} sync server`);
   });
+  syncServer.requestTimeout = 10 * 60 * 1000;
+  syncServer.headersTimeout = 10 * 60 * 1000 + 1000;
 
   syncServer.on('connection', (socket) => {
     openSockets.add(socket);

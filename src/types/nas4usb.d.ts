@@ -62,6 +62,12 @@ window.nas4usb = {
     exists: (relativePath) => {},
     readFile: (relativePath) => {},
     writeFile: (relativePath, base64) => {},
+    uploadInit: (payload) => {},
+    uploadPart: (payload) => {},
+    uploadCommit: (uploadId) => {},
+    uploadAbort: (uploadId) => {},
+    importLocalFile: (payload) => {},
+    getPathForFile: (file) => {},
     copy: (fromRelative, toRelative) => {},
     move: (fromRelative, toRelative) => {},
     stat: (relativePath) => {},
@@ -85,6 +91,7 @@ window.nas4usb = {
   },
   pdf: {
     fromHtml: (payload) => {},
+    embedMarkups: (payload) => {},
   },
   auth: {
     login: ({ id, password, rememberMe }) => {},

@@ -1,4 +1,5 @@
 import { appendShareTokenToUrl } from './shareAccess.js';
+import { UPLOAD_PART_TIMEOUT_MS } from '../../shared/chunkedUpload.js';
 import { createFsChangeSubscription } from './fsChangeSubscription.js';
 import {
   LEGACY_ADMIN_TOKEN_STORAGE_KEY,
@@ -52,6 +53,16 @@ function buildApiUrl(route) {
  * @param {number} [timeoutMs]
  */
 async function apiFetch(route, init, timeoutMs = 60000) {
+  return apiRequest(route, init, timeoutMs, false);
+}
+
+/**
+ * @param {string} route
+ * @param {RequestInit} [init]
+ * @param {number} [timeoutMs]
+ * @param {boolean} [binaryBody]
+ */
+async function apiRequest(route, init, timeoutMs = 60000, binaryBody = false) {
   const adminToken = readAdminToken();
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), timeoutMs);
@@ -61,7 +72,7 @@ async function apiFetch(route, init, timeoutMs = 60000) {
     response = await fetch(buildApiUrl(route), {
       ...init,
       headers: {
-        'Content-Type': 'application/json',
+        ...(binaryBody ? { 'Content-Type': 'application/octet-stream' } : { 'Content-Type': 'application/json' }),
         ...(adminToken ? { 'X-Admin-Token': adminToken } : {}),
         ...(init?.headers ?? {}),
       },
@@ -148,6 +159,35 @@ export function createHttpNas4usbClient() {
           method: 'POST',
           body: JSON.stringify({ path: relativePath, base64 }),
         }),
+      uploadInit: (payload) =>
+        apiFetch('/fs/upload/init', {
+          method: 'POST',
+          body: JSON.stringify({ path: payload?.path, size: payload?.size }),
+        }),
+      uploadPart: (payload) =>
+        apiRequest(
+          `/fs/upload/part?id=${encodeURIComponent(payload?.uploadId ?? '')}&offset=${encodeURIComponent(String(payload?.offset ?? 0))}`,
+          {
+            method: 'POST',
+            body: payload?.bytes,
+          },
+          UPLOAD_PART_TIMEOUT_MS,
+          true,
+        ),
+      uploadCommit: (uploadId) =>
+        apiFetch(
+          '/fs/upload/commit',
+          {
+            method: 'POST',
+            body: JSON.stringify({ uploadId }),
+          },
+          UPLOAD_PART_TIMEOUT_MS,
+        ),
+      uploadAbort: (uploadId) =>
+        apiFetch('/fs/upload/abort', {
+          method: 'POST',
+          body: JSON.stringify({ uploadId }),
+        }),
       copy: (fromRelative, toRelative) =>
         apiFetch('/fs/copy', {
           method: 'POST',
@@ -230,6 +270,15 @@ export function createHttpNas4usbClient() {
       fromHtml: (payload) =>
         apiFetch(
           '/pdf/fromHtml',
+          {
+            method: 'POST',
+            body: JSON.stringify(payload ?? {}),
+          },
+          180000,
+        ),
+      embedMarkups: (payload) =>
+        apiFetch(
+          '/pdf/embedMarkups',
           {
             method: 'POST',
             body: JSON.stringify(payload ?? {}),

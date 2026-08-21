@@ -29,6 +29,13 @@ import {
 } from './electron/appContext.js';
 import * as fsService from './electron/fsService.js';
 import {
+  abortUpload,
+  commitUpload,
+  importLocalFile,
+  initUpload,
+  writeUploadPart,
+} from './electron/uploadSessionService.js';
+import {
   configureSyncServer,
   startSyncServer,
   stopSyncServer,
@@ -53,7 +60,7 @@ import {
   resolveWebServerPort,
   webServerModeForHostname,
 } from './shared/webServerConfig.js';
-import { formatAccessUrl, normalizeHttpsEnabled } from './shared/httpsConfig.js';
+import { formatAccessUrl, normalizeHttpsEnabled, normalizeTlsHostnames } from './shared/httpsConfig.js';
 import { allowFirewallInbound, removeFirewallInbound } from './electron/firewallService.js';
 import {
   START_HIDDEN_ARG,
@@ -848,9 +855,11 @@ ipcMain.handle('sync:getInfo', async () => {
 });
 
 async function getServerManagementInfoWithTls() {
+  const settings = await getAppSettings(getPortableRoot());
   return {
     ...getServerManagementInfo(),
     tls: await getTlsStatus(),
+    tlsHostnames: settings.tlsHostnames ?? [],
   };
 }
 
@@ -885,6 +894,14 @@ ipcMain.handle('server:applyConfig', async (event, patch = {}) => {
   }
 
   if (patch?.regenerateTls) {
+    return regenerateTlsCertificates();
+  }
+
+  if (patch?.tlsHostnames != null) {
+    await updateAppSettings(
+      { tlsHostnames: normalizeTlsHostnames(patch.tlsHostnames) },
+      getPortableRoot(),
+    );
     return regenerateTlsCertificates();
   }
 
@@ -1005,6 +1022,18 @@ ipcMain.handle('server:removeFirewall', async (event, port) => {
 
 /** @type {Map<number, string>} */
 const adminTokenBySender = new Map();
+
+/**
+ * @param {unknown} bytes
+ */
+function toUploadBuffer(bytes) {
+  if (Buffer.isBuffer(bytes)) return bytes;
+  if (bytes instanceof ArrayBuffer) return Buffer.from(bytes);
+  if (ArrayBuffer.isView(bytes)) {
+    return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  }
+  throw new Error('업로드 데이터가 올바르지 않습니다.');
+}
 
 /**
  * @param {import('electron').IpcMainInvokeEvent} event
@@ -1148,6 +1177,36 @@ ipcMain.handle('fs:writeFile', async (event, relativePath, base64 = '') => {
   const target = resolveHomeScopedWritePath(relativePath, auth);
   await assertCanEditFile(target, auth, getShareTokenFromEvent(event));
   const result = await fsService.writeFileBase64(target, base64);
+  notifyFsChanged(target);
+  return result;
+});
+
+ipcMain.handle('fs:uploadInit', async (event, payload = {}) => {
+  const auth = getAccessAuthFromEvent(event);
+  const target = resolveHomeScopedWritePath(payload.path ?? '', auth);
+  await assertCanEditFile(target, auth, getShareTokenFromEvent(event));
+  return initUpload({ relativePath: target, size: payload.size });
+});
+
+ipcMain.handle('fs:uploadPart', async (_event, payload = {}) => {
+  return writeUploadPart(payload.uploadId ?? '', payload.offset, toUploadBuffer(payload.bytes));
+});
+
+ipcMain.handle('fs:uploadCommit', async (_event, uploadId) => {
+  const result = await commitUpload(uploadId ?? '');
+  notifyFsChanged(result.path);
+  return result;
+});
+
+ipcMain.handle('fs:uploadAbort', async (_event, uploadId) => {
+  return abortUpload(uploadId ?? '');
+});
+
+ipcMain.handle('fs:importLocalFile', async (event, payload = {}) => {
+  const auth = getAccessAuthFromEvent(event);
+  const target = resolveHomeScopedWritePath(payload.path ?? '', auth);
+  await assertCanEditFile(target, auth, getShareTokenFromEvent(event));
+  const result = await importLocalFile(target, payload.sourceAbsolute ?? '');
   notifyFsChanged(target);
   return result;
 });
@@ -1315,6 +1374,16 @@ ipcMain.handle('tiptap:exportHwpx', async (_event, payload = {}) => {
     fileName: payload.fileName ?? 'document.hwpx',
     assets: Array.isArray(payload.assets) ? payload.assets : [],
   });
+});
+
+ipcMain.handle('pdf:embedMarkups', async (event, payload = {}) => {
+  const auth = getAccessAuthFromEvent(event);
+  const target = resolveHomeScopedWritePath(payload.path ?? '', auth);
+  await assertCanEditFile(target, auth, getShareTokenFromEvent(event));
+  const { embedMarkupsIntoWorkspacePdf } = await import('./electron/pdfMarkupEmbedService.js');
+  const result = await embedMarkupsIntoWorkspacePdf(target, payload.markups, payload.remove);
+  notifyFsChanged(target);
+  return result;
 });
 
 ipcMain.handle('pdf:fromHtml', async (_event, payload = {}) => {

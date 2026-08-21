@@ -131,6 +131,13 @@ import {
 import { getStreamContentType } from '../shared/mediaTypes.js';
 import { handleFsEventsRequest, notifyFsChanged, getFsRevisionPayload } from './fsNotifyService.js';
 import {
+  abortUpload,
+  commitUpload,
+  initUpload,
+  writeUploadPart,
+} from './uploadSessionService.js';
+import { MAX_UPLOAD_PART_BYTES, UPLOAD_PART_TIMEOUT_MS } from '../shared/chunkedUpload.js';
+import {
   clearFileHistoryUnder,
   deleteFileHistoryEntry,
   listFileHistory,
@@ -162,6 +169,26 @@ async function readJsonBody(req) {
   const raw = Buffer.concat(chunks).toString('utf8').trim();
   if (!raw) return {};
   return JSON.parse(raw);
+}
+
+/**
+ * @param {import('node:http').IncomingMessage} req
+ * @param {number} maxBytes
+ */
+async function readRawBody(req, maxBytes) {
+  const chunks = [];
+  let total = 0;
+  for await (const chunk of req) {
+    total += chunk.length;
+    if (total > maxBytes) {
+      req.destroy();
+      const error = new Error('업로드 조각이 너무 큽니다.');
+      error.statusCode = 413;
+      throw error;
+    }
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
 }
 
 /**
@@ -359,6 +386,38 @@ export async function handleHttpApiRequest(req, res) {
       const result = await fsService.writeFileBase64(target, body.base64 ?? '');
       notifyFsChanged(target);
       sendJson(res, 200, result);
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/fs/upload/init') {
+      const body = await readJsonBody(req);
+      const auth = getAccessAuth(req);
+      const target = resolveHomeScopedWritePath(body.path ?? '', auth);
+      await assertCanEditFile(target, auth, getShareTokenFromQuery(url));
+      sendJson(res, 200, await initUpload({ relativePath: target, size: body.size }));
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/fs/upload/part') {
+      req.setTimeout(UPLOAD_PART_TIMEOUT_MS + 15_000);
+      const uploadId = url.searchParams.get('id') ?? '';
+      const offset = Number(url.searchParams.get('offset') ?? '0');
+      const buffer = await readRawBody(req, MAX_UPLOAD_PART_BYTES);
+      sendJson(res, 200, await writeUploadPart(uploadId, offset, buffer));
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/fs/upload/commit') {
+      const body = await readJsonBody(req);
+      const result = await commitUpload(body.uploadId ?? '');
+      notifyFsChanged(result.path);
+      sendJson(res, 200, result);
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/fs/upload/abort') {
+      const body = await readJsonBody(req);
+      sendJson(res, 200, await abortUpload(body.uploadId ?? ''));
       return true;
     }
 
@@ -1129,6 +1188,18 @@ export async function handleHttpApiRequest(req, res) {
       return true;
     }
 
+    if (method === 'POST' && url.pathname === '/api/pdf/embedMarkups') {
+      const body = await readJsonBody(req);
+      const auth = getAccessAuth(req);
+      const target = resolveHomeScopedWritePath(body.path ?? '', auth);
+      await assertCanEditFile(target, auth, getShareTokenFromQuery(url));
+      const { embedMarkupsIntoWorkspacePdf } = await import('./pdfMarkupEmbedService.js');
+      const result = await embedMarkupsIntoWorkspacePdf(target, body.markups, body.remove);
+      notifyFsChanged(target);
+      sendJson(res, 200, result);
+      return true;
+    }
+
     if (method === 'POST' && url.pathname === '/api/pdf/fromHtml') {
       // Host renders the export HTML with Chromium so LAN clients get the same PDF.
       const body = await readJsonBody(req);
@@ -1162,7 +1233,11 @@ export async function handleHttpApiRequest(req, res) {
     return true;
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Internal server error';
-    sendJson(res, 500, { error: message });
+    const status =
+      error && typeof error === 'object' && 'statusCode' in error && Number(error.statusCode)
+        ? Number(error.statusCode)
+        : 500;
+    sendJson(res, status, { error: message });
     return true;
   }
 }

@@ -23,6 +23,7 @@ import { isElectronRenderer } from '../../lib/runtime.js';
  *   addresses: string[],
  *   appUrl: string | null,
  *   httpsEnabled?: boolean,
+ *   tlsHostnames?: string[],
  *   tls?: {
  *     dir?: string,
  *     caPath?: string,
@@ -97,6 +98,7 @@ export default function ServerSettingsPanel() {
   /** @type {[ServerInfo | null, Function]} */
   const [info, setInfo] = useState(null);
   const [portDraft, setPortDraft] = useState(String(DEFAULT_SYNC_PORT));
+  const [tlsHostDraft, setTlsHostDraft] = useState('');
   const [loadError, setLoadError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -106,6 +108,7 @@ export default function ServerSettingsPanel() {
       const next = await window.nas4usb.server.getInfo();
       setInfo(next);
       setPortDraft(String(next.port ?? next.configuredPort));
+      setTlsHostDraft(Array.isArray(next.tlsHostnames) ? next.tlsHostnames.join('\n') : '');
       setLoadError('');
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : '서버 정보를 불러오지 못했습니다.');
@@ -360,8 +363,8 @@ export default function ServerSettingsPanel() {
         <h3 className="text-sm font-semibold text-slate-800">HTTPS</h3>
         <p className="text-sm leading-relaxed text-slate-600">
           같은 포트에서 TLS로 암호화합니다. 이 앱 창은 자체 인증서를 자동으로 신뢰합니다. 다른
-          PC·휴대폰 브라우저는 아래 CA 인증서를 한 번 설치해야 경고가 사라집니다. LAN IP가 바뀌면
-          서버 인증서를 다시 만드세요.
+          PC·휴대폰 브라우저는 아래 CA 인증서를 한 번 설치해야 경고가 사라집니다. LAN IP가 바뀌거나
+          DDNS 주소를 쓰면 아래 추가 호스트를 넣고 인증서를 다시 만드세요.
         </p>
         <dl className="grid gap-2 text-sm text-slate-700 sm:grid-cols-[6rem_1fr]">
           <dt className="text-slate-500">상태</dt>
@@ -373,7 +376,62 @@ export default function ServerSettingsPanel() {
           <dt className="text-slate-500">폴더</dt>
           <dd className="break-all font-mono text-xs">{info?.tls?.dir || '앱을 재시작하면 표시됩니다'}</dd>
         </dl>
+        <label className="block space-y-1">
+          <span className="text-sm font-medium text-slate-700">추가 호스트 (DDNS)</span>
+          <textarea
+            className="min-h-[4.5rem] w-full rounded-md border border-slate-300 px-3 py-2 font-mono text-sm text-slate-800 outline-none focus:border-nas-accent"
+            spellCheck={false}
+            placeholder={'xxx.iptime.org'}
+            value={tlsHostDraft}
+            onChange={(event) => setTlsHostDraft(event.target.value)}
+          />
+          <span className="block text-xs leading-relaxed text-slate-500">
+            줄 또는 쉼표로 여러 개를 넣을 수 있습니다. 저장하면 인증서 SAN에 포함하고 HTTPS가 켜져
+            있으면 서버를 재시작합니다.
+          </span>
+        </label>
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className={BUTTON_CLASS}
+            disabled={busy}
+            onClick={() =>
+              void run(async () => {
+                try {
+                  const result = await window.nas4usb.server.applyConfig({
+                    tlsHostnames: tlsHostDraft,
+                  });
+                  setInfo(result.info);
+                  setTlsHostDraft(
+                    Array.isArray(result.info?.tlsHostnames)
+                      ? result.info.tlsHostnames.join('\n')
+                      : '',
+                  );
+                  if (result.restarted && result.info.appUrl) {
+                    await appAlert({
+                      title: 'HTTPS',
+                      body: `추가 호스트를 저장하고 인증서를 다시 만들었습니다.\n${result.info.appUrl}`,
+                    });
+                    window.location.replace(result.info.appUrl);
+                    return;
+                  }
+                  await appAlert({
+                    title: 'HTTPS',
+                    body: '추가 호스트를 저장하고 인증서를 다시 만들었습니다.',
+                  });
+                } catch (error) {
+                  await appAlert({
+                    title: 'HTTPS',
+                    body:
+                      error instanceof Error ? error.message : '추가 호스트를 저장하지 못했습니다.',
+                  });
+                  await refresh();
+                }
+              })
+            }
+          >
+            추가 호스트 저장
+          </button>
           <button
             type="button"
             className={info?.httpsEnabled ? DANGER_BUTTON_CLASS : PRIMARY_BUTTON_CLASS}
@@ -416,7 +474,7 @@ export default function ServerSettingsPanel() {
               void run(async () => {
                 const ok = await appConfirm({
                   title: '인증서 다시 만들기',
-                  body: '현재 LAN IP를 넣어 서버 인증서를 다시 만듭니다. HTTPS가 켜져 있으면 서버를 재시작합니다.',
+                  body: '현재 LAN IP와 추가 호스트를 넣어 서버 인증서를 다시 만듭니다. HTTPS가 켜져 있으면 서버를 재시작합니다.',
                   confirmLabel: '다시 만들기',
                 });
                 if (!ok) return;

@@ -20,8 +20,10 @@ export async function guardOpenFileEntry(entry, { onMissing } = {}) {
   try {
     await window.nas4usb.fs.stat(entry.relativePath);
     return true;
-  } catch {
-    await showAppAlert({ title: '파일 열기', body: MISSING_OPEN_MESSAGE });
+  } catch (error) {
+    const message =
+      error instanceof Error && error.message.trim() ? error.message : MISSING_OPEN_MESSAGE;
+    await showAppAlert({ title: '파일 열기', body: message });
     onMissing?.();
     return false;
   }

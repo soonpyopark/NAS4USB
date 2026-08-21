@@ -242,7 +242,7 @@ export default function FileExplorer({
   const [lastSelectedPath, setLastSelectedPath] = useState(null);
   const [importingOnenote, setImportingOnenote] = useState(false);
   const [clearingFolderBackups, setClearingFolderBackups] = useState(false);
-  /** @type {[null | { kind: 'upload' | 'download', current: number, total: number, fileName?: string }, Function]} */
+  /** @type {[null | { kind: 'upload' | 'download', current: number, total: number, fileName?: string, bytes?: number, totalBytes?: number }, Function]} */
   const [transfer, setTransfer] = useState(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewEntry, setPreviewEntry] = useState(/** @type {import('../../types/nas4usb.d.ts').FsEntry | null} */ (null));
@@ -499,6 +499,8 @@ export default function FileExplorer({
       current: info.current,
       total: info.total,
       fileName: info.fileName,
+      bytes: info.bytes,
+      totalBytes: info.totalBytes,
     });
   };
 

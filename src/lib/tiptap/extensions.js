@@ -32,6 +32,7 @@ import { createTiptapMentionExtension } from './mentionExtension.js';
 import { createPasteMarkdownExtension } from './pasteMarkdown.js';
 import { Indent } from './indentExtension.js';
 import { PullQuote } from './pullQuoteExtension.js';
+import { createCollabStabilityExtension } from './collabStabilityExtension.js';
 
 const lowlight = createLowlight(common);
 
@@ -239,6 +240,7 @@ export function createTiptapExtensions(options = {}) {
           color: collaboration.user.color,
         },
       }),
+      createCollabStabilityExtension(),
     );
   }
 
