@@ -516,5 +516,17 @@ export function createHttpNas4usbClient() {
           body: JSON.stringify({ sessionId }),
         }),
     },
+
+    docIndex: {
+      status: () => apiFetch('/docIndex/status'),
+      search: (query) =>
+        apiFetch(`/docIndex/search?q=${encodeURIComponent(query ?? '')}`),
+      start: (options) =>
+        apiFetch('/docIndex/start', {
+          method: 'POST',
+          body: JSON.stringify({ reset: Boolean(options?.reset) }),
+        }),
+      stop: () => apiFetch('/docIndex/stop', { method: 'POST', body: '{}' }),
+    },
   };
 }

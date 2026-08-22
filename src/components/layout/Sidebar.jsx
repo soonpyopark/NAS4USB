@@ -109,9 +109,9 @@ export default function Sidebar({
   const tree = useDirectoryTree(currentPath);
   const fs = useFileSystem(currentPath);
   const { confirm: appConfirm, alert: appAlert, dialog: confirmDialog } = useAppConfirm();
-  const { results: searchResults, searching, truncated, isActive: isSearchActive } = useFileSearch(
-    searchQuery,
-  );
+  const { isAdminLoggedIn, adminId, isSuperAdmin } = useAdminAuthContext();
+  const { results: searchResults, searching, truncated } = useFileSearch(searchQuery);
+  const isSearchActive = Boolean(searchQuery.trim());
   const { hasClipboard, copyEntries, cutEntries, pasteEntries } = useFileClipboard();
   const { shareMap, refreshShareMap } = useShareLinks();
   const { accessMap, refreshAccessMap, setFileAccess } = useFileAccess();
@@ -126,7 +126,6 @@ export default function Sidebar({
   const { folderColorMap, nameBoldMap, refreshFolderColorMap, setFolderColor, setNameBold } =
     useFolderColors();
   const { folderOrderMap, refreshFolderOrderMap, setFolderOrder } = useFolderOrder();
-  const { isAdminLoggedIn, adminId, isSuperAdmin } = useAdminAuthContext();
   const { openLogin } = useLoginDialog();
   const { effectivePermissions } = useGuestPermissions();
   const globalWrite = Boolean(effectivePermissions.write);

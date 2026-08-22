@@ -95,6 +95,9 @@ import { useLoginDialog } from '../../context/LoginDialogContext.jsx';
 import { useFsSync } from '../../context/FsSyncContext.jsx';
 import { useFsRemoteRefresh } from '../../hooks/useFsRemoteRefresh.js';
 import { useFolderContentSearch } from '../../hooks/useFolderContentSearch.js';
+import { usePersonalDocSearch } from '../../hooks/usePersonalDocSearch.js';
+import { indexHitsInCurrentFolder } from '../../lib/mergeNameAndDocHits.js';
+import PersonalDocIndexBar from '../layout/PersonalDocIndexBar.jsx';
 import FileDropOverlay from '../common/FileDropOverlay.jsx';
 import TransferStatusBanner from '../common/TransferStatusBanner.jsx';
 import ViewAccessDeniedPanel from '../common/ViewAccessDeniedPanel.jsx';
@@ -108,6 +111,8 @@ import {
   isHomesContainerPath,
   isMemberHomeRootPath,
   isOwnMemberHomePath,
+  isUnderHomesFolder,
+  memberHomeRelativePath,
   visibleParentPath,
 } from '../../lib/memberHomes.js';
 import { isProtectedSharedSystemPath } from '../../../shared/workspacePaths.js';
@@ -256,7 +261,18 @@ export default function FileExplorer({
   const keyHandlersRef = useRef({});
   const restorePreviewAfterEditorRef = useRef(false);
 
+  const inPersonalFolder = Boolean(
+    isAdminLoggedIn &&
+      (isHomesContainerPath(currentPath) || isOwnMemberHomePath(currentPath, adminId) || isUnderHomesFolder(currentPath)),
+  );
+  const myHomePath = isAdminLoggedIn ? memberHomeRelativePath(adminId) : null;
+  const usePersonalIndex = Boolean(isAdminLoggedIn && searchContents);
   const contentSearch = useFolderContentSearch(entries, searchQuery, searchContents);
+  const docSearch = usePersonalDocSearch(searchQuery, usePersonalIndex);
+  const indexFolderHits = useMemo(
+    () => (usePersonalIndex ? indexHitsInCurrentFolder(docSearch.results, currentPath, myHomePath) : new Set()),
+    [usePersonalIndex, docSearch.results, currentPath, myHomePath],
+  );
   const orderParentPath = useMemo(
     () => resolveFolderOrderParent(currentPath, adminId, entries[0]?.relativePath),
     [adminId, currentPath, entries],
@@ -290,19 +306,38 @@ export default function FileExplorer({
   }, [allowCustomSort, currentPath]);
 
   const visibleEntries = useMemo(() => {
-    const byName = filterEntries(entries, searchQuery);
-    const matched = !searchContents || contentSearch.matchedPaths.size === 0
-      ? byName
-      : (() => {
-          const seen = new Set(byName.map((entry) => entry.relativePath));
-          return [
-            ...byName,
-            ...entries.filter(
-              (entry) =>
-                !seen.has(entry.relativePath) && contentSearch.matchedPaths.has(entry.relativePath),
-            ),
-          ];
-        })();
+    const needle = searchQuery.trim();
+    const matched = !needle
+      ? entries
+      : searchContents
+        ? (() => {
+            const contentPaths = new Set([
+              ...contentSearch.matchedPaths,
+              ...indexFolderHits,
+            ]);
+            const seen = new Set();
+            const list = [];
+            for (const entry of entries) {
+              if (!contentPaths.has(entry.relativePath)) continue;
+              seen.add(entry.relativePath);
+              list.push(entry);
+            }
+            for (const hit of docSearch.results) {
+              if (!hit.relativePath || seen.has(hit.relativePath)) continue;
+              seen.add(hit.relativePath);
+              const dot = hit.fileName.lastIndexOf('.');
+              list.push({
+                name: hit.fileName,
+                relativePath: hit.relativePath,
+                isDirectory: false,
+                extension: dot > 0 ? hit.fileName.slice(dot + 1).toLowerCase() : null,
+                size: 0,
+                modifiedAt: '',
+              });
+            }
+            return list;
+          })()
+        : filterEntries(entries, searchQuery);
     const filtered = starOnly
       ? matched.filter((entry) => entry.isDirectory || nameBoldMap[entry.relativePath])
       : matched;
@@ -314,6 +349,8 @@ export default function FileExplorer({
     searchQuery,
     searchContents,
     contentSearch.matchedPaths,
+    indexFolderHits,
+    docSearch.results,
     starOnly,
     nameBoldMap,
     listSort,
@@ -1600,12 +1637,22 @@ export default function FileExplorer({
           type="search"
           value={searchQuery}
           onChange={(event) => setSearchQuery(event.target.value)}
-          placeholder={searchContents ? '이름·본문 검색…' : '현재 폴더 검색…'}
+          placeholder={
+            searchContents
+              ? isAdminLoggedIn
+                ? '본문·개인·공유폴더 색인 검색…'
+                : '본문 검색…'
+              : '현재 폴더에서 이름 검색…'
+          }
           className="ml-auto h-8 w-[220px] shrink-0 rounded-md border border-nas-border bg-white px-3 text-[10pt] outline-none focus:border-nas-accent focus:ring-1 focus:ring-nas-accent"
         />
         <label
           className="flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap text-[10pt] text-nas-muted"
-          title="현재 폴더의 문서 내용까지 검색합니다 (txt·md·tiptap·hwpx·docx·xlsx·pdf 등). 외부폴더는 본문 검색에서 제외됩니다."
+          title={
+            isAdminLoggedIn
+              ? '개인·공유폴더 TipTap·한글·엑셀·텍스트는 색인에서, 현재 폴더의 다른 문서는 바로 읽습니다. 왼쪽 검색은 이름만 찾습니다.'
+              : '현재 폴더의 문서 내용까지 검색합니다 (txt·md·tiptap·hwpx·docx·xlsx·pdf 등). 외부폴더는 본문 검색에서 제외됩니다.'
+          }
         >
           <input
             type="checkbox"
@@ -1629,11 +1676,28 @@ export default function FileExplorer({
         </label>
       </div>
 
+      {usePersonalIndex && (
+        <PersonalDocIndexBar
+          variant="light"
+          status={docSearch.status}
+          error={docSearch.error}
+          onReindex={docSearch.reindex}
+          onStop={docSearch.stop}
+        />
+      )}
+
       {searchContents && searchQuery.trim() && (
         <div className="shrink-0 rounded-md border border-nas-accentBorder bg-nas-accentSoft px-4 py-1.5 text-xs text-nas-accentText">
-          {contentSearch.searching
-            ? `본문 검색 중… ${contentSearch.scanned}/${contentSearch.total}`
-            : `본문 일치 ${contentSearch.matchedPaths.size}건 · ${contentSearch.total}개 파일 검사`}
+          {usePersonalIndex
+            ? [
+                docSearch.searching ? '색인 검색 중…' : `색인 일치 ${new Set(docSearch.results.map((hit) => hit.relativePath)).size}개 파일`,
+                contentSearch.searching
+                  ? `현재 폴더 검사 ${contentSearch.scanned}/${contentSearch.total}`
+                  : `현재 폴더 실시간 ${contentSearch.matchedPaths.size}건`,
+              ].join(' · ')
+            : contentSearch.searching
+              ? `본문 검색 중… ${contentSearch.scanned}/${contentSearch.total}`
+              : `본문 일치 ${contentSearch.matchedPaths.size}건 · ${contentSearch.total}개 파일 검사`}
           {contentSearch.skipped > 0 && ` · 지원하지 않거나 큰 파일 ${contentSearch.skipped}개 제외`}
         </div>
       )}

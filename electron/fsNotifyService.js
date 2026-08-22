@@ -1,4 +1,5 @@
 import { BrowserWindow } from 'electron';
+import { schedulePersonalDocIndexRefresh } from './personalDocIndexService.js';
 
 /** @type {number} */
 let revision = 0;
@@ -82,6 +83,10 @@ export function notifyFsChanged(changed) {
   for (const window of BrowserWindow.getAllWindows()) {
     if (window.isDestroyed()) continue;
     window.webContents.send('fs:changed', payload);
+  }
+
+  if (paths.length) {
+    schedulePersonalDocIndexRefresh(paths);
   }
 }
 

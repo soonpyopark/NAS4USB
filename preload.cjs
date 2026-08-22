@@ -227,4 +227,11 @@ contextBridge.exposeInMainWorld('nas4usb', {
     openArchive: (relativePath) => ipcRenderer.invoke('comic:openArchive', relativePath),
     closeArchive: (sessionId) => ipcRenderer.invoke('comic:closeArchive', sessionId),
   },
+
+  docIndex: {
+    status: () => ipcRenderer.invoke('docIndex:status'),
+    search: (query) => ipcRenderer.invoke('docIndex:search', query ?? ''),
+    start: (options) => ipcRenderer.invoke('docIndex:start', options ?? {}),
+    stop: () => ipcRenderer.invoke('docIndex:stop'),
+  },
 });

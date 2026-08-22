@@ -131,6 +131,12 @@ import {
 import { getStreamContentType } from '../shared/mediaTypes.js';
 import { handleFsEventsRequest, notifyFsChanged, getFsRevisionPayload } from './fsNotifyService.js';
 import {
+  getPersonalDocIndexStatus,
+  searchPersonalDocIndex,
+  startPersonalDocIndex,
+  stopPersonalDocIndex,
+} from './personalDocIndexService.js';
+import {
   abortUpload,
   commitUpload,
   initUpload,
@@ -275,6 +281,31 @@ export async function handleHttpApiRequest(req, res) {
 
     if (method === 'GET' && url.pathname === '/api/fs/revision') {
       sendJson(res, 200, getFsRevisionPayload());
+      return true;
+    }
+
+    if (method === 'GET' && url.pathname === '/api/docIndex/status') {
+      sendJson(res, 200, await getPersonalDocIndexStatus(getAccessAuth(req)));
+      return true;
+    }
+
+    if (method === 'GET' && url.pathname === '/api/docIndex/search') {
+      sendJson(
+        res,
+        200,
+        await searchPersonalDocIndex(getAccessAuth(req), url.searchParams.get('q') ?? ''),
+      );
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/docIndex/start') {
+      const body = await readJsonBody(req);
+      sendJson(res, 200, await startPersonalDocIndex(getAccessAuth(req), { reset: Boolean(body.reset) }));
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/docIndex/stop') {
+      sendJson(res, 200, await stopPersonalDocIndex(getAccessAuth(req)));
       return true;
     }
 

@@ -184,6 +184,12 @@ import { closeComicArchive, openComicArchive } from './electron/comicArchive.js'
 import { syncTiptapAssetRename } from './electron/tiptapAssetService.js';
 import { notifyFsChanged } from './electron/fsNotifyService.js';
 import {
+  getPersonalDocIndexStatus,
+  searchPersonalDocIndex,
+  startPersonalDocIndex,
+  stopPersonalDocIndex,
+} from './electron/personalDocIndexService.js';
+import {
   clearFileHistoryUnder,
   deleteFileHistoryEntry,
   listFileHistory,
@@ -1100,6 +1106,22 @@ ipcMain.handle('auth:logout', (event) => {
   adminTokenBySender.delete(event.sender.id);
   return true;
 });
+
+ipcMain.handle('docIndex:status', async (event) =>
+  getPersonalDocIndexStatus(getAccessAuthFromEvent(event)),
+);
+
+ipcMain.handle('docIndex:search', async (event, query) =>
+  searchPersonalDocIndex(getAccessAuthFromEvent(event), query ?? ''),
+);
+
+ipcMain.handle('docIndex:start', async (event, options = {}) =>
+  startPersonalDocIndex(getAccessAuthFromEvent(event), { reset: Boolean(options.reset) }),
+);
+
+ipcMain.handle('docIndex:stop', async (event) =>
+  stopPersonalDocIndex(getAccessAuthFromEvent(event)),
+);
 
 ipcMain.handle('fs:readDir', async (event, relativePath = '.') =>
   readDirWithAccessFilter(relativePath, getAccessAuthFromEvent(event), getPortableRoot()),

@@ -182,6 +182,12 @@ window.nas4usb = {
     openArchive: (relativePath) => {},
     closeArchive: (sessionId) => {},
   },
+  docIndex: {
+    status: () => {},
+    search: (query) => {},
+    start: (options) => {},
+    stop: () => {},
+  },
 };
 
 export {};

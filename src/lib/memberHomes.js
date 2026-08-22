@@ -22,6 +22,7 @@ export {
   isHomesContainerPath,
   isMemberHomeRootPath,
   isOwnMemberHomePath,
+  isUnderHomesFolder,
   memberHomeRelativePath,
 };
 
