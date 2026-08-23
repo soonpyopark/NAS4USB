@@ -3,6 +3,7 @@ import path from 'node:path';
 import {
   PERSONAL_DOC_ALL_EXTENSIONS,
   PERSONAL_DOC_MAX_FILE_BYTES,
+  isPersonalDocIndexSkipDir,
   personalDocTypeForName,
 } from '../../shared/personalDocIndex.js';
 import { parseExcel } from './parsers/excel.js';
@@ -37,8 +38,7 @@ export async function collectPersonalDocFiles(root) {
     }
 
     for (const name of names) {
-      if (name.startsWith('.') || name.startsWith('~$')) continue;
-      if (name.endsWith('.tiptap.assets') || name.endsWith('.assets')) continue;
+      if (isPersonalDocIndexSkipDir(name)) continue;
       const fullPath = path.join(dir, name);
       let stats;
       try {

@@ -911,6 +911,13 @@ html.touch-ui .tiptap-toolbar__select {
   box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
 }
 
+.tiptap-swatch__panel--floating {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 12000;
+}
+
 .tiptap-swatch__grid {
   display: grid;
   grid-template-columns: repeat(8, 22px);

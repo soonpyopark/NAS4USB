@@ -14,6 +14,7 @@ import {
 } from '../shared/memberHomes.js';
 import {
   isPersonalDocIndexFileName,
+  isPersonalDocIndexSkipPath,
   PERSONAL_DOC_INDEX_DIR,
   PERSONAL_DOC_INDEX_FORMAT,
   PERSONAL_DOC_SEARCH_LIMIT,
@@ -342,7 +343,7 @@ export function schedulePersonalDocIndexRefresh(paths) {
 
   for (const relativePath of list) {
     const normalized = String(relativePath ?? '').replace(/\\/g, '/');
-    if (!normalized) continue;
+    if (!normalized || isPersonalDocIndexSkipPath(normalized)) continue;
     if (isShareWorkspacePath(normalized)) {
       sharePaths.push(toCanonicalWorkspacePath(normalized));
       continue;
@@ -384,6 +385,13 @@ async function refreshOwnerPaths(owner, relativePaths) {
       const parts = rest.split('/');
       parts.splice(0, 2);
       rest = parts.join('/');
+    }
+    if (isPersonalDocIndexSkipPath(rest)) {
+      if (rest) {
+        database.deleteRecordsBySourcePrefix(rest);
+        database.save();
+      }
+      continue;
     }
 
     const absolute = rest ? path.join(root, rest) : root;
@@ -447,6 +455,13 @@ async function refreshSharePaths(relativePaths) {
         : canonical.startsWith(`${SHARED_FOLDER}/`)
           ? canonical.slice(SHARED_FOLDER.length + 1)
           : '';
+    if (isPersonalDocIndexSkipPath(rest) || isPersonalDocIndexSkipPath(canonical)) {
+      if (rest) {
+        database.deleteRecordsBySourcePrefix(rest);
+        database.save();
+      }
+      continue;
+    }
     const absolute = rest ? path.join(root, rest) : root;
     let stats = null;
     try {

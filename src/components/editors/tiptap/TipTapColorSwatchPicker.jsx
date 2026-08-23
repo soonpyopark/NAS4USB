@@ -1,4 +1,5 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 /**
  * Palette / swatch color picker for TipTap toolbar.
@@ -25,7 +26,10 @@ export default function TipTapColorSwatchPicker({
 }) {
   const [open, setOpen] = useState(false);
   const [hexDraft, setHexDraft] = useState('');
+  const [panelStyle, setPanelStyle] = useState(/** @type {import('react').CSSProperties} */ ({}));
+  const [panelReady, setPanelReady] = useState(false);
   const rootRef = useRef(/** @type {HTMLDivElement | null} */ (null));
+  const panelRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   const customInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   const hexInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   const pickingRef = useRef(false);
@@ -53,7 +57,9 @@ export default function TipTapColorSwatchPicker({
     const onPointerDown = (event) => {
       if (pickingRef.current) return;
       if (customInputRef.current && document.activeElement === customInputRef.current) return;
-      if (!rootRef.current?.contains(event.target)) setOpen(false);
+      const target = event.target;
+      if (rootRef.current?.contains(target) || panelRef.current?.contains(target)) return;
+      setOpen(false);
     };
     const onKeyDown = (event) => {
       const hexInput = hexInputRef.current;
@@ -87,6 +93,185 @@ export default function TipTapColorSwatchPicker({
       window.removeEventListener('keydown', onKeyDown, true);
     };
   }, [open, onChange, value]);
+
+  useEffect(() => {
+    if (!open) setPanelReady(false);
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open) return undefined;
+    const update = () => {
+      const trigger = rootRef.current?.querySelector('.tiptap-swatch__trigger') ?? rootRef.current;
+      const panel = panelRef.current;
+      if (!trigger || !panel) return;
+      const rect = trigger.getBoundingClientRect();
+      const panelRect = panel.getBoundingClientRect();
+      const margin = 8;
+      const gap = 6;
+      const spaceBelow = window.innerHeight - rect.bottom - margin;
+      const spaceAbove = rect.top - margin;
+      const placeBelow = spaceBelow >= panelRect.height + gap || spaceBelow >= spaceAbove;
+      let top = placeBelow ? rect.bottom + gap : rect.top - panelRect.height - gap;
+      let left = rect.left;
+      if (left + panelRect.width > window.innerWidth - margin) {
+        left = window.innerWidth - margin - panelRect.width;
+      }
+      if (left < margin) left = margin;
+      if (top < margin) top = margin;
+      if (top + panelRect.height > window.innerHeight - margin) {
+        top = Math.max(margin, window.innerHeight - margin - panelRect.height);
+      }
+      setPanelStyle({
+        position: 'fixed',
+        top,
+        left,
+        zIndex: 12000,
+      });
+      setPanelReady(true);
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('scroll', update, true);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
+  }, [open, hexDraft, columns, allowCustom]);
+
+  const panel = open ? (
+    <div
+      ref={panelRef}
+      id={listId}
+      className="tiptap-swatch__panel tiptap-swatch__panel--floating"
+      role="listbox"
+      aria-label={title}
+      style={{ ...panelStyle, visibility: panelReady ? 'visible' : 'hidden' }}
+      onMouseDown={(event) => {
+        const target = event.target;
+        if (target instanceof HTMLInputElement && (target.type === 'text' || target.type === 'color')) {
+          return;
+        }
+        event.preventDefault();
+      }}
+    >
+      <div
+        className="tiptap-swatch__grid"
+        style={{ gridTemplateColumns: `repeat(${columns}, 22px)` }}
+      >
+        {colors.map((item) => {
+          const selected = item.value === value;
+          const isNone = !item.value;
+          return (
+            <button
+              key={`${item.label}-${item.value || 'none'}`}
+              type="button"
+              role="option"
+              aria-selected={selected}
+              title={item.label}
+              aria-label={item.label}
+              className={`tiptap-swatch__chip${selected ? ' is-selected' : ''}${
+                isNone ? ' is-none' : ''
+              }`}
+              style={item.value ? { background: item.value } : undefined}
+              onClick={() => {
+                onChange(item.value);
+                setOpen(false);
+              }}
+            >
+              {isNone ? <span className="tiptap-swatch__none-slash" /> : null}
+            </button>
+          );
+        })}
+
+        {allowCustom && (
+          <button
+            type="button"
+            role="option"
+            aria-selected={isCustom}
+            title="다른 색상 선택"
+            aria-label="다른 색상 선택"
+            className={`tiptap-swatch__chip tiptap-swatch__chip--custom${
+              isCustom ? ' is-selected' : ''
+            }`}
+            style={
+              isCustom
+                ? { background: value }
+                : {
+                    background:
+                      'conic-gradient(from 180deg, #ef4444, #f59e0b, #eab308, #22c55e, #06b6d4, #3b82f6, #a855f7, #ef4444)',
+                  }
+            }
+            onClick={() => {
+              pickingRef.current = true;
+              customInputRef.current?.click();
+            }}
+          />
+        )}
+      </div>
+
+      {allowCustom && (
+        <>
+          <input
+            ref={customInputRef}
+            type="color"
+            className="tiptap-swatch__native"
+            value={normalizeHexColor(value) || '#2563eb'}
+            aria-label={`${title} 사용자 지정`}
+            onChange={(event) => {
+              onChange(event.target.value);
+              setHexDraft(event.target.value);
+            }}
+            onBlur={() => {
+              window.setTimeout(() => {
+                pickingRef.current = false;
+              }, 0);
+            }}
+          />
+          <label className="tiptap-swatch__hex-row">
+            <span>HEX</span>
+            <input
+              ref={hexInputRef}
+              type="text"
+              lang="en"
+              inputMode="text"
+              autoComplete="off"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+              maxLength={7}
+              className="tiptap-swatch__hex"
+              value={hexDraft}
+              placeholder="#RRGGBB"
+              aria-label={`${title} HEX`}
+              onChange={(event) => {
+                const next = sanitizeHexDraft(event.target.value);
+                setHexDraft(next);
+                const complete = parseHexColor(next, { allowShort: false });
+                if (complete) onChange(complete);
+              }}
+              onPaste={(event) => {
+                event.preventDefault();
+                const pasted = event.clipboardData?.getData('text') ?? '';
+                applyHexInsert(
+                  event.currentTarget,
+                  hexDraftRef,
+                  sanitizeHexDraft(pasted).replace(/^#/, ''),
+                  onChange,
+                  setHexDraft,
+                );
+              }}
+              onCompositionStart={(event) => event.preventDefault()}
+              onKeyDown={(event) => event.stopPropagation()}
+              onKeyUp={(event) => event.stopPropagation()}
+              onBlur={() => commitHexDraft(hexDraftRef, value, onChange, setHexDraft)}
+            />
+          </label>
+        </>
+      )}
+
+      <div className="tiptap-swatch__caption">{active?.label || title}</div>
+    </div>
+  ) : null;
 
   return (
     <div className="tiptap-swatch" ref={rootRef}>
@@ -123,127 +308,7 @@ export default function TipTapColorSwatchPicker({
           />
         )}
       </button>
-
-      {open && (
-        <div id={listId} className="tiptap-swatch__panel" role="listbox" aria-label={title}>
-          <div
-            className="tiptap-swatch__grid"
-            style={{ gridTemplateColumns: `repeat(${columns}, 22px)` }}
-          >
-            {colors.map((item) => {
-              const selected = item.value === value;
-              const isNone = !item.value;
-              return (
-                <button
-                  key={`${item.label}-${item.value || 'none'}`}
-                  type="button"
-                  role="option"
-                  aria-selected={selected}
-                  title={item.label}
-                  aria-label={item.label}
-                  className={`tiptap-swatch__chip${selected ? ' is-selected' : ''}${
-                    isNone ? ' is-none' : ''
-                  }`}
-                  style={item.value ? { background: item.value } : undefined}
-                  onClick={() => {
-                    onChange(item.value);
-                    setOpen(false);
-                  }}
-                >
-                  {isNone ? <span className="tiptap-swatch__none-slash" /> : null}
-                </button>
-              );
-            })}
-
-            {allowCustom && (
-              <button
-                type="button"
-                role="option"
-                aria-selected={isCustom}
-                title="다른 색상 선택"
-                aria-label="다른 색상 선택"
-                className={`tiptap-swatch__chip tiptap-swatch__chip--custom${
-                  isCustom ? ' is-selected' : ''
-                }`}
-                style={
-                  isCustom
-                    ? { background: value }
-                    : {
-                        background:
-                          'conic-gradient(from 180deg, #ef4444, #f59e0b, #eab308, #22c55e, #06b6d4, #3b82f6, #a855f7, #ef4444)',
-                      }
-                }
-                onClick={() => {
-                  pickingRef.current = true;
-                  customInputRef.current?.click();
-                }}
-              />
-            )}
-          </div>
-
-          {allowCustom && (
-            <>
-              <input
-                ref={customInputRef}
-                type="color"
-                className="tiptap-swatch__native"
-                value={normalizeHexColor(value) || '#2563eb'}
-                aria-label={`${title} 사용자 지정`}
-                onChange={(event) => {
-                  onChange(event.target.value);
-                  setHexDraft(event.target.value);
-                }}
-                onBlur={() => {
-                  window.setTimeout(() => {
-                    pickingRef.current = false;
-                  }, 0);
-                }}
-              />
-              <label className="tiptap-swatch__hex-row">
-                <span>HEX</span>
-                <input
-                  ref={hexInputRef}
-                  type="text"
-                  lang="en"
-                  inputMode="text"
-                  autoComplete="off"
-                  autoCapitalize="off"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  maxLength={7}
-                  className="tiptap-swatch__hex"
-                  value={hexDraft}
-                  placeholder="#RRGGBB"
-                  aria-label={`${title} HEX`}
-                  onChange={(event) => {
-                    const next = sanitizeHexDraft(event.target.value);
-                    setHexDraft(next);
-                    const complete = parseHexColor(next, { allowShort: false });
-                    if (complete) onChange(complete);
-                  }}
-                  onPaste={(event) => {
-                    event.preventDefault();
-                    const pasted = event.clipboardData?.getData('text') ?? '';
-                    applyHexInsert(
-                      event.currentTarget,
-                      hexDraftRef,
-                      sanitizeHexDraft(pasted).replace(/^#/, ''),
-                      onChange,
-                      setHexDraft,
-                    );
-                  }}
-                  onCompositionStart={(event) => event.preventDefault()}
-                  onKeyDown={(event) => event.stopPropagation()}
-                  onKeyUp={(event) => event.stopPropagation()}
-                  onBlur={() => commitHexDraft(hexDraftRef, value, onChange, setHexDraft)}
-                />
-              </label>
-            </>
-          )}
-
-          <div className="tiptap-swatch__caption">{active?.label || title}</div>
-        </div>
-      )}
+      {panel && typeof document !== 'undefined' ? createPortal(panel, document.body) : null}
     </div>
   );
 }

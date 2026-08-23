@@ -6,7 +6,15 @@ export const PERSONAL_DOC_INDEX_DIR = '.nas4usb/doc-index';
 export const SHARE_DOC_INDEX_KEY = '__share';
 
 /** Bump when indexed file types or parsers change so old DBs rebuild. */
-export const PERSONAL_DOC_INDEX_FORMAT = 2;
+export const PERSONAL_DOC_INDEX_FORMAT = 3;
+
+/** Folders that must never be walked (trash, document history, explorer-hidden). */
+export const PERSONAL_DOC_INDEX_SKIP_DIRS = [
+  '__trash',
+  '__favorites',
+  'file-history',
+  'hwpx-history',
+];
 
 export const PERSONAL_DOC_EXTENSIONS = {
   excel: ['.xlsx', '.xlsm', '.xls'],
@@ -43,5 +51,28 @@ export function personalDocTypeForName(fileName) {
  */
 export function isPersonalDocIndexFileName(fileName) {
   return personalDocTypeForName(fileName) != null;
+}
+
+/**
+ * @param {string} [name]
+ */
+export function isPersonalDocIndexSkipDir(name) {
+  const base = String(name ?? '').replace(/\\/g, '/').split('/').pop() ?? '';
+  if (!base || base.startsWith('.') || base.startsWith('~$')) return true;
+  if (base.endsWith('.tiptap.assets') || base.endsWith('.assets')) return true;
+  return PERSONAL_DOC_INDEX_SKIP_DIRS.includes(base.toLowerCase())
+    || PERSONAL_DOC_INDEX_SKIP_DIRS.includes(base);
+}
+
+/**
+ * True when any path segment is trash, history, or another skipped folder.
+ * @param {string} [relativePath]
+ */
+export function isPersonalDocIndexSkipPath(relativePath) {
+  const parts = String(relativePath ?? '')
+    .replace(/\\/g, '/')
+    .split('/')
+    .filter(Boolean);
+  return parts.some((part) => isPersonalDocIndexSkipDir(part));
 }
 

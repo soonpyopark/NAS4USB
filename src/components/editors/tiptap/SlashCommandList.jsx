@@ -1,14 +1,29 @@
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 
 /**
  * Slash / mention / emoji suggestion popup list.
  */
 const SlashCommandList = forwardRef(function SlashCommandList({ items, command }, ref) {
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const menuRef = useRef(/** @type {HTMLDivElement | null} */ (null));
+  const itemRefs = useRef(/** @type {Array<HTMLButtonElement | null>} */ ([]));
 
   useEffect(() => {
     setSelectedIndex(0);
   }, [items]);
+
+  useEffect(() => {
+    const menu = menuRef.current;
+    const item = itemRefs.current[selectedIndex];
+    if (!menu || !item) return;
+    const menuRect = menu.getBoundingClientRect();
+    const itemRect = item.getBoundingClientRect();
+    if (itemRect.bottom > menuRect.bottom) {
+      menu.scrollTop += itemRect.bottom - menuRect.bottom;
+    } else if (itemRect.top < menuRect.top) {
+      menu.scrollTop -= menuRect.top - itemRect.top;
+    }
+  }, [selectedIndex, items]);
 
   useImperativeHandle(ref, () => ({
     onKeyDown: ({ event }) => {
@@ -47,20 +62,23 @@ const SlashCommandList = forwardRef(function SlashCommandList({ items, command }
 
   if (!items.length) {
     return (
-      <div className="tiptap-slash-menu">
+      <div className="tiptap-slash-menu" ref={menuRef}>
         <div className="tiptap-slash-menu__empty">결과 없음</div>
       </div>
     );
   }
 
   return (
-    <div className="tiptap-slash-menu">
+    <div className="tiptap-slash-menu" ref={menuRef}>
       {groups.map((group) => (
         <div key={group.group} className="tiptap-slash-menu__group">
           <div className="tiptap-slash-menu__group-label">{group.group}</div>
           {group.items.map(({ item, index }) => (
             <button
               key={`${item.group}-${item.title}-${item.id || index}`}
+              ref={(node) => {
+                itemRefs.current[index] = node;
+              }}
               type="button"
               className={`tiptap-slash-menu__item${index === selectedIndex ? ' is-selected' : ''}`}
               onClick={() => command(item)}
