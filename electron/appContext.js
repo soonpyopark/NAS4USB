@@ -179,7 +179,10 @@ export async function ensureDataRoot() {
   await fs.mkdir(path.join(dataRoot, TRASH_FOLDER), { recursive: true });
 }
 
-export function getAppPaths() {
+/**
+ * @param {{ role?: string | null } | null | undefined} [auth]
+ */
+export function getAppPaths(auth) {
   const ctx = getAppContext();
   const stateRoot = ctx.portableRoot;
   const exeRoot = ctx.exeRoot ?? stateRoot;
@@ -198,7 +201,7 @@ export function getAppPaths() {
     sharedFolder: SHARED_FOLDER,
     homesFolder: HOMES_FOLDER,
     externalFolder: EXTERNAL_FOLDER,
-    externalFolders: getExternalFolders(),
+    externalFolders: auth?.role === 'super_admin' ? getExternalFolders() : [],
     sharedDiskDir: DEFAULT_DATA_DIR,
     homesDiskDir: HOMES_DISK_DIR,
     tempPath: ctx.tempPath,

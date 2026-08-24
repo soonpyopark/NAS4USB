@@ -1,4 +1,5 @@
 import { HOMES_FOLDER } from '../../lib/memberHomes.js';
+import { useExternalFolders } from '../../hooks/useExternalFolders.js';
 import { formatBreadcrumbSegment } from '../../lib/trashPaths.js';
 
 function splitPath(relativePath) {
@@ -23,6 +24,7 @@ function realPathAt(segments, lastIndex) {
 }
 
 export default function Breadcrumb({ currentPath, onNavigate }) {
+  const externalFolders = useExternalFolders();
   const segments = splitPath(currentPath);
   const indexes = displayIndexes(segments);
 
@@ -39,7 +41,10 @@ export default function Breadcrumb({ currentPath, onNavigate }) {
       {indexes.map((segmentIndex, displayIndex) => {
         const path = realPathAt(segments, segmentIndex);
         const isLast = displayIndex === indexes.length - 1;
-        const label = formatBreadcrumbSegment(segments[segmentIndex]);
+        const label = formatBreadcrumbSegment(segments[segmentIndex], {
+          path,
+          externalFolders,
+        });
 
         return (
           <span key={path} className="flex items-center gap-1">

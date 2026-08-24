@@ -1,3 +1,5 @@
+import { useBackdropDismiss } from '../../hooks/useBackdropDismiss.js';
+
 /**
  * WhiteBoard4Share DeleteConfirmDialog 과 동일한 모달 스타일.
  * @see vendor/whiteboard4share/src/index.css
@@ -33,6 +35,11 @@ export function AppModal({
   className = '',
   children,
 }) {
+  // Editor/viewer windows should only close via their explicit [닫기] button,
+  // not by clicking the backdrop (avoids accidental data loss while editing).
+  const closeOnBackdrop = Boolean(onClose) && !embedded && !editor;
+  const backdropDismiss = useBackdropDismiss(onClose, { enabled: closeOnBackdrop });
+
   if (!open) return null;
 
   const overlayClass = [
@@ -52,12 +59,8 @@ export function AppModal({
     .filter(Boolean)
     .join(' ');
 
-  // Editor/viewer windows should only close via their explicit [닫기] button,
-  // not by clicking the backdrop (avoids accidental data loss while editing).
-  const handleOverlayClick = embedded || editor ? undefined : onClose;
-
   return (
-    <div className={overlayClass} onClick={handleOverlayClick}>
+    <div className={overlayClass} {...backdropDismiss}>
       <div
         className={dialogClass}
         role="dialog"

@@ -122,6 +122,23 @@ function homeAuthFrom(auth) {
 }
 
 /**
+ * @param {AccessAuth} auth
+ */
+export function isSuperAdminAuth(auth) {
+  return homeAuthFrom(auth).role === 'super_admin';
+}
+
+/**
+ * 외부폴더는 총괄관리자 전용. 회원 보기/읽기/쓰기는 공유폴더에만 적용.
+ * @param {AccessAuth} auth
+ */
+function assertSuperAdminExternalAccess(auth) {
+  if (!isSuperAdminAuth(auth)) {
+    throw new Error(ACCESS_DENIED_MESSAGE);
+  }
+}
+
+/**
  * @param {string} relativePath
  * @param {AccessAuth} auth
  */
@@ -176,6 +193,10 @@ export async function assertCanWriteFs(auth, portableRoot = getPortableRoot(), r
     if (homeAccess === 'deny') {
       throw new Error(ACCESS_WRITE_DENIED_MESSAGE);
     }
+    if (isExternalFolderPath(relativePath)) {
+      if (isSuperAdminAuth(auth)) return;
+      throw new Error(ACCESS_WRITE_DENIED_MESSAGE);
+    }
   }
 
   const perms = await getEffectiveAccessPermissions(auth, portableRoot);
@@ -204,8 +225,6 @@ export async function assertCanAccessFile(
   const normalizedPath = String(relativePath ?? '').replace(/\\/g, '/');
   if (isWorkspaceRootPath(normalizedPath)) return;
   if (normalizedPath === SHARED_FOLDER) return;
-  if (isExternalFolderContainerPath(normalizedPath)) return;
-  if (isExternalMountRootPath(normalizedPath)) return;
 
   if (await canAccessViaShareToken(normalizedPath, shareToken, portableRoot)) {
     return;
@@ -219,12 +238,8 @@ export async function assertCanAccessFile(
     return;
   }
 
-  // External folder contents follow shared-folder view/write permissions.
   if (isExternalFolderPath(normalizedPath)) {
-    const perms = await getEffectiveAccessPermissions(auth, portableRoot);
-    if (!perms.view && !perms.write && !perms.read) {
-      throw new Error(ACCESS_VIEW_DENIED_MESSAGE);
-    }
+    assertSuperAdminExternalAccess(auth);
     return;
   }
 
@@ -310,14 +325,16 @@ function buildWorkspaceRootEntries(auth) {
       extension: null,
     });
   }
-  entries.push({
-    name: EXTERNAL_FOLDER,
-    relativePath: EXTERNAL_FOLDER,
-    isDirectory: true,
-    size: 0,
-    modifiedAt: new Date(0).toISOString(),
-    extension: null,
-  });
+  if (isSuperAdminAuth(auth)) {
+    entries.push({
+      name: EXTERNAL_FOLDER,
+      relativePath: EXTERNAL_FOLDER,
+      isDirectory: true,
+      size: 0,
+      modifiedAt: new Date(0).toISOString(),
+      extension: null,
+    });
+  }
   return entries;
 }
 
@@ -428,17 +445,16 @@ export async function readDirWithAccessFilter(
     const rootEntries = buildWorkspaceRootEntries(auth);
     const perms = await getEffectiveAccessPermissions(auth, portableRoot);
     if (!perms.view && !perms.write) {
-      return rootEntries.filter((entry) => resolveHomePathAccess(entry.relativePath, home) === 'allow');
+      return rootEntries.filter((entry) => {
+        if (isExternalFolderPath(entry.relativePath)) return true;
+        return resolveHomePathAccess(entry.relativePath, home) === 'allow';
+      });
     }
     return rootEntries;
   }
 
   if (isExternalFolderContainerPath(normalizedPath)) {
     await assertCanAccessFile(normalizedPath, auth, null, portableRoot);
-    const perms = await getEffectiveAccessPermissions(auth, portableRoot);
-    if (!perms.view && !perms.write && !perms.read) {
-      return [];
-    }
     return buildExternalMountEntries();
   }
 
@@ -529,12 +545,11 @@ export async function pathExistsWithAccessFilter(
   shareToken,
   portableRoot = getPortableRoot(),
 ) {
-  if (
-    isWorkspaceRootPath(relativePath) ||
-    String(relativePath ?? '').replace(/\\/g, '/') === SHARED_FOLDER ||
-    isExternalFolderContainerPath(relativePath)
-  ) {
+  if (isWorkspaceRootPath(relativePath) || String(relativePath ?? '').replace(/\\/g, '/') === SHARED_FOLDER) {
     return true;
+  }
+  if (isExternalFolderContainerPath(relativePath)) {
+    return isSuperAdminAuth(auth);
   }
   try {
     await assertCanAccessFile(relativePath, auth, shareToken, portableRoot);
@@ -638,4 +653,27 @@ export function filterTrashMapByHomeAccess(trashMap, auth) {
       return resolveHomePathAccess(originalPath, home) !== 'deny';
     }),
   );
+}
+
+/**
+ * Hide 외부폴더 favorites from everyone except the super admin.
+ * @param {Record<string, unknown>} map
+ * @param {AccessAuth} auth
+ */
+export function filterFavoritesMapForAuth(map, auth) {
+  const source = map && typeof map === 'object' ? map : {};
+  if (isSuperAdminAuth(auth)) return source;
+  return Object.fromEntries(
+    Object.entries(source).filter(([relativePath]) => !isExternalFolderPath(relativePath)),
+  );
+}
+
+/**
+ * @param {Array<{ relativePath?: string }>} entries
+ * @param {AccessAuth} auth
+ */
+export function filterFavoriteEntriesForAuth(entries, auth) {
+  const list = Array.isArray(entries) ? entries : [];
+  if (isSuperAdminAuth(auth)) return list;
+  return list.filter((entry) => !isExternalFolderPath(entry?.relativePath));
 }

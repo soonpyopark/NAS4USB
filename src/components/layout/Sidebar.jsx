@@ -136,7 +136,7 @@ export default function Sidebar({
   const favoritesView = favoritesViewKind(currentPath);
   const canWrite = isInTrashView
     ? globalWrite || isAdminLoggedIn
-    : canWriteAtPath(currentPath, adminId, isAdminLoggedIn, globalWrite);
+    : canWriteAtPath(currentPath, adminId, isAdminLoggedIn, globalWrite, isSuperAdmin);
   const myHomePath = isAdminLoggedIn ? memberHomeRelativePath(adminId) : null;
   const { notifyLocalChange } = useFsSync();
   const canUseTrash = globalWrite || isAdminLoggedIn;
@@ -714,6 +714,7 @@ export default function Sidebar({
       adminId,
       isAdminLoggedIn,
       effectivePermissions,
+      isSuperAdmin,
     );
     if (!canOpenFileForEdit(entry.relativePath, accessMap, isAdminLoggedIn, pathPerms)) {
       nativeAlert(
@@ -847,6 +848,7 @@ export default function Sidebar({
                 adminId,
                 isAdminLoggedIn,
                 effectivePermissions,
+                isSuperAdmin,
               ),
             )
           : false,
@@ -858,6 +860,7 @@ export default function Sidebar({
               adminId,
               isAdminLoggedIn,
               globalWrite,
+              isSuperAdmin,
             ),
       })
     : buildBackgroundContextMenuItems({
@@ -874,7 +877,7 @@ export default function Sidebar({
         isAdminLoggedIn,
         canWrite: isInTrashView
           ? canWrite
-          : canWriteAtPath(contextTargetPath, adminId, isAdminLoggedIn, globalWrite),
+          : canWriteAtPath(contextTargetPath, adminId, isAdminLoggedIn, globalWrite, isSuperAdmin),
       });
 
   return (
@@ -1106,6 +1109,7 @@ export default function Sidebar({
             adminId,
             isAdminLoggedIn,
             globalWrite,
+            isSuperAdmin,
           )}
           onChangeFolderColor={(color) => handleSetFolderColor(propertiesEntry, color)}
           nameBold={Boolean(nameBoldMap[propertiesEntry.relativePath])}
@@ -1114,6 +1118,7 @@ export default function Sidebar({
             adminId,
             isAdminLoggedIn,
             globalWrite,
+            isSuperAdmin,
           )}
           onChangeNameBold={(bold) => handleSetNameBold(propertiesEntry, bold)}
           onClose={() => {

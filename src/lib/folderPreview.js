@@ -39,8 +39,9 @@ export async function listFolderPreviewEntries(relativePath, folderOrderMap) {
 /**
  * @param {string | null | undefined} _anchorPath
  * @param {string} folderPath
+ * @param {import('../../shared/externalFolders.js').ExternalFolderMount[]} [externalFolders]
  */
-export function folderPreviewCrumbs(_anchorPath, folderPath) {
+export function folderPreviewCrumbs(_anchorPath, folderPath, externalFolders) {
   const current = folderPath || '.';
   if (!current || current === '.') {
     return [{ path: '.', name: '워크스페이스' }];
@@ -53,7 +54,10 @@ export function folderPreviewCrumbs(_anchorPath, folderPath) {
   segments.forEach((segment, index) => {
     acc = acc ? `${acc}/${segment}` : segment;
     if (skipHomeId && index === 1) return;
-    crumbs.push({ path: acc, name: formatBreadcrumbSegment(segment) });
+    crumbs.push({
+      path: acc,
+      name: formatBreadcrumbSegment(segment, { path: acc, externalFolders }),
+    });
   });
   return crumbs.length ? crumbs : [{ path: current, name: getBaseName(current) || '폴더' }];
 }

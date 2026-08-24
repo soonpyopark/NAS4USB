@@ -5,6 +5,7 @@ import {
   SHARED_FOLDER,
   isTrashRelativePath,
 } from '../../shared/constants.js';
+import { displayExternalPathSegment } from '../../shared/externalFolders.js';
 import { HOMES_DISK_DIR, HOMES_FOLDER } from './memberHomes.js';
 
 export { TRASH_FOLDER, FAVORITES_FOLDER, SHARED_FOLDER };
@@ -62,15 +63,20 @@ export function filterTrashFromEntries(entries, currentPath) {
 
 /**
  * @param {string} segment
+ * @param {{
+ *   path?: string,
+ *   externalFolders?: import('../../shared/externalFolders.js').ExternalFolderMount[],
+ * }} [options]
  */
-export function formatBreadcrumbSegment(segment) {
+export function formatBreadcrumbSegment(segment, options = {}) {
   if (segment === TRASH_FOLDER) return '휴지통';
   if (segment === FAVORITES_FOLDER) return '즐겨찾기';
   if (segment === '__folders') return '폴더';
   if (segment === '__files') return '파일';
   if (segment === HOMES_FOLDER || segment === HOMES_DISK_DIR) return HOMES_FOLDER;
   if (segment === SHARED_FOLDER || segment === DEFAULT_DATA_DIR) return SHARED_FOLDER;
-  return segment;
+  const alias = displayExternalPathSegment(options.path, segment, options.externalFolders);
+  return alias || segment;
 }
 
 /**

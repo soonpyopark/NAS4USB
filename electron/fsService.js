@@ -2,7 +2,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { TRASH_FOLDER } from '../shared/constants.js';
 import { assertRenamePreservesExtension } from '../shared/entryNames.js';
-import { resolvePortablePath } from './appContext.js';
+import { isExternalMountRootPath, splitExternalFolderPath } from '../shared/externalFolders.js';
+import { getExternalFolders, resolvePortablePath } from './appContext.js';
 
 /**
  * @param {string} [relativePath]
@@ -361,8 +362,14 @@ export async function statPath(relativePath) {
   }
 
   const resolvedRelative = normalizeRelativePath(relativePath);
+  let name = path.basename(absolute);
+  if (isExternalMountRootPath(resolvedRelative)) {
+    const split = splitExternalFolderPath(resolvedRelative);
+    const alias = getExternalFolders().find((item) => item.id === split?.mountId)?.label;
+    if (alias) name = alias;
+  }
   return {
-    name: path.basename(absolute),
+    name,
     relativePath: resolvedRelative,
     isDirectory: stat.isDirectory(),
     size: stat.size,

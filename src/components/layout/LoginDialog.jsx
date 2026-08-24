@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useBackdropDismiss } from '../../hooks/useBackdropDismiss.js';
 
 const fieldClass =
   'w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-nas-accent focus:ring-2 focus:ring-nas-accent/15';
@@ -49,6 +50,7 @@ export default function LoginDialog({
   const [rememberMe, setRememberMe] = useState(true);
   const [showDefaultAdminHint, setShowDefaultAdminHint] = useState(false);
   const idInputRef = useRef(null);
+  const backdropDismiss = useBackdropDismiss(onClose, { enabled: open && dismissible });
 
   useEffect(() => {
     if (!open) return undefined;
@@ -105,8 +107,8 @@ export default function LoginDialog({
   return (
     <div
       className="fixed inset-0 z-[1000] flex items-center justify-center bg-[rgba(32,33,36,0.32)] p-4"
-      onClick={dismissible ? onClose : undefined}
       role="presentation"
+      {...backdropDismiss}
     >
       <form
         className="relative w-full max-w-[360px] rounded-xl bg-white p-6 shadow-lg"

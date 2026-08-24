@@ -679,8 +679,8 @@ export default function MembersSettingsPanel() {
       </section>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <p className="text-sm text-slate-600">
-          회원별로 보기·읽기·쓰기 권한을 설정합니다. 기본 관리자 아래의 손님(Guest)은 로그인하지
-          않은 사용자 권한입니다.
+          회원별로 공유폴더의 보기·읽기·쓰기 권한을 설정합니다. 외부폴더는 총괄관리자에게만 보이며
+          이 권한과 무관합니다. 기본 관리자 아래의 손님(Guest)은 로그인하지 않은 사용자 권한입니다.
         </p>
         <div className="flex shrink-0 gap-2">
           <button
@@ -774,8 +774,8 @@ export default function MembersSettingsPanel() {
           </div>
 
           <p className="text-xs leading-relaxed text-slate-500">
-            보기가 꺼져 있으면 목록이 비고, 읽기는 열기·다운로드, 쓰기는 생성·수정·삭제·휴지통
-            권한입니다.
+            공유폴더 기준입니다. 보기가 꺼져 있으면 목록이 비고, 읽기는 열기·다운로드, 쓰기는
+            생성·수정·삭제·휴지통 권한입니다. 개인폴더는 본인만, 외부폴더는 총괄관리자만 이용합니다.
           </p>
 
           {filteredMembers.length === 0 ? (

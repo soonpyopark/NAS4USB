@@ -24,6 +24,12 @@ export const STATE_FILES = [
 
 export const STATE_DIRS = ['.nas4usb'];
 
+/** Chromium / Electron profile folder (Cache, GPUCache, Cookies, …). */
+export const ELECTRON_PROFILE_DIR = path.join('.nas4usb', 'electron-profile');
+
+/** Default Electron `userData` name under %APPDATA% (package.json `name`). */
+export const LEGACY_USER_DATA_NAME = 'nas4usb';
+
 /** Login sessions are machine-specific; do not migrate them. */
 export const PC_SETTINGS_SKIP_FILES = ['.nas4usb-sessions.json'];
 
@@ -71,6 +77,28 @@ export function resolvePortableRoot(isDev) {
 }
 
 /**
+ * Redirect Electron/Chromium `userData` next to the exe (or project root in
+ * dev) so portable/MSI installs do not write %APPDATA%\nas4usb.
+ * Must run before `app.requestSingleInstanceLock()` and `app.whenReady()`.
+ *
+ * @param {boolean} isDev
+ */
+export function applyPortableUserData(isDev) {
+  const userData = path.join(resolveExeRoot(isDev), ELECTRON_PROFILE_DIR);
+  app.setPath('userData', userData);
+  return userData;
+}
+
+/** Previous Electron default: `%APPDATA%\nas4usb`. */
+export function getLegacyUserDataPath() {
+  try {
+    return path.join(app.getPath('appData'), LEGACY_USER_DATA_NAME);
+  } catch {
+    return '';
+  }
+}
+
+/**
  * @param {string} dir
  */
 async function pathExists(dir) {
@@ -92,12 +120,8 @@ async function pathExists(dir) {
 export async function migrateUserDataStateToInstall(exeRoot) {
   /** @type {string[]} */
   const migrated = [];
-  let userData;
-  try {
-    userData = app.getPath('userData');
-  } catch {
-    return { migrated };
-  }
+  const userData = getLegacyUserDataPath();
+  if (!userData) return { migrated };
   if (path.resolve(userData) === path.resolve(exeRoot)) {
     return { migrated };
   }

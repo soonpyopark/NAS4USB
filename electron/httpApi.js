@@ -40,6 +40,8 @@ import {
   assertGuestCanWrite,
   assertHomeSystemPathMutable,
   filterTrashMapByHomeAccess,
+  filterFavoritesMapForAuth,
+  filterFavoriteEntriesForAuth,
   pathExistsWithAccessFilter,
   readDirWithAccessFilter,
   readFileBase64WithAccessFilter,
@@ -259,7 +261,7 @@ export async function handleHttpApiRequest(req, res) {
 
   try {
     if (method === 'GET' && url.pathname === '/api/app/paths') {
-      sendJson(res, 200, getAppPaths());
+      sendJson(res, 200, getAppPaths(getAccessAuth(req)));
       return true;
     }
 
@@ -726,7 +728,7 @@ export async function handleHttpApiRequest(req, res) {
         return true;
       }
       if (perms.write) {
-        sendJson(res, 200, await getFavoritesMap(getPortableRoot()));
+        sendJson(res, 200, filterFavoritesMapForAuth(await getFavoritesMap(getPortableRoot()), auth));
         return true;
       }
       const map = await getFavoritesMap(getPortableRoot());
@@ -734,8 +736,11 @@ export async function handleHttpApiRequest(req, res) {
       sendJson(
         res,
         200,
-        Object.fromEntries(
-          Object.entries(map).filter(([path]) => canViewFileEntry(path, accessMap, false)),
+        filterFavoritesMapForAuth(
+          Object.fromEntries(
+            Object.entries(map).filter(([path]) => canViewFileEntry(path, accessMap, false)),
+          ),
+          auth,
         ),
       );
       return true;
@@ -749,7 +754,11 @@ export async function handleHttpApiRequest(req, res) {
         return true;
       }
       if (perms.write) {
-        sendJson(res, 200, await listFavoriteEntries(getPortableRoot()));
+        sendJson(
+          res,
+          200,
+          filterFavoriteEntriesForAuth(await listFavoriteEntries(getPortableRoot()), auth),
+        );
         return true;
       }
       const entries = await listFavoriteEntries(getPortableRoot());
@@ -757,7 +766,10 @@ export async function handleHttpApiRequest(req, res) {
       sendJson(
         res,
         200,
-        entries.filter((entry) => canViewFileEntry(entry.relativePath, accessMap, false)),
+        filterFavoriteEntriesForAuth(
+          entries.filter((entry) => canViewFileEntry(entry.relativePath, accessMap, false)),
+          auth,
+        ),
       );
       return true;
     }

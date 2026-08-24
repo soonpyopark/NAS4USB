@@ -19,6 +19,7 @@ import { useShareLinks } from '../../hooks/useShareLinks.js';
 import { useFileAccess } from '../../hooks/useFileAccess.js';
 import { useFavorites } from '../../hooks/useFavorites.js';
 import { useFolderColors } from '../../hooks/useFolderColors.js';
+import { useExternalFolders } from '../../hooks/useExternalFolders.js';
 import { useFolderOrder } from '../../hooks/useFolderOrder.js';
 import {
   openShareLinkForEntry,
@@ -116,7 +117,12 @@ import {
   visibleParentPath,
 } from '../../lib/memberHomes.js';
 import { isProtectedSharedSystemPath } from '../../../shared/workspacePaths.js';
-import { isExternalMountRootPath, isExternalFolderContainerPath } from '../../../shared/externalFolders.js';
+import {
+  isExternalMountRootPath,
+  isExternalFolderContainerPath,
+  isExternalFolderPath,
+  labelForExternalMountPath,
+} from '../../../shared/externalFolders.js';
 import {
   EXTERNAL_MOUNT_DELETE_HINT,
   isExternalContentPath,
@@ -227,7 +233,7 @@ export default function FileExplorer({
   const favoritesView = favoritesViewKind(currentPath);
   const canWrite = isInTrashView
     ? globalWrite || isAdminLoggedIn
-    : canWriteAtPath(currentPath, adminId, isAdminLoggedIn, globalWrite);
+    : canWriteAtPath(currentPath, adminId, isAdminLoggedIn, globalWrite, isSuperAdmin);
   const { notifyLocalChange } = useFsSync();
   const { refresh: refreshTrash } = useTrash();
   const { confirm: appConfirm, alert: appAlert, dialog: confirmDialog } = useAppConfirm();
@@ -253,6 +259,7 @@ export default function FileExplorer({
   const [previewEntry, setPreviewEntry] = useState(/** @type {import('../../types/nas4usb.d.ts').FsEntry | null} */ (null));
   const [previewAnchorPath, setPreviewAnchorPath] = useState(/** @type {string | null} */ (null));
   const touchUi = useTouchUi();
+  const externalFolders = useExternalFolders();
 
   const uploadInputRef = useRef(null);
   const onenoteInputRef = useRef(null);
@@ -260,6 +267,13 @@ export default function FileExplorer({
   const containerRef = useRef(null);
   const keyHandlersRef = useRef({});
   const restorePreviewAfterEditorRef = useRef(false);
+
+  useEffect(() => {
+    if (isSuperAdmin) return;
+    if (isExternalFolderPath(currentPath)) {
+      onNavigate('.');
+    }
+  }, [currentPath, isSuperAdmin, onNavigate]);
 
   const inPersonalFolder = Boolean(
     isAdminLoggedIn &&
@@ -407,6 +421,7 @@ export default function FileExplorer({
       adminId,
       isAdminLoggedIn,
       effectivePermissions,
+      isSuperAdmin,
     );
     return canOpenFileForEdit(entry.relativePath, accessMap, isAdminLoggedIn, pathPerms);
   };
@@ -642,7 +657,9 @@ export default function FileExplorer({
       ? HOMES_FOLDER
       : currentPath === SHARED_FOLDER
         ? SHARED_FOLDER
-        : currentPath.split('/').pop() || currentPath;
+        : labelForExternalMountPath(currentPath, externalFolders) ||
+          currentPath.split('/').pop() ||
+          currentPath;
 
     const confirmed = await appConfirm({
       title: '백업 일괄 제거',
@@ -1203,6 +1220,7 @@ export default function FileExplorer({
       adminId,
       isAdminLoggedIn,
       effectivePermissions,
+      isSuperAdmin,
     );
     if (!canOpenFileForEdit(entry.relativePath, accessMap, isAdminLoggedIn, pathPerms)) {
       nativeAlert(
@@ -1477,6 +1495,7 @@ export default function FileExplorer({
                 adminId,
                 isAdminLoggedIn,
                 effectivePermissions,
+                isSuperAdmin,
               ),
             )
           : false,
@@ -1488,6 +1507,7 @@ export default function FileExplorer({
               adminId,
               isAdminLoggedIn,
               globalWrite,
+              isSuperAdmin,
             ),
       })
     : buildBackgroundContextMenuItems({
@@ -1504,7 +1524,7 @@ export default function FileExplorer({
         isAdminLoggedIn,
         canWrite: isInTrashView
           ? canWrite
-          : canWriteAtPath(contextTargetPath, adminId, isAdminLoggedIn, globalWrite),
+          : canWriteAtPath(contextTargetPath, adminId, isAdminLoggedIn, globalWrite, isSuperAdmin),
       });
 
   keyHandlersRef.current = {
@@ -1937,6 +1957,7 @@ export default function FileExplorer({
             adminId,
             isAdminLoggedIn,
             globalWrite,
+            isSuperAdmin,
           )}
           onChangeFolderColor={(color) => handleSetFolderColor(propertiesEntry, color)}
           nameBold={Boolean(nameBoldMap[propertiesEntry.relativePath])}
@@ -1945,6 +1966,7 @@ export default function FileExplorer({
             adminId,
             isAdminLoggedIn,
             globalWrite,
+            isSuperAdmin,
           )}
           onChangeNameBold={(bold) => handleSetNameBold(propertiesEntry, bold)}
           onClose={() => {

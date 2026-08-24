@@ -1,5 +1,5 @@
 import { SHARED_FOLDER } from '../../shared/constants.js';
-import { isExternalFolderContainerPath } from '../../shared/externalFolders.js';
+import { isExternalFolderContainerPath, isExternalFolderPath } from '../../shared/externalFolders.js';
 import {
   HOMES_DISK_DIR,
   HOMES_FOLDER,
@@ -32,8 +32,19 @@ export {
  * @param {string | null | undefined} loginId
  * @param {boolean} isLoggedIn
  * @param {{ view?: boolean, read?: boolean, write?: boolean }} permissions
+ * @param {boolean} [isSuperAdmin]
  */
-export function effectivePermissionsForPath(relativePath, loginId, isLoggedIn, permissions) {
+export function effectivePermissionsForPath(
+  relativePath,
+  loginId,
+  isLoggedIn,
+  permissions,
+  isSuperAdmin = false,
+) {
+  if (isExternalFolderPath(relativePath)) {
+    const allow = Boolean(isSuperAdmin);
+    return { view: allow, read: allow, write: allow };
+  }
   const base = {
     view: permissions?.view !== false,
     read: permissions?.read !== false,
@@ -65,11 +76,12 @@ export function canClearFolderBackups(currentPath) {
   return isUnderHomesFolder(path);
 }
 
-export function canWriteAtPath(currentPath, loginId, isLoggedIn, globalWrite) {
+export function canWriteAtPath(currentPath, loginId, isLoggedIn, globalWrite, isSuperAdmin = false) {
   const path = normalizeRelativePath(currentPath);
   if (!path || path === '.') return false;
   if (isHomesContainerPath(path)) return Boolean(isLoggedIn && loginId);
   if (isExternalFolderContainerPath(path)) return false;
+  if (isExternalFolderPath(path)) return Boolean(isSuperAdmin);
   if (isLoggedIn && loginId && isOwnMemberHomePath(path, loginId)) return true;
   if (path === SHARED_FOLDER || path.startsWith(`${SHARED_FOLDER}/`)) {
     return Boolean(globalWrite);

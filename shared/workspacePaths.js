@@ -23,7 +23,7 @@ export function isProtectedSharedSystemPath(relativePath) {
 }
 
 /**
- * Workspace root (`.`) is virtual: 공유폴더 + 개인폴더 + 외부폴더.
+ * Workspace root (`.`) is virtual: 공유폴더 + 개인폴더 (+ 외부폴더 for super_admin).
  * @param {string} relativePath
  */
 export function isWorkspaceRootPath(relativePath) {

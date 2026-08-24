@@ -134,7 +134,7 @@ npm run build:msi
 
 출력: `msi/NAS4USB v<버전>_<타임스탬프>.msi` (WiX CLI 7+ 필요)
 
-설정·회원·data 등은 설치 폴더(`%LOCALAPPDATA%\NAS4USB`)에 두되, MSI 패키지에는 넣지 않습니다.  
+설정·회원·data·Electron 캐시(`.nas4usb/electron-profile`)는 설치 폴더(`%LOCALAPPDATA%\NAS4USB`)에 두되, MSI 패키지에는 넣지 않습니다.  
 업데이트는 프로그램 파일만 교체하고 런타임 설정은 그대로 둡니다. (USB 포터블도 exe 옆과 동일)
 
 ### 릴리스 빌드 (MSI + portable, 동일 빌드 시각)

@@ -290,26 +290,33 @@ export default function GeneralSettingsPanel() {
    * @param {string} mountId
    * @param {string} alias
    */
-  const saveExternalFolderAlias = (mountId, alias) =>
-    run(async () => {
-      const target = externalFolders.find((item) => item.id === mountId);
-      if (!target) return;
-      const { sanitizeExternalFolderLabel, normalizeExternalFolders } = await import(
-        '../../../shared/externalFolders.js'
+  const saveExternalFolderAlias = async (mountId, alias) => {
+    const target = externalFolders.find((item) => item.id === mountId);
+    if (!target) return;
+    const { sanitizeExternalFolderLabel, normalizeExternalFolders } = await import(
+      '../../../shared/externalFolders.js'
+    );
+    const label = sanitizeExternalFolderLabel(alias, target.absolutePath);
+    if (label === target.label) {
+      setExternalFolders((prev) =>
+        prev.map((item) => (item.id === mountId ? { ...item, label } : item)),
       );
-      const label = sanitizeExternalFolderLabel(alias, target.absolutePath);
-      if (label === target.label) {
-        setExternalFolders((prev) =>
-          prev.map((item) => (item.id === mountId ? { ...item, label } : item)),
-        );
-        return;
-      }
-      const next = normalizeExternalFolders(
-        externalFolders.map((item) => (item.id === mountId ? { ...item, label } : item)),
-      );
+      return;
+    }
+    const next = normalizeExternalFolders(
+      externalFolders.map((item) => (item.id === mountId ? { ...item, label } : item)),
+    );
+    try {
       await window.nas4usb.settings.update({ externalFolders: next });
       setExternalFolders(next);
-    });
+    } catch (error) {
+      await appAlert({
+        title: '외부 폴더',
+        body: error instanceof Error ? error.message : '별칭을 저장하지 못했습니다.',
+      });
+      await refresh();
+    }
+  };
 
   const chooseFfmpeg = () =>
     run(async () => {
@@ -513,7 +520,8 @@ export default function GeneralSettingsPanel() {
         <p className="text-sm leading-relaxed text-slate-600">
           Google Drive·iCloud·다른 드라이브 등 PC의 폴더를 탐색기에 추가합니다. 파일 열람·편집·저장은
           가능하지만 <strong className="font-semibold">LAN 실시간 협업(Y.js)은 사용하지 않습니다</strong>.
-          총괄관리자만 추가·해제할 수 있으며, 아래 순서·별칭이 탐색기 표시에 반영됩니다.
+          탐색기에는 총괄관리자에게만 보이며, 회원 보기·읽기·쓰기 권한은 적용되지 않습니다. 추가·해제도
+          총괄관리자만 할 수 있고, 아래 순서·별칭이 탐색기 표시에 반영됩니다.
         </p>
         {externalFolders.length > 0 ? (
           <ul className="overflow-hidden rounded-lg border border-slate-200 bg-white">

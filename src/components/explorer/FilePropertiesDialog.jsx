@@ -1,3 +1,5 @@
+import { formatExternalRelativePath, labelForExternalMountPath } from '../../../shared/externalFolders.js';
+import { useExternalFolders } from '../../hooks/useExternalFolders.js';
 import { AppModal, AppModalActions, AppModalButton } from '../common/AppModal.jsx';
 import { entryExtensionOf, isSecFileName } from '../../lib/filePassword/secPaths.js';
 import FolderColorSwatches from './FolderColorSwatches.jsx';
@@ -68,6 +70,15 @@ export default function FilePropertiesDialog({
   onChangeNameBold,
   onClose,
 }) {
+  const externalFolders = useExternalFolders();
+  const displayName =
+    labelForExternalMountPath(entry?.relativePath, externalFolders) ||
+    entry?.name ||
+    statInfo?.name ||
+    '';
+  const displayPath = entry
+    ? formatExternalRelativePath(entry.relativePath, externalFolders)
+    : '';
   const canEditAccessOptions = isAdminLoggedIn;
   const resolvedFileStatus =
     fileStatus ??
@@ -90,7 +101,7 @@ export default function FilePropertiesDialog({
           <dl className="modal-properties">
             <div>
               <dt>이름</dt>
-              <dd className="font-medium">{statInfo?.name ?? entry.name}</dd>
+              <dd className="font-medium">{displayName}</dd>
             </div>
             <div>
               <dt>종류</dt>
@@ -110,7 +121,7 @@ export default function FilePropertiesDialog({
             </div>
             <div>
               <dt>경로</dt>
-              <dd className="break-all font-mono text-xs">{entry.relativePath}</dd>
+              <dd className="break-all font-mono text-xs">{displayPath}</dd>
             </div>
             <div>
               <dt>크기</dt>

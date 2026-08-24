@@ -13,7 +13,9 @@ import {
   listFolderPreviewEntries,
 } from '../../lib/folderPreview.js';
 import { getBaseName, getParentPath } from '../../lib/fsPaths.js';
+import { useExternalFolders } from '../../hooks/useExternalFolders.js';
 import { useFolderOrder } from '../../hooks/useFolderOrder.js';
+import { labelForExternalMountPath } from '../../../shared/externalFolders.js';
 import { resolveComicFirstPage } from '../../lib/comicReader/firstPage.js';
 import { resolvePdfFirstPage } from '../../lib/pdf/firstPage.js';
 import FileIcon from './FileIcon.jsx';
@@ -95,6 +97,7 @@ export default function FilePreviewPane({
   const locked = Boolean(entry && isSecFileName(entry.relativePath || entry.name));
   const touchUi = useTouchUi();
   const { folderOrderMap } = useFolderOrder();
+  const externalFolders = useExternalFolders();
   const listingPath = entry?.isDirectory
     ? entry.relativePath
     : getParentPath(entry?.relativePath ?? '.');
@@ -103,7 +106,9 @@ export default function FilePreviewPane({
     : entry.isDirectory
       ? folderPreviewParentPath(entry.relativePath, previewAnchorPath)
       : listingPath;
-  const crumbs = folderPreviewCrumbs(previewAnchorPath, listingPath);
+  const crumbs = folderPreviewCrumbs(previewAnchorPath, listingPath, externalFolders);
+  const titleName =
+    labelForExternalMountPath(entry?.relativePath, externalFolders) || entry?.name || '미리보기';
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [text, setText] = useState('');
@@ -304,8 +309,8 @@ export default function FilePreviewPane({
     >
       <aside className="file-preview-pane" aria-label="미리보기" inert={open ? undefined : true}>
         <header className="file-preview-pane__header">
-          <p className="file-preview-pane__title" title={entry?.name}>
-            <span className="file-preview-pane__title-name">{entry?.name || '미리보기'}</span>
+          <p className="file-preview-pane__title" title={titleName}>
+            <span className="file-preview-pane__title-name">{titleName}</span>
             {entry && !entry.isDirectory ? (
               <span className="file-preview-pane__title-size">({formatByteSize(entry.size)})</span>
             ) : null}

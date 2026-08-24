@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useExternalFolders } from '../../hooks/useExternalFolders.js';
 import { useTouchUi } from '../../hooks/useTouchUi.js';
 import { EXTERNAL_FOLDER, SHARED_FOLDER } from '../../../shared/constants.js';
 import { HOMES_FOLDER } from '../../../shared/memberHomes.js';
@@ -372,6 +373,7 @@ export default function FileList({
   onToggleLevels,
 }) {
   const touchUi = useTouchUi();
+  const externalFolders = useExternalFolders();
   const selectAllRef = useRef(null);
   const listScrollRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   const dragPathRef = useRef(/** @type {string | null} */ (null));
@@ -613,6 +615,7 @@ export default function FileList({
               ? favoriteAncestorLabel(entry.relativePath, {
                   includeSelf: true,
                   isDirectory: entry.isDirectory,
+                  externalFolders,
                 })
               : '';
             const reorderable =

@@ -74,6 +74,7 @@ export function defaultExternalFolderLabel(absolutePath) {
 export function sanitizeExternalFolderLabel(value, absolutePath) {
   const trimmed = String(value ?? '')
     .trim()
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '')
     .replace(/\s+/g, ' ')
     .slice(0, 80);
   return trimmed || defaultExternalFolderLabel(absolutePath);
@@ -157,4 +158,50 @@ export function joinExternalFolderPath(mountId, rest = '') {
   const tail = normalizeRelativePath(rest);
   if (!id) return EXTERNAL_FOLDER;
   return tail ? `${EXTERNAL_FOLDER}/${id}/${tail}` : `${EXTERNAL_FOLDER}/${id}`;
+}
+
+/**
+ * @param {string} mountId
+ * @param {ExternalFolderMount[] | null | undefined} folders
+ */
+export function labelForExternalMountId(mountId, folders) {
+  const id = String(mountId ?? '').trim();
+  if (!id) return '';
+  const mount = (Array.isArray(folders) ? folders : []).find((item) => item.id === id);
+  return mount?.label ? String(mount.label) : '';
+}
+
+/**
+ * Alias when `relativePath` is a mount root (`외부폴더/<id>`).
+ * @param {string} relativePath
+ * @param {ExternalFolderMount[] | null | undefined} folders
+ */
+export function labelForExternalMountPath(relativePath, folders) {
+  const split = splitExternalFolderPath(relativePath);
+  if (!split || split.rest) return '';
+  return labelForExternalMountId(split.mountId, folders);
+}
+
+/**
+ * Show the alias for the mount-id segment; otherwise empty.
+ * @param {string} accumulatedPath
+ * @param {string} segment
+ * @param {ExternalFolderMount[] | null | undefined} folders
+ */
+export function displayExternalPathSegment(accumulatedPath, segment, folders) {
+  if (!isExternalMountRootPath(accumulatedPath)) return '';
+  return labelForExternalMountId(segment, folders);
+}
+
+/**
+ * `외부폴더/<id>/…` → `외부폴더/<별칭>/…` for UI only.
+ * @param {string} relativePath
+ * @param {ExternalFolderMount[] | null | undefined} folders
+ */
+export function formatExternalRelativePath(relativePath, folders) {
+  const normalized = normalizeRelativePath(relativePath);
+  const split = splitExternalFolderPath(normalized);
+  if (!split) return normalized;
+  const label = labelForExternalMountId(split.mountId, folders) || split.mountId;
+  return split.rest ? `${EXTERNAL_FOLDER}/${label}/${split.rest}` : `${EXTERNAL_FOLDER}/${label}`;
 }

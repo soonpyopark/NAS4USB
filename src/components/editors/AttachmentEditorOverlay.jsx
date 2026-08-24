@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useBackdropDismiss } from '../../hooks/useBackdropDismiss.js';
 import { getFileViewerType, getFileViewerTypeFromName } from '../../lib/fileViewerType.js';
 import { entryExtensionOf } from '../../lib/filePassword/secPaths.js';
 import { isImageExtension } from '../../lib/media/mediaTypes.js';
@@ -59,6 +60,7 @@ export default function AttachmentEditorOverlay({
 
   const [Editor, setEditor] = useState(/** @type {import('react').ComponentType<any> | null} */ (null));
   const [error, setError] = useState('');
+  const backdropDismiss = useBackdropDismiss(onClose);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,7 +86,7 @@ export default function AttachmentEditorOverlay({
   }, [type, extension, entry.relativePath]);
 
   const status = (
-    <div className="modal-overlay modal-overlay--raised" onClick={onClose}>
+    <div className="modal-overlay modal-overlay--raised" {...backdropDismiss}>
       <div
         className="modal-dialog"
         role="dialog"

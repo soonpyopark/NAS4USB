@@ -69,6 +69,7 @@ import {
 } from './electron/autoLaunchService.js';
 import { ensureSampleDataSeeded } from './electron/seedDataService.js';
 import {
+  applyPortableUserData,
   migrateUserDataStateToInstall,
   resolveExeRoot,
 } from './electron/portablePaths.js';
@@ -102,6 +103,8 @@ import {
   assertGuestCanWrite,
   assertHomeSystemPathMutable,
   filterTrashMapByHomeAccess,
+  filterFavoritesMapForAuth,
+  filterFavoriteEntriesForAuth,
   pathExistsWithAccessFilter,
   readDirWithAccessFilter,
   readFileBase64WithAccessFilter,
@@ -204,6 +207,7 @@ installStdioPipeGuard();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const isDev = !app.isPackaged;
+applyPortableUserData(isDev);
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
@@ -695,7 +699,7 @@ function createTray() {
   });
 }
 
-ipcMain.handle('app:getPaths', () => getAppPaths());
+ipcMain.handle('app:getPaths', (event) => getAppPaths(getAccessAuthFromEvent(event)));
 
 ipcMain.handle('app:checkForUpdates', async () => fetchLatestRelease());
 
@@ -1505,12 +1509,15 @@ ipcMain.handle('favorites:getMap', async (event) => {
   const perms = await getEffectiveAccessPermissions(auth, getPortableRoot());
   if (!perms.view && !perms.write) return {};
   if (perms.write) {
-    return getFavoritesMap(getPortableRoot());
+    return filterFavoritesMapForAuth(await getFavoritesMap(getPortableRoot()), auth);
   }
   const map = await getFavoritesMap(getPortableRoot());
   const accessMap = await getFileAccessMap(getPortableRoot());
-  return Object.fromEntries(
-    Object.entries(map).filter(([path]) => canViewFileEntry(path, accessMap, false)),
+  return filterFavoritesMapForAuth(
+    Object.fromEntries(
+      Object.entries(map).filter(([path]) => canViewFileEntry(path, accessMap, false)),
+    ),
+    auth,
   );
 });
 
@@ -1519,11 +1526,14 @@ ipcMain.handle('favorites:listEntries', async (event) => {
   const perms = await getEffectiveAccessPermissions(auth, getPortableRoot());
   if (!perms.view && !perms.write) return [];
   if (perms.write) {
-    return listFavoriteEntries(getPortableRoot());
+    return filterFavoriteEntriesForAuth(await listFavoriteEntries(getPortableRoot()), auth);
   }
   const entries = await listFavoriteEntries(getPortableRoot());
   const accessMap = await getFileAccessMap(getPortableRoot());
-  return entries.filter((entry) => canViewFileEntry(entry.relativePath, accessMap, false));
+  return filterFavoriteEntriesForAuth(
+    entries.filter((entry) => canViewFileEntry(entry.relativePath, accessMap, false)),
+    auth,
+  );
 });
 
 ipcMain.handle('favorites:set', async (event, { path: relativePath, favorited } = {}) => {

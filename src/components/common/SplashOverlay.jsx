@@ -4,11 +4,18 @@ import {
   APP_NAME,
   APP_VERSION,
 } from '../../../shared/constants.js';
+import { useBackdropDismiss } from '../../hooks/useBackdropDismiss.js';
 import { openExternalUrl } from '../../lib/openExternal.js';
 
 const iconSrc = `${import.meta.env.BASE_URL}${APP_ICON_URL.replace(/^\//, '')}`;
 
 export default function SplashOverlay({ open, onClose }) {
+  const dismiss = useBackdropDismiss(onClose, {
+    enabled: open,
+    requireTargetSelf: false,
+    moveThreshold: 6,
+  });
+
   if (!open) return null;
 
   return (
@@ -17,9 +24,9 @@ export default function SplashOverlay({ open, onClose }) {
       role="dialog"
       aria-modal="true"
       aria-label={`${APP_NAME} 소개`}
-      onClick={onClose}
+      {...dismiss}
     >
-      <div className="splash-overlay__panel" onClick={onClose}>
+      <div className="splash-overlay__panel">
         <img className="splash-overlay__logo" src={iconSrc} alt="" />
         <div className="splash-overlay__content">
           <h2 className="splash-overlay__title">
