@@ -19,6 +19,8 @@ import { labelForExternalMountPath } from '../../../shared/externalFolders.js';
 import { resolveComicFirstPage } from '../../lib/comicReader/firstPage.js';
 import { resolvePdfFirstPage } from '../../lib/pdf/firstPage.js';
 import FileIcon from './FileIcon.jsx';
+import HtmlPreviewFrame from '../editors/HtmlPreviewFrame.jsx';
+import { highlightPlainTextToHtml, highlightTextInElement } from '../../lib/searchHighlight.js';
 import { buildFileIndentInfo, filterCollapsedEntries } from '../../../shared/fileIndent.js';
 import { formatByteSize } from '../../../shared/videoPreviewCache.js';
 
@@ -77,12 +79,14 @@ const TEXT_PREVIEW_LIMIT = 400_000;
  *   fileLevelMap?: Record<string, number>,
  *   fileCollapsedMap?: Record<string, boolean>,
  *   onToggleCollapse?: (entry: import('../../types/nas4usb.d.ts').FsEntry, nextCollapsed?: boolean) => void,
+ *   highlightQuery?: string,
  * }} props
  */
 export default function FilePreviewPane({
   entry,
   open,
   canView = true,
+  highlightQuery = '',
   onClose,
   onOpenFull,
   onPreview,
@@ -124,6 +128,7 @@ export default function FilePreviewPane({
   const [folderCounts, setFolderCounts] = useState({ folders: 0, files: 0, total: 0, truncated: false });
   const [folderLoading, setFolderLoading] = useState(false);
   const [folderError, setFolderError] = useState('');
+  const markdownHighlightRef = useRef(/** @type {HTMLElement | null} */ (null));
   const folderIndentInfo = useMemo(
     () => buildFileIndentInfo(folderEntries, fileLevelMap, fileCollapsedMap),
     [folderEntries, fileLevelMap, fileCollapsedMap],
@@ -169,7 +174,7 @@ export default function FilePreviewPane({
           } else if (!cancelled) {
             setImageUrl(buildMediaStreamUrl(entry.relativePath));
           }
-        } else if (kind === 'text' || kind === 'markdown') {
+        } else if (kind === 'text' || kind === 'markdown' || kind === 'html') {
           const plain = await readWorkspacePlainBase64(entry.relativePath);
           let next = decodeTextBase64(plain);
           if (next.length > TEXT_PREVIEW_LIMIT) {
@@ -283,6 +288,22 @@ export default function FilePreviewPane({
       cancelled = true;
     };
   }, [open, entry?.relativePath, kind, canView, folderOrderMap]);
+
+  useEffect(() => {
+    if (!open || loading) return;
+    if (kind === 'markdown') {
+      const root = markdownHighlightRef.current;
+      if (root) highlightTextInElement(root, highlightQuery);
+      return;
+    }
+    if (kind === 'text' && highlightQuery.trim()) {
+      window.requestAnimationFrame(() => {
+        document
+          .querySelector('.file-preview-pane mark.nas-search-hit--active')
+          ?.scrollIntoView({ block: 'center', inline: 'nearest' });
+      });
+    }
+  }, [highlightQuery, html, kind, loading, open, text]);
 
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -496,9 +517,25 @@ export default function FilePreviewPane({
               ) : null}
             </div>
           ) : kind === 'text' ? (
-            <pre className="file-preview-pane__text">{text || '(빈 파일)'}</pre>
+            <pre
+              className="file-preview-pane__text"
+              dangerouslySetInnerHTML={{
+                __html: highlightPlainTextToHtml(text || '(빈 파일)', highlightQuery),
+              }}
+            />
+          ) : kind === 'html' ? (
+            <div className="file-preview-pane__html">
+              <HtmlPreviewFrame
+                html={text}
+                relativePath={entry.relativePath}
+                title={entry.name}
+                className="min-h-0 w-full flex-1 border-0 bg-white"
+                highlightQuery={highlightQuery}
+              />
+            </div>
           ) : kind === 'markdown' ? (
             <div
+              ref={markdownHighlightRef}
               className="markdown-preview file-preview-pane__rich"
               dangerouslySetInnerHTML={{ __html: html || '<p>(빈 문서)</p>' }}
             />
@@ -513,6 +550,7 @@ export default function FilePreviewPane({
                 collaboration={null}
                 readOnly
                 resolveFileUrl={tiptapResolveFileUrl}
+                highlightQuery={highlightQuery}
                 onReady={() => {}}
                 openLinkedAsOverlay={false}
                 onOpenFile={(next) => {

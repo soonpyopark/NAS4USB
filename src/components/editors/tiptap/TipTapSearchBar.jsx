@@ -8,6 +8,7 @@ import { useTiptapEditorTick } from '../../../hooks/useTiptapEditorTick.js';
  *   open: boolean,
  *   readOnly?: boolean,
  *   focusNonce?: number,
+ *   initialQuery?: string,
  *   onClose?: () => void,
  * }} props
  */
@@ -16,10 +17,12 @@ export default function TipTapSearchBar({
   open,
   readOnly = false,
   focusNonce = 0,
+  initialQuery = '',
   onClose,
 }) {
   const inputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
-  const [query, setQuery] = useState('');
+  const seededRef = useRef(false);
+  const [query, setQuery] = useState(() => String(initialQuery ?? '').trim());
   const [replace, setReplace] = useState('');
   const [caseSensitive, setCaseSensitive] = useState(false);
   useTiptapEditorTick(editor);
@@ -30,15 +33,21 @@ export default function TipTapSearchBar({
 
   useEffect(() => {
     if (!open) {
+      seededRef.current = false;
       editor.commands.setSearchQuery('');
       return undefined;
+    }
+    const incoming = String(initialQuery ?? '').trim();
+    if (incoming && !seededRef.current) {
+      seededRef.current = true;
+      setQuery(incoming);
     }
     const timer = window.setTimeout(() => {
       inputRef.current?.focus();
       inputRef.current?.select();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [editor, focusNonce, open]);
+  }, [editor, focusNonce, initialQuery, open]);
 
   useEffect(() => {
     if (!open) return;

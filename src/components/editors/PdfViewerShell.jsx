@@ -91,6 +91,7 @@ const PDF_SIDE_RAIL_WIDTH_PX = 220;
  *   onClose: () => void,
  *   allowClose?: boolean,
  *   fullscreen?: boolean,
+ *   highlightQuery?: string,
  * }} props
  */
 /**
@@ -135,6 +136,7 @@ export default function PdfViewerShell({
   allowClose = true,
   fullscreen = false,
   raised = false,
+  highlightQuery = '',
 }) {
   const mimeType = getPdfMimeType(extension);
   const [documentEpoch, setDocumentEpoch] = useState(0);
@@ -2259,6 +2261,21 @@ export default function PdfViewerShell({
   const closeSearchBar = useCallback(() => {
     setShowSearchBar(false);
   }, []);
+
+  const highlightAppliedKeyRef = useRef('');
+  useEffect(() => {
+    if (!docReady) highlightAppliedKeyRef.current = '';
+  }, [docReady]);
+  useEffect(() => {
+    const query = String(highlightQuery ?? '').trim();
+    if (!query || !docReady || !pdfRef.current) return;
+    const key = `${relativePath}\0${query}`;
+    if (highlightAppliedKeyRef.current === key) return;
+    highlightAppliedKeyRef.current = key;
+    setSearchQuery(query);
+    openSearchBar();
+    void runSearch(query);
+  }, [docReady, highlightQuery, openSearchBar, relativePath, runSearch]);
 
   useEffect(() => {
     const onKeyDown = (event) => {

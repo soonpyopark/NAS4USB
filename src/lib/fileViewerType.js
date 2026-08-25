@@ -71,7 +71,7 @@ export const OPENABLE_EXTENSIONS = {
   ...Object.fromEntries(PDF_EXTENSIONS.map((ext) => [ext, 'pdf'])),
   ...Object.fromEntries(ARCHIVE_EXTENSIONS.map((ext) => [ext, 'reader'])),
   ...Object.fromEntries(EPUB_EXTENSIONS.map((ext) => [ext, 'reader'])),
-  ...Object.fromEntries(HTML_EXTENSIONS.map((ext) => [ext, 'html'])),
+  ...Object.fromEntries(HTML_EXTENSIONS.map((ext) => [ext, 'text'])),
 };
 
 /**

@@ -4,6 +4,7 @@ import { getDataRoot, getHomesRoot, getPortableRoot } from './appContext.js';
 import { getAppSettings, updateAppSettings } from './settingsService.js';
 import { sevenZipMin } from './sevenZip.js';
 import {
+  backupArchiveDayKey,
   backupPrivateFileName,
   backupShareFileName,
   backupSlotKey,
@@ -446,6 +447,23 @@ export async function deleteWorkspaceBackup(fileName) {
     const state = await loadState();
     state.last = null;
     await saveState(state);
+  }
+  return listWorkspaceBackups();
+}
+
+/**
+ * Delete every archive that belongs to one calendar day (`YYYYMMDD`, or '' for undated).
+ * @param {string} dayKey
+ */
+export async function deleteWorkspaceBackupsByDay(dayKey) {
+  const key = String(dayKey ?? '').trim();
+  if (key && !isWorkspaceBackupDayFolder(key)) {
+    throw new Error('잘못된 백업 일자입니다.');
+  }
+  const archives = await listWorkspaceBackups();
+  const targets = archives.filter((item) => backupArchiveDayKey(item.fileName, item.at) === key);
+  for (const item of targets) {
+    await deleteWorkspaceBackup(item.fileName);
   }
   return listWorkspaceBackups();
 }

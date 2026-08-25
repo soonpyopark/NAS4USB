@@ -16,7 +16,7 @@ function loadOverlayEditor(type, extension) {
   if (type === 'hwpx') return import('./HwpxEditorShell.jsx');
   if (type === 'tiptap') return import('./TipTapEditorShell.jsx');
   if (type === 'pdf') return import('./PdfViewerShell.jsx');
-  if (type === 'html') return import('./HtmlViewerShell.jsx');
+  if (type === 'html') return import('./TextEditorShell.jsx');
   if (type === 'reader') {
     if (shouldUseLegacyImagePdfViewers() && isImageExtension(extension)) {
       return import('./ImageViewerShell.jsx');

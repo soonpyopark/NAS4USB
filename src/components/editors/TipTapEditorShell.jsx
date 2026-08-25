@@ -58,6 +58,7 @@ class TipTapLoadErrorBoundary extends Component {
  *   readOnly?: boolean,
  *   onOpenFile?: (entry: object) => void | Promise<boolean>,
  *   linkHash?: string,
+ *   highlightQuery?: string,
  * }} props
  */
 export default function TipTapEditorShell({
@@ -71,6 +72,7 @@ export default function TipTapEditorShell({
   readOnly: shareReadOnly = false,
   onOpenFile,
   linkHash = '',
+  highlightQuery = '',
 }) {
   const workspace = useWorkspaceSession(relativePath);
   const collaborationEnabled = syncInfo != null;
@@ -612,6 +614,7 @@ export default function TipTapEditorShell({
                   syncInfo={syncInfo}
                   onOpenFile={onOpenFile}
                   initialLinkHash={linkHash}
+                  highlightQuery={highlightQuery}
                 />
               </Suspense>
             </TipTapLoadErrorBoundary>

@@ -143,6 +143,57 @@ export function extractBackupDay(name) {
 }
 
 /**
+ * Group key for the settings list: `YYYYMMDD`, or '' when the day is unknown.
+ * Day-folder archives use that folder; older loose zips use the stamp (20YY).
+ * @param {string} fileName
+ * @param {string} [at]
+ */
+export function backupArchiveDayKey(fileName, at) {
+  const parsed = parseWorkspaceBackupPath(fileName);
+  if (parsed?.dayFolder) return parsed.dayFolder;
+  const yyMMdd = extractBackupDay(fileName);
+  if (yyMMdd) return `20${yyMMdd}`;
+  if (at) {
+    const date = new Date(at);
+    if (!Number.isNaN(date.getTime())) return formatBackupDayFolder(date);
+  }
+  return '';
+}
+
+/**
+ * @param {string} dayKey
+ */
+export function formatBackupDayListLabel(dayKey) {
+  const key = String(dayKey ?? '');
+  if (!isWorkspaceBackupDayFolder(key)) return '날짜 없음';
+  const year = key.slice(0, 4);
+  const month = Number(key.slice(4, 6));
+  const day = Number(key.slice(6, 8));
+  if (month < 1 || month > 12 || day < 1 || day > 31) return key;
+  return `${year}년 ${month}월 ${day}일`;
+}
+
+/**
+ * @param {Array<{ fileName: string, at?: string }>} archives
+ * @returns {Array<[string, typeof archives]>}
+ */
+export function groupWorkspaceBackupsByDay(archives) {
+  /** @type {Map<string, Array<{ fileName: string, at?: string }>>} */
+  const groups = new Map();
+  for (const item of Array.isArray(archives) ? archives : []) {
+    const key = backupArchiveDayKey(item.fileName, item.at);
+    const list = groups.get(key);
+    if (list) list.push(item);
+    else groups.set(key, [item]);
+  }
+  return [...groups.entries()].sort((left, right) => {
+    if (!left[0]) return 1;
+    if (!right[0]) return -1;
+    return right[0].localeCompare(left[0]);
+  });
+}
+
+/**
  * @param {Date} [date]
  */
 export function backupFileName(date = new Date()) {

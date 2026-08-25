@@ -2,7 +2,15 @@ import { basicSetup } from 'codemirror';
 import { EditorView, getDialog, keymap, scrollPastEnd, placeholder } from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
 import { indentWithTab } from '@codemirror/commands';
-import { gotoLine, openSearchPanel, closeSearchPanel, searchPanelOpen } from '@codemirror/search';
+import {
+  SearchQuery,
+  closeSearchPanel,
+  findNext,
+  gotoLine,
+  openSearchPanel,
+  searchPanelOpen,
+  setSearchQuery,
+} from '@codemirror/search';
 import { completeAnyWord } from '@codemirror/autocomplete';
 import { lintGutter, linter } from '@codemirror/lint';
 import { LanguageDescription } from '@codemirror/language';
@@ -214,6 +222,29 @@ export function openFindPanel(view) {
     }
   }
   return openSearchPanel(view);
+}
+
+/**
+ * Highlight the first case-insensitive match and open the find panel.
+ * @param {import('@codemirror/view').EditorView} view
+ * @param {unknown} query
+ */
+export function applyCodeMirrorSearchHighlight(view, query) {
+  const trimmed = String(query ?? '').trim();
+  if (!view || !trimmed) return false;
+  view.dispatch({
+    selection: { anchor: 0, head: 0 },
+    effects: setSearchQuery.of(
+      new SearchQuery({
+        search: trimmed,
+        caseSensitive: false,
+        literal: true,
+        wholeWord: false,
+      }),
+    ),
+  });
+  openSearchPanel(view);
+  return findNext(view);
 }
 
 export { gotoLine, openSearchPanel, closeSearchPanel, openGotoLineOnce as openGotoLine };

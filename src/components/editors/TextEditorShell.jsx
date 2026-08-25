@@ -22,6 +22,7 @@ import { persistAndCloseEditor } from '../../lib/persistOnEditorClose.js';
  *   fullscreen?: boolean,
  *   shareMode?: 'view' | 'edit' | null,
  *   readOnly?: boolean,
+ *   highlightQuery?: string,
  * }} props
  */
 export default function TextEditorShell({
@@ -34,8 +35,10 @@ export default function TextEditorShell({
   fullscreen = false,
   raised = false,
   readOnly: shareReadOnly = false,
+  highlightQuery = '',
 }) {
   const isMarkdown = extension === 'md';
+  const isHtml = extension === 'html' || extension === 'htm';
   const workspace = useWorkspaceSession(relativePath);
   const { doc, status, synced, roomId, provider } = useYjsSession(relativePath, syncInfo, {
     syncReady: true,
@@ -262,7 +265,7 @@ export default function TextEditorShell({
   const lanEndpoints = getLanWsEndpoints(syncInfo, roomId).join(' · ');
   const isLoading = workspace.loading || !doc || !ready;
   const waitingSync = ready && Boolean(editorHandle) && !bound;
-  const fileLabel = isMarkdown ? 'Markdown' : 'Text';
+  const fileLabel = isMarkdown ? 'Markdown' : isHtml ? 'HTML' : 'Text';
 
   return (
     <>
@@ -309,9 +312,11 @@ export default function TextEditorShell({
               : `${fileLabel} · CodeMirror · 접기·검색·자동완성·린트·다중선택 · Ctrl+S 저장 · LAN 동시편집`}
           {!shareReadOnly && isMarkdown
             ? ' · MD 코드블록 하이라이트 · 미리보기(편집/분할/미리보기)'
-            : !shareReadOnly
-              ? ' · 확장자별 코드 하이라이트'
-              : ''}
+            : !shareReadOnly && isHtml
+              ? ' · HTML 하이라이트 · 미리보기(편집/분할/미리보기) · 스크립트는 실행하지 않음'
+              : !shareReadOnly
+                ? ' · 확장자별 코드 하이라이트'
+                : ''}
         </div>
 
         {isLoading ? (
@@ -322,7 +327,10 @@ export default function TextEditorShell({
           <TextEditor
             initialText={initialText}
             fileName={fileName}
+            relativePath={relativePath}
             isMarkdown={isMarkdown}
+            isHtml={isHtml}
+            highlightQuery={highlightQuery}
             onReady={handleEditorReady}
             onSave={handleSave}
           />

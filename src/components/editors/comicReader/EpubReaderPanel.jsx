@@ -3,6 +3,7 @@ import {
   buildChapterHtmlDocument,
   openEpubBook,
 } from '../../../lib/comicReader/epubBook.js';
+import { injectNasScrollbarStyle } from '../../../lib/ui/nasScrollbarStyle.js';
 
 /**
  * @param {{
@@ -86,6 +87,7 @@ export default function EpubReaderPanel({ data, fontScale }) {
             title={book?.title || 'EPUB'}
             srcDoc={srcDoc}
             sandbox="allow-same-origin"
+            onLoad={(event) => injectNasScrollbarStyle(event.currentTarget.contentDocument)}
           />
           <div className="comic-reader-epub-nav">
             <button

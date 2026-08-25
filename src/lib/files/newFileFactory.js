@@ -4,7 +4,7 @@ import { createEmptyTiptapPackageBase64 } from '../tiptap/package.js';
 import { bytesToBase64 } from '../bytes.js';
 import { resolveUniqueName } from '../fsPaths.js';
 
-/** @typedef {'hwpx' | 'md' | 'txt' | 'xlsx' | 'wb4s' | 'tiptap'} NewFileType */
+/** @typedef {'hwpx' | 'md' | 'txt' | 'html' | 'xlsx' | 'wb4s' | 'tiptap'} NewFileType */
 
 export const NEW_FILE_TYPES = /** @type {const} */ ([
   { id: 'hwpx', label: 'HWPX 문서', extension: 'hwpx', description: '한글 HWPX 협업 편집' },
@@ -12,6 +12,7 @@ export const NEW_FILE_TYPES = /** @type {const} */ ([
   { id: 'tiptap', label: 'TipTap 문서(HTML 편집기)', extension: 'tiptap', description: 'Notion-like TipTap 에디터' },
   { id: 'wb4s', label: '화이트보드', extension: 'wb4s', description: 'WhiteBoard4Share' },
   { id: 'md', label: 'Markdown', extension: 'md', description: '마크다운 텍스트' },
+  { id: 'html', label: 'HTML', extension: 'html', description: 'CodeMirror 편집 · 미리보기' },
   { id: 'txt', label: '텍스트', extension: 'txt', description: '일반 텍스트' },
 ]);
 
@@ -114,6 +115,20 @@ export async function buildNewFileContent(type) {
       return loadHwpxTemplateBase64();
     case 'md':
       return utf8ToBase64('');
+    case 'html':
+      return utf8ToBase64(`<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>문서</title>
+</head>
+<body>
+  <h1>새 HTML 문서</h1>
+  <p></p>
+</body>
+</html>
+`);
     case 'txt':
       return utf8ToBase64('');
     case 'xlsx':

@@ -1,4 +1,5 @@
 @import './print-pagination.css';
+@import './scrollbar.css';
 
 @tailwind base;
 @tailwind components;
@@ -41,57 +42,6 @@
   select {
     font-size: 10pt;
   }
-}
-
-/*
- * Slim overlay-style scrollbars (Chromium + Firefox). Kept outside @layer so
- * ::-webkit-scrollbar is not buried under Tailwind preflight.
- */
-:root {
-  --nas-scroll-size: 10px;
-  --nas-scroll-thumb: rgb(15 23 42 / 0.22);
-  --nas-scroll-thumb-hover: rgb(15 23 42 / 0.4);
-  --nas-scroll-thumb-active: rgb(15 23 42 / 0.55);
-}
-
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--nas-scroll-thumb) transparent;
-}
-
-*::-webkit-scrollbar {
-  width: var(--nas-scroll-size);
-  height: var(--nas-scroll-size);
-}
-
-*::-webkit-scrollbar-track,
-*::-webkit-scrollbar-corner {
-  background: transparent;
-}
-
-*::-webkit-scrollbar-thumb {
-  background-color: var(--nas-scroll-thumb);
-  border: 2px solid transparent;
-  border-radius: 999px;
-  background-clip: padding-box;
-}
-
-*::-webkit-scrollbar-thumb:hover {
-  background-color: var(--nas-scroll-thumb-hover);
-  background-clip: padding-box;
-}
-
-*::-webkit-scrollbar-thumb:active {
-  background-color: var(--nas-scroll-thumb-active);
-  background-clip: padding-box;
-}
-
-.sidebar-panel,
-.bg-nas-sidebar,
-.bg-slate-950 {
-  --nas-scroll-thumb: rgb(248 250 252 / 0.24);
-  --nas-scroll-thumb-hover: rgb(248 250 252 / 0.42);
-  --nas-scroll-thumb-active: rgb(248 250 252 / 0.58);
 }
 
 @layer components {
@@ -450,6 +400,28 @@
 
   .file-preview-pane__rich {
     padding: 1rem 1.1rem 1.5rem;
+    background: #fff;
+  }
+
+  mark.nas-search-hit {
+    background: #fde68a;
+    color: inherit;
+    border-radius: 2px;
+    padding: 0 0.05em;
+  }
+
+  mark.nas-search-hit--active {
+    background: #f59e0b;
+    box-shadow: 0 0 0 1px #d97706;
+  }
+
+  .file-preview-pane__html {
+    display: flex;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
     background: #fff;
   }
 

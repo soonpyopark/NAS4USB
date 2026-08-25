@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAppConfirm } from '../../hooks/useAppConfirm.jsx';
 import { isElectronRenderer } from '../../lib/runtime.js';
 import { formatByteSize } from '../../../shared/videoPreviewCache.js';
 import {
   DEFAULT_WORKSPACE_BACKUP,
+  formatBackupDayListLabel,
+  groupWorkspaceBackupsByDay,
   normalizeBackupTime,
   normalizeWorkspaceBackup,
 } from '../../../shared/workspaceBackup.js';
@@ -40,6 +42,7 @@ export default function BackupSettingsPanel() {
   const [running, setRunning] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState('');
+  const archiveGroups = useMemo(() => groupWorkspaceBackupsByDay(archives), [archives]);
 
   const refresh = useCallback(async () => {
     try {
@@ -101,6 +104,14 @@ export default function BackupSettingsPanel() {
     await persist({ times: config.times.filter((item) => item !== time) });
   };
 
+  const applyArchiveList = (next) => {
+    const list = Array.isArray(next) ? next : [];
+    setArchives(list);
+    if (last && !list.some((item) => item.fileName === last.fileName)) {
+      setLast((prev) => (prev?.error ? prev : null));
+    }
+  };
+
   const deleteArchive = async (fileName) => {
     const ok = await appConfirm({
       title: '백업 삭제',
@@ -111,12 +122,36 @@ export default function BackupSettingsPanel() {
     if (!ok) return;
     setBusy(true);
     try {
-      const next = await window.nas4usb.backup.delete(fileName);
-      setArchives(Array.isArray(next) ? next : []);
-      if (last?.fileName === fileName) setLast(null);
+      applyArchiveList(await window.nas4usb.backup.delete(fileName));
     } catch (error) {
       void appAlert({
         title: '백업 삭제 실패',
+        body: error instanceof Error ? error.message : '백업을 삭제하지 못했습니다.',
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /**
+   * @param {string} dayKey
+   * @param {Array<{ fileName: string }>} items
+   */
+  const deleteArchiveDay = async (dayKey, items) => {
+    const label = formatBackupDayListLabel(dayKey);
+    const ok = await appConfirm({
+      title: '백업 일괄 삭제',
+      body: `${label} 백업 ${items.length}개를 모두 삭제할까요?\n\n이 작업은 되돌릴 수 없습니다.`,
+      confirmLabel: '일괄 삭제',
+      confirmVariant: 'danger',
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      applyArchiveList(await window.nas4usb.backup.deleteDay(dayKey));
+    } catch (error) {
+      void appAlert({
+        title: '백업 일괄 삭제 실패',
         body: error instanceof Error ? error.message : '백업을 삭제하지 못했습니다.',
       });
     } finally {
@@ -407,38 +442,71 @@ export default function BackupSettingsPanel() {
         </div>
       </section>
 
-      <section className="space-y-2">
+      <section className="space-y-3">
         <h3 className="text-sm font-semibold text-slate-800">최근 백업</h3>
         {last?.error ? <p className="text-sm text-red-600">{last.error}</p> : null}
         {archives.length === 0 ? (
           <p className="text-sm text-slate-500">아직 백업 파일이 없습니다.</p>
         ) : (
-          <ul className="space-y-2">
-            {archives.map((item) => {
-              const { folder, base } = splitArchiveName(item.fileName);
+          <ul className="space-y-4">
+            {archiveGroups.map(([dayKey, items]) => {
+              const dayBytes = items.reduce(
+                (sum, item) => sum + (typeof item.bytes === 'number' ? item.bytes : 0),
+                0,
+              );
               return (
-                <li
-                  key={item.fileName}
-                  className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate font-mono text-sm font-semibold text-slate-800" title={item.fileName}>
-                      {base}
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      {folder ? `${folder} · ` : ''}
-                      {formatWhen(item.at)}
-                      {typeof item.bytes === 'number' ? ` · ${formatByteSize(item.bytes)}` : ''}
-                    </p>
+                <li key={dayKey || 'undated'} className="space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-slate-800">
+                        {formatBackupDayListLabel(dayKey)}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {items.length}개
+                        {dayBytes > 0 ? ` · ${formatByteSize(dayBytes)}` : ''}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="shrink-0 rounded-md border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                      disabled={busy || running || !electron}
+                      onClick={() => void deleteArchiveDay(dayKey, items)}
+                    >
+                      일괄 삭제
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    className="shrink-0 rounded-md border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
-                    disabled={busy || running || !electron}
-                    onClick={() => void deleteArchive(item.fileName)}
-                  >
-                    삭제
-                  </button>
+                  <ul className="space-y-2">
+                    {items.map((item) => {
+                      const { base } = splitArchiveName(item.fileName);
+                      return (
+                        <li
+                          key={item.fileName}
+                          className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+                        >
+                          <div className="min-w-0">
+                            <p
+                              className="truncate font-mono text-sm font-semibold text-slate-800"
+                              title={item.fileName}
+                            >
+                              {base}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              {formatWhen(item.at)}
+                              {typeof item.bytes === 'number' ? ` · ${formatByteSize(item.bytes)}` : ''}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            className="shrink-0 rounded-md border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                            disabled={busy || running || !electron}
+                            onClick={() => void deleteArchive(item.fileName)}
+                          >
+                            삭제
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
                 </li>
               );
             })}

@@ -62,7 +62,11 @@ export default function HistoryPreviewModal({
     normalizedExtension === 'xls' ||
     normalizedExtension === 'csv' ||
     normalizedExtension === 'tsv';
-  const isText = normalizedExtension === 'txt' || normalizedExtension === 'md';
+  const isText =
+    normalizedExtension === 'txt' ||
+    normalizedExtension === 'md' ||
+    normalizedExtension === 'html' ||
+    normalizedExtension === 'htm';
 
   // Read-only preview (unlike the editor windows), so Esc-to-close is safe — there is no
   // unsaved content to lose.
@@ -154,7 +158,12 @@ export default function HistoryPreviewModal({
           }
           editor.setEditable?.(false);
           rhwpHandleRef.current = editor;
-        } else if (normalizedExtension === 'txt' || normalizedExtension === 'md') {
+        } else if (
+          normalizedExtension === 'txt' ||
+          normalizedExtension === 'md' ||
+          normalizedExtension === 'html' ||
+          normalizedExtension === 'htm'
+        ) {
           setText(decodeTextBase64(base64));
         } else if (normalizedExtension === 'tiptap') {
           const parsed = await parseTiptapFileBase64(base64);
@@ -264,7 +273,9 @@ export default function HistoryPreviewModal({
             <TextEditor
               initialText={text}
               fileName={fileName}
+              relativePath={relativePath}
               isMarkdown={normalizedExtension === 'md'}
+              isHtml={normalizedExtension === 'html' || normalizedExtension === 'htm'}
               onReady={() => {}}
             />
           </div>

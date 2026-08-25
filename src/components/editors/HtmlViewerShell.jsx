@@ -2,6 +2,7 @@ import { useState } from 'react';
 import ViewerModal from './ViewerModal.jsx';
 import { usePlaintextObjectUrl } from '../../hooks/usePlaintextObjectUrl.js';
 import { getHtmlMimeType } from '../../lib/media/mediaTypes.js';
+import { injectNasScrollbarStyle } from '../../lib/ui/nasScrollbarStyle.js';
 
 /**
  * @param {{
@@ -53,7 +54,10 @@ export default function HtmlViewerShell({
             src={streamUrl}
             className="min-h-0 w-full flex-1 border-0 bg-white"
             sandbox="allow-same-origin allow-popups allow-forms"
-            onLoad={() => setLoading(false)}
+            onLoad={(event) => {
+              injectNasScrollbarStyle(event.currentTarget.contentDocument);
+              setLoading(false);
+            }}
             onError={() => {
               setLoadError('HTML을 표시할 수 없습니다.');
               setLoading(false);

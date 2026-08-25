@@ -6,6 +6,7 @@ import FileList from './FileList.jsx';
 import FilePreviewPane from './FilePreviewPane.jsx';
 import { useTouchUi } from '../../hooks/useTouchUi.js';
 import { canPreviewEntry } from '../../lib/filePreview.js';
+import { withHighlightQuery } from '../../lib/searchHighlight.js';
 import FilePropertiesDialog from './FilePropertiesDialog.jsx';
 import NewFileDialog from './NewFileDialog.jsx';
 import NewFolderDialog from './NewFolderDialog.jsx';
@@ -1230,7 +1231,7 @@ export default function FileExplorer({
       );
       return;
     }
-    onOpenFile(entry);
+    onOpenFile(withHighlightQuery(entry, searchContents ? searchQuery : ''));
   };
 
   const handleShowProperties = async (entry) => {
@@ -1918,6 +1919,7 @@ export default function FileExplorer({
           entry={previewEntry}
           open={previewOpen}
           canView={canPreviewView(previewEntry)}
+          highlightQuery={searchContents ? searchQuery : ''}
           onClose={closePreview}
           onOpenFull={handleOpen}
           onPreview={(next) => openPreviewFor(next)}

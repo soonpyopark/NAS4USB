@@ -1,4 +1,5 @@
 import JSZip from 'jszip';
+import { nasScrollbarStyleTag } from '../ui/nasScrollbarStyle.js';
 
 /**
  * @typedef {{ id: string, href: string, mediaType: string }} EpubManifestItem
@@ -234,7 +235,7 @@ export function buildChapterHtmlDocument(book, index, fontScale) {
   let html = book.chapterHtml.get(chapter.href);
   if (!html) return '<p>챕터를 불러오지 못했습니다.</p>';
   const percent = Math.round(100 * fontScale);
-  const style = `<style>
+  const style = `${nasScrollbarStyleTag()}<style>
     html, body { margin: 0; padding: 1rem 1.25rem; background: #fff; color: #111; }
     body { font-size: ${percent}%; line-height: 1.55; }
     img, svg { max-width: 100%; height: auto; }

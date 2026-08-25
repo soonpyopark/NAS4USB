@@ -98,6 +98,7 @@ function stepZoom(zoom, direction) {
  *   initialLinkHash?: string,
  *   allowLinkedEditors?: boolean,
  *   openLinkedAsOverlay?: boolean,
+ *   highlightQuery?: string,
  * }} props
  */
 export default function TipTapEditorView({
@@ -113,6 +114,7 @@ export default function TipTapEditorView({
   initialLinkHash = '',
   allowLinkedEditors = true,
   openLinkedAsOverlay = true,
+  highlightQuery = '',
 }) {
   const imageInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   const videoInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
@@ -122,7 +124,7 @@ export default function TipTapEditorView({
   const bodyRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   const [tocOpen, setTocOpen] = useState(!readOnly);
   const [tocFits, setTocFits] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(() => Boolean(String(highlightQuery ?? '').trim()));
   const [searchFocusNonce, setSearchFocusNonce] = useState(0);
   const [assetPlayer, setAssetPlayer] = useState(
     /** @type {{ kind: 'audio' | 'video', relativePath: string, fileName: string, extension: string } | null} */ (
@@ -694,6 +696,12 @@ export default function TipTapEditorView({
     ],
   );
 
+  useEffect(() => {
+    if (!editor || !String(highlightQuery ?? '').trim()) return;
+    setSearchOpen(true);
+    setSearchFocusNonce((value) => value + 1);
+  }, [editor, highlightQuery]);
+
   const openImagePicker = () => imageInputRef.current?.click();
   const openVideoPicker = () => videoInputRef.current?.click();
   const openAudioPicker = () => audioInputRef.current?.click();
@@ -774,6 +782,7 @@ export default function TipTapEditorView({
         open={searchOpen && !htmlMode}
         readOnly={readOnly}
         focusNonce={searchFocusNonce}
+        initialQuery={highlightQuery}
         onClose={() => setSearchOpen(false)}
       />
 

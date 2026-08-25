@@ -11,7 +11,6 @@ import AudioPlayerShell from './components/editors/AudioPlayerShell.jsx';
 import VideoPlayerShell from './components/editors/VideoPlayerShell.jsx';
 import ImageViewerShell from './components/editors/ImageViewerShell.jsx';
 import PdfViewerShell from './components/editors/PdfViewerShell.jsx';
-import HtmlViewerShell from './components/editors/HtmlViewerShell.jsx';
 import ComicReaderShell from './components/editors/ComicReaderShell.jsx';
 
 const TipTapEditorShell = lazy(() => import('./components/editors/TipTapEditorShell.jsx'));
@@ -123,6 +122,7 @@ function OpenEditorLayer({
         fullscreen={fullscreen}
         shareMode={shareMode}
         readOnly={shareViewOnly}
+        highlightQuery={openEditor.highlightQuery || ''}
       />
     );
   }
@@ -141,6 +141,7 @@ function OpenEditorLayer({
           readOnly={shareViewOnly}
           onOpenFile={onOpenFile}
           linkHash={openEditor.linkHash || ''}
+          highlightQuery={openEditor.highlightQuery || ''}
         />
       </Suspense>
     );
@@ -210,19 +211,24 @@ function OpenEditorLayer({
         onClose={onClose}
         allowClose={allowClose}
         fullscreen={fullscreen}
+        highlightQuery={openEditor.highlightQuery || ''}
       />
     );
   }
 
   if (openEditor.type === 'html') {
     return (
-      <HtmlViewerShell
+      <TextEditorShell
         relativePath={openEditor.relativePath}
         fileName={openEditor.name}
         extension={openEditor.extension ?? 'html'}
+        syncInfo={editorSyncInfo}
         onClose={onClose}
         allowClose={allowClose}
         fullscreen={fullscreen}
+        shareMode={shareMode}
+        readOnly={shareViewOnly}
+        highlightQuery={openEditor.highlightQuery || ''}
       />
     );
   }
@@ -347,6 +353,7 @@ function Nas4usbAppMain() {
     if (entry.isDirectory) {
       return false;
     }
+    const highlightQuery = String(entry.highlightQuery ?? '').trim() || undefined;
 
     const canOpen = await guardOpenFileEntry(entry, {
       onMissing: () => notifyRemoteChange({ paths: [entry.relativePath] }),
@@ -371,6 +378,7 @@ function Nas4usbAppMain() {
           extension: innerExt || entry.extension,
           shareMode: resolveOpenShareMode(entry.mode),
           linkHash: entry.linkHash ? String(entry.linkHash).replace(/^#/, '') : undefined,
+          highlightQuery,
         });
         return true;
       }
@@ -385,6 +393,7 @@ function Nas4usbAppMain() {
           name: entry.name,
           extension: innerExt || 'txt',
           shareMode: resolveOpenShareMode(entry.mode),
+          highlightQuery,
         });
         return true;
       }
@@ -407,6 +416,7 @@ function Nas4usbAppMain() {
           extension: 'tiptap',
           shareMode: resolveOpenShareMode(entry.mode),
           linkHash: entry.linkHash ? String(entry.linkHash).replace(/^#/, '') : undefined,
+          highlightQuery,
         });
         notifyRemoteChange({ paths: [imported.folderPath, imported.firstFilePath] });
         return true;
@@ -425,6 +435,7 @@ function Nas4usbAppMain() {
         extension: entry.extension,
         shareMode: resolveOpenShareMode(entry.mode),
         linkHash: entry.linkHash ? String(entry.linkHash).replace(/^#/, '') : undefined,
+        highlightQuery,
       });
       return true;
     }
@@ -437,6 +448,7 @@ function Nas4usbAppMain() {
         name: entry.name,
         extension: entry.extension || 'txt',
         shareMode: resolveOpenShareMode(entry.mode),
+        highlightQuery,
       });
       return true;
     }

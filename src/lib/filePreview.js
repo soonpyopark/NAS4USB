@@ -1,8 +1,8 @@
 import { isTiptapDocumentRelativePath } from '../../shared/tiptapAssetPaths.js';
 import { entryExtensionOf } from './filePassword/secPaths.js';
-import { isArchiveExtension, isImageExtension, isPdfExtension } from './media/mediaTypes.js';
+import { isArchiveExtension, isHtmlExtension, isImageExtension, isPdfExtension } from './media/mediaTypes.js';
 
-/** @typedef {'folder' | 'image' | 'text' | 'markdown' | 'tiptap' | 'comic' | 'pdf'} FilePreviewKind */
+/** @typedef {'folder' | 'image' | 'text' | 'markdown' | 'html' | 'tiptap' | 'comic' | 'pdf'} FilePreviewKind */
 
 /**
  * @param {{ isDirectory?: boolean, name?: string, relativePath?: string, extension?: string } | null | undefined} entry
@@ -15,6 +15,7 @@ export function getFilePreviewKind(entry) {
   if (isImageExtension(ext)) return 'image';
   if (ext === 'txt') return 'text';
   if (ext === 'md') return 'markdown';
+  if (isHtmlExtension(ext)) return 'html';
   if (ext === 'tiptap' || isTiptapDocumentRelativePath(entry.relativePath || entry.name)) {
     return 'tiptap';
   }

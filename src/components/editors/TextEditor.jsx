@@ -10,14 +10,17 @@ import { oneDark } from '@codemirror/theme-one-dark';
 import { getLineColumn } from '../../lib/text/textIO.js';
 import { renderMarkdown } from '../../lib/text/markdown.js';
 import {
+  applyCodeMirrorSearchHighlight,
   createFullCodeMirrorExtensions,
   getLanguageLabel,
   loadLanguageExtensionsForFile,
   openFindPanel,
   openGotoLineOnce,
 } from '../../lib/text/codeMirrorSetup.js';
+import { highlightTextInElement } from '../../lib/searchHighlight.js';
 import { useSpellcheckEnabled } from '../../hooks/useSpellcheckEnabled.js';
 import { detectTouchUi, useTouchUi } from '../../hooks/useTouchUi.js';
+import HtmlPreviewFrame from './HtmlPreviewFrame.jsx';
 
 /**
  * @typedef {'edit' | 'split' | 'preview'} TextEditorViewMode
@@ -28,6 +31,9 @@ import { detectTouchUi, useTouchUi } from '../../hooks/useTouchUi.js';
  * @param {string} props.initialText
  * @param {string} [props.fileName]
  * @param {boolean} [props.isMarkdown]
+ * @param {boolean} [props.isHtml]
+ * @param {string} [props.relativePath]
+ * @param {string} [props.highlightQuery]
  * @param {(editor: import('../../lib/rhwp/types.js').RhwpEditorHandle) => void} props.onReady
  * @param {() => void} [props.onSave]
  */
@@ -35,10 +41,14 @@ export default function TextEditor({
   initialText,
   fileName = '',
   isMarkdown = false,
+  isHtml = false,
+  relativePath = '',
+  highlightQuery = '',
   onReady,
   onSave,
 }) {
   const parentRef = useRef(/** @type {HTMLDivElement | null} */ (null));
+  const markdownPreviewRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   const viewRef = useRef(/** @type {EditorView | null} */ (null));
   const listenersRef = useRef(new Set());
   const textRef = useRef(initialText);
@@ -62,9 +72,11 @@ export default function TextEditor({
   const [darkTheme, setDarkTheme] = useState(false);
   const touchUi = useTouchUi();
   const [toolsOpen, setToolsOpen] = useState(() => !detectTouchUi());
+  const hasPreview = isMarkdown || isHtml;
   const [viewMode, setViewMode] = useState(
-    /** @type {TextEditorViewMode} */ (isMarkdown && !detectTouchUi() ? 'split' : 'edit'),
+    /** @type {TextEditorViewMode} */ (hasPreview && !detectTouchUi() ? 'split' : 'edit'),
   );
+  const [htmlPreviewText, setHtmlPreviewText] = useState(initialText);
   const [cursorOffset, setCursorOffset] = useState(0);
   const [isEditable, setIsEditable] = useState(false);
   const [languageLabel, setLanguageLabel] = useState(() =>
@@ -83,6 +95,12 @@ export default function TextEditor({
     () => (isMarkdown ? renderMarkdown(text) : ''),
     [isMarkdown, text],
   );
+
+  useEffect(() => {
+    if (!isHtml) return undefined;
+    const timer = window.setTimeout(() => setHtmlPreviewText(text), 250);
+    return () => window.clearTimeout(timer);
+  }, [isHtml, text]);
 
   const notify = useCallback((origin = 'local') => {
     listenersRef.current.forEach((listener) => listener(textRef.current, origin));
@@ -186,6 +204,7 @@ export default function TextEditor({
     };
 
     onReadyRef.current(editor);
+    if (highlightQuery) applyCodeMirrorSearchHighlight(view, highlightQuery);
 
     return () => {
       view.destroy();
@@ -223,6 +242,19 @@ export default function TextEditor({
     textRef.current = initialText;
     setText(initialText);
   }, [initialText]);
+
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || !highlightQuery) return;
+    applyCodeMirrorSearchHighlight(view, highlightQuery);
+  }, [highlightQuery, initialText]);
+
+  useEffect(() => {
+    if (!isMarkdown) return;
+    const root = markdownPreviewRef.current;
+    if (!root) return;
+    highlightTextInElement(root, highlightQuery);
+  }, [highlightQuery, isMarkdown, previewHtml]);
 
   useEffect(() => {
     let cancelled = false;
@@ -292,7 +324,7 @@ export default function TextEditor({
 
   const { line, column } = getLineColumn(text, cursorOffset);
   const showEditor = viewMode !== 'preview';
-  const showPreview = isMarkdown && viewMode !== 'edit';
+  const showPreview = hasPreview && viewMode !== 'edit';
 
   return (
     <div className={`flex min-h-0 flex-1 flex-col ${darkTheme ? 'bg-slate-900' : 'bg-slate-100'}`}>
@@ -378,7 +410,7 @@ export default function TextEditor({
         </span>
           </>
         ) : null}
-        {isMarkdown && (
+        {hasPreview && (
           <div
             className={`ml-auto flex items-center gap-1 rounded-md border p-0.5 ${
               darkTheme ? 'border-slate-600' : 'border-slate-200'
@@ -415,14 +447,25 @@ export default function TextEditor({
           <div ref={parentRef} className="h-full min-h-0 w-full [&_.cm-editor]:h-full" />
         </div>
 
-        {showPreview && (
+        {showPreview && isMarkdown ? (
           <div
+            ref={markdownPreviewRef}
             className={`markdown-preview overflow-auto p-6 ${
               darkTheme ? 'bg-slate-900 text-slate-100' : 'bg-white'
             } ${showEditor ? 'w-1/2' : 'w-full'}`}
             dangerouslySetInnerHTML={{ __html: previewHtml }}
           />
-        )}
+        ) : null}
+        {showPreview && isHtml ? (
+          <div className={`min-h-0 ${showEditor ? 'w-1/2' : 'w-full'}`}>
+            <HtmlPreviewFrame
+              html={htmlPreviewText}
+              relativePath={relativePath}
+              title={`${fileName || 'HTML'} 미리보기`}
+              highlightQuery={highlightQuery}
+            />
+          </div>
+        ) : null}
       </div>
 
       <div

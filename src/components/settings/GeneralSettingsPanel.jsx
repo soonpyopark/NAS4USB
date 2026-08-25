@@ -59,6 +59,9 @@ export default function GeneralSettingsPanel() {
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState('');
   const saveTimerRef = useRef(/** @type {ReturnType<typeof setTimeout> | null} */ (null));
+  const persistedExternalFoldersRef = useRef(
+    /** @type {import('../../../shared/externalFolders.js').ExternalFolderMount[]} */ ([]),
+  );
 
   useEffect(
     () => () => {
@@ -99,13 +102,13 @@ export default function GeneralSettingsPanel() {
         sharedRoot: paths?.dataRoot ?? '',
         homesRoot: paths?.homesRoot ?? '',
       });
-      setExternalFolders(
-        Array.isArray(settings?.externalFolders)
-          ? settings.externalFolders
-          : Array.isArray(paths?.externalFolders)
-            ? paths.externalFolders
-            : [],
-      );
+      const nextFolders = Array.isArray(settings?.externalFolders)
+        ? settings.externalFolders
+        : Array.isArray(paths?.externalFolders)
+          ? paths.externalFolders
+          : [];
+      persistedExternalFoldersRef.current = nextFolders;
+      setExternalFolders(nextFolders);
       setFfmpegPath(
         typeof settings?.ffmpegPath === 'string' && settings.ffmpegPath.trim()
           ? settings.ffmpegPath.trim()
@@ -243,6 +246,7 @@ export default function GeneralSettingsPanel() {
         { id, label: defaultExternalFolderLabel(picked), absolutePath: picked },
       ]);
       await window.nas4usb.settings.update({ externalFolders: next });
+      persistedExternalFoldersRef.current = next;
       setExternalFolders(next);
       await appAlert({
         title: '외부 폴더',
@@ -265,6 +269,7 @@ export default function GeneralSettingsPanel() {
       if (!ok) return;
       const next = externalFolders.filter((item) => item.id !== mountId);
       await window.nas4usb.settings.update({ externalFolders: next });
+      persistedExternalFoldersRef.current = next;
       setExternalFolders(next);
     });
 
@@ -283,6 +288,7 @@ export default function GeneralSettingsPanel() {
       if (toIndex < 0 || toIndex >= externalFolders.length) return;
       const next = normalizeExternalFolders(moveExternalFolder(externalFolders, fromIndex, toIndex));
       await window.nas4usb.settings.update({ externalFolders: next });
+      persistedExternalFoldersRef.current = next;
       setExternalFolders(next);
     });
 
@@ -291,23 +297,29 @@ export default function GeneralSettingsPanel() {
    * @param {string} alias
    */
   const saveExternalFolderAlias = async (mountId, alias) => {
-    const target = externalFolders.find((item) => item.id === mountId);
+    const target =
+      externalFolders.find((item) => item.id === mountId) ??
+      persistedExternalFoldersRef.current.find((item) => item.id === mountId);
     if (!target) return;
     const { sanitizeExternalFolderLabel, normalizeExternalFolders } = await import(
       '../../../shared/externalFolders.js'
     );
     const label = sanitizeExternalFolderLabel(alias, target.absolutePath);
-    if (label === target.label) {
+    const persisted = persistedExternalFoldersRef.current.find((item) => item.id === mountId);
+    if (persisted && label === persisted.label) {
       setExternalFolders((prev) =>
         prev.map((item) => (item.id === mountId ? { ...item, label } : item)),
       );
       return;
     }
     const next = normalizeExternalFolders(
-      externalFolders.map((item) => (item.id === mountId ? { ...item, label } : item)),
+      (externalFolders.length ? externalFolders : persistedExternalFoldersRef.current).map(
+        (item) => (item.id === mountId ? { ...item, label } : item),
+      ),
     );
     try {
       await window.nas4usb.settings.update({ externalFolders: next });
+      persistedExternalFoldersRef.current = next;
       setExternalFolders(next);
     } catch (error) {
       await appAlert({

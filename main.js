@@ -1766,6 +1766,12 @@ ipcMain.handle('backup:delete', async (event, fileName) => {
   return deleteWorkspaceBackup(fileName);
 });
 
+ipcMain.handle('backup:deleteDay', async (event, dayKey) => {
+  assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
+  const { deleteWorkspaceBackupsByDay } = await import('./electron/workspaceBackupService.js');
+  return deleteWorkspaceBackupsByDay(dayKey);
+});
+
 ipcMain.handle('backup:exportPcSettings', async (event) => {
   assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
   const parentWindow = BrowserWindow.fromWebContents(event.sender);
