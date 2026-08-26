@@ -176,7 +176,12 @@ export function createTiptapExtensions(options = {}) {
     Mathematics.configure({
       katexOptions: { throwOnError: false },
     }),
-    Highlight.configure({ multicolor: true }),
+    Highlight.extend({
+      renderMarkdown: (node, helpers) => {
+        const inner = helpers?.renderChildren?.(node) ?? node.text ?? '';
+        return `==${inner}==`;
+      },
+    }).configure({ multicolor: true }),
     TextAlign.configure({
       types: ['heading', 'paragraph'],
     }),

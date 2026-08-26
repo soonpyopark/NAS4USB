@@ -15,7 +15,9 @@ import { completeAnyWord } from '@codemirror/autocomplete';
 import { lintGutter, linter } from '@codemirror/lint';
 import { LanguageDescription } from '@codemirror/language';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
+import { sql } from '@codemirror/lang-sql';
 import { languages } from '@codemirror/language-data';
+import { innerExtensionOf } from '../filePassword/secPaths.js';
 
 /**
  * Soft diagnostics for general text / markdown editing.
@@ -75,10 +77,18 @@ export function resolveLanguageDescription(fileName) {
 }
 
 /**
+ * @param {string} [fileName]
+ */
+function isSqlFileName(fileName) {
+  return innerExtensionOf(fileName) === 'sql';
+}
+
+/**
  * @param {{ fileName?: string, isMarkdown?: boolean }} [options]
  */
 export function getLanguageLabel({ fileName, isMarkdown = false } = {}) {
   if (isMarkdown) return 'Markdown';
+  if (isSqlFileName(fileName)) return 'SQL';
   return resolveLanguageDescription(fileName)?.name ?? 'Plain Text';
 }
 
@@ -103,6 +113,7 @@ export function createMarkdownLanguageExtensions() {
  */
 export async function loadLanguageExtensionsForFile({ fileName, isMarkdown = false } = {}) {
   if (isMarkdown) return createMarkdownLanguageExtensions();
+  if (isSqlFileName(fileName)) return [sql()];
 
   const desc = resolveLanguageDescription(fileName);
   if (!desc) return [];

@@ -110,6 +110,20 @@ export function IconExportHwpx() {
   );
 }
 
+/** 인쇄 — printer */
+export function IconPrint() {
+  return (
+    <Glyph>
+      <path fill="currentColor" d="M7 3h10v5H7Z" />
+      <path
+        fill="currentColor"
+        d="M5 9h14a2 2 0 0 1 2 2v6h-4v-3H7v3H3v-6a2 2 0 0 1 2-2Zm13 2.25a1 1 0 1 0 0 2 1 1 0 0 0 0-2Z"
+      />
+      <path fill="currentColor" d="M7 15h10v6H7Z" />
+    </Glyph>
+  );
+}
+
 /** PDF 내보내기 — document marked P with an arrow going out */
 export function IconExportPdf() {
   return (

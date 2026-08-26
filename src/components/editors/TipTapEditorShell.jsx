@@ -94,6 +94,7 @@ export default function TipTapEditorShell({
   const [importingOnenote, setImportingOnenote] = useState(false);
   const [exportingHwpx, setExportingHwpx] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [printing, setPrinting] = useState(false);
   const htmlImportInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   const onenoteImportInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
 
@@ -266,18 +267,34 @@ export default function TipTapEditorShell({
   );
 
   const handleImportHtml = useCallback(() => {
-    if (exportingHtml || exportingHwpx || importingHtml || importingOnenote || !editorRef.current) {
+    if (
+      exportingHtml ||
+      exportingHwpx ||
+      exportingPdf ||
+      printing ||
+      importingHtml ||
+      importingOnenote ||
+      !editorRef.current
+    ) {
       return;
     }
     htmlImportInputRef.current?.click();
-  }, [exportingHtml, exportingHwpx, importingHtml, importingOnenote]);
+  }, [exportingHtml, exportingHwpx, exportingPdf, importingHtml, importingOnenote, printing]);
 
   const handleImportOnenote = useCallback(() => {
-    if (exportingHtml || exportingHwpx || importingHtml || importingOnenote || !editorRef.current) {
+    if (
+      exportingHtml ||
+      exportingHwpx ||
+      exportingPdf ||
+      printing ||
+      importingHtml ||
+      importingOnenote ||
+      !editorRef.current
+    ) {
       return;
     }
     onenoteImportInputRef.current?.click();
-  }, [exportingHtml, exportingHwpx, importingHtml, importingOnenote]);
+  }, [exportingHtml, exportingHwpx, exportingPdf, importingHtml, importingOnenote, printing]);
 
   const handleImportOnenotePicked = useCallback(
     async (event) => {
@@ -442,7 +459,7 @@ export default function TipTapEditorShell({
   );
 
   const handleExportHtml = useCallback(async () => {
-    if (exportingHtml || exportingHwpx || !editorRef.current) return;
+    if (exportingHtml || exportingHwpx || exportingPdf || printing || !editorRef.current) return;
     setExportingHtml(true);
     setLoadError(null);
     try {
@@ -463,10 +480,10 @@ export default function TipTapEditorShell({
     } finally {
       setExportingHtml(false);
     }
-  }, [exportingHtml, exportingHwpx, fileName, relativePath]);
+  }, [exportingHtml, exportingHwpx, exportingPdf, fileName, printing, relativePath]);
 
   const handleExportHwpx = useCallback(async () => {
-    if (exportingHtml || exportingHwpx || !editorRef.current) return;
+    if (exportingHtml || exportingHwpx || exportingPdf || printing || !editorRef.current) return;
     setExportingHwpx(true);
     setLoadError(null);
     try {
@@ -487,10 +504,10 @@ export default function TipTapEditorShell({
     } finally {
       setExportingHwpx(false);
     }
-  }, [exportingHtml, exportingHwpx, fileName, relativePath]);
+  }, [exportingHtml, exportingHwpx, exportingPdf, fileName, printing, relativePath]);
 
   const handleExportPdf = useCallback(async () => {
-    if (exportingHtml || exportingHwpx || exportingPdf || !editorRef.current) return;
+    if (exportingHtml || exportingHwpx || exportingPdf || printing || !editorRef.current) return;
     setExportingPdf(true);
     setLoadError(null);
     try {
@@ -511,7 +528,21 @@ export default function TipTapEditorShell({
     } finally {
       setExportingPdf(false);
     }
-  }, [exportingHtml, exportingHwpx, exportingPdf, fileName, relativePath]);
+  }, [exportingHtml, exportingHwpx, exportingPdf, fileName, printing, relativePath]);
+
+  const handlePrint = useCallback(async () => {
+    if (exportingHtml || exportingHwpx || exportingPdf || printing || !editorRef.current) return;
+    setPrinting(true);
+    setLoadError(null);
+    try {
+      const { printLiveTiptapContent } = await import('../../lib/tiptap/exportPdf.js');
+      await printLiveTiptapContent(relativePath, fileName, editorRef.current);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : '인쇄에 실패했습니다.');
+    } finally {
+      setPrinting(false);
+    }
+  }, [exportingHtml, exportingHwpx, exportingPdf, fileName, printing, relativePath]);
 
   const handleClose = useCallback(async () => {
     const canFlush = Boolean(!shareReadOnly && editorRef.current && contentReady && roomReady);
@@ -558,6 +589,8 @@ export default function TipTapEditorShell({
         exportingHwpx={exportingHwpx}
         onExportPdf={isLoading || shareReadOnly ? undefined : handleExportPdf}
         exportingPdf={exportingPdf}
+        onPrint={isLoading ? undefined : handlePrint}
+        printing={printing}
         onSave={handleSave}
         onClose={handleClose}
         allowClose={allowClose}

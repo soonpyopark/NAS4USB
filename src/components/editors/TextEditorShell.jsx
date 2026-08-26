@@ -39,6 +39,7 @@ export default function TextEditorShell({
 }) {
   const isMarkdown = extension === 'md';
   const isHtml = extension === 'html' || extension === 'htm';
+  const isSql = extension === 'sql';
   const workspace = useWorkspaceSession(relativePath);
   const { doc, status, synced, roomId, provider } = useYjsSession(relativePath, syncInfo, {
     syncReady: true,
@@ -53,6 +54,7 @@ export default function TextEditorShell({
   const [exportingHtml, setExportingHtml] = useState(false);
   const [exportingHwpx, setExportingHwpx] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [printing, setPrinting] = useState(false);
   const unbindRef = useRef(null);
   const initialTextRef = useRef('');
   const diskRevisionRef = useRef('');
@@ -166,7 +168,7 @@ export default function TextEditorShell({
   }, [persistLive]);
 
   const handleExportHtml = useCallback(async () => {
-    if (!isMarkdown || exportingHtml || exportingHwpx || shareReadOnly) return;
+    if (!isMarkdown || exportingHtml || exportingHwpx || exportingPdf || printing || shareReadOnly) return;
     if (!editorHandleRef.current) return;
     setExportingHtml(true);
     setLoadError(null);
@@ -184,10 +186,10 @@ export default function TextEditorShell({
     } finally {
       setExportingHtml(false);
     }
-  }, [exportingHtml, exportingHwpx, fileName, isMarkdown, shareReadOnly]);
+  }, [exportingHtml, exportingHwpx, exportingPdf, fileName, isMarkdown, printing, shareReadOnly]);
 
   const handleExportHwpx = useCallback(async () => {
-    if (!isMarkdown || exportingHtml || exportingHwpx || shareReadOnly) return;
+    if (!isMarkdown || exportingHtml || exportingHwpx || exportingPdf || printing || shareReadOnly) return;
     if (!editorHandleRef.current) return;
     setExportingHwpx(true);
     setLoadError(null);
@@ -205,10 +207,10 @@ export default function TextEditorShell({
     } finally {
       setExportingHwpx(false);
     }
-  }, [exportingHtml, exportingHwpx, fileName, isMarkdown, shareReadOnly]);
+  }, [exportingHtml, exportingHwpx, exportingPdf, fileName, isMarkdown, printing, shareReadOnly]);
 
   const handleExportPdf = useCallback(async () => {
-    if (!isMarkdown || exportingHtml || exportingHwpx || exportingPdf || shareReadOnly) return;
+    if (!isMarkdown || exportingHtml || exportingHwpx || exportingPdf || printing || shareReadOnly) return;
     if (!editorHandleRef.current) return;
     setExportingPdf(true);
     setLoadError(null);
@@ -226,7 +228,33 @@ export default function TextEditorShell({
     } finally {
       setExportingPdf(false);
     }
-  }, [exportingHtml, exportingHwpx, exportingPdf, fileName, isMarkdown, shareReadOnly]);
+  }, [exportingHtml, exportingHwpx, exportingPdf, fileName, isMarkdown, printing, shareReadOnly]);
+
+  const handlePrint = useCallback(async () => {
+    if (exportingHtml || exportingHwpx || exportingPdf || printing) return;
+    if (!editorHandleRef.current) return;
+    setPrinting(true);
+    setLoadError(null);
+    try {
+      const text = editorHandleRef.current.getText();
+      if (isMarkdown) {
+        const { printMarkdownText } = await import('../../lib/text/exportMarkdown.js');
+        await printMarkdownText(fileName, text);
+        return;
+      }
+      if (isHtml) {
+        const { printHtmlSource } = await import('../../lib/text/printTextDocument.js');
+        await printHtmlSource(fileName, text, relativePath);
+        return;
+      }
+      const { printPlainText } = await import('../../lib/text/printTextDocument.js');
+      await printPlainText(fileName, text, isSql ? 'sql' : 'txt');
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : '인쇄에 실패했습니다.');
+    } finally {
+      setPrinting(false);
+    }
+  }, [exportingHtml, exportingHwpx, exportingPdf, fileName, isHtml, isMarkdown, isSql, printing, relativePath]);
 
   const handleClose = async () => {
     const canFlush = Boolean(!shareReadOnly && editorHandleRef.current && ready);
@@ -265,7 +293,7 @@ export default function TextEditorShell({
   const lanEndpoints = getLanWsEndpoints(syncInfo, roomId).join(' · ');
   const isLoading = workspace.loading || !doc || !ready;
   const waitingSync = ready && Boolean(editorHandle) && !bound;
-  const fileLabel = isMarkdown ? 'Markdown' : isHtml ? 'HTML' : 'Text';
+  const fileLabel = isMarkdown ? 'Markdown' : isHtml ? 'HTML' : isSql ? 'SQL' : 'Text';
 
   return (
     <>
@@ -292,6 +320,8 @@ export default function TextEditorShell({
           isMarkdown && !isLoading && !shareReadOnly ? handleExportPdf : undefined
         }
         exportingPdf={exportingPdf}
+        onPrint={isLoading ? undefined : handlePrint}
+        printing={printing}
         onSave={handleSave}
         onClose={handleClose}
         allowClose={allowClose}
@@ -314,9 +344,11 @@ export default function TextEditorShell({
             ? ' · MD 코드블록 하이라이트 · 미리보기(편집/분할/미리보기)'
             : !shareReadOnly && isHtml
               ? ' · HTML 하이라이트 · 미리보기(편집/분할/미리보기) · 스크립트는 실행하지 않음'
-              : !shareReadOnly
-                ? ' · 확장자별 코드 하이라이트'
-                : ''}
+              : !shareReadOnly && isSql
+                ? ' · SQL 하이라이트'
+                : !shareReadOnly
+                  ? ' · 확장자별 코드 하이라이트'
+                  : ''}
         </div>
 
         {isLoading ? (

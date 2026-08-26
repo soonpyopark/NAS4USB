@@ -39,7 +39,6 @@ function main() {
 
   run('npm run prepare:icons');
   run('npm run prepare:pdfjs');
-  run('npm run prepare:hwpx-export');
   fs.rmSync(RELEASE_STAGING_DIR, { recursive: true, force: true });
   buildRenderer();
   packagePlatform('--win', RELEASE_STAGING_DIR);

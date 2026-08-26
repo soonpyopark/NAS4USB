@@ -1,247 +1,158 @@
-import fs from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
-import { getExeRoot, getInstallRoot, getTempPath } from './appContext.js';
-import { sanitizeTiptapHtmlForHwpx } from './hwpxHtmlSanitize.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const projectRoot = path.resolve(__dirname, '..');
 
 /**
- * @returns {string}
+ * TipTap / Markdown → HWPX via kordoc (`markdownToHwpx`).
+ * Gongmun presets stay off so lists keep Markdown numbering.
+ * Offline: `KORDOC_OFFLINE=1` blocks optional OCR/model downloads.
  */
-export function resolveHwpxExportRoot() {
-  const candidates = [
-    path.join(getExeRoot(), 'tools', 'hwpx-export'),
-    path.join(getInstallRoot(), 'tools', 'hwpx-export'),
-    path.join(projectRoot, 'tools', 'hwpx-export'),
-  ];
-  return candidates[0];
-}
 
-/**
- * @returns {Promise<string>}
- */
-async function resolveExistingExportRoot() {
-  const candidates = [
-    path.join(getExeRoot(), 'tools', 'hwpx-export'),
-    path.join(getInstallRoot(), 'tools', 'hwpx-export'),
-    path.join(projectRoot, 'tools', 'hwpx-export'),
-  ];
-  for (const candidate of candidates) {
-    try {
-      await fs.access(path.join(candidate, 'run_convert.py'));
-      return candidate;
-    } catch {
-      // try next
-    }
+function ensureKordocOffline() {
+  if (!process.env.KORDOC_OFFLINE) {
+    process.env.KORDOC_OFFLINE = '1';
   }
-  throw new Error(
-    'HWPX 변환 도구가 없습니다. 호스트에서 `npm run prepare:hwpx-export`를 실행하세요.',
-  );
 }
 
 /**
- * @param {string} cmd
- * @param {string[]} args
- * @param {{ cwd?: string, env?: NodeJS.ProcessEnv }} [options]
- * @returns {Promise<{ code: number, stdout: string, stderr: string }>}
+ * @param {string} value
  */
-function runProcess(cmd, args, options = {}) {
-  return new Promise((resolve) => {
-    const child = spawn(cmd, args, {
-      cwd: options.cwd,
-      env: options.env,
-      windowsHide: true,
-      shell: false,
-    });
-    let stdout = '';
-    let stderr = '';
-    child.stdout?.on('data', (chunk) => {
-      stdout += String(chunk);
-    });
-    child.stderr?.on('data', (chunk) => {
-      stderr += String(chunk);
-    });
-    child.on('error', (err) => {
-      resolve({
-        code: 1,
-        stdout,
-        stderr: `${stderr}\n${err instanceof Error ? err.message : String(err)}`.trim(),
-      });
-    });
-    child.on('close', (code) => {
-      resolve({ code: code ?? 1, stdout, stderr });
-    });
+function decodeUrlLoose(value) {
+  try {
+    return decodeURIComponent(String(value));
+  } catch {
+    return String(value);
+  }
+}
+
+/**
+ * @param {{ fileName?: string, base64?: string }[]} assets
+ * @returns {Record<string, Buffer>}
+ */
+function buildImageMap(assets) {
+  /** @type {Record<string, Buffer>} */
+  const images = {};
+  for (const asset of assets) {
+    const safeName = path.basename(String(asset.fileName || '')).replace(/[^\w.\-()+]/g, '_');
+    if (!safeName || !asset.base64) continue;
+    const bytes = Buffer.from(asset.base64, 'base64');
+    images[safeName] = bytes;
+    images[`assets/${safeName}`] = bytes;
+    images[`asset/${safeName}`] = bytes;
+  }
+  return images;
+}
+
+/**
+ * Point `![alt](url)` at keys present in the image map.
+ *
+ * @param {string} markdown
+ * @param {Record<string, Buffer>} images
+ */
+function rewriteMarkdownImageUrls(markdown, images) {
+  return String(markdown ?? '').replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (full, alt, url) => {
+    const raw = decodeUrlLoose(String(url).trim());
+    if (!raw || raw.startsWith('data:')) return full;
+    const withoutQuery = raw.split(/[?#]/)[0];
+    const base = path.posix.basename(withoutQuery.replace(/\\/g, '/'));
+    if (images[raw]) return `![${alt}](${raw})`;
+    if (images[withoutQuery]) return `![${alt}](${withoutQuery})`;
+    if (base && images[base]) return `![${alt}](${base})`;
+    if (base && images[`assets/${base}`]) return `![${alt}](assets/${base})`;
+    return full;
   });
 }
 
 /**
- * @param {string} html
- * @param {{ fileName: string, base64: string }[]} assets
- * @param {string} workDir
- * @returns {Promise<string>} absolute path of written HTML
+ * kordoc generate does not emit highlight shade from `==text==` / `<mark>`.
+ * Unwrap so those markers do not print as literals.
+ *
+ * @param {string} markdown
  */
-async function materializeHtmlDocument(html, assets, workDir) {
-  const mediaDir = path.join(workDir, 'media');
-  await fs.mkdir(mediaDir, { recursive: true });
-
-  /** @type {Map<string, string>} */
-  const fileNameToRel = new Map();
-  for (const asset of assets) {
-    const safeName = path.basename(String(asset.fileName || '')).replace(/[^\w.\-()+]/g, '_');
-    if (!safeName || !asset.base64) continue;
-    const abs = path.join(mediaDir, safeName);
-    await fs.writeFile(abs, Buffer.from(asset.base64, 'base64'));
-    fileNameToRel.set(safeName, `media/${safeName}`);
-    fileNameToRel.set(`assets/${safeName}`, `media/${safeName}`);
-  }
-
-  let body = sanitizeTiptapHtmlForHwpx(html);
-
-  // Rewrite TipTap package asset URLs and common absolute/stream forms to local media/*.
-  body = body.replace(
-    /(?:src|href)=["']([^"']+)["']/gi,
-    (full, url) => {
-      const raw = String(url);
-      const decoded = (() => {
-        try {
-          return decodeURIComponent(raw);
-        } catch {
-          return raw;
-        }
-      })();
-
-      for (const [key, rel] of fileNameToRel) {
-        if (decoded === key || decoded.endsWith(`/${key}`) || decoded.includes(`assets/${path.basename(key)}`)) {
-          const attr = full.startsWith('href') ? 'href' : 'src';
-          return `${attr}="${rel}"`;
-        }
-      }
-
-      const assetMatch = decoded.match(/(?:^|\/)assets\/([^/?#]+)/i);
-      if (assetMatch) {
-        const name = assetMatch[1];
-        const rel = fileNameToRel.get(name) || fileNameToRel.get(`assets/${name}`);
-        if (rel) {
-          const attr = full.startsWith('href') ? 'href' : 'src';
-          return `${attr}="${rel}"`;
-        }
-      }
-      return full;
-    },
-  );
-
-  const documentHtml = `<!DOCTYPE html>
-<html lang="ko">
-<head>
-<meta charset="utf-8" />
-<title>export</title>
-</head>
-<body>
-${body}
-</body>
-</html>
-`;
-
-  const htmlPath = path.join(workDir, 'document.html');
-  await fs.writeFile(htmlPath, documentHtml, 'utf8');
-  return htmlPath;
+function unwrapUnsupportedHighlightMarkup(markdown) {
+  return String(markdown ?? '')
+    .replace(/==([^=\n]+)==/g, '$1')
+    .replace(/<mark\b[^>]*>([\s\S]*?)<\/mark>/gi, '$1');
 }
 
 /**
- * Convert TipTap HTML (+ optional embedded assets) to HWPX bytes (base64).
+ * @param {string} fileName
+ */
+function hwpxFileName(fileName) {
+  const stem = String(fileName || 'document')
+    .replace(/\.[^.]+$/, '')
+    .replace(/[^\w.\-()\uac00-\ud7a3 ]+/g, '_')
+    .trim() || 'document';
+  return `${stem}.hwpx`;
+}
+
+/**
+ * Convert Markdown (+ optional sidecar images) to HWPX bytes (base64).
  *
  * @param {{
- *   html: string,
+ *   markdown?: string,
+ *   html?: string,
  *   fileName?: string,
  *   assets?: { fileName: string, base64: string }[],
  * }} input
  * @returns {Promise<{ base64: string, fileName: string }>}
  */
-export async function convertHtmlToHwpxBase64(input) {
-  const exportRoot = await resolveExistingExportRoot();
-  const runner = path.join(exportRoot, 'run_convert.py');
-  const reference = path.join(exportRoot, 'vendor', 'pypandoc_hwpx', 'blank.hwpx');
-  await fs.access(runner);
-  await fs.access(reference);
+export async function convertMarkdownToHwpxBase64(input) {
+  ensureKordocOffline();
 
-  const stem = String(input.fileName || 'document')
-    .replace(/\.[^.]+$/, '')
-    .replace(/[^\w.\-()\uac00-\ud7a3 ]+/g, '_')
-    .trim() || 'document';
-  const outName = `${stem}.hwpx`;
-
-  const workDir = await fs.mkdtemp(path.join(getTempPath() || os.tmpdir(), 'nas4usb-hwpx-'));
-  try {
-    const htmlPath = await materializeHtmlDocument(
-      input.html,
-      Array.isArray(input.assets) ? input.assets : [],
-      workDir,
+  const markdown = String(input.markdown ?? '').trim();
+  if (!markdown) {
+    throw new Error(
+      'HWPX 변환에 마크다운이 필요합니다. 앱을 새로고침한 뒤 다시 내보내세요.',
     );
-    const outPath = path.join(workDir, outName);
-
-    const pandocDir = path.join(exportRoot, 'pandoc');
-    const env = {
-      ...process.env,
-      PATH: `${pandocDir}${path.delimiter}${process.env.PATH ?? ''}`,
-      PYTHONPATH: [
-        path.join(exportRoot, 'pydeps'),
-        path.join(exportRoot, 'vendor'),
-        process.env.PYTHONPATH ?? '',
-      ]
-        .filter(Boolean)
-        .join(path.delimiter),
-    };
-
-    const attempts = [
-      { cmd: 'py', args: ['-3', runner, htmlPath, outPath, reference] },
-      { cmd: 'python', args: [runner, htmlPath, outPath, reference] },
-      { cmd: 'python3', args: [runner, htmlPath, outPath, reference] },
-    ];
-
-    let last = /** @type {{ code: number, stdout: string, stderr: string } | null} */ (null);
-    for (const attempt of attempts) {
-      last = await runProcess(attempt.cmd, attempt.args, { cwd: exportRoot, env });
-      if (last.code === 0) break;
-      // Only continue when the launcher itself is missing.
-      if (!/not recognized|ENOENT|No such file/i.test(last.stderr)) break;
-    }
-
-    if (!last || last.code !== 0) {
-      const detail = (last?.stderr || last?.stdout || 'unknown error').trim();
-      if (/Python|pypandoc|pandoc/i.test(detail)) {
-        throw new Error(
-          `HWPX 변환 실패: ${detail}\n\n호스트에 Python 3가 있고, \`npm run prepare:hwpx-export\`로 Pandoc/의존성을 준비했는지 확인하세요.`,
-        );
-      }
-      throw new Error(`HWPX 변환 실패: ${detail || `exit ${last?.code}`}`);
-    }
-
-    const bytes = await fs.readFile(outPath);
-    return {
-      base64: bytes.toString('base64'),
-      fileName: outName,
-    };
-  } finally {
-    await fs.rm(workDir, { recursive: true, force: true }).catch(() => {});
   }
+
+  const outName = hwpxFileName(input.fileName);
+  const images = buildImageMap(Array.isArray(input.assets) ? input.assets : []);
+  const prepared = unwrapUnsupportedHighlightMarkup(
+    rewriteMarkdownImageUrls(markdown, images),
+  );
+
+  let markdownToHwpx;
+  try {
+    ({ markdownToHwpx } = await import('kordoc'));
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(`HWPX 변환 모듈(kordoc)을 불러오지 못했습니다: ${detail}`);
+  }
+
+  let buffer;
+  try {
+    buffer = await markdownToHwpx(prepared, { images });
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(`HWPX 변환 실패: ${detail}`);
+  }
+
+  const bytes = Buffer.from(buffer);
+  if (bytes.length < 4 || bytes[0] !== 0x50 || bytes[1] !== 0x4b) {
+    throw new Error('HWPX 변환 결과가 비어 있거나 올바르지 않습니다.');
+  }
+
+  return {
+    base64: bytes.toString('base64'),
+    fileName: outName,
+  };
 }
+
+/** @deprecated use convertMarkdownToHwpxBase64 */
+export const convertHtmlToHwpxBase64 = convertMarkdownToHwpxBase64;
 
 /**
  * @returns {Promise<{ ready: boolean, exportRoot: string, detail?: string }>}
  */
 export async function getHwpxExportStatus() {
+  ensureKordocOffline();
   try {
-    const exportRoot = await resolveExistingExportRoot();
-    await fs.access(path.join(exportRoot, 'vendor', 'pypandoc_hwpx', 'blank.hwpx'));
-    return { ready: true, exportRoot };
+    await import('kordoc');
+    return { ready: true, exportRoot: 'kordoc' };
   } catch (err) {
     return {
       ready: false,
-      exportRoot: resolveHwpxExportRoot(),
+      exportRoot: 'kordoc',
       detail: err instanceof Error ? err.message : String(err),
     };
   }

@@ -60,6 +60,7 @@ async function withTimeout(promise, timeoutMs, message) {
  *   pageSize?: 'A3' | 'A4' | 'A5' | 'Legal' | 'Letter' | 'Tabloid',
  *   landscape?: boolean,
  *   marginMm?: number,
+ *   preferCssPageSize?: boolean,
  *   printBackground?: boolean,
  * }} input
  * @returns {Promise<{ base64: string, fileName: string }>}
@@ -109,7 +110,7 @@ export async function convertHtmlToPdfBase64(input) {
         left: marginInches,
         right: marginInches,
       },
-      preferCSSPageSize: false,
+      preferCSSPageSize: Boolean(input?.preferCssPageSize),
     });
 
     return { base64: pdf.toString('base64'), fileName: outName };

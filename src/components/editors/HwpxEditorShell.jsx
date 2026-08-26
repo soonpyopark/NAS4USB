@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import EditorModal from './EditorModal.jsx';
 import HistoryModal from './HistoryModal.jsx';
 import { useYjsSession } from '../../hooks/useYjsSession.js';
@@ -35,6 +35,8 @@ export default function HwpxEditorShell({
   const [editorHandle, setEditorHandle] = useState(null);
   const [bound, setBound] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const [printing, setPrinting] = useState(false);
   const mountRef = useRef(null);
   const unbindRef = useRef(null);
   const hwpxBase64Ref = useRef('');
@@ -235,6 +237,70 @@ export default function HwpxEditorShell({
     }
   };
 
+  const readLiveHwpxBase64 = useCallback(async () => {
+    const handle = editorHandleRef.current;
+    if (handle?.exportHwpxBase64) {
+      return handle.exportHwpxBase64();
+    }
+    if (handle?.getHwpxBase64) {
+      return handle.getHwpxBase64();
+    }
+    return hwpxBase64Ref.current;
+  }, []);
+
+  const handleExportPdf = useCallback(async () => {
+    if (exportingPdf || printing) return;
+    setExportingPdf(true);
+    setLoadError(null);
+    try {
+      const mod = await import('../../lib/hwpx/exportHwpxDocument.js');
+      let pages = [];
+      try {
+        pages = (await editorHandleRef.current?.exportPageSvgs?.()) ?? [];
+      } catch {
+        pages = [];
+      }
+      const saved =
+        pages.length > 0
+          ? await mod.exportHwpxPagesAsPdf(pages, fileName)
+          : await mod.exportHwpxBase64AsPdf(await readLiveHwpxBase64(), fileName);
+      if (!saved) return;
+      const { showAppAlert } = await import('../../lib/nativeDialog.js');
+      await showAppAlert({
+        title: 'PDF로 내보내기',
+        body: `내보냈습니다.\n${saved.absolutePath ?? saved.fileName}`,
+      });
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'PDF로 내보내기에 실패했습니다.');
+    } finally {
+      setExportingPdf(false);
+    }
+  }, [exportingPdf, fileName, printing, readLiveHwpxBase64]);
+
+  const handlePrint = useCallback(async () => {
+    if (exportingPdf || printing) return;
+    setPrinting(true);
+    setLoadError(null);
+    try {
+      const mod = await import('../../lib/hwpx/exportHwpxDocument.js');
+      let pages = [];
+      try {
+        pages = (await editorHandleRef.current?.exportPageSvgs?.()) ?? [];
+      } catch {
+        pages = [];
+      }
+      if (pages.length > 0) {
+        await mod.printHwpxPages(pages, fileName);
+        return;
+      }
+      await mod.printHwpxBase64(await readLiveHwpxBase64(), fileName);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : '인쇄에 실패했습니다.');
+    } finally {
+      setPrinting(false);
+    }
+  }, [exportingPdf, fileName, printing, readLiveHwpxBase64]);
+
   const handleClose = async () => {
     const canFlush = Boolean(!shareReadOnly && editorHandleRef.current && editorReady);
     await persistAndCloseEditor({
@@ -283,6 +349,10 @@ export default function HwpxEditorShell({
         hideSave={shareReadOnly}
         hideHistory={shareReadOnly}
         onShowHistory={() => setShowHistory(true)}
+        onExportPdf={isLoading ? undefined : handleExportPdf}
+        exportingPdf={exportingPdf}
+        onPrint={isLoading ? undefined : handlePrint}
+        printing={printing}
         onSave={handleSave}
         onClose={handleClose}
         allowClose={allowClose}

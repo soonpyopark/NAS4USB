@@ -5,6 +5,7 @@ import {
   IconExportHtml,
   IconExportHwpx,
   IconExportPdf,
+  IconPrint,
   IconHistory,
   IconImportHtml,
   IconImportOnenote,
@@ -93,10 +94,17 @@ export default function EditorModal({
   exportingHwpx = false,
   onExportPdf,
   exportingPdf = false,
+  onPrint,
+  printing = false,
   children,
 }) {
   const transferBusy =
-    exportingHtml || exportingHwpx || exportingPdf || importingHtml || importingOnenote;
+    exportingHtml ||
+    exportingHwpx ||
+    exportingPdf ||
+    printing ||
+    importingHtml ||
+    importingOnenote;
 
   return (
     <AppModal open editor embedded={fullscreen} raised={raised} onClose={allowClose ? onClose : undefined}>
@@ -114,6 +122,17 @@ export default function EditorModal({
         />
 
         <AppModalActions className="modal-editor-header__actions !mb-0 shrink-0">
+          {onPrint && (
+            <HeaderIconButton
+              label="인쇄"
+              busyLabel="준비 중…"
+              busy={printing}
+              onClick={onPrint}
+              disabled={transferBusy}
+            >
+              <IconPrint />
+            </HeaderIconButton>
+          )}
           {onImportOnenote && (
             <HeaderIconButton
               label="원노트 가져오기"

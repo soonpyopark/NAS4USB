@@ -6,7 +6,7 @@ components that NAS4USB uses or ships with. Each component remains under its
 own license.
 
 Versions below reflect the dependency tree at the time this file was last
-updated (NAS4USB **1.0.7**). Exact resolved versions are in `package-lock.json`.
+updated (NAS4USB **1.0.8**). Exact resolved versions are in `package-lock.json`.
 
 ---
 
@@ -47,24 +47,18 @@ Bundled editor outputs (`public/rhwp-studio/`, `public/rhwp-core/`,
 
 ---
 
-## TipTap / Markdown → HWPX export toolchain
+## TipTap / Markdown → HWPX export
 
-Prepared by `npm run prepare:hwpx-export` into `tools/hwpx-export/`
-(and copied into release packages). Host **Python 3** is required at runtime
-to run the converter. See [`tools/hwpx-export/README.md`](tools/hwpx-export/README.md).
+The host converts Markdown to `.hwpx` with [kordoc](https://github.com/chrisryugj/kordoc)
+(`markdownToHwpx`). TipTap documents are serialized with `@tiptap/markdown` first.
+Gongmun (official-document) presets are not enabled. Optional kordoc extras
+(OCR / PDFium / Transformers) are not used; conversion sets `KORDOC_OFFLINE=1`.
+
+Native `.hwpx` editor save still uses rhwp-studio and is unchanged.
 
 | Component | Version | License | Project / notes |
 |-----------|---------|---------|-----------------|
-| Pandoc (Windows `pandoc.exe` bundle) | 3.10.1 | GPL-2.0-or-later | https://github.com/jgm/pandoc/releases/tag/3.10.1 — official release binary under `tools/hwpx-export/pandoc/` |
-| pypandoc-hwpx | vendored | MIT | https://github.com/msjang/pypandoc-hwpx — synced to `tools/hwpx-export/vendor/pypandoc_hwpx/` (includes `blank.hwpx` reference doc) |
-| pypandoc | 1.17 | MIT | https://github.com/JessicaTegner/pypandoc — `tools/hwpx-export/pydeps/` |
-| Pillow | 12.3.x | MIT-CMU | https://github.com/python-pillow/Pillow — `tools/hwpx-export/pydeps/` (image embedding in HWPX) |
-
-**Pandoc GPL note:** The Pandoc executable is a separate GPL-licensed program
-invoked for HTML→JSON AST conversion. Shipping `pandoc.exe` does not place
-NAS4USB application source under the GPL; keep Pandoc’s license terms available
-to recipients of the binary distribution
-([GPL-2.0](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html)).
+| kordoc | 4.9.x | MIT | https://github.com/chrisryugj/kordoc — npm `kordoc` |
 
 ---
 
@@ -98,6 +92,7 @@ to recipients of the binary distribution
 | `y-prosemirror` | MIT |
 | `y-websocket` | MIT |
 | `yjs` | MIT |
+| `kordoc` | MIT |
 
 Transitive runtime libraries of note (not always listed in `package.json`
 but used by the app):
@@ -133,8 +128,5 @@ but used by the app):
   this repository). It does **not** relicense third-party components.
 - When you distribute binaries, keep `LICENSE`, this file, and (for Electron
   builds) `LICENSE.electron.txt` / `LICENSES.chromium.html` available to users.
-- When shipping HWPX export tools, also keep Pandoc’s GPL terms and the
-  pypandoc-hwpx / pypandoc / Pillow notices available (see
-  `tools/hwpx-export/`).
 - FFmpeg is **not** shipped with NAS4USB. Users may register their own
   binary in settings. That binary remains under FFmpeg’s LGPL/GPL terms.

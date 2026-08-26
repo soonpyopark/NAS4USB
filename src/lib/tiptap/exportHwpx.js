@@ -2,10 +2,7 @@ import { readSidecarAssets } from './package.js';
 import { getTiptapFileStem } from './document.js';
 import { exportFileName } from '../browserDownload.js';
 import { saveFileToPickedFolder } from '../saveToFolder.js';
-import {
-  buildSharedTiptapExportBody,
-  wrapSharedExportHwpxSource,
-} from './buildSharedExport.js';
+import { buildTiptapExportMarkdown } from './exportMarkdownSource.js';
 
 /**
  * @param {string} relativePath
@@ -20,8 +17,7 @@ async function loadExportAssets(relativePath) {
 }
 
 /**
- * TipTap live editor → HWPX.
- * Uses the same cleaned body HTML as HTML export (generateHTML + clean).
+ * TipTap live editor → Markdown → HWPX (kordoc on the host).
  *
  * @param {string} relativePath
  * @param {string} fileName
@@ -37,13 +33,15 @@ export async function exportLiveTiptapContentAsHwpx(relativePath, fileName, edit
   }
 
   const title = getTiptapFileStem(fileName) || 'document';
-  const bodyHtml = buildSharedTiptapExportBody({ editor, relativePath });
-  const html = wrapSharedExportHwpxSource(bodyHtml, title);
+  const markdown = buildTiptapExportMarkdown(editor, relativePath);
+  if (!markdown) {
+    throw new Error('내보낼 내용이 없습니다.');
+  }
   const assets = await loadExportAssets(relativePath);
   const outName = exportFileName(title, 'hwpx');
 
   const converted = await window.nas4usb.tiptap.exportHwpx({
-    html,
+    markdown,
     fileName: outName,
     assets,
   });

@@ -1253,6 +1253,7 @@ export async function handleHttpApiRequest(req, res) {
         pageSize: body.pageSize ?? 'A4',
         landscape: Boolean(body.landscape),
         marginMm: body.marginMm,
+        preferCssPageSize: Boolean(body.preferCssPageSize),
         printBackground: body.printBackground,
       });
       sendJson(res, 200, result);
@@ -1260,11 +1261,11 @@ export async function handleHttpApiRequest(req, res) {
     }
 
     if (method === 'POST' && url.pathname === '/api/tiptap/exportHwpx') {
-      // Host converts TipTap HTML → HWPX (requires prepare:hwpx-export on the server machine).
+      // Host converts TipTap/Markdown → HWPX via kordoc (no Python/Pandoc).
       const body = await readJsonBody(req);
-      const { convertHtmlToHwpxBase64 } = await import('./hwpxExportService.js');
-      const result = await convertHtmlToHwpxBase64({
-        html: body.html ?? '',
+      const { convertMarkdownToHwpxBase64 } = await import('./hwpxExportService.js');
+      const result = await convertMarkdownToHwpxBase64({
+        markdown: body.markdown ?? '',
         fileName: body.fileName ?? 'document.hwpx',
         assets: Array.isArray(body.assets) ? body.assets : [],
       });

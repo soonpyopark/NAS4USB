@@ -12,13 +12,15 @@ let httpClient = null;
 const A4_PRINT_CSS = `
 @media print {
   .tiptap-export-page,
-  .markdown-export {
+  .markdown-export,
+  .rhwp-hwpx-export {
     max-width: none !important;
     padding: 0 !important;
   }
   .tiptap-export-page img,
   .tiptap-export-page video,
-  .markdown-export img {
+  .markdown-export img,
+  .rhwp-hwpx-export img {
     max-height: 240mm !important;
   }
 }
@@ -45,6 +47,7 @@ function withPdfPageCss(html) {
  *   pageSize?: string,
  *   landscape?: boolean,
  *   marginMm?: number,
+ *   preferCssPageSize?: boolean,
  *   printBackground?: boolean,
  * }} payload
  * @returns {Promise<{ base64: string, fileName: string }>}
@@ -66,17 +69,32 @@ async function renderHtmlToPdf(payload) {
 /**
  * Print a standalone HTML document to PDF and save it to a folder the user picks.
  *
- * @param {{ html: string, title: string, landscape?: boolean }} input
+ * @param {{
+ *   html: string,
+ *   title: string,
+ *   landscape?: boolean,
+ *   marginMm?: number,
+ *   preferCssPageSize?: boolean,
+ *   fitA4Css?: boolean,
+ * }} input
  * @returns {Promise<import('../saveToFolder.js').SaveResult | null>} null when cancelled
  */
-export async function exportHtmlDocumentAsPdf({ html, title, landscape = false }) {
+export async function exportHtmlDocumentAsPdf({
+  html,
+  title,
+  landscape = false,
+  marginMm = 12,
+  preferCssPageSize = false,
+  fitA4Css = true,
+}) {
   const outName = exportFileName(title || 'NoName', 'pdf');
   const converted = await renderHtmlToPdf({
-    html: withPdfPageCss(html),
+    html: fitA4Css ? withPdfPageCss(html) : html,
     fileName: outName,
     pageSize: 'A4',
     landscape,
-    marginMm: 12,
+    marginMm,
+    preferCssPageSize,
     printBackground: true,
   });
 

@@ -233,6 +233,7 @@ async function publishDist() {
   await stripEmbedBlockers(publicOut);
   await patchNestedTableCellPath(publicOut);
   await patchPcLocalFonts(publicOut);
+  await run(root, 'node', ['scripts/patch-rhwp-pasteHtml.mjs']);
   console.log(`[rhwp-studio] published → ${publicOut}`);
 }
 

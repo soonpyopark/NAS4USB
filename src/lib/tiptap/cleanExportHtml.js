@@ -1,7 +1,6 @@
 /**
  * Normalize TipTap HTML for standalone HTML / HWPX export.
- * TipTap tables use `.tableWrapper` divs; pandoc wraps those as Div blocks and
- * pypandoc-hwpx drops nested tables. Unwrap wrappers and strip editor chrome.
+ * TipTap tables use `.tableWrapper` divs. Unwrap wrappers and strip editor chrome.
  *
  * @param {string} html
  * @returns {string}

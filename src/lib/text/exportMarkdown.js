@@ -168,7 +168,19 @@ export async function exportMarkdownTextAsPdf(fileName, markdown) {
 }
 
 /**
- * Markdown → HTML → HWPX (pandoc AST → pypandoc-hwpx).
+ * Markdown → same standalone HTML as PDF, opened in the system print dialog.
+ *
+ * @param {string} fileName
+ * @param {string} markdown
+ */
+export async function printMarkdownText(fileName, markdown) {
+  const title = getMarkdownFileStem(fileName);
+  const { printHtmlDocument } = await import('../print/printHtmlDocument.js');
+  await printHtmlDocument(markdownToStandaloneHtml(markdown, title));
+}
+
+/**
+ * Markdown → HWPX (kordoc on the host).
  *
  * @param {string} fileName
  * @param {string} markdown
@@ -180,21 +192,10 @@ export async function exportMarkdownTextAsHwpx(fileName, markdown) {
   }
 
   const title = getMarkdownFileStem(fileName);
-  const bodyHtml = markdownToBodyHtml(markdown);
-  const html = `<!DOCTYPE html>
-<html lang="ko">
-<head>
-<meta charset="utf-8" />
-<title>${escapeHtml(title)}</title>
-</head>
-<body>
-${bodyHtml}
-</body>
-</html>`;
   const outName = exportFileName(title, 'hwpx');
 
   const converted = await window.nas4usb.tiptap.exportHwpx({
-    html,
+    markdown: String(markdown ?? ''),
     fileName: outName,
     assets: [],
   });

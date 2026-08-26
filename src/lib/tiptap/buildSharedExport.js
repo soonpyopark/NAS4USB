@@ -1,6 +1,6 @@
 /**
- * Shared TipTap → document export body + Hangul/HWPX-aligned HTML chrome.
- * HTML and HWPX both consume the same cleaned body so structure matches.
+ * Shared TipTap → document export body + Hangul-aligned HTML chrome.
+ * HTML export consumes the cleaned body. HWPX export uses Markdown + kordoc.
  */
 
 import { generateHTML } from '@tiptap/core';
@@ -170,7 +170,7 @@ function escapeHtml(value) {
 }
 
 /**
- * Build the shared cleaned body HTML used by both HTML and HWPX export.
+ * Build the shared cleaned body HTML used by HTML export.
  *
  * @param {{
  *   content?: import('@tiptap/core').JSONContent,
@@ -244,7 +244,7 @@ export function embedAssetsAsDataUrls(bodyHtml, assets) {
 }
 
 /**
- * Standalone HTML file whose body matches the HWPX conversion input.
+ * Standalone HTML file for TipTap HTML export.
  *
  * @param {{
  *   bodyHtml: string,
@@ -273,21 +273,3 @@ ${body}
 `;
 }
 
-/**
- * Minimal HTML document for HWPX conversion (no CSS — pandoc ignores it anyway).
- *
- * @param {string} bodyHtml
- * @param {string} title
- */
-export function wrapSharedExportHwpxSource(bodyHtml, title) {
-  return `<!DOCTYPE html>
-<html lang="ko">
-<head>
-<meta charset="utf-8" />
-<title>${escapeHtml(title)}</title>
-</head>
-<body>
-${bodyHtml}
-</body>
-</html>`;
-}

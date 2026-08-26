@@ -4,7 +4,7 @@
 
 # NAS4USB
 
-USB(또는 단일 폴더)만으로 **오프라인 LAN NAS**와 **실시간 공동 편집**을 제공하는 Windows/macOS Electron 앱입니다. (v1.0.7)
+USB(또는 단일 폴더)만으로 **오프라인 LAN NAS**와 **실시간 공동 편집**을 제공하는 Windows/macOS Electron 앱입니다. (v1.0.8)
 
 - **Electron + Vite + React** — 로컬 파일 탐색기 UI
 - **Y.js** — HWPX·XLSX·화이트보드·TipTap 실시간 동기화 (기본 포트 `3009`)
@@ -25,7 +25,7 @@ USB(또는 단일 폴더)만으로 **오프라인 LAN NAS**와 **실시간 공�
 | 워크스페이스 | UI **공유폴더** / **개인폴더** ↔ 디스크 `share` / `private` |
 | LAN 동기화 | Y.js WebSocket — 같은 방(room)에 접속한 클라이언트 간 CRDT 동기화 |
 | HWPX 편집 | rhwp-studio 기반 `.hwpx` 브라우저 에디터 |
-| TipTap 문서 | `.tiptap` — Notion-like TipTap 에디터 (ZIP+첨부, 슬래시 메뉴, 실시간 협업, 원노트 가져오기, HTML/HWPX 내보내기 · Pandoc + [pypandoc-hwpx](https://github.com/msjang/pypandoc-hwpx)) |
+| TipTap 문서 | `.tiptap` — Notion-like TipTap 에디터 (ZIP+첨부, 슬래시 메뉴, 실시간 협업, 원노트 가져오기, HTML/HWPX 내보내기 · [kordoc](https://github.com/chrisryugj/kordoc)) |
 | Markdown / TXT | CodeMirror 편집 · MD 미리보기 · MD는 HTML/HWPX 내보내기 |
 | 스프레드시트 | FortuneSheet — `.xlsx` / `.xls` |
 | 화이트보드 | `.wb4s` — WhiteBoard4Share 엔진 |
@@ -216,7 +216,6 @@ npm run build:release
 | `npm run build:release` | MSI + portable zip을 `msi/`에 동일 스탬프로 생성 |
 | `npm run sync-version` | `APP_VERSION` → package.json / MSI License 동기화 |
 | `npm run update:all` | 에디터 코어 + npm 의존성 업데이트 |
-| `npm run prepare:hwpx-export` | TipTap/MD→HWPX용 Pandoc·pypandoc-hwpx·pydeps 준비 (호스트 Python 3 필요) |
 | `npm run build:update_all` | 코어 업데이트 + `build:release` |
 
 ---
@@ -243,7 +242,6 @@ NAS4USB/
 ├── data/                   기본 문서 저장소 예(개발 시)
 │   ├── share/              공유폴더 디스크명
 │   └── private/            개인폴더 디스크명
-├── tools/hwpx-export/      TipTap·MD → HWPX (Pandoc + pypandoc-hwpx)
 ├── build/                  앱 아이콘 (prepare:icons)
 ├── LICENSE                 AGPL-3.0-only (+ Third-Party Components)
 ├── THIRD_PARTY_NOTICES.md  사용 오픈소스 고지
@@ -266,10 +264,10 @@ NAS4USB/
 | 동영상 미리보기 | Video.js + hls.js · 사용자 등록 FFmpeg | Apache-2.0 (플레이어) / LGPL·GPL (FFmpeg, 미번들) |
 | PDF 미리보기 | `pdfjs-dist` (PDF.js) — `src/lib/pdf/`, `PdfViewerShell` | Apache-2.0 |
 | 실시간 동기화 | `yjs`, `y-websocket` | MIT |
-| TipTap·MD → HWPX | Pandoc 3.10.1 + pypandoc-hwpx + pypandoc + Pillow (`tools/hwpx-export`) | GPL-2.0-or-later / MIT / MIT-CMU |
+| TipTap·MD → HWPX | [kordoc](https://github.com/chrisryugj/kordoc) (`markdownToHwpx`) | MIT |
 
 버전 기록: `lib/cores-manifest.json`  
-HWPX 내보내기 준비: `npm run prepare:hwpx-export` (자세한 내용 [`tools/hwpx-export/README.md`](tools/hwpx-export/README.md))
+`.hwpx` 에디터 저장은 rhwp-studio. TipTap/MD 내보내기만 kordoc를 씁니다.
 
 ---
 
@@ -291,7 +289,7 @@ Electron/Chromium 및 npm 패키지 등 서드파티는 각 라이선스를 따�
 | 협업 | Yjs, y-websocket | MIT |
 | 문서 편집 | TipTap, CodeMirror, rhwp, FortuneSheet, WhiteBoard4Share | MIT / AGPL-3.0-only |
 | 문서/미디어 | PDF.js, Video.js, hls.js, SheetJS (`xlsx`), JSZip, KaTeX | Apache-2.0 / MIT 등 |
-| HWPX 변환 | [Pandoc](https://github.com/jgm/pandoc), [pypandoc-hwpx](https://github.com/msjang/pypandoc-hwpx), pypandoc, Pillow | GPL-2.0-or-later / MIT / MIT-CMU |
+| HWPX 변환 (TipTap/MD) | [kordoc](https://github.com/chrisryugj/kordoc) | MIT |
 
 자세한 표와 직접 의존성 목록은 `THIRD_PARTY_NOTICES.md`와 `LICENSE` 하단 **Third-Party Components**를 참고하세요.
 

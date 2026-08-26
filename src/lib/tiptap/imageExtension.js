@@ -78,6 +78,12 @@ export function createTiptapImageExtension(options = {}) {
       if (!includeNodeView) return null;
       return ReactNodeViewRenderer(TiptapImageView);
     },
+
+    renderMarkdown: (node) => {
+      const src = String(node.attrs?.src ?? '').trim();
+      const alt = String(node.attrs?.alt ?? '').replace(/[\[\]]/g, '');
+      return src ? `![${alt}](${src})` : '';
+    },
   }).configure({
     allowBase64: false,
     HTMLAttributes: { class: 'tiptap-image' },

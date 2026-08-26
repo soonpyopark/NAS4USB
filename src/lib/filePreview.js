@@ -13,7 +13,7 @@ export function getFilePreviewKind(entry) {
   if (entry.isDirectory) return 'folder';
   const ext = String(entryExtensionOf(entry) || '').toLowerCase();
   if (isImageExtension(ext)) return 'image';
-  if (ext === 'txt') return 'text';
+  if (ext === 'txt' || ext === 'sql') return 'text';
   if (ext === 'md') return 'markdown';
   if (isHtmlExtension(ext)) return 'html';
   if (ext === 'tiptap' || isTiptapDocumentRelativePath(entry.relativePath || entry.name)) {

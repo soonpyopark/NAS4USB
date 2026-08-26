@@ -1,6 +1,6 @@
 {
   "name": "nas4usb",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Offline LAN NAS & real-time collaborative HWPX editor",
   "main": "main.js",
   "type": "module",
@@ -10,7 +10,6 @@
     "dev:restart": "node scripts/dev-process.mjs restart",
     "prepare:icons": "node scripts/prepare-app-icon.mjs",
     "prepare:pdfjs": "node scripts/prepare-pdfjs-assets.mjs",
-    "prepare:hwpx-export": "node scripts/prepare-hwpx-export.mjs",
     "prepare:wb4s-deps": "node scripts/prepare-wb4s-src.mjs",
     "prepare:wb4s-src": "node scripts/prepare-wb4s-src.mjs",
     "build:rhwp-studio": "node scripts/build-rhwp-studio.mjs",
@@ -56,6 +55,7 @@
     "@codemirror/autocomplete": "^6.20.3",
     "@codemirror/commands": "^6.10.4",
     "@codemirror/lang-markdown": "^6.5.2",
+    "@codemirror/lang-sql": "^6.10.0",
     "@codemirror/language": "^6.12.4",
     "@codemirror/language-data": "^6.5.2",
     "@codemirror/lint": "^6.9.7",
@@ -113,6 +113,7 @@
     "hls.js": "^1.7.0",
     "jszip": "^3.10.1",
     "katex": "^0.16.47",
+    "kordoc": "^4.9.2",
     "lowlight": "^3.3.0",
     "node-forge": "^1.4.0",
     "pdf-lib": "^1.17.1",
@@ -166,13 +167,6 @@
       {
         "from": "lib",
         "to": "lib",
-        "filter": [
-          "**/*"
-        ]
-      },
-      {
-        "from": "tools/hwpx-export",
-        "to": "tools/hwpx-export",
         "filter": [
           "**/*"
         ]

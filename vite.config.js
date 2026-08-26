@@ -71,6 +71,7 @@ export default defineConfig(({ mode }) => {
         '@tiptap/react',
         '@tiptap/starter-kit',
         '@tiptap/markdown',
+        '@codemirror/lang-sql',
         '@tiptap/extension-blockquote',
         '@tiptap/extension-placeholder',
         '@tiptap/extension-task-list',

@@ -66,7 +66,8 @@ export default function HistoryPreviewModal({
     normalizedExtension === 'txt' ||
     normalizedExtension === 'md' ||
     normalizedExtension === 'html' ||
-    normalizedExtension === 'htm';
+    normalizedExtension === 'htm' ||
+    normalizedExtension === 'sql';
 
   // Read-only preview (unlike the editor windows), so Esc-to-close is safe — there is no
   // unsaved content to lose.
@@ -162,7 +163,8 @@ export default function HistoryPreviewModal({
           normalizedExtension === 'txt' ||
           normalizedExtension === 'md' ||
           normalizedExtension === 'html' ||
-          normalizedExtension === 'htm'
+          normalizedExtension === 'htm' ||
+          normalizedExtension === 'sql'
         ) {
           setText(decodeTextBase64(base64));
         } else if (normalizedExtension === 'tiptap') {

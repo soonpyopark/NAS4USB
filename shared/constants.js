@@ -2,14 +2,14 @@
 export const DEFAULT_SYNC_PORT = 3009;
 
 /** Application display version. */
-export const APP_VERSION = '1.0.7';
+export const APP_VERSION = '1.0.8';
 
 /**
  * Package build id (YYMMDD_HHMMSS) — matches MSI/portable filename suffix.
  * Refreshed by `build:release` / `build:msi` / `build:dist:exe` for update checks
  * when the GitHub tag version is unchanged (same-version republish).
  */
-export const APP_BUILD_STAMP = '260825_114905';
+export const APP_BUILD_STAMP = '260826_230035';
 
 /** Application display name. */
 export const APP_NAME = 'NAS4USB';

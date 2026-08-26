@@ -4,6 +4,7 @@
  * @property {() => string} [getHtml]
  * @property {() => string} [getHwpxBase64]
  * @property {() => Promise<string>} [exportHwpxBase64]
+ * @property {() => Promise<{ svg: string, widthMm?: number | null, heightMm?: number | null }[]>} [exportPageSvgs]
  * @property {(text: string, origin?: string) => void} [setText]
  * @property {(html: string, origin?: string) => void} [setHtml]
  * @property {(base64: string, origin?: string) => void | Promise<void>} [setHwpxBase64]

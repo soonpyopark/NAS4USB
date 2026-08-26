@@ -29,6 +29,7 @@ const ICON_COLORS = {
   image: 'text-cyan-600',
   pdf: 'text-rose-600',
   html: 'text-orange-600',
+  sql: 'text-sky-700',
   default: 'text-slate-400',
 };
 
@@ -82,6 +83,7 @@ export function fileTypeColorClass(extension) {
   if (isImageExtension(extension)) return ICON_COLORS.image;
   if (isPdfExtension(extension)) return ICON_COLORS.pdf;
   if (isHtmlExtension(extension)) return ICON_COLORS.html;
+  if (extension === 'sql') return ICON_COLORS.sql;
   return ICON_COLORS.default;
 }
 
