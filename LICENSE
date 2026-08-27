@@ -700,7 +700,6 @@ is below; the full inventory of direct npm dependencies is in THIRD_PARTY_NOTICE
 | FFmpeg (user-registered, not bundled) | LGPL / GPL | https://ffmpeg.org |
 | epub.js (epubjs) | BSD-2-Clause | https://github.com/futurepress/epub.js |
 | 7zip-min / 7zip-bin | MIT / LGPL | comic archive extract |
-| kordoc (TipTap/Markdown → HWPX) | MIT | https://github.com/chrisryugj/kordoc |
 | SheetJS Community (xlsx) | Apache-2.0 | https://sheetjs.com/ |
 | xlsx-js-style | Apache-2.0 | https://github.com/gitbrent/xlsx-js-style |
 | JSZip | MIT OR GPL-3.0-or-later | https://github.com/Stuk/jszip |
@@ -713,7 +712,7 @@ is below; the full inventory of direct npm dependencies is in THIRD_PARTY_NOTICE
 | Source Han Serif K (rhwp fonts) | SIL OFL 1.1 | bundled under public/rhwp-studio/fonts/ |
 
 Editor core versions: lib/cores-manifest.json.
-TipTap/Markdown → HWPX uses kordoc (MIT). Native .hwpx save uses rhwp-studio.
+Native .hwpx save uses rhwp-studio.
 Offline USB update packages may be placed under lib/updates/ (see lib/updates/README.md).
 
 Rhwp studio WASM bundles (public/rhwp-studio/, public/rhwp-core/) and wb4s editor

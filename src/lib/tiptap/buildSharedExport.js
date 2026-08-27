@@ -1,6 +1,6 @@
 /**
  * Shared TipTap → document export body + Hangul-aligned HTML chrome.
- * HTML export consumes the cleaned body. HWPX export uses Markdown + kordoc.
+ * HTML export consumes the cleaned body.
  */
 
 import { generateHTML } from '@tiptap/core';

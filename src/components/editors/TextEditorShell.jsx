@@ -52,7 +52,6 @@ export default function TextEditorShell({
   const [bound, setBound] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [exportingHtml, setExportingHtml] = useState(false);
-  const [exportingHwpx, setExportingHwpx] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [printing, setPrinting] = useState(false);
   const unbindRef = useRef(null);
@@ -168,7 +167,7 @@ export default function TextEditorShell({
   }, [persistLive]);
 
   const handleExportHtml = useCallback(async () => {
-    if (!isMarkdown || exportingHtml || exportingHwpx || exportingPdf || printing || shareReadOnly) return;
+    if (!isMarkdown || exportingHtml || exportingPdf || printing || shareReadOnly) return;
     if (!editorHandleRef.current) return;
     setExportingHtml(true);
     setLoadError(null);
@@ -186,31 +185,10 @@ export default function TextEditorShell({
     } finally {
       setExportingHtml(false);
     }
-  }, [exportingHtml, exportingHwpx, exportingPdf, fileName, isMarkdown, printing, shareReadOnly]);
-
-  const handleExportHwpx = useCallback(async () => {
-    if (!isMarkdown || exportingHtml || exportingHwpx || exportingPdf || printing || shareReadOnly) return;
-    if (!editorHandleRef.current) return;
-    setExportingHwpx(true);
-    setLoadError(null);
-    try {
-      const { exportMarkdownTextAsHwpx } = await import('../../lib/text/exportMarkdown.js');
-      const saved = await exportMarkdownTextAsHwpx(fileName, editorHandleRef.current.getText());
-      if (!saved) return;
-      const { showAppAlert } = await import('../../lib/nativeDialog.js');
-      await showAppAlert({
-        title: 'HWPX로 내보내기',
-        body: `내보냈습니다.\n${saved.absolutePath ?? saved.fileName}`,
-      });
-    } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'HWPX로 내보내기에 실패했습니다.');
-    } finally {
-      setExportingHwpx(false);
-    }
-  }, [exportingHtml, exportingHwpx, exportingPdf, fileName, isMarkdown, printing, shareReadOnly]);
+  }, [exportingHtml, exportingPdf, fileName, isMarkdown, printing, shareReadOnly]);
 
   const handleExportPdf = useCallback(async () => {
-    if (!isMarkdown || exportingHtml || exportingHwpx || exportingPdf || printing || shareReadOnly) return;
+    if (!isMarkdown || exportingHtml || exportingPdf || printing || shareReadOnly) return;
     if (!editorHandleRef.current) return;
     setExportingPdf(true);
     setLoadError(null);
@@ -228,10 +206,10 @@ export default function TextEditorShell({
     } finally {
       setExportingPdf(false);
     }
-  }, [exportingHtml, exportingHwpx, exportingPdf, fileName, isMarkdown, printing, shareReadOnly]);
+  }, [exportingHtml, exportingPdf, fileName, isMarkdown, printing, shareReadOnly]);
 
   const handlePrint = useCallback(async () => {
-    if (exportingHtml || exportingHwpx || exportingPdf || printing) return;
+    if (exportingHtml || exportingPdf || printing) return;
     if (!editorHandleRef.current) return;
     setPrinting(true);
     setLoadError(null);
@@ -254,7 +232,7 @@ export default function TextEditorShell({
     } finally {
       setPrinting(false);
     }
-  }, [exportingHtml, exportingHwpx, exportingPdf, fileName, isHtml, isMarkdown, isSql, printing, relativePath]);
+  }, [exportingHtml, exportingPdf, fileName, isHtml, isMarkdown, isSql, printing, relativePath]);
 
   const handleClose = async () => {
     const canFlush = Boolean(!shareReadOnly && editorHandleRef.current && ready);
@@ -312,10 +290,6 @@ export default function TextEditorShell({
           isMarkdown && !isLoading && !shareReadOnly ? handleExportHtml : undefined
         }
         exportingHtml={exportingHtml}
-        onExportHwpx={
-          isMarkdown && !isLoading && !shareReadOnly ? handleExportHwpx : undefined
-        }
-        exportingHwpx={exportingHwpx}
         onExportPdf={
           isMarkdown && !isLoading && !shareReadOnly ? handleExportPdf : undefined
         }

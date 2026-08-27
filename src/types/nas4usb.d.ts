@@ -86,7 +86,6 @@ window.nas4usb = {
     update: () => {},
   },
   tiptap: {
-    exportHwpx: (payload) => {},
     importOnenote: (payload) => {},
   },
   pdf: {

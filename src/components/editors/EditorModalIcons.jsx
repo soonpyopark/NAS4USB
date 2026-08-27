@@ -96,20 +96,6 @@ export function IconExportHtml() {
   );
 }
 
-/** HWPX 내보내기 — document marked H with an arrow going out */
-export function IconExportHwpx() {
-  return (
-    <Glyph>
-      <path
-        fill="currentColor"
-        d="M13 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-8h-2v8H6V5h7Z"
-      />
-      <path fill="currentColor" d="M17 2l4.5 4.5-1.4 1.4L18 5.8V11h-2V5.8l-2.1 2.1-1.4-1.4Z" />
-      <path fill="currentColor" d="M8 13h1.6v2.2h2.3V13h1.6v6h-1.6v-2.3H9.6V19H8Z" />
-    </Glyph>
-  );
-}
-
 /** 인쇄 — printer */
 export function IconPrint() {
   return (

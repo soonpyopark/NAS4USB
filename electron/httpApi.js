@@ -1260,19 +1260,6 @@ export async function handleHttpApiRequest(req, res) {
       return true;
     }
 
-    if (method === 'POST' && url.pathname === '/api/tiptap/exportHwpx') {
-      // Host converts TipTap/Markdown → HWPX via kordoc (no Python/Pandoc).
-      const body = await readJsonBody(req);
-      const { convertMarkdownToHwpxBase64 } = await import('./hwpxExportService.js');
-      const result = await convertMarkdownToHwpxBase64({
-        markdown: body.markdown ?? '',
-        fileName: body.fileName ?? 'document.hwpx',
-        assets: Array.isArray(body.assets) ? body.assets : [],
-      });
-      sendJson(res, 200, result);
-      return true;
-    }
-
     sendJson(res, 404, { error: 'API route not found.' });
     return true;
   } catch (error) {

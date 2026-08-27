@@ -1393,15 +1393,6 @@ ipcMain.handle('history:clearTree', async (event, relativePath) => {
 
 ipcMain.handle('editors:getStatus', async () => getEditorCoresStatus(getExeRoot(), getInstallRoot()));
 
-ipcMain.handle('tiptap:exportHwpx', async (_event, payload = {}) => {
-  const { convertMarkdownToHwpxBase64 } = await import('./electron/hwpxExportService.js');
-  return convertMarkdownToHwpxBase64({
-    markdown: payload.markdown ?? '',
-    fileName: payload.fileName ?? 'document.hwpx',
-    assets: Array.isArray(payload.assets) ? payload.assets : [],
-  });
-});
-
 ipcMain.handle('pdf:embedMarkups', async (event, payload = {}) => {
   const auth = getAccessAuthFromEvent(event);
   const target = resolveHomeScopedWritePath(payload.path ?? '', auth);

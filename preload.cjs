@@ -69,7 +69,6 @@ contextBridge.exposeInMainWorld('nas4usb', {
   },
 
   tiptap: {
-    exportHwpx: (payload) => ipcRenderer.invoke('tiptap:exportHwpx', payload ?? {}),
     importOnenote: (payload) => ipcRenderer.invoke('tiptap:importOnenote', payload ?? {}),
   },
 

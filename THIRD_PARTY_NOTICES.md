@@ -47,21 +47,6 @@ Bundled editor outputs (`public/rhwp-studio/`, `public/rhwp-core/`,
 
 ---
 
-## TipTap / Markdown → HWPX export
-
-The host converts Markdown to `.hwpx` with [kordoc](https://github.com/chrisryugj/kordoc)
-(`markdownToHwpx`). TipTap documents are serialized with `@tiptap/markdown` first.
-Gongmun (official-document) presets are not enabled. Optional kordoc extras
-(OCR / PDFium / Transformers) are not used; conversion sets `KORDOC_OFFLINE=1`.
-
-Native `.hwpx` editor save still uses rhwp-studio and is unchanged.
-
-| Component | Version | License | Project / notes |
-|-----------|---------|---------|-----------------|
-| kordoc | 4.9.x | MIT | https://github.com/chrisryugj/kordoc — npm `kordoc` |
-
----
-
 ## Direct npm dependencies (`package.json`)
 
 ### Production (`dependencies`)
@@ -92,7 +77,6 @@ Native `.hwpx` editor save still uses rhwp-studio and is unchanged.
 | `y-prosemirror` | MIT |
 | `y-websocket` | MIT |
 | `yjs` | MIT |
-| `kordoc` | MIT |
 
 Transitive runtime libraries of note (not always listed in `package.json`
 but used by the app):

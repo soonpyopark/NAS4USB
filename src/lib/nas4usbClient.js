@@ -246,15 +246,6 @@ export function createHttpNas4usbClient() {
     },
 
     tiptap: {
-      exportHwpx: (payload) =>
-        apiFetch(
-          '/tiptap/exportHwpx',
-          {
-            method: 'POST',
-            body: JSON.stringify(payload ?? {}),
-          },
-          180000,
-        ),
       importOnenote: (payload) =>
         apiFetch(
           '/tiptap/importOnenote',

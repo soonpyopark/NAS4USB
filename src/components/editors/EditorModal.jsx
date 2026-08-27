@@ -3,7 +3,6 @@ import {
   IconBackupCreate,
   IconClose,
   IconExportHtml,
-  IconExportHwpx,
   IconExportPdf,
   IconPrint,
   IconHistory,
@@ -90,8 +89,6 @@ export default function EditorModal({
   importingHtml = false,
   onImportOnenote,
   importingOnenote = false,
-  onExportHwpx,
-  exportingHwpx = false,
   onExportPdf,
   exportingPdf = false,
   onPrint,
@@ -100,7 +97,6 @@ export default function EditorModal({
 }) {
   const transferBusy =
     exportingHtml ||
-    exportingHwpx ||
     exportingPdf ||
     printing ||
     importingHtml ||
@@ -164,17 +160,6 @@ export default function EditorModal({
               disabled={transferBusy}
             >
               <IconExportHtml />
-            </HeaderIconButton>
-          )}
-          {onExportHwpx && (
-            <HeaderIconButton
-              label="HWPX로 내보내기"
-              busyLabel="내보내는 중…"
-              busy={exportingHwpx}
-              onClick={onExportHwpx}
-              disabled={transferBusy}
-            >
-              <IconExportHwpx />
             </HeaderIconButton>
           )}
           {onExportPdf && (

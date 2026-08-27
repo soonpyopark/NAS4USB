@@ -1,29 +1,29 @@
 {
-  "updatedAt": "2026-08-19T09:18:23.014Z",
+  "updatedAt": "2026-08-27T04:46:45.550Z",
   "cores": {
     "rhwp": {
       "version": "@rhwp/core@0.8.4, @rhwp/editor@0.8.4",
-      "updatedAt": "2026-08-19T09:18:23.014Z",
+      "updatedAt": "2026-08-27T04:46:45.550Z",
       "method": "npm"
     },
     "wb4s": {
       "version": "1.0.6",
-      "updatedAt": "2026-08-19T09:18:23.014Z",
-      "method": "sibling+build"
+      "updatedAt": "2026-08-27T04:46:45.550Z",
+      "method": "git-clone+build"
     },
     "fortune-sheet": {
       "version": "@fortune-sheet/react@1.0.4",
-      "updatedAt": "2026-08-19T09:18:23.014Z",
+      "updatedAt": "2026-08-27T04:46:45.550Z",
       "method": "npm"
     },
     "tiptap": {
-      "version": "@tiptap/core@3.30.2, @tiptap/pm@3.30.2, @tiptap/react@3.30.2, @tiptap/starter-kit@3.30.2, @tiptap/extension-collaboration@3.30.2, @tiptap/extension-collaboration-caret@3.30.2, @tiptap/extension-bubble-menu@3.30.2",
-      "updatedAt": "2026-08-19T09:18:23.014Z",
+      "version": "@tiptap/core@3.30.5, @tiptap/pm@3.30.5, @tiptap/react@3.30.5, @tiptap/starter-kit@3.30.5, @tiptap/extension-collaboration@3.30.5, @tiptap/extension-collaboration-caret@3.30.5, @tiptap/extension-bubble-menu@3.30.5",
+      "updatedAt": "2026-08-27T04:46:45.550Z",
       "method": "npm"
     },
     "comic-reader": {
       "version": "epubjs@0.3.93, 7zip-min@3.0.1",
-      "updatedAt": "2026-08-19T09:18:23.014Z",
+      "updatedAt": "2026-08-27T04:46:45.550Z",
       "method": "npm"
     }
   }

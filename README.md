@@ -25,8 +25,8 @@ USB(또는 단일 폴더)만으로 **오프라인 LAN NAS**와 **실시간 공�
 | 워크스페이스 | UI **공유폴더** / **개인폴더** ↔ 디스크 `share` / `private` |
 | LAN 동기화 | Y.js WebSocket — 같은 방(room)에 접속한 클라이언트 간 CRDT 동기화 |
 | HWPX 편집 | rhwp-studio 기반 `.hwpx` 브라우저 에디터 |
-| TipTap 문서 | `.tiptap` — Notion-like TipTap 에디터 (ZIP+첨부, 슬래시 메뉴, 실시간 협업, 원노트 가져오기, HTML/HWPX 내보내기 · [kordoc](https://github.com/chrisryugj/kordoc)) |
-| Markdown / TXT | CodeMirror 편집 · MD 미리보기 · MD는 HTML/HWPX 내보내기 |
+| TipTap 문서 | `.tiptap` — Notion-like TipTap 에디터 (ZIP+첨부, 슬래시 메뉴, 실시간 협업, 원노트 가져오기, HTML 내보내기) |
+| Markdown / TXT | CodeMirror 편집 · MD 미리보기 · MD는 HTML 내보내기 |
 | 스프레드시트 | FortuneSheet — `.xlsx` / `.xls` |
 | 화이트보드 | `.wb4s` — WhiteBoard4Share 엔진 |
 | PDF 미리보기 | 썸네일 · 너비/높이/페이지 맞춤 · 2쪽 보기 · 검색 · 형광펜/밑줄 · 엑셀 내보내기 |
@@ -264,10 +264,9 @@ NAS4USB/
 | 동영상 미리보기 | Video.js + hls.js · 사용자 등록 FFmpeg | Apache-2.0 (플레이어) / LGPL·GPL (FFmpeg, 미번들) |
 | PDF 미리보기 | `pdfjs-dist` (PDF.js) — `src/lib/pdf/`, `PdfViewerShell` | Apache-2.0 |
 | 실시간 동기화 | `yjs`, `y-websocket` | MIT |
-| TipTap·MD → HWPX | [kordoc](https://github.com/chrisryugj/kordoc) (`markdownToHwpx`) | MIT |
 
 버전 기록: `lib/cores-manifest.json`  
-`.hwpx` 에디터 저장은 rhwp-studio. TipTap/MD 내보내기만 kordoc를 씁니다.
+`.hwpx` 에디터 저장은 rhwp-studio를 씁니다.
 
 ---
 
@@ -289,7 +288,6 @@ Electron/Chromium 및 npm 패키지 등 서드파티는 각 라이선스를 따�
 | 협업 | Yjs, y-websocket | MIT |
 | 문서 편집 | TipTap, CodeMirror, rhwp, FortuneSheet, WhiteBoard4Share | MIT / AGPL-3.0-only |
 | 문서/미디어 | PDF.js, Video.js, hls.js, SheetJS (`xlsx`), JSZip, KaTeX | Apache-2.0 / MIT 등 |
-| HWPX 변환 (TipTap/MD) | [kordoc](https://github.com/chrisryugj/kordoc) | MIT |
 
 자세한 표와 직접 의존성 목록은 `THIRD_PARTY_NOTICES.md`와 `LICENSE` 하단 **Third-Party Components**를 참고하세요.
 
