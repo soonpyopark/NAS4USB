@@ -6,7 +6,7 @@ import { entryExtensionOf, isSecFileName } from '../../lib/filePassword/secPaths
 import { readWorkspacePlainBase64 } from '../../lib/filePassword/io.js';
 import { decodeTextBase64 } from '../../lib/text/textIO.js';
 import { renderMarkdown } from '../../lib/text/markdown.js';
-import { getFilePreviewKind } from '../../lib/filePreview.js';
+import { getFilePreviewKind, isAudioOrVideoEntry } from '../../lib/filePreview.js';
 import {
   folderPreviewCrumbs,
   folderPreviewParentPath,
@@ -432,12 +432,16 @@ export default function FilePreviewPane({
                               className="file-preview-pane__folder-item"
                               role="button"
                               tabIndex={0}
-                              onClick={() => onPreview?.(child)}
+                              onClick={() => {
+                                if (isAudioOrVideoEntry(child)) onOpenFull?.(child);
+                                else onPreview?.(child);
+                              }}
                               onDoubleClick={() => onOpenFull?.(child)}
                               onKeyDown={(event) => {
                                 if (event.key !== 'Enter' && event.key !== ' ') return;
                                 event.preventDefault();
-                                onPreview?.(child);
+                                if (isAudioOrVideoEntry(child)) onOpenFull?.(child);
+                                else onPreview?.(child);
                               }}
                             >
                               <span

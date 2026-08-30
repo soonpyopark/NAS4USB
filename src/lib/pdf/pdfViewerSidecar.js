@@ -34,6 +34,7 @@ import {
  *   view: PdfViewerViewState,
  *   markups: import('./pdfMarkup.js').PdfMarkupEntry[],
  *   removed: PdfRemovedAnnotTarget[],
+ *   marksComplete?: boolean,
  * }} PdfViewerSidecarPayload
  */
 
@@ -69,6 +70,20 @@ function normalizeMarkupEntry(value) {
       ? entry.id.trim()
       : `saved-${pageNumber}-${Math.random().toString(36).slice(2, 8)}`;
 
+  /** @type {[number, number, number, number] | undefined} */
+  let pdfRect;
+  if (Array.isArray(entry.pdfRect) && entry.pdfRect.length >= 4) {
+    const nums = entry.pdfRect.slice(0, 4).map(Number);
+    if (nums.every((n) => Number.isFinite(n))) {
+      pdfRect = [
+        Math.min(nums[0], nums[2]),
+        Math.min(nums[1], nums[3]),
+        Math.max(nums[0], nums[2]),
+        Math.max(nums[1], nums[3]),
+      ];
+    }
+  }
+
   return {
     id,
     pageNumber: Math.round(pageNumber),
@@ -76,7 +91,8 @@ function normalizeMarkupEntry(value) {
     color: typeof entry.color === 'string' && entry.color ? entry.color : '#fff59d',
     text: typeof entry.text === 'string' ? entry.text : `(${Math.round(pageNumber)}페이지)`,
     rects,
-    source: 'saved',
+    source: entry.source === 'pdf' ? 'pdf' : 'saved',
+    ...(pdfRect ? { pdfRect } : {}),
   };
 }
 
@@ -159,6 +175,7 @@ export function parsePdfViewerSidecarPayload(payload) {
     view,
     markups,
     removed,
+    marksComplete: record.marksComplete === true,
   };
 }
 
@@ -181,13 +198,14 @@ export function parsePdfViewerSidecarBase64(base64) {
  *   view?: PdfViewerViewState,
  *   markups?: import('./pdfMarkup.js').PdfMarkupEntry[],
  *   removed?: PdfRemovedAnnotTarget[],
+ *   marksComplete?: boolean,
  * }} state
  */
 export function buildPdfViewerSidecarBase64(state) {
   /** @type {import('./pdfMarkup.js').PdfMarkupEntry[]} */
   const markups = [];
   for (const entry of state.markups || []) {
-    if (!entry || entry.source === 'pdf') continue;
+    if (!entry) continue;
     const normalized = normalizeMarkupEntry(entry);
     if (normalized) markups.push(normalized);
   }
@@ -213,6 +231,7 @@ export function buildPdfViewerSidecarBase64(state) {
     },
     markups,
     removed,
+    marksComplete: state.marksComplete === true,
   };
 
   return bytesToBase64(new TextEncoder().encode(JSON.stringify(payload)));
@@ -287,6 +306,7 @@ export async function loadPdfViewerSidecar(pdfRelativePath) {
  *   view?: PdfViewerViewState,
  *   markups?: import('./pdfMarkup.js').PdfMarkupEntry[],
  *   removed?: PdfRemovedAnnotTarget[],
+ *   marksComplete?: boolean,
  * }} state
  */
 export async function writePdfViewerSidecar(pdfRelativePath, state) {

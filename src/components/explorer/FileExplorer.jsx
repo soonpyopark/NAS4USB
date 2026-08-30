@@ -5,7 +5,7 @@ import FileExplorerToolbar from './FileExplorerToolbar.jsx';
 import FileList from './FileList.jsx';
 import FilePreviewPane from './FilePreviewPane.jsx';
 import { useTouchUi } from '../../hooks/useTouchUi.js';
-import { canPreviewEntry } from '../../lib/filePreview.js';
+import { canPreviewEntry, isAudioOrVideoEntry } from '../../lib/filePreview.js';
 import { withHighlightQuery } from '../../lib/searchHighlight.js';
 import FilePropertiesDialog from './FilePropertiesDialog.jsx';
 import NewFileDialog from './NewFileDialog.jsx';
@@ -434,6 +434,7 @@ export default function FileExplorer({
 
   const openPreviewFor = (entry, { fromList = false } = {}) => {
     if (!entry) return;
+    if (isAudioOrVideoEntry(entry)) return;
     if (touchUi && entry.isDirectory) {
       onNavigate(entry.relativePath);
       return;
@@ -1408,6 +1409,10 @@ export default function FileExplorer({
       toggleSelection(entry.relativePath);
     } else {
       selectOnly(entry.relativePath);
+      if (isAudioOrVideoEntry(entry)) {
+        if (touchUi) void handleOpen(entry);
+        return;
+      }
       if (touchUi || previewOpen || canPreviewEntry(entry)) {
         openPreviewFor(entry, { fromList: true });
       }
@@ -1429,7 +1434,7 @@ export default function FileExplorer({
       selectOnly(entry.relativePath);
       setLastSelectedPath(entry.relativePath);
     }
-    if (entry && previewOpen) {
+    if (entry && previewOpen && !isAudioOrVideoEntry(entry)) {
       openPreviewFor(entry, { fromList: true });
     }
 

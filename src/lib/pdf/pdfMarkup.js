@@ -815,18 +815,28 @@ function textFromWordsInRects(words, hitRects) {
 
 /**
  * Read Highlight / Underline annotations from a PDF (read-only preview).
+ * Emits each page as soon as QuadPoints are known so the list is not blocked
+ * by a full-document getTextContent scan (slow on tablet / LAN).
+ *
  * @param {import('pdfjs-dist').PDFDocumentProxy} pdf
+ * @param {{
+ *   onPage?: (entries: PdfMarkupEntry[]) => void,
+ * }} [options]
  * @returns {Promise<PdfMarkupEntry[]>}
  */
-export async function loadPdfMarkupAnnotations(pdf) {
+export async function loadPdfMarkupAnnotations(pdf, options = {}) {
   /** @type {PdfMarkupEntry[]} */
   const entries = [];
+  const onPage = typeof options.onPage === 'function' ? options.onPage : null;
 
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
     const page = await pdf.getPage(pageNumber);
     const viewport = page.getViewport({ scale: 1, rotation: 0 });
     const annotations = await page.getAnnotations({ intent: 'display' });
-    const pageWords = await extractPageWords(page, 0);
+    /** @type {Array<{ entry: PdfMarkupEntry, displayRects: Array<{ left: number, top: number, width: number, height: number }> }>} */
+    const needWords = [];
+    /** @type {PdfMarkupEntry[]} */
+    const pageEntries = [];
 
     for (let index = 0; index < annotations.length; index += 1) {
       const annot = annotations[index];
@@ -855,19 +865,38 @@ export async function loadPdfMarkupAnnotations(pdf) {
       const displayRects = quadRects.length ? quadRects : [boundRect];
 
       const embeddedText = String(annot.contentsObj?.str || annot.contents || '').trim();
-      const recoveredText = embeddedText || textFromWordsInRects(pageWords, displayRects);
-
-      entries.push({
+      /** @type {PdfMarkupEntry} */
+      const entry = {
         id: `pdf-${pageNumber}-${index}`,
         pageNumber,
         kind: isUnderline ? 'underline' : 'highlight',
         color: rgbArrayToCss(annot.color),
-        text: recoveredText || `(${pageNumber}페이지)`,
+        text: embeddedText || `(${pageNumber}페이지)`,
         rects: displayRects,
         source: 'pdf',
         pdfRect: [x1, y1, x2, y2],
-      });
+      };
+      pageEntries.push(entry);
+      if (!embeddedText) needWords.push({ entry, displayRects });
     }
+
+    if (pageEntries.length) {
+      entries.push(...pageEntries);
+      onPage?.(pageEntries);
+    }
+
+    if (!needWords.length) continue;
+
+    const pageWords = await extractPageWords(page, 0);
+    /** @type {PdfMarkupEntry[]} */
+    const recovered = [];
+    for (const item of needWords) {
+      const text = textFromWordsInRects(pageWords, item.displayRects).trim();
+      if (!text) continue;
+      item.entry.text = text;
+      recovered.push(item.entry);
+    }
+    if (recovered.length) onPage?.(recovered);
   }
 
   return entries;

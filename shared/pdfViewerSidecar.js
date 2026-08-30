@@ -4,7 +4,7 @@ import { SHARED_FOLDER } from './constants.js';
 export const PDF_VIEWER_SIDECAR_SUFFIX = '.viewer.json';
 
 export const PDF_VIEWER_SIDECAR_FORMAT = 'pdf-viewer';
-export const PDF_VIEWER_SIDECAR_VERSION = 1;
+export const PDF_VIEWER_SIDECAR_VERSION = 2;
 
 /**
  * Canonical `file.pdf.viewer.json` plus iOS/Windows conflict copies:

@@ -128,6 +128,31 @@ function physicalPageKeyDirection(event) {
   return null;
 }
 
+/**
+ * Fold newly scanned PDF annotations into the live list without dropping
+ * sidecar / this-session marks (tablet scans are slow and used to replace state).
+ * @param {import('../../lib/pdf/pdfMarkup.js').PdfMarkupEntry[]} prev
+ * @param {import('../../lib/pdf/pdfMarkup.js').PdfMarkupEntry[]} incoming
+ * @param {import('../../lib/pdf/embedPdfMarkups.js').PdfRemovedAnnot[]} removed
+ */
+function mergeLoadedPdfMarkups(prev, incoming, removed) {
+  const visible = incoming.filter(
+    (entry) => !removed.some((target) => isSamePdfAnnotTarget(entry, target)),
+  );
+  if (!visible.length) return prev;
+
+  const byId = new Map(prev.map((entry) => [entry.id, entry]));
+  for (const entry of visible) {
+    const existing = byId.get(entry.id);
+    if (existing && existing.source !== 'pdf') continue;
+    const existingLooksPlaceholder = existing && /^\(\d+페이지\)$/.test(String(existing.text || '').trim());
+    const incomingLooksPlaceholder = /^\(\d+페이지\)$/.test(String(entry.text || '').trim());
+    if (existing && !existingLooksPlaceholder && incomingLooksPlaceholder) continue;
+    byId.set(entry.id, entry);
+  }
+  return [...byId.values()];
+}
+
 export default function PdfViewerShell({
   relativePath,
   fileName,
@@ -217,6 +242,7 @@ export default function PdfViewerShell({
   const [markups, setMarkups] = useState(
     /** @type {import('../../lib/pdf/pdfMarkup.js').PdfMarkupEntry[]} */ ([]),
   );
+  const [markupScanPending, setMarkupScanPending] = useState(false);
   const [removedPdfMarkups, setRemovedPdfMarkups] = useState(
     /** @type {import('../../lib/pdf/embedPdfMarkups.js').PdfRemovedAnnot[]} */ ([]),
   );
@@ -266,6 +292,11 @@ export default function PdfViewerShell({
   );
   /** Skip autosave until initial sidecar restore finishes. */
   const skipViewerSaveRef = useRef(true);
+  /** Sidecar already holds the full markup list — skip PDF annotation scan. */
+  const marksCompleteRef = useRef(false);
+  const persistViewerStateRef = useRef(
+    /** @type {(options?: { force?: boolean }) => Promise<void>} */ (async () => {}),
+  );
   /** Page to restore after first layout (from sidecar). */
   const pendingRestorePageRef = useRef(/** @type {number | null} */ (null));
   const viewerSaveTimerRef = useRef(/** @type {ReturnType<typeof setTimeout> | null} */ (null));
@@ -1025,6 +1056,8 @@ export default function PdfViewerShell({
       setDocReady(false);
       clearSearch();
       setMarkups([]);
+      setMarkupScanPending(false);
+      marksCompleteRef.current = false;
       setRemovedPdfMarkups([]);
       setActiveMarkupId('');
       pdfRef.current = null;
@@ -1061,25 +1094,45 @@ export default function PdfViewerShell({
 
         const savedMarkups = Array.isArray(sidecar?.markups) ? sidecar.markups : [];
         const removed = Array.isArray(sidecar?.removed) ? sidecar.removed : [];
+        removedPdfMarkupsRef.current = removed;
         setRemovedPdfMarkups(removed);
+        setMarkups([...savedMarkups]);
+        const skipMarkupScan = sidecar?.marksComplete === true || savedMarkups.length > 0;
+        marksCompleteRef.current = skipMarkupScan;
+        setMarkupScanPending(!skipMarkupScan);
 
         pdfRef.current = pdf;
         setPageCount(pdf.numPages);
         setDocReady(true);
         setLoading(false);
 
-        // Markup scan walks every page — keep it off the critical path.
-        void loadPdfMarkupAnnotations(pdf)
+        if (skipMarkupScan) return;
+
+        void loadPdfMarkupAnnotations(pdf, {
+          onPage: (pageEntries) => {
+            if (cancelled) return;
+            setMarkups((prev) =>
+              mergeLoadedPdfMarkups(prev, pageEntries, removedPdfMarkupsRef.current),
+            );
+          },
+        })
           .then((embedded) => {
             if (cancelled) return;
-            const visible = embedded.filter(
-              (entry) => !removed.some((target) => isSamePdfAnnotTarget(entry, target)),
-            );
-            setMarkups([...visible, ...savedMarkups]);
+            setMarkups((prev) => {
+              const next = mergeLoadedPdfMarkups(prev, embedded, removedPdfMarkupsRef.current);
+              markupsRef.current = next;
+              return next;
+            });
+            marksCompleteRef.current = true;
+            setMarkupScanPending(false);
+            void persistViewerStateRef.current({ force: true });
           })
           .catch((err) => {
             console.warn('[pdf] markup load failed:', err);
-            if (!cancelled) setMarkups([...savedMarkups]);
+            if (cancelled) return;
+            marksCompleteRef.current = true;
+            setMarkupScanPending(false);
+            void persistViewerStateRef.current({ force: true });
           });
       } catch (err) {
         if (!cancelled) {
@@ -1177,8 +1230,8 @@ export default function PdfViewerShell({
     return () => window.clearTimeout(timer);
   }, [docReady, loading, pageCount, rendering]);
 
-  const persistViewerState = useCallback(async () => {
-    if (skipViewerSaveRef.current || !relativePath) return;
+  const persistViewerState = useCallback(async (options = {}) => {
+    if ((!options.force && skipViewerSaveRef.current) || !relativePath) return;
     try {
       await writePdfViewerSidecar(relativePath, {
         view: {
@@ -1188,13 +1241,15 @@ export default function PdfViewerShell({
           rotation: rotationRef.current,
           twoPageView: twoPageViewRef.current,
         },
-        markups: markupsRef.current.filter((entry) => entry.source !== 'pdf'),
+        markups: markupsRef.current,
         removed: removedPdfMarkupsRef.current,
+        marksComplete: marksCompleteRef.current,
       });
     } catch (err) {
       console.warn('[pdf] viewer state save failed:', err);
     }
   }, [relativePath]);
+  persistViewerStateRef.current = persistViewerState;
 
   const scheduleViewerSave = useCallback(() => {
     if (skipViewerSaveRef.current) return;
@@ -2212,21 +2267,23 @@ export default function PdfViewerShell({
       });
 
       const embeddedById = new Map(embedEntries.map((entry) => [entry.id, entry]));
-      setMarkups((prev) =>
-        prev.map((entry) => {
-          const embedded = embeddedById.get(entry.id);
-          if (!embedded) return entry;
-          const first = embedded.pdfRects[0];
-          return {
-            ...entry,
-            source: 'pdf',
-            pdfRect: first
-              ? [first.x, first.y, first.x + first.width, first.y + first.height]
-              : entry.pdfRect,
-          };
-        }),
-      );
+      const nextMarkups = markupsRef.current.map((entry) => {
+        const embedded = embeddedById.get(entry.id);
+        if (!embedded) return entry;
+        const first = embedded.pdfRects[0];
+        return {
+          ...entry,
+          source: /** @type {const} */ ('pdf'),
+          pdfRect: first
+            ? [first.x, first.y, first.x + first.width, first.y + first.height]
+            : entry.pdfRect,
+        };
+      });
+      markupsRef.current = nextMarkups;
+      setMarkups(nextMarkups);
+      removedPdfMarkupsRef.current = [];
       setRemovedPdfMarkups([]);
+      marksCompleteRef.current = true;
       await writePdfViewerSidecar(relativePath, {
         view: {
           page: currentPageRef.current,
@@ -2235,8 +2292,9 @@ export default function PdfViewerShell({
           rotation: rotationRef.current,
           twoPageView: twoPageViewRef.current,
         },
-        markups: [],
+        markups: nextMarkups,
         removed: [],
+        marksComplete: true,
       });
 
       setSaveMessage('원본 PDF에 저장했습니다.');
@@ -2817,12 +2875,13 @@ export default function PdfViewerShell({
 
         {showMarksPanel && (
           <aside
-            className="pdf-marks-rail flex shrink-0 flex-col border-r border-slate-300 bg-slate-50"
+            className="pdf-marks-rail flex h-full min-h-0 shrink-0 flex-col border-r border-slate-300 bg-slate-50"
             style={{ width: PDF_SIDE_RAIL_WIDTH_PX }}
             aria-label="형광펜 · 밑줄 목록"
           >
-            <div className="border-b border-slate-200 px-2 py-1.5 text-[11px] font-medium text-slate-600">
+            <div className="border-b border-slate-200 px-2 py-1.5 text-[11px] font-medium text-slate-700">
               형광펜 ({markups.length})
+              {markupScanPending ? ' · 불러오는 중' : ''}
             </div>
             <div
               ref={marksListRef}
@@ -2842,11 +2901,10 @@ export default function PdfViewerShell({
               }}
             >
               {markups.length === 0 ? (
-                <p className="px-1 py-2 text-[11px] leading-relaxed text-slate-500">
-                  형광펜이나 밑줄 친 내용이 없습니다. 본문에서 텍스트를 선택한 뒤 메뉴에서
-                  형광펜·밑줄을 추가하고 [저장]으로 원본 PDF에 기록하세요. 태블릿은 손가락으로
-                  스크롤하고, 텍스트는 더블 탭한 뒤 파란 핸들로 범위를 조절하세요. 읽던 위치는
-                  자동 보관됩니다.
+                <p className="px-1 py-2 text-[11px] leading-relaxed text-slate-600">
+                  {markupScanPending
+                    ? 'PDF에 저장된 형광펜을 불러오는 중입니다. 페이지가 많을수록 조금 걸릴 수 있습니다.'
+                    : '형광펜이나 밑줄 친 내용이 없습니다. 본문에서 텍스트를 선택한 뒤 메뉴에서 형광펜·밑줄을 추가하고 [저장]으로 원본 PDF에 기록하세요. 태블릿은 손가락으로 스크롤하고, 텍스트는 더블 탭한 뒤 파란 핸들로 범위를 조절하세요. 읽던 위치는 자동 보관됩니다.'}
                 </p>
               ) : (
                 <ul className="flex flex-col gap-1.5">
@@ -2867,10 +2925,10 @@ export default function PdfViewerShell({
                             aria-hidden
                           />
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate text-[11px] font-medium text-slate-700">
+                            <span className="block truncate text-[12px] font-medium text-slate-800">
                               {entry.text || '(표시)'}
                             </span>
-                            <span className="block text-[10px] text-slate-500">
+                            <span className="block text-[11px] text-slate-600">
                               {entry.pageNumber}쪽 ·{' '}
                               {entry.kind === 'underline' ? '밑줄' : '형광펜'}
                               {entry.source === 'pdf' ? ' · PDF' : ''}
@@ -3317,8 +3375,12 @@ export default function PdfViewerShell({
           gap: 8px;
           padding: 6px 8px;
           border-radius: 6px;
-          border: 1px solid transparent;
+          border: 1px solid #e2e8f0;
           background: #fff;
+        }
+        html.touch-ui .pdf-mark-item {
+          padding: 10px 8px;
+          border-color: #94a3b8;
         }
         .pdf-mark-item:hover { background: #f1f5f9; }
         .pdf-mark-item--active {

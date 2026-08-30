@@ -13,8 +13,8 @@ export const NEW_FILE_TYPES = /** @type {const} */ ([
   { id: 'wb4s', label: '화이트보드', extension: 'wb4s', description: 'WhiteBoard4Share' },
   { id: 'md', label: 'Markdown', extension: 'md', description: '마크다운 텍스트' },
   { id: 'html', label: 'HTML', extension: 'html', description: 'CodeMirror 편집 · 미리보기' },
-  { id: 'sql', label: 'SQL', extension: 'sql', description: 'CodeMirror 편집 · SQL 하이라이트' },
   { id: 'txt', label: '텍스트', extension: 'txt', description: '일반 텍스트' },
+  { id: 'sql', label: 'SQL', extension: 'sql', description: 'CodeMirror 편집 · SQL 하이라이트' },
 ]);
 
 const DEFAULT_STEM = 'NoName';
