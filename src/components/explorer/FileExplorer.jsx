@@ -98,7 +98,7 @@ import { useFsSync } from '../../context/FsSyncContext.jsx';
 import { useFsRemoteRefresh } from '../../hooks/useFsRemoteRefresh.js';
 import { useFolderContentSearch } from '../../hooks/useFolderContentSearch.js';
 import { usePersonalDocSearch } from '../../hooks/usePersonalDocSearch.js';
-import { indexHitsInCurrentFolder } from '../../lib/mergeNameAndDocHits.js';
+import { fsEntryFromDocHit, indexHitsInCurrentFolder } from '../../lib/mergeNameAndDocHits.js';
 import PersonalDocIndexBar from '../layout/PersonalDocIndexBar.jsx';
 import FileDropOverlay from '../common/FileDropOverlay.jsx';
 import TransferStatusBanner from '../common/TransferStatusBanner.jsx';
@@ -340,15 +340,7 @@ export default function FileExplorer({
             for (const hit of docSearch.results) {
               if (!hit.relativePath || seen.has(hit.relativePath)) continue;
               seen.add(hit.relativePath);
-              const dot = hit.fileName.lastIndexOf('.');
-              list.push({
-                name: hit.fileName,
-                relativePath: hit.relativePath,
-                isDirectory: false,
-                extension: dot > 0 ? hit.fileName.slice(dot + 1).toLowerCase() : null,
-                size: 0,
-                modifiedAt: '',
-              });
+              list.push(fsEntryFromDocHit(hit));
             }
             return list;
           })()

@@ -185,6 +185,13 @@ export async function getPersonalDocIndexStatus(auth) {
   };
 }
 
+function isoFromIndexMtime(mtime) {
+  const value = Number(mtime);
+  if (!Number.isFinite(value) || value <= 0) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString();
+}
+
 function mapRows(rows, toRelativePath) {
   return rows.map((row) => ({
     docType: row.doc_type,
@@ -193,6 +200,8 @@ function mapRows(rows, toRelativePath) {
     location: row.location_label,
     content: row.content,
     relativePath: toRelativePath(row.source_path),
+    size: Number(row.file_size) || 0,
+    modifiedAt: isoFromIndexMtime(row.file_mtime),
   }));
 }
 

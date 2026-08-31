@@ -263,10 +263,19 @@ export class PersonalDocIndexDatabase {
   search(whereSql, params = [], limit = 300) {
     if (!this.db) return [];
     const stmt = this.db.prepare(
-      `SELECT doc_type, folder_path, file_name, source_path, location_label, location_json, content
+      `SELECT document_index.doc_type,
+              document_index.folder_path,
+              document_index.file_name,
+              document_index.source_path,
+              document_index.location_label,
+              document_index.location_json,
+              document_index.content,
+              index_files.size AS file_size,
+              index_files.mtime AS file_mtime
        FROM document_index
+       LEFT JOIN index_files ON index_files.source_path = document_index.source_path
        WHERE ${whereSql}
-       ORDER BY folder_path, file_name, id
+       ORDER BY document_index.folder_path, document_index.file_name, document_index.id
        LIMIT ?`,
     );
     stmt.bind([...params, limit]);

@@ -11,8 +11,26 @@ function extensionOf(fileName) {
 }
 
 /**
+ * @param {{ relativePath?: string, fileName?: string, size?: number, modifiedAt?: string }} hit
+ */
+export function fsEntryFromDocHit(hit) {
+  const relativePath = String(hit?.relativePath || '');
+  const fileName = String(hit?.fileName || relativePath.split('/').pop() || '');
+  const extension = extensionOf(fileName);
+  const modifiedAt = typeof hit?.modifiedAt === 'string' ? hit.modifiedAt : '';
+  return {
+    name: fileName,
+    relativePath,
+    isDirectory: false,
+    extension,
+    size: Number(hit?.size) || 0,
+    modifiedAt,
+  };
+}
+
+/**
  * @param {import('../types/nas4usb.d.ts').FsEntry[]} nameEntries
- * @param {Array<{ relativePath: string, fileName: string, location: string, content: string, docType: string, folderPath: string }>} contentHits
+ * @param {Array<{ relativePath: string, fileName: string, location: string, content: string, docType: string, folderPath: string, size?: number, modifiedAt?: string }>} contentHits
  */
 export function mergeNameAndDocHits(nameEntries, contentHits) {
   const byPath = new Map();
@@ -36,14 +54,7 @@ export function mergeNameAndDocHits(nameEntries, contentHits) {
       continue;
     }
     byPath.set(path, {
-      entry: {
-        name: hit.fileName,
-        relativePath: path,
-        isDirectory: false,
-        extension: extensionOf(hit.fileName),
-        size: 0,
-        modifiedAt: '',
-      },
+      entry: fsEntryFromDocHit(hit),
       nameMatch: false,
       hits: [snippet],
     });
