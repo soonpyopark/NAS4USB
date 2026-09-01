@@ -10,12 +10,18 @@ import { parseExcel } from './parsers/excel.js';
 import { parseHwp } from './parsers/hwp.js';
 import { parseText } from './parsers/text.js';
 import { parseTiptap } from './parsers/tiptap.js';
+import { parsePdf } from './parsers/pdf.js';
+import { parseDocx } from './parsers/docx.js';
+import { parsePpt } from './parsers/ppt.js';
 
 const BATCH_SIZE = 2000;
 
 const PARSERS = {
   excel: parseExcel,
   hwp: parseHwp,
+  docx: parseDocx,
+  ppt: parsePpt,
+  pdf: parsePdf,
   tiptap: parseTiptap,
   text: parseText,
 };

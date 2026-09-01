@@ -27,6 +27,7 @@ import { hasNas4usbApi } from './lib/runtime.js';
 import { guardOpenFileEntry } from './lib/openFileGuard.js';
 import { useTrashGuardedNavigate } from './hooks/useTrashGuardedNavigate.js';
 import { SHARED_FOLDER } from '../shared/constants.js';
+import { parseDocSearchLocation } from '../shared/docSearchLocation.js';
 import { getShareTokenFromUrl } from './lib/shareAccess.js';
 import { isShareViewOnly, resolveOpenShareMode } from './lib/shareLinkAccess.js';
 import { resolveUnknownFileOpenAction } from './lib/unknownFileOpen.js';
@@ -106,6 +107,7 @@ function OpenEditorLayer({
         fullscreen={fullscreen}
         shareMode={shareMode}
         readOnly={shareViewOnly}
+        openLocation={openEditor.openLocation}
       />
     );
   }
@@ -123,6 +125,7 @@ function OpenEditorLayer({
         shareMode={shareMode}
         readOnly={shareViewOnly}
         highlightQuery={openEditor.highlightQuery || ''}
+        openLocation={openEditor.openLocation}
       />
     );
   }
@@ -142,6 +145,7 @@ function OpenEditorLayer({
           onOpenFile={onOpenFile}
           linkHash={openEditor.linkHash || ''}
           highlightQuery={openEditor.highlightQuery || ''}
+          openLocation={openEditor.openLocation}
         />
       </Suspense>
     );
@@ -212,6 +216,7 @@ function OpenEditorLayer({
         allowClose={allowClose}
         fullscreen={fullscreen}
         highlightQuery={openEditor.highlightQuery || ''}
+        openLocation={openEditor.openLocation}
       />
     );
   }
@@ -229,6 +234,7 @@ function OpenEditorLayer({
         shareMode={shareMode}
         readOnly={shareViewOnly}
         highlightQuery={openEditor.highlightQuery || ''}
+        openLocation={openEditor.openLocation}
       />
     );
   }
@@ -354,6 +360,7 @@ function Nas4usbAppMain() {
       return false;
     }
     const highlightQuery = String(entry.highlightQuery ?? '').trim() || undefined;
+    const openLocation = parseDocSearchLocation(entry.openLocation ?? entry.locationJson);
 
     const canOpen = await guardOpenFileEntry(entry, {
       onMissing: () => notifyRemoteChange({ paths: [entry.relativePath] }),
@@ -379,6 +386,7 @@ function Nas4usbAppMain() {
           shareMode: resolveOpenShareMode(entry.mode),
           linkHash: entry.linkHash ? String(entry.linkHash).replace(/^#/, '') : undefined,
           highlightQuery,
+          openLocation,
         });
         return true;
       }
@@ -394,6 +402,7 @@ function Nas4usbAppMain() {
           extension: innerExt || 'txt',
           shareMode: resolveOpenShareMode(entry.mode),
           highlightQuery,
+          openLocation,
         });
         return true;
       }
@@ -417,6 +426,7 @@ function Nas4usbAppMain() {
           shareMode: resolveOpenShareMode(entry.mode),
           linkHash: entry.linkHash ? String(entry.linkHash).replace(/^#/, '') : undefined,
           highlightQuery,
+          openLocation,
         });
         notifyRemoteChange({ paths: [imported.folderPath, imported.firstFilePath] });
         return true;
@@ -436,6 +446,7 @@ function Nas4usbAppMain() {
         shareMode: resolveOpenShareMode(entry.mode),
         linkHash: entry.linkHash ? String(entry.linkHash).replace(/^#/, '') : undefined,
         highlightQuery,
+        openLocation,
       });
       return true;
     }
@@ -449,6 +460,7 @@ function Nas4usbAppMain() {
         extension: entry.extension || 'txt',
         shareMode: resolveOpenShareMode(entry.mode),
         highlightQuery,
+        openLocation,
       });
       return true;
     }

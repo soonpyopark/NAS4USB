@@ -198,6 +198,7 @@ function mapRows(rows, toRelativePath) {
     folderPath: row.folder_path || '',
     fileName: row.file_name,
     location: row.location_label,
+    locationJson: row.location_json || '',
     content: row.content,
     relativePath: toRelativePath(row.source_path),
     size: Number(row.file_size) || 0,

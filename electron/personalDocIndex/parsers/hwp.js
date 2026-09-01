@@ -60,9 +60,11 @@ async function initRhwp() {
   ensureMeasureStub();
   const rhwp = await import('@rhwp/core');
   const wasmPath = path.join(path.dirname(require.resolve('@rhwp/core/package.json')), 'rhwp_bg.wasm');
+  const wasmBytes = new Uint8Array(await fs.readFile(wasmPath));
   const init = rhwp.default || rhwp.init;
   if (typeof init === 'function') {
-    await init({ module_or_path: wasmPath });
+    // Path strings use fetch() inside wasm-bindgen and fail in Electron/Node.
+    await init({ module_or_path: wasmBytes });
   }
   HwpDocument = rhwp.HwpDocument;
   if (!HwpDocument) {
@@ -140,18 +142,96 @@ function extractFromDocument(doc) {
   return records;
 }
 
+function freeDoc(doc) {
+  if (doc && typeof doc.free === 'function') {
+    doc.free();
+  }
+}
+
+function openDocument(Document, buffer) {
+  const doc = new Document(buffer);
+  if (typeof doc.convertToEditable === 'function') {
+    try {
+      doc.convertToEditable();
+    } catch {
+      // ignore non-distributable documents
+    }
+  }
+  return doc;
+}
+
+function extractFromBytes(Document, buffer) {
+  const doc = openDocument(Document, buffer);
+  try {
+    return extractFromDocument(doc);
+  } finally {
+    freeDoc(doc);
+  }
+}
+
+function exportHwpxBytes(doc) {
+  if (typeof doc.exportHwpx === 'function') {
+    const bytes = doc.exportHwpx();
+    if (bytes && bytes.length) return bytes;
+  }
+  if (typeof doc.exportHwpxWithReport === 'function') {
+    const report = doc.exportHwpxWithReport();
+    try {
+      if (report && typeof report.hasBytes === 'function' && report.hasBytes()) {
+        const bytes = report.takeBytes();
+        if (bytes && bytes.length) return bytes;
+      }
+    } finally {
+      freeDoc(report);
+    }
+  }
+  throw new Error('HWPX 변환 결과가 비어 있습니다.');
+}
+
+function parseHwpViaHwpx(Document, hwpBuffer) {
+  const source = openDocument(Document, hwpBuffer);
+  let hwpxBytes;
+  try {
+    hwpxBytes = exportHwpxBytes(source);
+  } finally {
+    freeDoc(source);
+  }
+  return extractFromBytes(Document, hwpxBytes);
+}
+
 /**
  * @param {string} filePath
  */
 export async function parseHwp(filePath) {
   const Document = await initRhwp();
   const buffer = new Uint8Array(await fs.readFile(filePath));
-  const doc = new Document(buffer);
-  try {
-    return extractFromDocument(doc);
-  } finally {
-    if (typeof doc.free === 'function') {
-      doc.free();
+  const ext = path.extname(filePath).toLowerCase();
+
+  if (ext !== '.hwp') {
+    const records = extractFromBytes(Document, buffer);
+    if (!records.length) {
+      throw new Error('본문을 읽지 못했습니다. 암호 문서이거나 빈 파일일 수 있습니다.');
     }
+    return records;
   }
+
+  let directError = null;
+  try {
+    const records = extractFromBytes(Document, buffer);
+    if (records.length) return records;
+  } catch (error) {
+    directError = error;
+  }
+
+  try {
+    const records = parseHwpViaHwpx(Document, buffer);
+    if (records.length) return records;
+  } catch (error) {
+    const first = directError instanceof Error ? directError.message : '본문을 읽지 못했습니다';
+    throw new Error(
+      `HWP 인덱싱 실패 후 HWPX 변환도 실패했습니다: ${first} / ${error instanceof Error ? error.message : error}`,
+    );
+  }
+
+  throw new Error('HWP를 HWPX로 변환했지만 본문을 읽지 못했습니다.');
 }

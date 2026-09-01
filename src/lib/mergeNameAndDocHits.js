@@ -25,6 +25,9 @@ export function fsEntryFromDocHit(hit) {
     extension,
     size: Number(hit?.size) || 0,
     modifiedAt,
+    searchLocation: String(hit?.location ?? ''),
+    searchSnippet: String(hit?.content ?? ''),
+    locationJson: hit?.locationJson,
   };
 }
 
@@ -44,6 +47,7 @@ export function mergeNameAndDocHits(nameEntries, contentHits) {
     if (!path) continue;
     const snippet = {
       location: hit.location,
+      locationJson: hit.locationJson,
       content: hit.content,
       docType: hit.docType,
       folderPath: hit.folderPath,

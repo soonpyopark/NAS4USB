@@ -236,6 +236,21 @@ export function openFindPanel(view) {
 }
 
 /**
+ * Jump to a 1-based line from the document index.
+ * @param {import('@codemirror/view').EditorView} view
+ * @param {number} lineNumber
+ */
+export function revealCodeMirrorLine(view, lineNumber) {
+  const line = Math.max(1, Math.min(view.state.doc.lines, Math.round(Number(lineNumber) || 1)));
+  const info = view.state.doc.line(line);
+  view.dispatch({
+    selection: { anchor: info.from, head: info.from },
+    effects: EditorView.scrollIntoView(info.from, { y: 'center' }),
+  });
+  return true;
+}
+
+/**
  * Highlight the first case-insensitive match and open the find panel.
  * @param {import('@codemirror/view').EditorView} view
  * @param {unknown} query

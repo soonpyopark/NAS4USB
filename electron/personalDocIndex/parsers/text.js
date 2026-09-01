@@ -1,11 +1,12 @@
 import fs from 'node:fs/promises';
+import { decodeTextBytes } from './textEncoding.js';
 
 /**
  * @param {string} filePath
  */
 export async function parseText(filePath) {
   const raw = await fs.readFile(filePath);
-  const text = raw.toString('utf8').replace(/^\uFEFF/, '');
+  const text = decodeTextBytes(raw);
   const records = [];
   const lines = text.split(/\r?\n/);
   lines.forEach((line, index) => {

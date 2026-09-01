@@ -1,3 +1,5 @@
+import { findHighlightRanges, parseDocSearchQuery } from '../../shared/docSearchQuery.js';
+
 const HIT_CLASS = 'nas-search-hit';
 const HIT_ACTIVE_CLASS = 'nas-search-hit--active';
 const STYLE_MARK = 'data-nas-search-hit';
@@ -32,21 +34,18 @@ export function highlightPlainTextToHtml(text, query) {
   const needle = normalizeHighlightQuery(query);
   if (!needle) return escapeHtml(source);
 
-  const lower = source.toLowerCase();
-  const lookFor = needle.toLowerCase();
-  let index = lower.indexOf(lookFor);
-  if (index < 0) return escapeHtml(source);
+  const ranges = findHighlightRanges(source, needle);
+  if (!ranges.length) return escapeHtml(source);
 
   let html = '';
   let cursor = 0;
   let first = true;
-  while (index >= 0) {
-    html += escapeHtml(source.slice(cursor, index));
+  for (const range of ranges) {
+    html += escapeHtml(source.slice(cursor, range.from));
     const cls = first ? `${HIT_CLASS} ${HIT_ACTIVE_CLASS}` : HIT_CLASS;
-    html += `<mark class="${cls}">${escapeHtml(source.slice(index, index + needle.length))}</mark>`;
+    html += `<mark class="${cls}">${escapeHtml(source.slice(range.from, range.to))}</mark>`;
     first = false;
-    cursor = index + needle.length;
-    index = lower.indexOf(lookFor, cursor);
+    cursor = range.to;
   }
   html += escapeHtml(source.slice(cursor));
   return html;
@@ -112,7 +111,9 @@ export function highlightTextInElement(root, query) {
   if (!doc) return 0;
   ensureHighlightStyle(doc);
 
-  const lookFor = needle.toLowerCase();
+  const ast = parseDocSearchQuery(needle);
+  if (!ast) return 0;
+
   const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
       const value = node.nodeValue;
@@ -135,22 +136,20 @@ export function highlightTextInElement(root, query) {
 
   for (const node of nodes) {
     const text = node.nodeValue ?? '';
-    const lower = text.toLowerCase();
-    let index = lower.indexOf(lookFor);
-    if (index < 0) continue;
+    const ranges = findHighlightRanges(text, ast);
+    if (!ranges.length) continue;
 
     const frag = doc.createDocumentFragment();
     let cursor = 0;
-    while (index >= 0) {
-      if (index > cursor) frag.append(text.slice(cursor, index));
+    for (const range of ranges) {
+      if (range.from > cursor) frag.append(text.slice(cursor, range.from));
       const mark = doc.createElement('mark');
       mark.className = first ? HIT_CLASS : `${HIT_CLASS} ${HIT_ACTIVE_CLASS}`;
-      mark.textContent = text.slice(index, index + needle.length);
+      mark.textContent = text.slice(range.from, range.to);
       if (!first) first = mark;
       frag.append(mark);
       count += 1;
-      cursor = index + needle.length;
-      index = lower.indexOf(lookFor, cursor);
+      cursor = range.to;
     }
     if (cursor < text.length) frag.append(text.slice(cursor));
     node.parentNode?.replaceChild(frag, node);

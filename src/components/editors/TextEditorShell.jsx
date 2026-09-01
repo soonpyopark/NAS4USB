@@ -23,6 +23,7 @@ import { persistAndCloseEditor } from '../../lib/persistOnEditorClose.js';
  *   shareMode?: 'view' | 'edit' | null,
  *   readOnly?: boolean,
  *   highlightQuery?: string,
+ *   openLocation?: { line?: number } | null,
  * }} props
  */
 export default function TextEditorShell({
@@ -36,6 +37,7 @@ export default function TextEditorShell({
   raised = false,
   readOnly: shareReadOnly = false,
   highlightQuery = '',
+  openLocation = null,
 }) {
   const isMarkdown = extension === 'md';
   const isHtml = extension === 'html' || extension === 'htm';
@@ -337,6 +339,7 @@ export default function TextEditorShell({
             isMarkdown={isMarkdown}
             isHtml={isHtml}
             highlightQuery={highlightQuery}
+            openLocation={openLocation}
             onReady={handleEditorReady}
             onSave={handleSave}
           />

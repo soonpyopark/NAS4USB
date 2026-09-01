@@ -11,6 +11,7 @@ import { getLineColumn } from '../../lib/text/textIO.js';
 import { renderMarkdown } from '../../lib/text/markdown.js';
 import {
   applyCodeMirrorSearchHighlight,
+  revealCodeMirrorLine,
   createFullCodeMirrorExtensions,
   getLanguageLabel,
   loadLanguageExtensionsForFile,
@@ -34,6 +35,7 @@ import HtmlPreviewFrame from './HtmlPreviewFrame.jsx';
  * @param {boolean} [props.isHtml]
  * @param {string} [props.relativePath]
  * @param {string} [props.highlightQuery]
+ * @param {{ line?: number } | null} [props.openLocation]
  * @param {(editor: import('../../lib/rhwp/types.js').RhwpEditorHandle) => void} props.onReady
  * @param {() => void} [props.onSave]
  */
@@ -44,6 +46,7 @@ export default function TextEditor({
   isHtml = false,
   relativePath = '',
   highlightQuery = '',
+  openLocation = null,
   onReady,
   onSave,
 }) {
@@ -204,6 +207,7 @@ export default function TextEditor({
     };
 
     onReadyRef.current(editor);
+    if (openLocation?.line) revealCodeMirrorLine(view, openLocation.line);
     if (highlightQuery) applyCodeMirrorSearchHighlight(view, highlightQuery);
 
     return () => {

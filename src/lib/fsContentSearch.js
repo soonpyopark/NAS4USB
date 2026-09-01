@@ -1,3 +1,4 @@
+import { fragmentsMatchQuery, parseDocSearchQuery } from '../../shared/docSearchQuery.js';
 import { base64ToBytes } from './bytes.js';
 import { decodeTextBase64 } from './text/textIO.js';
 
@@ -173,7 +174,7 @@ async function readTiptapTextFragments(relativePath, signal) {
  * @param {AbortSignal} [signal]
  * @returns {Promise<boolean>}
  */
-async function pdfContainsText(relativePath, needle, signal) {
+async function pdfContainsText(relativePath, query, signal) {
   const [{ loadPdfDocument, destroyPdfDocument }, { buildMediaStreamUrl }] = await Promise.all([
     import('./pdf/pdfjs.js'),
     import('./media/streamUrl.js'),
@@ -188,7 +189,7 @@ async function pdfContainsText(relativePath, needle, signal) {
       const page = await pdf.getPage(pageNumber);
       const content = await page.getTextContent();
       const parts = content.items.map((item) => String(item?.str ?? ''));
-      if (partsToSearchFragments(parts).some((fragment) => fragment.includes(needle))) {
+      if (fragmentsMatchQuery(partsToSearchFragments(parts), query)) {
         return true;
       }
     }
@@ -200,18 +201,25 @@ async function pdfContainsText(relativePath, needle, signal) {
 
 /**
  * @param {import('../types/nas4usb.d.ts').FsEntry} entry
- * @param {string} needle lowercase query
+ * @param {string | object} query
  * @param {AbortSignal} [signal]
  * @returns {Promise<boolean>}
  */
-export async function entryContentMatches(entry, needle, signal) {
-  if (!needle || !isContentSearchableEntry(entry)) return false;
+export async function entryContentMatches(entry, query, signal) {
+  const ast = query && typeof query === 'object' && query.type ? query : parseDocSearchQuery(query);
+  if (!ast || !isContentSearchableEntry(entry)) return false;
   if ((entry.size ?? 0) > CONTENT_SEARCH_MAX_BYTES) return false;
 
   const extension = getEntryExtension(entry);
+  const relative = String(entry.relativePath ?? '').replace(/\\/g, '/');
+  const slash = relative.lastIndexOf('/');
+  const fields = {
+    file_name: String(entry.name ?? ''),
+    folder_path: slash < 0 ? '' : relative.slice(0, slash),
+  };
 
   if (extension === 'pdf') {
-    return pdfContainsText(entry.relativePath, needle, signal);
+    return pdfContainsText(entry.relativePath, ast, signal);
   }
 
   let fragments;
@@ -224,7 +232,7 @@ export async function entryContentMatches(entry, needle, signal) {
   }
 
   if (signal?.aborted) return false;
-  return fragments.some((fragment) => fragment.includes(needle));
+  return fragmentsMatchQuery(fragments, ast, { fields });
 }
 
 /**
@@ -263,12 +271,12 @@ async function runPool(items, limit, worker, signal) {
  */
 export async function searchEntriesByContent(entries, query, options = {}) {
   const { signal, concurrency = 4, onMatch, onProgress } = options;
-  const needle = String(query ?? '').trim().toLowerCase();
+  const ast = parseDocSearchQuery(query);
   const candidates = (entries ?? []).filter(
     (entry) => isContentSearchableEntry(entry) && (entry.size ?? 0) <= CONTENT_SEARCH_MAX_BYTES,
   );
 
-  if (!needle || candidates.length === 0) {
+  if (!ast || candidates.length === 0) {
     return { matched: [], total: candidates.length };
   }
 
@@ -281,7 +289,7 @@ export async function searchEntriesByContent(entries, query, options = {}) {
     concurrency,
     async (entry) => {
       try {
-        if (await entryContentMatches(entry, needle, signal)) {
+        if (await entryContentMatches(entry, ast, signal)) {
           matched.push(entry.relativePath);
           onMatch?.(entry.relativePath);
         }

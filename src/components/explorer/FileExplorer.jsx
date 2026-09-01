@@ -7,6 +7,7 @@ import FilePreviewPane from './FilePreviewPane.jsx';
 import { useTouchUi } from '../../hooks/useTouchUi.js';
 import { canPreviewEntry, isAudioOrVideoEntry } from '../../lib/filePreview.js';
 import { withHighlightQuery } from '../../lib/searchHighlight.js';
+import { withSearchOpenTarget } from '../../../shared/docSearchLocation.js';
 import FilePropertiesDialog from './FilePropertiesDialog.jsx';
 import NewFileDialog from './NewFileDialog.jsx';
 import NewFolderDialog from './NewFolderDialog.jsx';
@@ -332,10 +333,25 @@ export default function FileExplorer({
             ]);
             const seen = new Set();
             const list = [];
+            const firstHitByPath = new Map();
+            for (const hit of docSearch.results) {
+              if (!hit.relativePath || firstHitByPath.has(hit.relativePath)) continue;
+              firstHitByPath.set(hit.relativePath, hit);
+            }
             for (const entry of entries) {
               if (!contentPaths.has(entry.relativePath)) continue;
               seen.add(entry.relativePath);
-              list.push(entry);
+              const hit = firstHitByPath.get(entry.relativePath);
+              list.push(
+                hit
+                  ? {
+                      ...entry,
+                      searchLocation: hit.location,
+                      searchSnippet: hit.content,
+                      locationJson: hit.locationJson,
+                    }
+                  : entry,
+              );
             }
             for (const hit of docSearch.results) {
               if (!hit.relativePath || seen.has(hit.relativePath)) continue;
@@ -1224,7 +1240,14 @@ export default function FileExplorer({
       );
       return;
     }
-    onOpenFile(withHighlightQuery(entry, searchContents ? searchQuery : ''));
+    const hit = docSearch.results.find((item) => item.relativePath === entry.relativePath);
+    onOpenFile(
+      withSearchOpenTarget(withHighlightQuery(entry, searchContents ? searchQuery : ''), {
+        query: searchContents ? searchQuery : '',
+        locationJson: hit?.locationJson ?? entry.locationJson,
+        location: hit?.location ?? entry.searchLocation,
+      }),
+    );
   };
 
   const handleShowProperties = async (entry) => {
@@ -1668,7 +1691,7 @@ export default function FileExplorer({
           className="flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap text-[10pt] text-nas-muted"
           title={
             isAdminLoggedIn
-              ? '개인·공유폴더 TipTap·한글·엑셀·텍스트는 색인에서, 현재 폴더의 다른 문서는 바로 읽습니다. 왼쪽 검색은 이름만 찾습니다.'
+              ? '개인·공유폴더 Excel·한글·Word·슬라이드·PDF·TipTap·텍스트는 색인에서, 현재 폴더의 다른 문서는 바로 읽습니다. 왼쪽 검색은 이름만 찾습니다.'
               : '현재 폴더의 문서 내용까지 검색합니다 (txt·md·tiptap·hwpx·docx·xlsx·pdf 등). 외부폴더는 본문 검색에서 제외됩니다.'
           }
         >

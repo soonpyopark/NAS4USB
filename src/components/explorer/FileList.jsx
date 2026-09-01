@@ -851,6 +851,13 @@ export default function FileList({
                         >
                           {locationLabel}
                         </span>
+                      ) : entry.searchLocation || entry.searchSnippet ? (
+                        <span
+                          className="block truncate text-[11px] leading-tight text-nas-muted"
+                          title={[entry.searchLocation, entry.searchSnippet].filter(Boolean).join(' · ')}
+                        >
+                          {[entry.searchLocation, entry.searchSnippet].filter(Boolean).join(' · ')}
+                        </span>
                       ) : null}
                     </span>
                   </div>

@@ -92,6 +92,7 @@ const PDF_SIDE_RAIL_WIDTH_PX = 220;
  *   allowClose?: boolean,
  *   fullscreen?: boolean,
  *   highlightQuery?: string,
+ *   openLocation?: { page?: number } | null,
  * }} props
  */
 /**
@@ -162,6 +163,7 @@ export default function PdfViewerShell({
   fullscreen = false,
   raised = false,
   highlightQuery = '',
+  openLocation = null,
 }) {
   const mimeType = getPdfMimeType(extension);
   const [documentEpoch, setDocumentEpoch] = useState(0);
@@ -1085,7 +1087,13 @@ export default function PdfViewerShell({
         if (typeof view?.twoPageView === 'boolean') setTwoPageView(view.twoPageView);
         // Set current page before first layout so renderAllPages keepPage is correct.
         // Scroll jump still waits until shells exist (pendingRestorePageRef).
-        if (typeof view?.page === 'number' && view.page >= 1) {
+        const openPage = Number(openLocation?.page);
+        if (Number.isFinite(openPage) && openPage >= 1) {
+          const target = Math.min(pdf.numPages, Math.max(1, Math.round(openPage)));
+          pendingRestorePageRef.current = target;
+          setCurrentPage(target);
+          setPageInput(String(target));
+        } else if (typeof view?.page === 'number' && view.page >= 1) {
           const savedPage = Math.min(pdf.numPages, Math.max(1, Math.round(view.page)));
           pendingRestorePageRef.current = savedPage;
           setCurrentPage(savedPage);
@@ -1160,7 +1168,7 @@ export default function PdfViewerShell({
       pdfRef.current = null;
       void destroyPdfDocument(pdf);
     };
-  }, [cancelPageRenders, clearSearch, relativePath, streamUrl, teardownThumbnails]);
+  }, [cancelPageRenders, clearSearch, openLocation, relativePath, streamUrl, teardownThumbnails]);
 
   useEffect(() => {
     if (!passwordOpen) return undefined;

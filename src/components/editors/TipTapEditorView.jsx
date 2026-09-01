@@ -8,6 +8,7 @@ import { createEmptyTiptapDoc } from '../../lib/tiptap/document.js';
 import { normalizeTiptapTextMarks } from '../../lib/tiptap/textMarks.js';
 import { createTiptapExtensions } from '../../lib/tiptap/extensions.js';
 import { createTiptapSearchExtension } from '../../lib/tiptap/searchExtension.js';
+import { scrollTiptapToOpenLocation } from '../../lib/tiptap/scrollToOpenLocation.js';
 import { createSlashCommandExtension } from '../../lib/tiptap/slashCommand.js';
 import {
   insertTiptapMedia,
@@ -99,6 +100,7 @@ function stepZoom(zoom, direction) {
  *   allowLinkedEditors?: boolean,
  *   openLinkedAsOverlay?: boolean,
  *   highlightQuery?: string,
+ *   openLocation?: { paragraph?: number } | null,
  * }} props
  */
 export default function TipTapEditorView({
@@ -115,6 +117,7 @@ export default function TipTapEditorView({
   allowLinkedEditors = true,
   openLinkedAsOverlay = true,
   highlightQuery = '',
+  openLocation = null,
 }) {
   const imageInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   const videoInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
@@ -701,6 +704,14 @@ export default function TipTapEditorView({
     setSearchOpen(true);
     setSearchFocusNonce((value) => value + 1);
   }, [editor, highlightQuery]);
+
+  useEffect(() => {
+    if (!editor || !openLocation?.paragraph) return;
+    const timer = window.setTimeout(() => {
+      scrollTiptapToOpenLocation(editor, openLocation);
+    }, 60);
+    return () => window.clearTimeout(timer);
+  }, [editor, openLocation]);
 
   const openImagePicker = () => imageInputRef.current?.click();
   const openVideoPicker = () => videoInputRef.current?.click();

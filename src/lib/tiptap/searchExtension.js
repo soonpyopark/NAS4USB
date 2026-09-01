@@ -1,6 +1,7 @@
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
+import { findQueryRanges } from '../../../shared/docSearchQuery.js';
 
 export const tiptapSearchKey = new PluginKey('tiptapSearch');
 
@@ -10,10 +11,9 @@ export const tiptapSearchKey = new PluginKey('tiptapSearch');
  * @param {boolean} caseSensitive
  */
 export function collectSearchMatches(doc, query, caseSensitive) {
-  const needle = String(query ?? '');
+  const needle = String(query ?? '').trim();
   if (!needle) return [];
 
-  const lookFor = caseSensitive ? needle : needle.toLowerCase();
   /** @type {{ from: number, to: number }[]} */
   const results = [];
 
@@ -35,15 +35,10 @@ export function collectSearchMatches(doc, query, caseSensitive) {
       }
     });
 
-    const hay = caseSensitive ? text : text.toLowerCase();
-    let cursor = 0;
-    while (cursor < hay.length) {
-      const index = hay.indexOf(lookFor, cursor);
-      if (index < 0) break;
-      const from = positions[index];
-      const last = positions[index + needle.length - 1];
+    for (const range of findQueryRanges(text, needle, { caseSensitive })) {
+      const from = positions[range.from];
+      const last = positions[range.to - 1];
       if (from != null && last != null) results.push({ from, to: last + 1 });
-      cursor = index + Math.max(1, needle.length);
     }
     return false;
   });

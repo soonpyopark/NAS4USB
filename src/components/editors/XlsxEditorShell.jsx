@@ -12,6 +12,7 @@ import { getLanWsEndpoints } from '../../sync/buildWsUrl.js';
 import { buildSpreadsheetBase64, getSpreadsheetKind, parseSpreadsheetBase64 } from '../../lib/xlsx/xlsxIO.js';
 import { loadSpreadsheetDocument, writeFortuneSidecar } from '../../lib/xlsx/fortuneSidecar.js';
 import { persistAndCloseEditor } from '../../lib/persistOnEditorClose.js';
+import { applyFortuneOpenLocation } from '../../lib/xlsx/applyFortuneOpenLocation.js';
 
 const FORTUNE_SHEET_VERSION = '1.0.4';
 
@@ -24,6 +25,7 @@ export default function XlsxEditorShell({
   fullscreen = false,
   raised = false,
   readOnly: shareReadOnly = false,
+  openLocation = null,
 }) {
   const workspace = useWorkspaceSession(relativePath);
   const { doc, status, synced, roomId, provider } = useYjsSession(relativePath, syncInfo, {
@@ -98,7 +100,7 @@ export default function XlsxEditorShell({
             ? `${parsed.sheetNames.length} sheets`
             : parsed.sheetName,
         );
-        setInitialSheets(parsed.sheets);
+        setInitialSheets(applyFortuneOpenLocation(parsed.sheets, openLocation));
         setDiskRevision(nextDiskRevision);
       } catch (err) {
         if (!cancelled) {
@@ -112,7 +114,7 @@ export default function XlsxEditorShell({
     return () => {
       cancelled = true;
     };
-  }, [workspace.ready, workspace.sessionId, workspace.readBinary, relativePath]);
+  }, [workspace.ready, workspace.sessionId, workspace.readBinary, relativePath, openLocation]);
 
   useEffect(() => {
     if (!editorHandle || !doc || initialSheets == null) return undefined;

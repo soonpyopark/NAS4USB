@@ -177,7 +177,7 @@ export default function FilePreviewPane({
         } else if (kind === 'text' || kind === 'markdown' || kind === 'html') {
           const plain = await readWorkspacePlainBase64(entry.relativePath);
           let next = decodeTextBase64(plain);
-          if (next.length > TEXT_PREVIEW_LIMIT) {
+          if (kind !== 'html' && next.length > TEXT_PREVIEW_LIMIT) {
             next = next.slice(0, TEXT_PREVIEW_LIMIT);
             if (!cancelled) setTruncated(true);
           }
