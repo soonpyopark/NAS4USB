@@ -647,6 +647,13 @@
   height: 100dvh;
 }
 
+/* Keep the layer in the tree while closed so the first open is a
+   visibility toggle, not a new compositor surface (white flash). */
+.modal-overlay--closed {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 /* Alerts/confirms must sit above EditorModal/ViewerModal (same base z-index,
    but editors mount later in the tree). Also above TipTap floating menus. */
 .modal-overlay--raised {
@@ -1426,6 +1433,10 @@
     padding: 0 !important;
     overflow: visible !important;
     background: transparent !important;
+  }
+
+  .modal-overlay.modal-overlay--closed {
+    display: none !important;
   }
 
   .modal-dialog,

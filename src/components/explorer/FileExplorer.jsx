@@ -89,7 +89,8 @@ import {
   removePasswordFromEntries,
   setPasswordOnEntries,
 } from '../../lib/filePassword/actions.js';
-import { nativeAlert, showAppAlert, showAppConfirm } from '../../lib/nativeDialog.js';
+import { nativeAlert } from '../../lib/nativeDialog.js';
+import { useAppConfirm } from '../../hooks/useAppConfirm.jsx';
 import { useTrash } from '../../hooks/useTrash.js';
 import { useFileDropZone } from '../../hooks/useFileDropZone.js';
 import { useAdminAuthContext } from '../../context/AdminAuthContext.jsx';
@@ -238,8 +239,7 @@ export default function FileExplorer({
     : canWriteAtPath(currentPath, adminId, isAdminLoggedIn, globalWrite, isSuperAdmin);
   const { notifyLocalChange } = useFsSync();
   const { refresh: refreshTrash } = useTrash();
-  const appConfirm = showAppConfirm;
-  const appAlert = showAppAlert;
+  const { confirm: appConfirm, alert: appAlert, dialog: confirmDialog } = useAppConfirm();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchContents, setSearchContents] = useState(true);
@@ -2113,6 +2113,7 @@ export default function FileExplorer({
         onConfirm={handleMoveConfirm}
       />
 
+      {confirmDialog}
     </div>
   );
 }

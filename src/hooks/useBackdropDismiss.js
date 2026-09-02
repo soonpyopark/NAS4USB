@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 
 /**
  * Dismiss a dialog only for a real backdrop click — not a text-drag that
@@ -14,6 +14,13 @@ import { useRef } from 'react';
 export function useBackdropDismiss(onClose, options = {}) {
   const { enabled = true, requireTargetSelf = true, moveThreshold = 0 } = options;
   const pressRef = useRef({ onBackdrop: false, x: 0, y: 0 });
+  const openedAtRef = useRef(0);
+
+  useEffect(() => {
+    if (!enabled) return;
+    pressRef.current = { onBackdrop: false, x: 0, y: 0 };
+    openedAtRef.current = performance.now();
+  }, [enabled]);
 
   if (!enabled || !onClose) return {};
 
@@ -27,8 +34,9 @@ export function useBackdropDismiss(onClose, options = {}) {
     },
     onClick(event) {
       const press = pressRef.current;
-      // Overlay often mounts in the same click that opened it. That click
-      // must not count as a backdrop dismiss (flash-and-gone).
+      // Overlay often becomes visible in the same click that opened it.
+      // That click must not count as a backdrop dismiss (flash-and-gone).
+      if (performance.now() - openedAtRef.current < 400) return;
       if (!press.onBackdrop) return;
       if (requireTargetSelf && event.target !== event.currentTarget) return;
       if (

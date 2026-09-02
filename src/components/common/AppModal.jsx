@@ -38,15 +38,18 @@ export function AppModal({
 }) {
   // Editor/viewer windows should only close via their explicit [닫기] button,
   // not by clicking the backdrop (avoids accidental data loss while editing).
-  const closeOnBackdrop = Boolean(onClose) && !embedded && !editor;
+  const closeOnBackdrop = Boolean(onClose) && !embedded && !editor && open;
   const backdropDismiss = useBackdropDismiss(onClose, { enabled: closeOnBackdrop });
 
-  if (!open) return null;
+  // Editor/embedded chrome unmounts when closed. Other dialogs stay portaled
+  // (hidden) so the first open does not insert a new full-screen layer.
+  if (!open && (embedded || editor || typeof document === 'undefined')) return null;
 
   const overlayClass = [
     'modal-overlay',
     embedded ? 'modal-overlay--embedded' : '',
     raised ? 'modal-overlay--raised' : '',
+    open ? 'is-open' : 'modal-overlay--closed',
   ]
     .filter(Boolean)
     .join(' ');
@@ -61,11 +64,16 @@ export function AppModal({
     .join(' ');
 
   const overlay = (
-    <div className={overlayClass} {...backdropDismiss}>
+    <div
+      className={overlayClass}
+      {...backdropDismiss}
+      aria-hidden={!open}
+      {...(!open ? { inert: '' } : {})}
+    >
       <div
         className={dialogClass}
         role="dialog"
-        aria-modal="true"
+        aria-modal={open ? 'true' : undefined}
         aria-labelledby={title ? titleId : undefined}
         onClick={(event) => event.stopPropagation()}
       >
@@ -200,7 +208,7 @@ export function AppConfirmDialog({
   onCancel,
 }) {
   return (
-    <AppModal open={open} onClose={onCancel} title={title} raised>
+    <AppModal open={open} title={title} raised>
       {body &&
         (typeof body === 'string' ? (
           <p className="modal-body whitespace-pre-line">{body}</p>
