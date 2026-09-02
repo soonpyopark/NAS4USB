@@ -449,6 +449,14 @@ export function createHttpNas4usbClient() {
         }),
     },
 
+    external: {
+      clearOrphanCaches: (relativePath) =>
+        apiFetch('/external/clearOrphanCaches', {
+          method: 'POST',
+          body: JSON.stringify({ path: relativePath }),
+        }),
+    },
+
     settings: {
       get: () => apiFetch('/settings'),
       getGuestPermissions: () => apiFetch('/settings/guest-permissions'),

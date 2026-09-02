@@ -10,7 +10,7 @@ import { getLanWsEndpoints } from '../../sync/buildWsUrl.js';
 import { loadRhwpModule } from '../../lib/rhwp/loadRhwp.js';
 import { persistAndCloseEditor } from '../../lib/persistOnEditorClose.js';
 
-const RHWP_VERSION = '0.8.4';
+const RHWP_VERSION = '0.8.6';
 const MOUNT_TIMEOUT_MS = 200_000;
 
 export default function HwpxEditorShell({

@@ -31,6 +31,7 @@ import { syncFavoritesDelete, syncFavoritesMoveTree } from './favoritesService.j
 import { syncFolderColorsDelete, syncFolderColorsMoveTree } from './folderColorsService.js';
 import { syncFolderOrderDelete, syncFolderOrderMoveTree } from './folderOrderService.js';
 import { syncFileHistoryDelete, syncFileHistoryMoveTree } from './fileHistoryService.js';
+import { syncHwpxLockDelete } from './hwpxEditService.js';
 
 export const EXTERNAL_TRASH_UNSUPPORTED_MESSAGE =
   '외부 폴더 항목은 휴지통으로 옮길 수 없습니다. 삭제(영구)를 사용해 주세요.';
@@ -338,6 +339,7 @@ export async function deletePermanent(relativePath, portableRoot = getPortableRo
   await syncFortuneSidecarDelete(normalized);
   await syncPdfViewerSidecarDelete(normalized);
   await syncFileHistoryDelete(normalized, portableRoot);
+  await syncHwpxLockDelete(normalized, portableRoot);
   await fsService.deletePath(normalized);
 
   if (inTrash) {

@@ -45,3 +45,12 @@ export function isExternalContentPath(relativePath) {
 
 export const EXTERNAL_MOUNT_DELETE_HINT =
   '외부폴더 연결은 환경설정 → 일반 → 외부 폴더에서만 해제할 수 있습니다. 원본 파일은 삭제되지 않습니다.';
+
+/**
+ * Toolbar 「캐시 정리」 — 외부폴더 트리, 총괄관리자만.
+ * @param {string} currentPath
+ * @param {boolean} isSuperAdmin
+ */
+export function canClearExternalOrphanCaches(currentPath, isSuperAdmin) {
+  return Boolean(isSuperAdmin && isExternalFolderPath(String(currentPath ?? '')));
+}

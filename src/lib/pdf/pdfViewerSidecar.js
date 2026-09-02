@@ -35,6 +35,7 @@ import {
  *   markups: import('./pdfMarkup.js').PdfMarkupEntry[],
  *   removed: PdfRemovedAnnotTarget[],
  *   marksComplete?: boolean,
+ *   sourcePath?: string,
  * }} PdfViewerSidecarPayload
  */
 
@@ -176,6 +177,10 @@ export function parsePdfViewerSidecarPayload(payload) {
     markups,
     removed,
     marksComplete: record.marksComplete === true,
+    sourcePath:
+      typeof record.sourcePath === 'string' && record.sourcePath.trim()
+        ? normalizeRelativePath(record.sourcePath)
+        : undefined,
   };
 }
 
@@ -199,6 +204,7 @@ export function parsePdfViewerSidecarBase64(base64) {
  *   markups?: import('./pdfMarkup.js').PdfMarkupEntry[],
  *   removed?: PdfRemovedAnnotTarget[],
  *   marksComplete?: boolean,
+ *   sourcePath?: string,
  * }} state
  */
 export function buildPdfViewerSidecarBase64(state) {
@@ -232,6 +238,9 @@ export function buildPdfViewerSidecarBase64(state) {
     markups,
     removed,
     marksComplete: state.marksComplete === true,
+    ...(typeof state.sourcePath === 'string' && state.sourcePath.trim()
+      ? { sourcePath: normalizeRelativePath(state.sourcePath) }
+      : {}),
   };
 
   return bytesToBase64(new TextEncoder().encode(JSON.stringify(payload)));
@@ -288,7 +297,7 @@ export async function loadPdfViewerSidecar(pdfRelativePath) {
       try {
         await window.nas4usb.fs.writeFile(
           getPdfViewerStateCacheRelativePath(pdfRelativePath),
-          buildPdfViewerSidecarBase64(legacy),
+          buildPdfViewerSidecarBase64({ ...legacy, sourcePath: pdfRelativePath }),
         );
       } catch {
         // listing prune will still remove phone-side copies
@@ -323,7 +332,7 @@ export async function writePdfViewerSidecar(pdfRelativePath, state) {
   } catch {
     return;
   }
-  const base64 = buildPdfViewerSidecarBase64(state);
+  const base64 = buildPdfViewerSidecarBase64({ ...state, sourcePath: pdfRelativePath });
   if (isExternalFolderPath(pdfRelativePath)) {
     await window.nas4usb.fs.writeFile(getPdfViewerStateCacheRelativePath(pdfRelativePath), base64);
     await removeSiblingViewerSidecars(pdfRelativePath);

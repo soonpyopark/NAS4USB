@@ -60,6 +60,11 @@ export function getPdfPathForViewerSidecar(sidecarRelativePath) {
   return normalizeRelativePath(sidecarRelativePath).replace(/\.viewer(?:\s+\d+|\s*\(\d+\))?\.json$/i, '');
 }
 
+/** Hidden workspace cache folder for external-folder PDF viewer state. */
+export function getPdfViewerStateCacheDir() {
+  return `${SHARED_FOLDER}/.nas4usb/pdf-viewer`;
+}
+
 /**
  * Hidden workspace cache for external-folder PDFs (iOS/Readdle cannot overwrite).
  * @param {string} pdfRelativePath
@@ -72,7 +77,15 @@ export function getPdfViewerStateCacheRelativePath(pdfRelativePath) {
     hash = Math.imul(hash, 16777619);
   }
   const key = (hash >>> 0).toString(16).padStart(8, '0');
-  return `${SHARED_FOLDER}/.nas4usb/pdf-viewer/${key}.json`;
+  return `${getPdfViewerStateCacheDir()}/${key}.json`;
+}
+
+/**
+ * @param {string} pdfRelativePath
+ */
+export function getPdfViewerStateCacheKey(pdfRelativePath) {
+  const base = getPdfViewerStateCacheRelativePath(pdfRelativePath).split('/').pop() ?? '';
+  return base.replace(/\.json$/i, '');
 }
 
 /**

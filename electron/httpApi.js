@@ -48,6 +48,7 @@ import {
   resolveHomeScopedWritePath,
   statPathWithAccessFilter,
   assertCanClearFileHistoryTree,
+  assertCanClearOrphanCaches,
 } from './fileAccessGuard.js';
 import { filterFileAccessMap, canViewFileEntry } from '../shared/fileAccessVisibility.js';
 import {
@@ -155,6 +156,7 @@ import {
   syncFileHistoryDelete,
   syncFileHistoryRename,
 } from './fileHistoryService.js';
+import { syncHwpxLockDelete } from './hwpxEditService.js';
 
 /**
  * @param {import('node:http').ServerResponse} res
@@ -360,6 +362,7 @@ export async function handleHttpApiRequest(req, res) {
       await syncFortuneSidecarDelete(body.path);
       await syncPdfViewerSidecarDelete(body.path);
       await syncFileHistoryDelete(body.path, getPortableRoot());
+      await syncHwpxLockDelete(body.path, getPortableRoot());
       const result = await fsService.deletePath(body.path);
       notifyFsChanged(body.path);
       sendJson(res, 200, result);
@@ -1159,6 +1162,16 @@ export async function handleHttpApiRequest(req, res) {
       const body = await readJsonBody(req);
       const target = await assertCanClearFileHistoryTree(body.path ?? '', getAccessAuth(req));
       const result = await clearFileHistoryUnder(target, getPortableRoot());
+      notifyFsChanged(target);
+      sendJson(res, 200, result);
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/external/clearOrphanCaches') {
+      const body = await readJsonBody(req);
+      const target = await assertCanClearOrphanCaches(body.path ?? '', getAccessAuth(req));
+      const { clearOrphanCaches } = await import('./externalOrphanCacheService.js');
+      const result = await clearOrphanCaches(target);
       notifyFsChanged(target);
       sendJson(res, 200, result);
       return true;

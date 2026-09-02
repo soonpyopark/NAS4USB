@@ -108,6 +108,7 @@ import { canOpenFileForEdit, VIEW_OPEN_DENIED_MESSAGE, GUEST_READ_DENIED_MESSAGE
 import { useGuestPermissions } from '../../hooks/useGuestPermissions.js';
 import {
   canClearFolderBackups,
+  canClearOrphanCaches,
   canWriteAtPath,
   effectivePermissionsForPath,
   HOMES_FOLDER,
@@ -254,6 +255,7 @@ export default function FileExplorer({
   const [propertiesSaving, setPropertiesSaving] = useState(false);
   const [lastSelectedPath, setLastSelectedPath] = useState(null);
   const [importingOnenote, setImportingOnenote] = useState(false);
+  const [clearingExternalCaches, setClearingExternalCaches] = useState(false);
   const [clearingFolderBackups, setClearingFolderBackups] = useState(false);
   /** @type {[null | { kind: 'upload' | 'download', current: number, total: number, fileName?: string, bytes?: number, totalBytes?: number }, Function]} */
   const [transfer, setTransfer] = useState(null);
@@ -649,6 +651,7 @@ export default function FileExplorer({
 
   const handleImportOnenoteClick = () => {
     if (isInTrashView || isInFavoritesView || !canWrite || importingOnenote) return;
+    if (isExternalFolderPath(currentPath)) return;
     onenoteInputRef.current?.click();
   };
 
@@ -707,10 +710,78 @@ export default function FileExplorer({
     }
   };
 
+  const handleClearExternalCaches = async () => {
+    if (
+      isInTrashView ||
+      isInFavoritesView ||
+      !canClearOrphanCaches(currentPath, isSuperAdmin) ||
+      (!isExternalFolderPath(currentPath) && !canWrite) ||
+      clearingExternalCaches
+    ) {
+      return;
+    }
+
+    const isExternal = isExternalFolderPath(currentPath);
+    const folderLabel = isHomesContainerPath(currentPath) || isMemberHomeRootPath(currentPath)
+      ? HOMES_FOLDER
+      : currentPath === SHARED_FOLDER
+        ? SHARED_FOLDER
+        : labelForExternalMountPath(currentPath, externalFolders) ||
+          currentPath.split('/').pop() ||
+          currentPath;
+    const confirmed = await appConfirm({
+      title: '캐시 정리',
+      body: isExternal
+        ? '연결된 외부 폴더에서 원본이 없는 PDF 표시·파일 이력·엑셀/문서 보조 파일만 삭제할까요?\n\n아직 있는 파일의 하이라이트와 원본은 그대로 둡니다. 이 작업은 되돌릴 수 없습니다.'
+        : `"${folderLabel}" 폴더와 그 하위에서 원본이 없는 PDF 표시·파일 이력·엑셀/문서 보조 파일만 삭제할까요?\n\n아직 있는 파일의 하이라이트·백업과 원본은 그대로 둡니다. 이 작업은 되돌릴 수 없습니다.`,
+      confirmLabel: '캐시 정리',
+      confirmVariant: 'danger',
+    });
+    if (!confirmed) return;
+
+    setClearingExternalCaches(true);
+    try {
+      const result = await window.nas4usb.external.clearOrphanCaches(currentPath);
+      const parts = [];
+      const pdf = (Number(result?.pdfViewerCache) || 0) + (Number(result?.pdfViewerSidecar) || 0);
+      const history = (Number(result?.fileHistory) || 0) + (Number(result?.hwpxHistory) || 0);
+      const fortune = Number(result?.fortuneSidecar) || 0;
+      const tiptap = Number(result?.tiptapAssets) || 0;
+      if (pdf) parts.push(`PDF 표시 ${pdf}개`);
+      if (history) parts.push(`파일 이력 ${history}개`);
+      if (fortune) parts.push(`엑셀 보조 ${fortune}개`);
+      if (tiptap) parts.push(`문서 자산 ${tiptap}개`);
+      const skipped = Number(result?.skippedUnreadableMounts) || 0;
+      const skipNote =
+        skipped > 0
+          ? `\n\n연결되지 않은 외부 폴더 ${skipped}곳은 건너뛰었습니다. 해당 폴더의 캐시는 그대로 둡니다.`
+          : '';
+      if (parts.length === 0) {
+        await appAlert({
+          title: '캐시 정리',
+          body: `정리할 고아 캐시가 없습니다.${skipNote}`,
+        });
+        return;
+      }
+      await appAlert({
+        title: '캐시 정리',
+        body: `${parts.join(', ')}를 정리했습니다.${skipNote}`,
+      });
+      await refreshAll();
+    } catch (err) {
+      await appAlert({
+        title: '캐시 정리 실패',
+        body: err instanceof Error ? err.message : '캐시를 정리하지 못했습니다.',
+      });
+    } finally {
+      setClearingExternalCaches(false);
+    }
+  };
+
   const handleOnenoteInput = async (event) => {
     const files = Array.from(event.target.files ?? []);
     event.target.value = '';
-    if (!files.length || importingOnenote) return;
+    if (!files.length || importingOnenote || isExternalFolderPath(currentPath)) return;
 
     setImportingOnenote(true);
     try {
@@ -1812,8 +1883,17 @@ export default function FileExplorer({
         onClearSelection={clearSelection}
         onProperties={() => handleShowProperties()}
         canShowProperties={selectedEntries.length === 1}
-        onImportOnenote={handleImportOnenoteClick}
+        onImportOnenote={
+          isExternalFolderPath(currentPath) ? undefined : handleImportOnenoteClick
+        }
         importingOnenote={importingOnenote}
+        onClearExternalCaches={
+          canClearOrphanCaches(currentPath, isSuperAdmin) &&
+          (isExternalFolderPath(currentPath) || canWrite)
+            ? handleClearExternalCaches
+            : undefined
+        }
+        clearingExternalCaches={clearingExternalCaches}
         onClearFolderBackups={
           canClearFolderBackups(currentPath) ? handleClearFolderBackups : undefined
         }

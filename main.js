@@ -111,6 +111,7 @@ import {
   resolveHomeScopedWritePath,
   statPathWithAccessFilter,
   assertCanClearFileHistoryTree,
+  assertCanClearOrphanCaches,
 } from './electron/fileAccessGuard.js';
 import { filterFileAccessMap, canViewFileEntry } from './shared/fileAccessVisibility.js';
 import {
@@ -202,6 +203,7 @@ import {
   syncFileHistoryDelete,
   syncFileHistoryRename,
 } from './electron/fileHistoryService.js';
+import { syncHwpxLockDelete } from './electron/hwpxEditService.js';
 
 installStdioPipeGuard();
 
@@ -1185,6 +1187,7 @@ ipcMain.handle('fs:delete', async (event, relativePath) => {
   await syncFortuneSidecarDelete(relativePath);
   await syncPdfViewerSidecarDelete(relativePath);
   await syncFileHistoryDelete(relativePath, getPortableRoot());
+  await syncHwpxLockDelete(relativePath, getPortableRoot());
   const result = await fsService.deletePath(relativePath);
   notifyFsChanged(relativePath);
   return result;
@@ -1387,6 +1390,17 @@ ipcMain.handle('history:clearTree', async (event, relativePath) => {
     getAccessAuthFromEvent(event),
   );
   const result = await clearFileHistoryUnder(target, getPortableRoot());
+  notifyFsChanged(target);
+  return result;
+});
+
+ipcMain.handle('external:clearOrphanCaches', async (event, relativePath) => {
+  const target = await assertCanClearOrphanCaches(
+    relativePath,
+    getAccessAuthFromEvent(event),
+  );
+  const { clearOrphanCaches } = await import('./electron/externalOrphanCacheService.js');
+  const result = await clearOrphanCaches(target);
   notifyFsChanged(target);
   return result;
 });

@@ -27,6 +27,8 @@ export default function FileExplorerToolbar({
   canShowProperties = false,
   onImportOnenote,
   importingOnenote = false,
+  onClearExternalCaches,
+  clearingExternalCaches = false,
   onClearFolderBackups,
   clearingFolderBackups = false,
   isInTrashView = false,
@@ -101,6 +103,15 @@ export default function FileExplorerToolbar({
       label: importingOnenote ? '가져오는 중…' : '원노트 가져오기',
       disabled: importingOnenote,
       onClick: onImportOnenote,
+    });
+  }
+  if (onClearExternalCaches) {
+    overflowItems.push({
+      id: 'clear-external-caches',
+      label: clearingExternalCaches ? '정리 중…' : '캐시 정리',
+      danger: true,
+      disabled: clearingExternalCaches,
+      onClick: onClearExternalCaches,
     });
   }
   if (showWriteActions && onClearFolderBackups) {
@@ -270,6 +281,20 @@ export default function FileExplorerToolbar({
               title="원노트(.one/.onepkg) 파일을 현재 폴더에 폴더+TipTap 페이지로 가져옵니다"
             >
               {importingOnenote ? '가져오는 중…' : '원노트 가져오기'}
+            </button>
+          </>
+        )}
+        {onClearExternalCaches && (
+          <>
+            <span className="mx-1 hidden h-4 w-px bg-nas-border sm:inline" />
+            <button
+              type="button"
+              className="nas-btn-ghost text-red-600"
+              disabled={clearingExternalCaches}
+              onClick={onClearExternalCaches}
+              title="원본이 없는 PDF 표시·이력·보조 파일만 삭제합니다. 있는 파일의 하이라이트와 백업은 그대로 둡니다."
+            >
+              {clearingExternalCaches ? '정리 중…' : '캐시 정리'}
             </button>
           </>
         )}

@@ -396,8 +396,13 @@ export async function syncFileHistoryMoveTree(
  * @param {string} [portableRoot]
  */
 export async function syncFileHistoryDelete(relativePath, portableRoot = getPortableRoot()) {
-  const dir = historyDir(portableRoot, normalizePath(relativePath));
-  await fs.rm(dir, { recursive: true, force: true });
+  const normalized = normalizePath(relativePath);
+  if (!normalized || normalized === '.') {
+    const dir = historyDir(portableRoot, normalized);
+    await fs.rm(dir, { recursive: true, force: true });
+    return;
+  }
+  await clearFileHistoryUnder(normalized, portableRoot);
 }
 
 /**

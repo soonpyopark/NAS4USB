@@ -460,11 +460,35 @@ export async function syncHwpxLockRename(fromRelative, toRelative, portableRoot 
 export async function syncHwpxLockDelete(relativePath, portableRoot = getPortableRoot()) {
   const normalized = normalizePath(relativePath);
   const store = await loadLockStore(portableRoot);
-  const lock = store.locks[normalized];
-  if (lock) {
-    editSessions.delete(lock.editSessionId);
-    delete store.locks[normalized];
-    await saveLockStore(portableRoot, store);
+  let changed = false;
+  for (const key of Object.keys(store.locks)) {
+    if (key === normalized || key.startsWith(`${normalized}/`)) {
+      const lock = store.locks[key];
+      if (lock) editSessions.delete(lock.editSessionId);
+      delete store.locks[key];
+      changed = true;
+    }
   }
-  await fs.rm(historyDir(portableRoot, normalized), { recursive: true, force: true });
+  if (changed) await saveLockStore(portableRoot, store);
+
+  const historyRoot = path.join(portableRoot, HISTORY_ROOT);
+  await fs.rm(historyDir(portableRoot, normalized), { recursive: true, force: true }).catch(() => {});
+  let entries;
+  try {
+    entries = await fs.readdir(historyRoot, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    let filePath = '';
+    try {
+      filePath = Buffer.from(entry.name, 'base64url').toString('utf8');
+    } catch {
+      continue;
+    }
+    const key = normalizePath(filePath);
+    if (key !== normalized && !key.startsWith(`${normalized}/`)) continue;
+    await fs.rm(path.join(historyRoot, entry.name), { recursive: true, force: true }).catch(() => {});
+  }
 }

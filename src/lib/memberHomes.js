@@ -76,6 +76,16 @@ export function canClearFolderBackups(currentPath) {
   return isUnderHomesFolder(path);
 }
 
+/**
+ * Toolbar 「캐시 정리」 — 공유/개인 트리, 또는 총괄관리자의 외부폴더.
+ * @param {string} currentPath
+ * @param {boolean} isSuperAdmin
+ */
+export function canClearOrphanCaches(currentPath, isSuperAdmin) {
+  if (canClearFolderBackups(currentPath)) return true;
+  return Boolean(isSuperAdmin && isExternalFolderPath(String(currentPath ?? '')));
+}
+
 export function canWriteAtPath(currentPath, loginId, isLoggedIn, globalWrite, isSuperAdmin = false) {
   const path = normalizeRelativePath(currentPath);
   if (!path || path === '.') return false;

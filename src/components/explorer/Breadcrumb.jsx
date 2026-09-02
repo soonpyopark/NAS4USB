@@ -47,10 +47,14 @@ export default function Breadcrumb({ currentPath, onNavigate }) {
         });
 
         return (
-          <span key={path} className="flex items-center gap-1">
-            {displayIndex > 0 ? <span className="text-nas-muted">/</span> : null}
+          <span key={path} className="flex min-w-0 items-center gap-1">
+            {displayIndex > 0 ? (
+              <span className="shrink-0 text-nas-muted" aria-hidden="true">
+                /
+              </span>
+            ) : null}
             {isLast ? (
-              <span className="truncate font-medium text-slate-700">{label}</span>
+              <span className="truncate px-1.5 py-0.5 font-medium text-slate-700">{label}</span>
             ) : (
               <button
                 type="button"

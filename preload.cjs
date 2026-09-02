@@ -150,6 +150,11 @@ contextBridge.exposeInMainWorld('nas4usb', {
     clearTree: (relativePath) => ipcRenderer.invoke('history:clearTree', relativePath),
   },
 
+  external: {
+    clearOrphanCaches: (relativePath) =>
+      ipcRenderer.invoke('external:clearOrphanCaches', relativePath),
+  },
+
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),
     getGuestPermissions: () => ipcRenderer.invoke('settings:getGuestPermissions'),

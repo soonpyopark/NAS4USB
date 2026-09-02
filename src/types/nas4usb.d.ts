@@ -143,6 +143,9 @@ window.nas4usb = {
     restore: (relativePath, entryId, shareToken) => {},
     clearTree: (relativePath) => {},
   },
+  external: {
+    clearOrphanCaches: (relativePath) => {},
+  },
   settings: {
     get: () => {},
     getGuestPermissions: () => {},

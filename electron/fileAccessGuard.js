@@ -182,6 +182,35 @@ export async function assertCanClearFileHistoryTree(
 }
 
 /**
+ * External-folder orphan cache sweep — super admin only.
+ * @param {AccessAuth} auth
+ */
+export function assertCanClearExternalOrphanCaches(auth) {
+  assertSuperAdminExternalAccess(auth);
+}
+
+/**
+ * Orphan cache sweep for 외부폴더 / 공유폴더 / 개인폴더.
+ * @param {string} relativePath
+ * @param {AccessAuth} auth
+ * @param {string} [portableRoot]
+ * @returns {Promise<string>} rewritten folder prefix to clear
+ */
+export async function assertCanClearOrphanCaches(
+  relativePath,
+  auth,
+  portableRoot = getPortableRoot(),
+) {
+  const target = resolveHomeScopedWritePath(relativePath, auth);
+  const normalized = String(target ?? '').replace(/\\/g, '/');
+  if (isExternalFolderPath(normalized)) {
+    assertSuperAdminExternalAccess(auth);
+    return normalized;
+  }
+  return assertCanClearFileHistoryTree(normalized, auth, portableRoot);
+}
+
+/**
  * @param {AccessAuth} auth
  * @param {string} [portableRoot]
  * @param {string} [relativePath] when set, owner/super_admin write is allowed on their home
