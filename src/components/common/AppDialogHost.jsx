@@ -1,10 +1,18 @@
 import { useEffect } from 'react';
 import { useAppConfirm } from '../../hooks/useAppConfirm.jsx';
-import { registerAppAlertHandler, registerAppChoiceHandler } from '../../lib/nativeDialog.js';
+import {
+  registerAppAlertHandler,
+  registerAppChoiceHandler,
+  registerAppConfirmHandler,
+} from '../../lib/nativeDialog.js';
 
 /** Mount once near the app root so `showAppAlert` / `nativeAlert` use in-app dialogs. */
 export default function AppDialogHost() {
-  const { alert, choose, dialog } = useAppConfirm();
+  const { alert, confirm, choose, dialog } = useAppConfirm();
+
+  useEffect(() => {
+    return registerAppConfirmHandler((options) => confirm(options));
+  }, [confirm]);
 
   useEffect(() => {
     return registerAppAlertHandler((options) =>

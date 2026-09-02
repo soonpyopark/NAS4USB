@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { useBackdropDismiss } from '../../hooks/useBackdropDismiss.js';
 
 /**
@@ -59,7 +60,7 @@ export function AppModal({
     .filter(Boolean)
     .join(' ');
 
-  return (
+  const overlay = (
     <div className={overlayClass} {...backdropDismiss}>
       <div
         className={dialogClass}
@@ -98,6 +99,11 @@ export function AppModal({
       </div>
     </div>
   );
+
+  // Embedded editor chrome must stay in-tree. Other dialogs portal so a
+  // clipped explorer pane cannot hide or flash them.
+  if (embedded || typeof document === 'undefined') return overlay;
+  return createPortal(overlay, document.body);
 }
 
 /** @param {{ children: import('react').ReactNode, className?: string }} props */

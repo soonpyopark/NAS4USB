@@ -27,8 +27,10 @@ export function useBackdropDismiss(onClose, options = {}) {
     },
     onClick(event) {
       const press = pressRef.current;
-      if (requireTargetSelf && event.target !== event.currentTarget) return;
+      // Overlay often mounts in the same click that opened it. That click
+      // must not count as a backdrop dismiss (flash-and-gone).
       if (!press.onBackdrop) return;
+      if (requireTargetSelf && event.target !== event.currentTarget) return;
       if (
         moveThreshold > 0 &&
         Math.hypot(event.clientX - press.x, event.clientY - press.y) > moveThreshold

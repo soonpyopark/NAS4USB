@@ -10,6 +10,17 @@ let alertHandler = null;
 /**
  * @type {null | ((options: {
  *   title?: string,
+ *   body?: string | import('react').ReactNode,
+ *   confirmLabel?: string,
+ *   cancelLabel?: string,
+ *   confirmVariant?: 'primary' | 'danger',
+ * }) => Promise<boolean>)}
+ */
+let confirmHandler = null;
+
+/**
+ * @type {null | ((options: {
+ *   title?: string,
  *   body?: string,
  *   primaryLabel?: string,
  *   extraLabel?: string,
@@ -27,6 +38,23 @@ export function registerAppAlertHandler(handler) {
   alertHandler = handler;
   return () => {
     if (alertHandler === handler) alertHandler = null;
+  };
+}
+
+/**
+ * @param {(options: {
+ *   title?: string,
+ *   body?: string | import('react').ReactNode,
+ *   confirmLabel?: string,
+ *   cancelLabel?: string,
+ *   confirmVariant?: 'primary' | 'danger',
+ * }) => Promise<boolean>} handler
+ * @returns {() => void}
+ */
+export function registerAppConfirmHandler(handler) {
+  confirmHandler = handler;
+  return () => {
+    if (confirmHandler === handler) confirmHandler = null;
   };
 }
 
@@ -70,6 +98,28 @@ export async function showAppChoice(options) {
   const accepted = window.confirm(String(options.body ?? options.title ?? ''));
   scheduleRestoreAfterNativeDialog();
   return accepted ? 'primary' : null;
+}
+
+/**
+ * @param {{
+ *   title?: string,
+ *   body?: string | import('react').ReactNode,
+ *   confirmLabel?: string,
+ *   cancelLabel?: string,
+ *   confirmVariant?: 'primary' | 'danger',
+ * }} options
+ * @returns {Promise<boolean>}
+ */
+export async function showAppConfirm(options) {
+  if (confirmHandler) {
+    const result = await confirmHandler(options ?? {});
+    window.dispatchEvent(new CustomEvent('nas4usb:restore-inputs'));
+    return result;
+  }
+
+  const accepted = window.confirm(String(options?.body ?? options?.title ?? ''));
+  scheduleRestoreAfterNativeDialog();
+  return accepted;
 }
 
 /**
