@@ -292,7 +292,7 @@ export default function FileExplorerToolbar({
               className="nas-btn-ghost text-red-600"
               disabled={clearingExternalCaches}
               onClick={onClearExternalCaches}
-              title="원본이 없는 PDF 표시·이력·보조 파일만 삭제합니다. 있는 파일의 하이라이트와 백업은 그대로 둡니다."
+              title="원본이 없는 PDF 표시 캐시와 파일 이력만 삭제합니다. 폴더는 훑지 않습니다."
             >
               {clearingExternalCaches ? '정리 중…' : '캐시 정리'}
             </button>

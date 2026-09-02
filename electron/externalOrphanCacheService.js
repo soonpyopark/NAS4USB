@@ -1,28 +1,10 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { getExternalFolders, getPortableRoot, resolvePortablePath } from './appContext.js';
+import { getPortableRoot, resolvePortablePath } from './appContext.js';
 import * as fsService from './fsService.js';
-import {
-  isExternalFolderPath,
-  joinExternalFolderPath,
-  splitExternalFolderPath,
-} from '../shared/externalFolders.js';
-import {
-  getSpreadsheetPathForFortuneSidecar,
-  isFortuneSidecarRelativePath,
-} from '../shared/fortuneSheetSidecar.js';
-import {
-  getPdfPathForViewerSidecar,
-  getPdfViewerStateCacheDir,
-  getPdfViewerStateCacheKey,
-  isPdfDocumentRelativePath,
-  isPdfViewerSidecarRelativePath,
-  normalizeRelativePath,
-} from '../shared/pdfViewerSidecar.js';
-import {
-  getTiptapPathForAssetSidecar,
-  isTiptapAssetSidecarRelativePath,
-} from '../shared/tiptapAssetPaths.js';
+import { EXTERNAL_FOLDER } from '../shared/constants.js';
+import { isExternalFolderPath, joinExternalFolderPath, splitExternalFolderPath } from '../shared/externalFolders.js';
+import { getPdfViewerStateCacheDir, normalizeRelativePath } from '../shared/pdfViewerSidecar.js';
 
 const FILE_HISTORY_ROOT = '.nas4usb/file-history';
 const HWPX_HISTORY_ROOT = '.nas4usb/hwpx-history';
@@ -79,162 +61,63 @@ function mountIdOf(relativePath) {
   return splitExternalFolderPath(normalizeRelativePath(relativePath))?.mountId ?? '';
 }
 
+/** @type {Map<string, boolean>} */
+const mountReadableCache = new Map();
+
 /**
- * @param {Set<string>} unreadableMountIds
+ * Mount root only — never walks the tree.
  * @param {string} relativePath
+ * @returns {Promise<boolean | null>} true/false if known, null if the mount is offline
  */
-function isOnUnreadableMount(unreadableMountIds, relativePath) {
-  const mountId = mountIdOf(relativePath);
-  return Boolean(mountId && unreadableMountIds.has(mountId));
-}
+async function sourceFileExists(relativePath) {
+  const normalized = normalizeRelativePath(relativePath);
+  if (!normalized) return false;
 
-/**
- * @param {string} relativePath
- */
-async function removeWorkspacePath(relativePath) {
-  await fsService.deletePath(relativePath).catch(() => {});
-}
-
-/**
- * @param {string} absDir
- * @param {string} relDir
- * @param {{
- *   seen: Set<string>,
- *   livePdfKeys: Set<string>,
- *   fortuneOrphans: string[],
- *   tiptapOrphans: string[],
- *   pdfSidecarOrphans: string[],
- *   collectPdfKeys?: boolean,
- * }} acc
- */
-async function visitTree(absDir, relDir, acc) {
-  let entries;
-  try {
-    entries = await fs.readdir(absDir, { withFileTypes: true });
-  } catch {
-    return;
-  }
-
-  for (const entry of entries) {
-    const rel = `${relDir}/${entry.name}`;
-    const abs = path.join(absDir, entry.name);
-    acc.seen.add(rel);
-
-    if (entry.isDirectory()) {
-      if (isTiptapAssetSidecarRelativePath(rel)) {
-        const companion = getTiptapPathForAssetSidecar(rel);
-        if (companion && !acc.seen.has(companion)) {
-          const exists = await fsService.pathExists(companion);
-          if (!exists) acc.tiptapOrphans.push(rel);
-        }
-        continue;
-      }
-      if (entry.name.startsWith('.')) continue;
-      await visitTree(abs, rel, acc);
-      continue;
-    }
-
-    if (acc.collectPdfKeys && isPdfDocumentRelativePath(rel)) {
-      acc.livePdfKeys.add(getPdfViewerStateCacheKey(rel));
-      continue;
-    }
-
-    if (isPdfViewerSidecarRelativePath(rel)) {
-      const pdfPath = getPdfPathForViewerSidecar(rel);
-      if (!pdfPath || !(await fsService.pathExists(pdfPath))) {
-        acc.pdfSidecarOrphans.push(rel);
-      }
-      continue;
-    }
-
-    if (isFortuneSidecarRelativePath(rel)) {
-      const spreadsheet = getSpreadsheetPathForFortuneSidecar(rel);
-      if (!spreadsheet || !(await fsService.pathExists(spreadsheet))) {
-        acc.fortuneOrphans.push(rel);
+  if (isExternalFolderPath(normalized)) {
+    const mountId = mountIdOf(normalized);
+    if (!mountId) return false;
+    if (!mountReadableCache.has(mountId)) {
+      const root = joinExternalFolderPath(mountId);
+      try {
+        await fs.access(resolvePortablePath(root));
+        mountReadableCache.set(mountId, true);
+      } catch {
+        mountReadableCache.set(mountId, false);
       }
     }
-  }
-}
-
-function emptyScan() {
-  return {
-    seen: new Set(),
-    livePdfKeys: new Set(),
-    unreadableMountIds: new Set(),
-    fortuneOrphans: [],
-    tiptapOrphans: [],
-    pdfSidecarOrphans: [],
-  };
-}
-
-async function scanExternalMounts() {
-  const acc = emptyScan();
-  acc.collectPdfKeys = true;
-
-  for (const mount of getExternalFolders()) {
-    const relRoot = joinExternalFolderPath(mount.id);
-    let absRoot;
-    try {
-      absRoot = resolvePortablePath(relRoot);
-      await fs.access(absRoot);
-    } catch {
-      acc.unreadableMountIds.add(mount.id);
-      continue;
-    }
-    acc.seen.add(relRoot);
-    await visitTree(absRoot, relRoot, acc);
+    if (!mountReadableCache.get(mountId)) return null;
   }
 
-  return acc;
+  return fsService.pathExists(normalized);
 }
 
 /**
- * @param {string} relativePath
+ * Keep only caches whose source PDF still exists under `prefix`.
+ * Missing `sourcePath` or a missing file → delete. Offline mounts are skipped.
+ * @param {string} prefix
  */
-async function scanWorkspaceTree(relativePath) {
-  const acc = emptyScan();
-  const relRoot = normalizeRelativePath(relativePath);
-  let absRoot;
-  try {
-    absRoot = resolvePortablePath(relRoot);
-    await fs.access(absRoot);
-  } catch {
-    return acc;
-  }
-  acc.seen.add(relRoot);
-  await visitTree(absRoot, relRoot, acc);
-  return acc;
-}
-
-/**
- * @param {object} scan
- * @param {Set<string>} scan.livePdfKeys
- * @param {Set<string>} scan.unreadableMountIds
- * @param {Set<string>} scan.seen
- */
-async function prunePdfViewerCache(scan) {
+async function prunePdfViewerCache(prefix) {
   const cacheDir = getPdfViewerStateCacheDir();
   let absDir;
   try {
     absDir = resolvePortablePath(cacheDir);
   } catch {
-    return 0;
+    return { deleted: 0, skippedUnreadable: 0 };
   }
 
   let entries;
   try {
     entries = await fs.readdir(absDir, { withFileTypes: true });
   } catch {
-    return 0;
+    return { deleted: 0, skippedUnreadable: 0 };
   }
 
-  const mountsReadable = scan.unreadableMountIds.size === 0;
   let deleted = 0;
+  let skippedUnreadable = 0;
 
   for (const entry of entries) {
     if (!entry.isFile() || !/\.json$/i.test(entry.name)) continue;
     const rel = `${cacheDir}/${entry.name}`;
-    const key = entry.name.replace(/\.json$/i, '').toLowerCase();
 
     /** @type {string | null} */
     let sourcePath = null;
@@ -245,112 +128,107 @@ async function prunePdfViewerCache(scan) {
         sourcePath = normalizeRelativePath(parsed.sourcePath);
       }
     } catch {
-      // treat as unkeyed hash cache
+      sourcePath = null;
     }
 
-    let orphan = false;
-    if (sourcePath && isExternalFolderPath(sourcePath)) {
-      if (isOnUnreadableMount(scan.unreadableMountIds, sourcePath)) continue;
-      orphan = !scan.seen.has(sourcePath) && !(await fsService.pathExists(sourcePath));
-    } else if (mountsReadable) {
-      orphan = !scan.livePdfKeys.has(key);
+    if (!sourcePath || !isPathUnderPrefix(sourcePath, prefix)) {
+      await fsService.deletePath(rel).catch(() => {});
+      deleted += 1;
+      continue;
     }
 
-    if (!orphan) continue;
-    await removeWorkspacePath(rel);
+    const exists = await sourceFileExists(sourcePath);
+    if (exists === null) {
+      skippedUnreadable += 1;
+      continue;
+    }
+    if (exists) continue;
+    await fsService.deletePath(rel).catch(() => {});
     deleted += 1;
   }
 
-  return deleted;
+  return { deleted, skippedUnreadable };
 }
 
 /**
  * @param {string} historyRoot
- * @param {{
- *   prefix?: string,
- *   externalOnly?: boolean,
- *   unreadableMountIds?: Set<string>,
- * }} [options]
+ * @param {string} prefix
  */
-async function pruneOrphanHistoryRoot(historyRoot, options = {}) {
-  const prefix = options.prefix ? normalizeRelativePath(options.prefix) : '';
-  const unreadableMountIds = options.unreadableMountIds ?? new Set();
+async function pruneOrphanHistoryRoot(historyRoot, prefix) {
   const absRoot = path.join(getPortableRoot(), historyRoot);
   let entries;
   try {
     entries = await fs.readdir(absRoot, { withFileTypes: true });
   } catch {
-    return 0;
+    return { deleted: 0, skippedUnreadable: 0 };
   }
 
+  const pre = normalizeRelativePath(prefix);
   let deleted = 0;
+  let skippedUnreadable = 0;
+
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
     const filePath = normalizeRelativePath(decodeHistoryKey(entry.name));
-    if (!filePath) continue;
-    if (options.externalOnly && !isExternalFolderPath(filePath)) continue;
-    if (prefix && !isPathUnderPrefix(filePath, prefix)) continue;
-    if (isOnUnreadableMount(unreadableMountIds, filePath)) continue;
-    if (await fsService.pathExists(filePath)) continue;
+    if (!filePath || !isPathUnderPrefix(filePath, pre)) continue;
+
+    const exists = await sourceFileExists(filePath);
+    if (exists === null) {
+      skippedUnreadable += 1;
+      continue;
+    }
+    if (exists) continue;
     await fs.rm(path.join(absRoot, entry.name), { recursive: true, force: true }).catch(() => {});
     deleted += 1;
   }
-  return deleted;
+
+  return { deleted, skippedUnreadable };
+}
+
+function countUnreadableMounts() {
+  let n = 0;
+  for (const readable of mountReadableCache.values()) {
+    if (!readable) n += 1;
+  }
+  return n;
 }
 
 /**
- * @param {ReturnType<typeof emptyScan>} scan
- * @param {ReturnType<typeof emptyCounts>} counts
+ * PDF hash cache + history only. Does not walk share / personal / external trees.
+ * @param {string} prefix
+ * @param {{ includePdfCache?: boolean }} [options]
  */
-async function applySidecarOrphans(scan, counts) {
-  for (const rel of scan.pdfSidecarOrphans) {
-    await removeWorkspacePath(rel);
-    counts.pdfViewerSidecar += 1;
-  }
-  for (const rel of scan.fortuneOrphans) {
-    await removeWorkspacePath(rel);
-    counts.fortuneSidecar += 1;
-  }
-  for (const rel of scan.tiptapOrphans) {
-    await removeWorkspacePath(rel);
-    counts.tiptapAssets += 1;
-  }
-}
-
-/**
- * Remove leftover viewer/editor helpers whose external-folder source is gone.
- * Live files' highlights, sidecars, and history are left alone.
- */
-export async function clearExternalOrphanCaches() {
+async function clearOrphansByPrefix(prefix, options = {}) {
+  mountReadableCache.clear();
   const counts = emptyCounts();
-  const scan = await scanExternalMounts();
-  counts.skippedUnreadableMounts = scan.unreadableMountIds.size;
-  await applySidecarOrphans(scan, counts);
-  counts.pdfViewerCache = await prunePdfViewerCache(scan);
-  counts.fileHistory = await pruneOrphanHistoryRoot(FILE_HISTORY_ROOT, {
-    externalOnly: true,
-    unreadableMountIds: scan.unreadableMountIds,
-  });
-  counts.hwpxHistory = await pruneOrphanHistoryRoot(HWPX_HISTORY_ROOT, {
-    externalOnly: true,
-    unreadableMountIds: scan.unreadableMountIds,
-  });
+  const pre = normalizeRelativePath(prefix);
+
+  if (options.includePdfCache) {
+    const pdf = await prunePdfViewerCache(pre);
+    counts.pdfViewerCache = pdf.deleted;
+  }
+
+  const fileHistory = await pruneOrphanHistoryRoot(FILE_HISTORY_ROOT, pre);
+  const hwpxHistory = await pruneOrphanHistoryRoot(HWPX_HISTORY_ROOT, pre);
+  counts.fileHistory = fileHistory.deleted;
+  counts.hwpxHistory = hwpxHistory.deleted;
+  counts.skippedUnreadableMounts = countUnreadableMounts();
   return counts;
 }
 
 /**
- * Share / personal tree: sibling sidecars + history whose source file is gone.
- * Does not wipe live backups or the external PDF hash cache.
+ * External mounts: keep PDF caches whose `sourcePath` still exists under 외부폴더/.
+ */
+export async function clearExternalOrphanCaches() {
+  return clearOrphansByPrefix(EXTERNAL_FOLDER, { includePdfCache: true });
+}
+
+/**
+ * Share / personal: orphan history under this folder only. No tree walk.
  * @param {string} relativePath
  */
 export async function clearWorkspaceOrphanCaches(relativePath) {
-  const counts = emptyCounts();
-  const prefix = normalizeRelativePath(relativePath);
-  const scan = await scanWorkspaceTree(prefix);
-  await applySidecarOrphans(scan, counts);
-  counts.fileHistory = await pruneOrphanHistoryRoot(FILE_HISTORY_ROOT, { prefix });
-  counts.hwpxHistory = await pruneOrphanHistoryRoot(HWPX_HISTORY_ROOT, { prefix });
-  return counts;
+  return clearOrphansByPrefix(relativePath, { includePdfCache: false });
 }
 
 /**
