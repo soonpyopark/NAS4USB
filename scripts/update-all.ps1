@@ -7,7 +7,7 @@
   Skip git pull.
 
 .PARAMETER SkipNpm
-  Skip npm install/update.
+  Skip npm install/update and Electron latest.
 
 .PARAMETER SkipCores
   Skip editor core updates (rhwp, wb4s, fortune-sheet, tiptap).

@@ -68,6 +68,95 @@ async function gitPull() {
   run('git pull', 'git', ['pull', '--ff-only']);
 }
 
+function queryNpmVersion(pkg) {
+  const result = spawnSync('npm', ['view', pkg, 'version'], {
+    cwd: root,
+    encoding: 'utf8',
+    shell: process.platform === 'win32',
+  });
+  const version = result.stdout?.trim();
+  if (result.status !== 0 || !version) {
+    throw new Error(`npm view ${pkg} version failed`);
+  }
+  return version;
+}
+
+function electronBinaryPath() {
+  const name = process.platform === 'win32' ? 'electron.exe' : 'electron';
+  return path.join(root, 'node_modules', 'electron', 'dist', name);
+}
+
+/**
+ * Running NAS4USB / project Electron locks node_modules and the installed exe.
+ * Updating while they run leaves a broken binary and the next launch fails.
+ */
+function stopRunningApp() {
+  if (process.platform === 'win32') {
+    spawnSync('taskkill', ['/IM', 'NAS4USB.exe', '/T', '/F'], { stdio: 'ignore' });
+    const filter = JSON.stringify(`${root}\\*`);
+    const ps = [
+      `Get-CimInstance Win32_Process -Filter "Name='electron.exe'" |`,
+      `Where-Object { $_.ExecutablePath -and $_.ExecutablePath -like ${filter} } |`,
+      'ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }',
+    ].join(' ');
+    spawnSync('powershell', ['-NoProfile', '-Command', ps], { stdio: 'ignore' });
+    return;
+  }
+
+  spawnSync('pkill', ['-f', path.join(root, 'node_modules', 'electron')], { stdio: 'ignore' });
+}
+
+async function writeElectronAllowScripts(version) {
+  const pkgPath = path.join(root, 'package.json');
+  let text = await fs.readFile(pkgPath, 'utf8');
+  if (/"electron@[^"]+"\s*:\s*true/.test(text)) {
+    text = text.replace(/"electron@[^"]+"\s*:\s*true/, `"electron@${version}": true`);
+  } else if (/"allowScripts"\s*:\s*\{/.test(text)) {
+    text = text.replace(/("allowScripts"\s*:\s*\{)/, `$1\n    "electron@${version}": true,`);
+  } else {
+    throw new Error('package.json is missing allowScripts; cannot install Electron');
+  }
+  await fs.writeFile(pkgPath, text);
+  console.log(`[update-all] allowScripts electron@${version}`);
+}
+
+function assertElectronRuns(expectedVersion) {
+  const binary = electronBinaryPath();
+  const result = spawnSync(binary, ['--version'], {
+    cwd: root,
+    encoding: 'utf8',
+    timeout: 20000,
+  });
+  const out = `${result.stdout ?? ''}${result.stderr ?? ''}`.trim();
+  if (result.status !== 0) {
+    throw new Error(
+      `Electron ${expectedVersion} did not start after update (${out || `exit ${result.status}`}). ` +
+        'Refusing to leave a broken install.',
+    );
+  }
+  console.log(`[update-all] Electron runs: ${out}`);
+}
+
+/**
+ * `npm update` stays inside package.json ranges (`^33` never becomes 44).
+ * Install the current npm latest *after* allowScripts + stopping the app,
+ * then verify the binary actually launches.
+ */
+async function updateElectronLatest() {
+  const electronVersion = queryNpmVersion('electron');
+  const builderVersion = queryNpmVersion('electron-builder');
+  await writeElectronAllowScripts(electronVersion);
+  run('electron latest', 'npm', ['install', `electron@${electronVersion}`, '--save-dev']);
+  run('electron-builder latest', 'npm', ['install', `electron-builder@${builderVersion}`, '--save-dev']);
+  try {
+    await fs.access(electronBinaryPath());
+  } catch {
+    console.log('[update-all] Electron binary missing; running install.js…');
+    run('electron install.js', 'node', [path.join('node_modules', 'electron', 'install.js')]);
+  }
+  assertElectronRuns(electronVersion);
+}
+
 /**
  * @param {ReturnType<typeof parseArgs>} opts
  */
@@ -99,6 +188,8 @@ async function main() {
   console.log(`[update-all] Project root: ${root}`);
 
   run('stop dev server', 'node', ['scripts/dev-process.mjs', 'stop']);
+  console.log('[update-all] Stopping running NAS4USB / project Electron…');
+  stopRunningApp();
 
   if (!opts.skipGit) {
     await gitPull();
@@ -107,6 +198,7 @@ async function main() {
   if (!opts.skipNpm) {
     run('npm install', 'npm', ['install']);
     run('npm update', 'npm', ['update']);
+    await updateElectronLatest();
   }
 
   if (!opts.skipCores) {

@@ -38,7 +38,7 @@ USB(또는 단일 폴더)만으로 **오프라인 LAN NAS**와 **실시간 공�
 | 개인폴더 본문 검색 | 탐색기 오른쪽 위 **본문 검색** — 현재 폴더 본문 + 개인·공유폴더 Excel·한글·Word·슬라이드·PDF·TipTap·텍스트 색인. 결과 열면 쪽·셀·문단으로 이동. 휴지통·문서 이력 제외. 왼쪽은 이름만 |
 | 휴지통 | 로그인 회원은 본인 항목 · 비우기는 쓰기 권한 |
 | 게스트 UI | 열람 권한 없을 때 로그인 유도 / 관리자 문의 안내 |
-| 에디터 코어 업데이트 | `update_all.bat` — rhwp / wb4s / fortune-sheet / tiptap / comic-reader + npm 일괄 갱신 |
+| 에디터 코어 업데이트 | `update_all.bat` — rhwp / wb4s / fortune-sheet / tiptap / comic-reader + npm + Electron latest |
 
 ### 워크스페이스 경로
 
@@ -215,7 +215,7 @@ npm run build:release
 | `npm run build:msi` | Windows MSI 설치 패키지 생성 (WiX CLI 필요) |
 | `npm run build:release` | MSI + portable zip을 `msi/`에 동일 스탬프로 생성 |
 | `npm run sync-version` | `APP_VERSION` → package.json / MSI License 동기화 |
-| `npm run update:all` | 에디터 코어 + npm 의존성 업데이트 |
+| `npm run update:all` | 에디터 코어 + npm 의존성 + Electron latest |
 | `npm run build:update_all` | 코어 업데이트 + `build:release` |
 
 ---

@@ -3,7 +3,7 @@ chcp 949 >nul 2>&1
 
 REM ============================================================================
 REM  NAS4USB / NAS4USB - Update all components to latest
-REM  Editor cores (rhwp, wb4s, fortune-sheet, tiptap, comic-reader) + npm + optional exe build
+REM  Editor cores (rhwp, wb4s, fortune-sheet, tiptap, comic-reader) + npm + Electron latest + optional exe build
 REM ============================================================================
 
 if /I not "%~1"=="_inner" if /I not "%~1"=="_quiet" (

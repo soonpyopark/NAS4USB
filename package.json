@@ -41,8 +41,8 @@
     "@xmldom/xmldom": "^0.9.10",
     "autoprefixer": "^10.4.20",
     "concurrently": "^9.1.2",
-    "electron": "^33.2.1",
-    "electron-builder": "^25.1.8",
+    "electron": "^44.1.1",
+    "electron-builder": "^26.15.3",
     "png-to-ico": "^3.0.2",
     "postcss": "^8.4.49",
     "rcedit": "^5.0.2",
@@ -137,7 +137,7 @@
     "@tiptap/pm": "$@tiptap/pm"
   },
   "allowScripts": {
-    "electron@33.4.11": true
+    "electron@44.1.1": true
   },
   "build": {
     "appId": "com.nas4usb.app",
