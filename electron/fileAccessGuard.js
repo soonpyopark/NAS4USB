@@ -492,11 +492,8 @@ export async function readDirWithAccessFilter(
   }
 
   if (normalizedPath && normalizedPath !== '.') {
-    try {
-      await pruneOrphanPdfViewerSidecars(normalizedPath, { recursive: false });
-    } catch {
-      // listing must not fail because a sidecar could not be removed
-    }
+    // 목록을 막지 않는다. 시작 시 전체 정리도 이미 한 번 한다.
+    void pruneOrphanPdfViewerSidecars(normalizedPath, { recursive: false }).catch(() => {});
   }
 
   if (isHomesContainerPath(normalizedPath)) {
@@ -504,11 +501,7 @@ export async function readDirWithAccessFilter(
     if (!homePath) return [];
     const { ensureMemberHome } = await import('./memberHomeService.js');
     await ensureMemberHome(home.loginId);
-    try {
-      await pruneOrphanPdfViewerSidecars(homePath, { recursive: false });
-    } catch {
-      // listing must not fail because a sidecar could not be removed
-    }
+    void pruneOrphanPdfViewerSidecars(homePath, { recursive: false }).catch(() => {});
     const homeEntries = await fsService.readDir(homePath);
     return filterEntriesByMemberHome(homeEntries, home).map((entry) => ({
       ...entry,

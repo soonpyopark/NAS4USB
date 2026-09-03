@@ -71,7 +71,9 @@ export async function loadPdfDocument(url, options = {}) {
   const loadingTask = getDocument({
     url,
     ...(initialPassword ? { password: initialPassword } : {}),
-    withCredentials: true,
+    // Token is already on the stream URL. Credentials + ACAO * blocks
+    // pdf.js worker fetches on LAN browsers (blob/module worker).
+    withCredentials: false,
     useSystemFonts: true,
     // pdf.js 6.x WasmImage: when jbig2.wasm init fails, Promise.race can settle
     // with null before jbig2_nowasm_fallback.js finishes → blank scanned pages

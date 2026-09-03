@@ -16,6 +16,10 @@ import { parsePpt } from './parsers/ppt.js';
 
 const BATCH_SIZE = 2000;
 
+function yieldEventLoop() {
+  return new Promise((resolve) => setImmediate(resolve));
+}
+
 const PARSERS = {
   excel: parseExcel,
   hwp: parseHwp,
@@ -57,6 +61,7 @@ export async function collectPersonalDocFiles(root) {
       if (stats.isDirectory()) {
         folderCount += 1;
         await walk(fullPath);
+        await yieldEventLoop();
         continue;
       }
       if (!allowed.has(path.extname(name).toLowerCase())) continue;
@@ -230,6 +235,7 @@ export async function buildPersonalDocIndex({
         percent,
         skipped: true,
       });
+      await yieldEventLoop();
       continue;
     }
 
@@ -272,6 +278,7 @@ export async function buildPersonalDocIndex({
       database.save();
       warnings.push(`${path.basename(filePath)}: ${error instanceof Error ? error.message : error}`);
     }
+    await yieldEventLoop();
   }
 
   database.setJob({

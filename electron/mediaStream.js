@@ -55,10 +55,16 @@ export async function streamAbsoluteFile(req, res, absolutePath, contentType) {
   const total = stat.size;
   const range = parseRangeHeader(req.headers.range, total);
 
+  const origin =
+    typeof req.headers.origin === 'string' && req.headers.origin.trim()
+      ? req.headers.origin.trim()
+      : '*';
   const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Range, Content-Type',
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Headers': 'Range, Content-Type, X-Admin-Token, Accept',
     'Access-Control-Expose-Headers': 'Accept-Ranges, Content-Length, Content-Range',
+    'Cross-Origin-Resource-Policy': 'cross-origin',
+    ...(origin !== '*' ? { 'Access-Control-Allow-Credentials': 'true' } : {}),
   };
 
   if (req.headers.range && !range) {
@@ -164,7 +170,11 @@ export async function streamHlsAsset(req, res, absolutePath, contentType, option
     'Content-Type': contentType,
     'Content-Length': buf.length,
     'Cache-Control': 'no-store',
-    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Origin':
+      typeof req.headers.origin === 'string' && req.headers.origin.trim()
+        ? req.headers.origin.trim()
+        : '*',
+    'Cross-Origin-Resource-Policy': 'cross-origin',
   });
   res.end(buf);
 }

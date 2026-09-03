@@ -14,6 +14,7 @@ export function usePersonalDocSearch(query, enabled) {
   const [error, setError] = useState('');
 
   const isActive = Boolean(enabled && query.trim());
+  const hasQuery = Boolean(query.trim());
 
   useEffect(() => {
     if (!enabled) {
@@ -29,7 +30,9 @@ export function usePersonalDocSearch(query, enabled) {
       try {
         const next = await window.nas4usb.docIndex.status();
         if (!cancelled) setStatus(next);
-        if (next?.status !== 'running' && !next?.ready) {
+        // 탐색기만 열었을 때 전체 색인을 돌리면 LAN 목록이 멈춘다.
+        // 검색어가 있을 때만 부족한 색인을 시작한다.
+        if (hasQuery && next?.status !== 'running' && !next?.ready) {
           await window.nas4usb.docIndex.start({ reset: false });
         }
       } catch (err) {
@@ -40,12 +43,12 @@ export function usePersonalDocSearch(query, enabled) {
     };
 
     poll();
-    const timer = window.setInterval(poll, 1500);
+    const timer = window.setInterval(poll, hasQuery ? 1500 : 8000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [enabled]);
+  }, [enabled, hasQuery]);
 
   useEffect(() => {
     const normalized = query.trim();

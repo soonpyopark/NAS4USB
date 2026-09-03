@@ -62,23 +62,58 @@ async function apiFetch(route, init, timeoutMs = 60000) {
  * @param {number} [timeoutMs]
  * @param {boolean} [binaryBody]
  */
+const FILE_READ_TIMEOUT_MS = 10 * 60 * 1000;
+
+/**
+ * @param {ArrayBuffer} buffer
+ * @returns {Promise<string>}
+ */
+function arrayBufferToBase64(buffer) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = String(reader.result || '');
+      const comma = text.indexOf(',');
+      resolve(comma >= 0 ? text.slice(comma + 1) : text);
+    };
+    reader.onerror = () => reject(reader.error || new Error('파일을 읽지 못했습니다.'));
+    reader.readAsDataURL(new Blob([buffer]));
+  });
+}
+
 async function apiRequest(route, init, timeoutMs = 60000, binaryBody = false) {
   const adminToken = readAdminToken();
+  const outerSignal = init?.signal;
+  if (outerSignal?.aborted) {
+    throw new DOMException('Aborted', 'AbortError');
+  }
+
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  const onOuterAbort = () => controller.abort();
+  outerSignal?.addEventListener('abort', onOuterAbort, { once: true });
+  const method = String(init?.method ?? 'GET').toUpperCase();
+  const hasBody = init?.body != null && init.body !== '';
 
   let response;
   try {
     response = await fetch(buildApiUrl(route), {
       ...init,
       headers: {
-        ...(binaryBody ? { 'Content-Type': 'application/octet-stream' } : { 'Content-Type': 'application/json' }),
+        ...(binaryBody
+          ? { 'Content-Type': 'application/octet-stream' }
+          : method !== 'GET' || hasBody
+            ? { 'Content-Type': 'application/json' }
+            : {}),
         ...(adminToken ? { 'X-Admin-Token': adminToken } : {}),
         ...(init?.headers ?? {}),
       },
       signal: controller.signal,
     });
   } catch (error) {
+    if (outerSignal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError');
+    }
     if (error instanceof DOMException && error.name === 'AbortError') {
       throw new Error('서버 응답 시간이 초과되었습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요.');
     }
@@ -88,6 +123,7 @@ async function apiRequest(route, init, timeoutMs = 60000, binaryBody = false) {
     throw error;
   } finally {
     window.clearTimeout(timer);
+    outerSignal?.removeEventListener('abort', onOuterAbort);
   }
 
   if (!response.ok) {
@@ -136,11 +172,15 @@ export function createHttpNas4usbClient() {
       },
     },
 
-    subscribeFsChanged: (callback) => createFsChangeSubscription(callback),
+    subscribeFsChanged: (callback) => createFsChangeSubscription(callback, { useSse: false }),
 
     fs: {
-      readDir: (relativePath) =>
-        apiFetch(`/fs/readDir?path=${encodeURIComponent(relativePath ?? '.')}`),
+      readDir: (relativePath, options) =>
+        apiFetch(
+          `/fs/readDir?path=${encodeURIComponent(relativePath ?? '.')}`,
+          options?.signal ? { signal: options.signal } : undefined,
+          8000,
+        ),
       mkdir: (relativePath) =>
         apiFetch('/fs/mkdir', { method: 'POST', body: JSON.stringify({ path: relativePath }) }),
       delete: (relativePath) =>
@@ -152,8 +192,45 @@ export function createHttpNas4usbClient() {
         }),
       exists: (relativePath) =>
         apiFetch(`/fs/exists?path=${encodeURIComponent(relativePath)}`),
-      readFile: (relativePath) =>
-        apiFetch(`/fs/readFile?path=${encodeURIComponent(relativePath)}`),
+      readFile: async (relativePath) => {
+        const adminToken = readAdminToken();
+        const controller = new AbortController();
+        const timer = window.setTimeout(() => controller.abort(), FILE_READ_TIMEOUT_MS);
+        try {
+          const response = await fetch(buildApiUrl(`/fs/readFile?path=${encodeURIComponent(relativePath)}`), {
+            headers: {
+              Accept: 'application/octet-stream',
+              ...(adminToken ? { 'X-Admin-Token': adminToken } : {}),
+            },
+            signal: controller.signal,
+          });
+          if (!response.ok) {
+            let message = response.statusText;
+            try {
+              const payload = await response.json();
+              if (payload?.error) message = payload.error;
+            } catch {
+              // ignore parse errors
+            }
+            throw new Error(message || 'API request failed');
+          }
+          const contentType = response.headers.get('Content-Type') ?? '';
+          if (contentType.includes('application/json')) {
+            return response.json();
+          }
+          return arrayBufferToBase64(await response.arrayBuffer());
+        } catch (error) {
+          if (error instanceof DOMException && error.name === 'AbortError') {
+            throw new Error('서버 응답 시간이 초과되었습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요.');
+          }
+          if (error instanceof TypeError && error.message === 'Failed to fetch') {
+            throw new Error('서버에 연결할 수 없습니다. 네트워크 연결을 확인한 뒤 다시 시도해 주세요.');
+          }
+          throw error;
+        } finally {
+          window.clearTimeout(timer);
+        }
+      },
       writeFile: (relativePath, base64) =>
         apiFetch('/fs/writeFile', {
           method: 'POST',

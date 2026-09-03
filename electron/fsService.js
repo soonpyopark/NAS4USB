@@ -119,6 +119,15 @@ function assertNotTrashTarget(relativePath) {
   }
 }
 
+/**
+ * @param {import('node:fs').Dirent} entry
+ */
+function isDirentDirectory(entry) {
+  if (entry.isDirectory()) return true;
+  if (typeof entry.isJunction === 'function' && entry.isJunction()) return true;
+  return false;
+}
+
 export async function readDir(relativePath = '.') {
   const normalized = normalizeRelativePath(relativePath);
   const absolute = resolvePortablePath(relativePath);
@@ -135,37 +144,21 @@ export async function readDir(relativePath = '.') {
 
   const entries = await fs.readdir(absolute, { withFileTypes: true });
 
-  return Promise.all(
-    entries
-      .filter((entry) => !entry.name.startsWith('.'))
-      .map(async (entry) => {
-        const entryRelative = joinRelativePath(relativePath, entry.name);
-        const entryAbsolute = path.join(absolute, entry.name);
-
-        try {
-          const stat = await fs.stat(entryAbsolute);
-          return {
-            name: entry.name,
-            relativePath: entryRelative,
-            isDirectory: entry.isDirectory(),
-            size: stat.size,
-            modifiedAt: stat.mtime.toISOString(),
-            extension: entry.isDirectory() ? null : path.extname(entry.name).slice(1).toLowerCase(),
-          };
-        } catch (error) {
-          return {
-            name: entry.name,
-            relativePath: entryRelative,
-            isDirectory: entry.isDirectory(),
-            size: 0,
-            modifiedAt: new Date(0).toISOString(),
-            extension: entry.isDirectory() ? null : path.extname(entry.name).slice(1).toLowerCase(),
-            inaccessible: true,
-            statError: error instanceof Error ? error.message : 'stat failed',
-          };
-        }
-      }),
-  );
+  // Do not stat here. Following cloud/offline/network entries occupies the
+  // libuv pool and can stall every later listing (including 개인폴더).
+  return entries
+    .filter((entry) => !entry.name.startsWith('.'))
+    .map((entry) => {
+      const isDirectory = isDirentDirectory(entry);
+      return {
+        name: entry.name,
+        relativePath: joinRelativePath(relativePath, entry.name),
+        isDirectory,
+        size: 0,
+        modifiedAt: '',
+        extension: isDirectory ? null : path.extname(entry.name).slice(1).toLowerCase(),
+      };
+    });
 }
 
 export async function mkdir(relativePath) {

@@ -55,7 +55,7 @@ window.nas4usb = {
   },
   subscribeFsChanged: (callback) => {},
   fs: {
-    readDir: (relativePath) => {},
+    readDir: (relativePath, options) => {},
     mkdir: (relativePath) => {},
     delete: (relativePath) => {},
     rename: (fromRelative, toRelative) => {},

@@ -262,6 +262,22 @@ export async function handleHttpApiRequest(req, res) {
   const method = req.method ?? 'GET';
 
   try {
+    if (method === 'OPTIONS') {
+      const origin =
+        typeof req.headers.origin === 'string' && req.headers.origin.trim()
+          ? req.headers.origin.trim()
+          : '*';
+      res.writeHead(204, {
+        'Access-Control-Allow-Origin': origin,
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, X-Admin-Token, Range, Accept',
+        'Access-Control-Max-Age': '86400',
+        ...(origin !== '*' ? { 'Access-Control-Allow-Credentials': 'true' } : {}),
+      });
+      res.end();
+      return true;
+    }
+
     if (method === 'GET' && url.pathname === '/api/app/paths') {
       sendJson(res, 200, getAppPaths(getAccessAuth(req)));
       return true;
@@ -404,13 +420,22 @@ export async function handleHttpApiRequest(req, res) {
     }
 
     if (method === 'GET' && url.pathname === '/api/fs/readFile') {
-      sendJson(
-        res,
-        200,
-        await readFileBase64WithAccessFilter(url.searchParams.get('path') ?? '', getAccessAuth(req),
-          getShareTokenFromQuery(url),
-        ),
-      );
+      const relativePath = url.searchParams.get('path') ?? '';
+      const shareToken = getShareTokenFromQuery(url);
+      const accept = String(req.headers.accept ?? '');
+      req.setTimeout(10 * 60 * 1000);
+      // LAN browsers time out when the whole file is JSON-stringified as base64
+      // on the main thread. Send raw bytes unless a client asked for JSON.
+      if (accept.includes('application/json') && !accept.includes('application/octet-stream')) {
+        sendJson(
+          res,
+          200,
+          await readFileBase64WithAccessFilter(relativePath, getAccessAuth(req), shareToken),
+        );
+        return true;
+      }
+      await assertCanAccessFile(relativePath, getAccessAuth(req), shareToken);
+      await streamFile(req, res, relativePath, 'application/octet-stream');
       return true;
     }
 

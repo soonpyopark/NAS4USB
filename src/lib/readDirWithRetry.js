@@ -1,14 +1,10 @@
-import { retryAsync } from './retryAsync.js';
-
-/** readDir — tolerate brief server restarts / LAN glitches. */
-const FS_READ_DIR_RETRY = { retries: 4, delayMs: 600 };
-
 /**
  * @param {string} relativePath
+ * @param {AbortSignal} [signal]
  */
-export function readDirWithRetry(relativePath) {
-  return retryAsync(
-    () => window.nas4usb.fs.readDir(relativePath ?? '.'),
-    FS_READ_DIR_RETRY,
-  );
+export function readDirWithRetry(relativePath, signal) {
+  if (signal?.aborted) {
+    return Promise.reject(new DOMException('Aborted', 'AbortError'));
+  }
+  return window.nas4usb.fs.readDir(relativePath ?? '.', { signal });
 }

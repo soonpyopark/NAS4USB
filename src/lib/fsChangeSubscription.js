@@ -1,13 +1,16 @@
 const API_PREFIX = '/api';
+/** SSE 없이 쓸 때 (태블릿·공유기 HTTPS는 EventSource가 연결을 붙잡음) */
+const POLL_ONLY_MS = 2500;
 /** SSE 끊김 시에만 revision 폴링 (백업) */
 const POLL_FALLBACK_MS = 5000;
 const SSE_RETRY_MS = 2000;
 
 /**
  * @param {(event: { revision?: number, paths?: string[], at?: number }) => void} callback
+ * @param {{ useSse?: boolean }} [options]
  * @returns {() => void}
  */
-export function createFsChangeSubscription(callback) {
+export function createFsChangeSubscription(callback, { useSse = true } = {}) {
   let stopped = false;
   let lastRevision = null;
   let sseConnected = false;
@@ -80,12 +83,12 @@ export function createFsChangeSubscription(callback) {
     }
   };
 
-  const startPollFallback = () => {
+  const startPollFallback = (intervalMs = POLL_FALLBACK_MS) => {
     if (pollTimer !== null) return;
     void pollRevision();
     pollTimer = window.setInterval(() => {
       void pollRevision();
-    }, POLL_FALLBACK_MS);
+    }, intervalMs);
   };
 
   const stopPollFallback = () => {
@@ -96,8 +99,8 @@ export function createFsChangeSubscription(callback) {
   };
 
   const connectSse = () => {
-    if (stopped || typeof EventSource === 'undefined') {
-      startPollFallback();
+    if (stopped || !useSse || typeof EventSource === 'undefined') {
+      startPollFallback(useSse ? POLL_FALLBACK_MS : POLL_ONLY_MS);
       return;
     }
 

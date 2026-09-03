@@ -19,16 +19,24 @@ export function useFileSystem(currentPath) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const loadedPathRef = useRef(/** @type {string | null} */ (null));
+  const requestIdRef = useRef(0);
+  const abortRef = useRef(/** @type {AbortController | null} */ (null));
 
   const refresh = useCallback(async () => {
+    abortRef.current?.abort();
+    const abort = new AbortController();
+    abortRef.current = abort;
+    const requestId = ++requestIdRef.current;
     if (loadedPathRef.current !== currentPath) {
       setLoading(true);
+      setEntries([]);
     }
     setError(null);
 
     try {
       if (isFavoritesPath(currentPath)) {
         const result = await window.nas4usb.favorites.listEntries();
+        if (requestId !== requestIdRef.current) return;
         const all = Array.isArray(result) ? result : [];
         const kind = favoritesViewKind(currentPath);
         setEntries(
@@ -39,7 +47,8 @@ export function useFileSystem(currentPath) {
               : all,
         );
       } else {
-        const result = await readDirWithRetry(currentPath);
+        const result = await readDirWithRetry(currentPath, abort.signal);
+        if (requestId !== requestIdRef.current) return;
         setEntries(
           filterPdfViewerSidecarFromEntries(
             filterFortuneSidecarFromEntries(
@@ -49,14 +58,17 @@ export function useFileSystem(currentPath) {
         );
       }
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       if (isFsNotFoundError(err) || isFsNotADirectoryError(err)) {
         setEntries([]);
         setError(null);
       } else {
-        // 재시도 후에도 실패 — 목록은 유지하고 배너는 띄우지 않음
-        setError(null);
+        setEntries([]);
+        setError(err instanceof Error ? err.message : '폴더 목록을 불러오지 못했습니다.');
       }
     } finally {
+      if (requestId !== requestIdRef.current) return;
       loadedPathRef.current = currentPath;
       setLoading(false);
     }
@@ -64,6 +76,9 @@ export function useFileSystem(currentPath) {
 
   useEffect(() => {
     refresh();
+    return () => {
+      abortRef.current?.abort();
+    };
   }, [refresh]);
 
   const mkdir = useCallback(
