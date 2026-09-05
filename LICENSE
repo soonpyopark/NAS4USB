@@ -693,6 +693,7 @@ is below; the full inventory of direct npm dependencies is in THIRD_PARTY_NOTICE
 | CodeMirror 6 | MIT | https://github.com/codemirror/dev |
 | FortuneSheet | MIT | https://github.com/ruilisi/fortune-sheet |
 | rhwp (@rhwp/core, @rhwp/editor) | MIT | https://github.com/edwardkim/rhwp |
+| kordoc | MIT | https://github.com/chrisryugj/kordoc |
 | WhiteBoard4Share (wb4s) | AGPL-3.0-only | https://github.com/soonpyopark/WhiteBoard4Share |
 | PDF.js (pdfjs-dist) | Apache-2.0 | https://github.com/mozilla/pdf.js |
 | Video.js | Apache-2.0 | https://github.com/videojs/video.js |

@@ -77,6 +77,11 @@ contextBridge.exposeInMainWorld('nas4usb', {
     embedMarkups: (payload) => ipcRenderer.invoke('pdf:embedMarkups', payload ?? {}),
   },
 
+  kordoc: {
+    hwpxToMarkdown: (payload) => ipcRenderer.invoke('kordoc:hwpxToMarkdown', payload ?? {}),
+    markdownToHwpx: (payload) => ipcRenderer.invoke('kordoc:markdownToHwpx', payload ?? {}),
+  },
+
   auth: {
     login: ({ id, password, rememberMe }) =>
       ipcRenderer.invoke('auth:login', { id, password, rememberMe }),

@@ -884,6 +884,40 @@ export default function FileExplorer({
     }
   };
 
+  const handleExportMarkdown = async (entry) => {
+    if (!entry || entry.isDirectory) return;
+    try {
+      const fileName = entry.name || entry.relativePath.split('/').pop();
+      const { exportHwpxFileAsMarkdown } = await import('../../lib/hwpx/exportHwpxAsMarkdown.js');
+      const saved = await exportHwpxFileAsMarkdown(entry.relativePath, fileName);
+      if (!saved) return;
+      nativeAlert(`Markdown으로 내보냈습니다.\n${saved.absolutePath ?? saved.fileName}`);
+    } catch (err) {
+      nativeAlert(err instanceof Error ? err.message : 'Markdown으로 내보내기에 실패했습니다.');
+    }
+  };
+
+  const handleExportHwpx = async (entry) => {
+    if (!entry || entry.isDirectory) return;
+    try {
+      const fileName = entry.name || entry.relativePath.split('/').pop();
+      let saved;
+      if (isTiptapDocumentRelativePath(entry.relativePath)) {
+        const { exportTiptapFileAsHwpx } = await import('../../lib/tiptap/exportHwpx.js');
+        saved = await exportTiptapFileAsHwpx(entry.relativePath, fileName);
+      } else if (/\.md$/i.test(entry.relativePath)) {
+        const { exportMarkdownFileAsHwpx } = await import('../../lib/text/exportMarkdownAsHwpx.js');
+        saved = await exportMarkdownFileAsHwpx(entry.relativePath, fileName);
+      } else {
+        throw new Error('HWPX 내보내기를 지원하지 않는 파일입니다.');
+      }
+      if (!saved) return;
+      nativeAlert(`HWPX로 내보냈습니다.\n${saved.absolutePath ?? saved.fileName}`);
+    } catch (err) {
+      nativeAlert(err instanceof Error ? err.message : 'HWPX로 내보내기에 실패했습니다.');
+    }
+  };
+
   const handleShareLinkBadgeClick = async (entry) => {
     try {
       const result = await openShareLinkForEntry({
@@ -1563,12 +1597,23 @@ export default function FileExplorer({
         onDownload: () => handleDownload(contextTarget),
         canDownload: contextTargets.some((target) => !target.isDirectory),
         onExportHtml: () => handleExportHtml(contextTarget),
+        onExportMarkdown: () => handleExportMarkdown(contextTarget),
+        onExportHwpx: () => handleExportHwpx(contextTarget),
         onSetPassword: () => handleSetPassword(contextTarget),
         canSetPassword: contextTargets.some((target) => canSetFilePassword(target) || canRemoveFilePassword(target)),
         passwordActionLabel: contextTargets.every(canRemoveFilePassword)
           ? '비밀번호 해제'
           : '비밀번호 설정',
         canExportHtml:
+          contextTargets.length === 1 &&
+          !contextTargets[0].isDirectory &&
+          (isTiptapDocumentRelativePath(contextTargets[0].relativePath) ||
+            /\.md$/i.test(contextTargets[0].relativePath)),
+        canExportMarkdown:
+          contextTargets.length === 1 &&
+          !contextTargets[0].isDirectory &&
+          /\.hwpx$/i.test(contextTargets[0].relativePath),
+        canExportHwpx:
           contextTargets.length === 1 &&
           !contextTargets[0].isDirectory &&
           (isTiptapDocumentRelativePath(contextTargets[0].relativePath) ||

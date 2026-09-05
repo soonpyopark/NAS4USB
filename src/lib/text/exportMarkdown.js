@@ -16,7 +16,18 @@ export function getMarkdownFileStem(fileName) {
  * @param {string} relativePath
  */
 export function isMarkdownRelativePath(relativePath) {
-  return /\.md$/i.test(String(relativePath || ''));
+  return /\.(md|markdown|mdx)(\.sec)?$/i.test(String(relativePath || ''));
+}
+
+/**
+ * @param {string | null | undefined} extension
+ */
+export function isMarkdownExtension(extension) {
+  const ext = String(extension ?? '')
+    .trim()
+    .replace(/^\./, '')
+    .toLowerCase();
+  return ext === 'md' || ext === 'markdown' || ext === 'mdx';
 }
 
 /**

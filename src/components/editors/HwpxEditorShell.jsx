@@ -36,6 +36,7 @@ export default function HwpxEditorShell({
   const [bound, setBound] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [exportingMarkdown, setExportingMarkdown] = useState(false);
   const [printing, setPrinting] = useState(false);
   const mountRef = useRef(null);
   const unbindRef = useRef(null);
@@ -248,8 +249,28 @@ export default function HwpxEditorShell({
     return hwpxBase64Ref.current;
   }, []);
 
+  const handleExportMarkdown = useCallback(async () => {
+    if (exportingPdf || exportingMarkdown || printing) return;
+    setExportingMarkdown(true);
+    setLoadError(null);
+    try {
+      const { exportHwpxBase64AsMarkdown } = await import('../../lib/hwpx/exportHwpxAsMarkdown.js');
+      const saved = await exportHwpxBase64AsMarkdown(fileName, await readLiveHwpxBase64());
+      if (!saved) return;
+      const { showAppAlert } = await import('../../lib/nativeDialog.js');
+      await showAppAlert({
+        title: 'Markdown으로 내보내기',
+        body: `내보냈습니다.\n${saved.absolutePath ?? saved.fileName}`,
+      });
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Markdown으로 내보내기에 실패했습니다.');
+    } finally {
+      setExportingMarkdown(false);
+    }
+  }, [exportingMarkdown, exportingPdf, fileName, printing, readLiveHwpxBase64]);
+
   const handleExportPdf = useCallback(async () => {
-    if (exportingPdf || printing) return;
+    if (exportingPdf || exportingMarkdown || printing) return;
     setExportingPdf(true);
     setLoadError(null);
     try {
@@ -275,10 +296,10 @@ export default function HwpxEditorShell({
     } finally {
       setExportingPdf(false);
     }
-  }, [exportingPdf, fileName, printing, readLiveHwpxBase64]);
+  }, [exportingMarkdown, exportingPdf, fileName, printing, readLiveHwpxBase64]);
 
   const handlePrint = useCallback(async () => {
-    if (exportingPdf || printing) return;
+    if (exportingPdf || exportingMarkdown || printing) return;
     setPrinting(true);
     setLoadError(null);
     try {
@@ -299,7 +320,7 @@ export default function HwpxEditorShell({
     } finally {
       setPrinting(false);
     }
-  }, [exportingPdf, fileName, printing, readLiveHwpxBase64]);
+  }, [exportingMarkdown, exportingPdf, fileName, printing, readLiveHwpxBase64]);
 
   const handleClose = async () => {
     const canFlush = Boolean(!shareReadOnly && editorHandleRef.current && editorReady);
@@ -349,6 +370,8 @@ export default function HwpxEditorShell({
         hideSave={shareReadOnly}
         hideHistory={shareReadOnly}
         onShowHistory={() => setShowHistory(true)}
+        onExportMarkdown={isLoading ? undefined : handleExportMarkdown}
+        exportingMarkdown={exportingMarkdown}
         onExportPdf={isLoading ? undefined : handleExportPdf}
         exportingPdf={exportingPdf}
         onPrint={isLoading ? undefined : handlePrint}

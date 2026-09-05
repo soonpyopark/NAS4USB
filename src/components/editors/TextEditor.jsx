@@ -38,6 +38,8 @@ import HtmlPreviewFrame from './HtmlPreviewFrame.jsx';
  * @param {{ line?: number } | null} [props.openLocation]
  * @param {(editor: import('../../lib/rhwp/types.js').RhwpEditorHandle) => void} props.onReady
  * @param {() => void} [props.onSave]
+ * @param {() => void} [props.onExportHwpx]
+ * @param {boolean} [props.exportingHwpx]
  */
 export default function TextEditor({
   initialText,
@@ -49,6 +51,8 @@ export default function TextEditor({
   openLocation = null,
   onReady,
   onSave,
+  onExportHwpx,
+  exportingHwpx = false,
 }) {
   const parentRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   const markdownPreviewRef = useRef(/** @type {HTMLDivElement | null} */ (null));
@@ -412,6 +416,17 @@ export default function TextEditor({
         <span className={`text-[11px] ${darkTheme ? 'text-slate-500' : 'text-slate-400'}`}>
           CodeMirror 전체 기능
         </span>
+        {isMarkdown && onExportHwpx ? (
+          <button
+            type="button"
+            className={`nas-btn-ghost text-xs ${darkTheme ? 'text-slate-200 hover:bg-slate-800' : ''}`}
+            onClick={onExportHwpx}
+            disabled={exportingHwpx}
+            title="현재 Markdown을 HWPX로 내보냅니다"
+          >
+            {exportingHwpx ? 'HWPX 내보내는 중…' : 'HWPX로 내보내기'}
+          </button>
+        ) : null}
           </>
         ) : null}
         {hasPreview && (

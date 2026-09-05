@@ -45,6 +45,10 @@ function openFileMenuLabel(entry) {
  *   passwordActionLabel?: string,
  *   onExportHtml?: () => void,
  *   canExportHtml?: boolean,
+ *   onExportMarkdown?: () => void,
+ *   canExportMarkdown?: boolean,
+ *   onExportHwpx?: () => void,
+ *   canExportHwpx?: boolean,
  *   onToggleFavorite?: (favorited: boolean) => void,
  *   isFavorite?: boolean,
  *   onSetFolderColor?: (color: string) => void,
@@ -80,6 +84,10 @@ export function buildEntryContextMenuItems({
   passwordActionLabel = '비밀번호 설정',
   onExportHtml,
   canExportHtml = false,
+  onExportMarkdown,
+  canExportMarkdown = false,
+  onExportHwpx,
+  canExportHwpx = false,
   onToggleFavorite,
   isFavorite = false,
   onSetFolderColor,
@@ -180,6 +188,26 @@ export function buildEntryContextMenuItems({
         disabled: !onExportHtml || !canExportHtml,
         onClick: () => onExportHtml?.(),
       },
+      ...(canExportMarkdown
+        ? [
+            {
+              id: 'export-markdown',
+              label: 'Markdown으로 내보내기',
+              disabled: !onExportMarkdown,
+              onClick: () => onExportMarkdown?.(),
+            },
+          ]
+        : []),
+      ...(canExportHwpx
+        ? [
+            {
+              id: 'export-hwpx',
+              label: 'HWPX로 내보내기',
+              disabled: !onExportHwpx,
+              onClick: () => onExportHwpx?.(),
+            },
+          ]
+        : []),
       {
         id: 'properties',
         label: '속성',
@@ -330,6 +358,26 @@ export function buildEntryContextMenuItems({
       disabled: !onExportHtml || !canExportHtml,
       onClick: () => onExportHtml?.(),
     },
+    ...(canExportMarkdown
+      ? [
+          {
+            id: 'export-markdown',
+            label: 'Markdown으로 내보내기',
+            disabled: !onExportMarkdown,
+            onClick: () => onExportMarkdown?.(),
+          },
+        ]
+      : []),
+    ...(canExportHwpx
+      ? [
+          {
+            id: 'export-hwpx',
+            label: 'HWPX로 내보내기',
+            disabled: !onExportHwpx,
+            onClick: () => onExportHwpx?.(),
+          },
+        ]
+      : []),
     {
       id: 'set-password',
       label: passwordActionLabel,

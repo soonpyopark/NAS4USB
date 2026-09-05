@@ -128,6 +128,29 @@ function isDirentDirectory(entry) {
   return false;
 }
 
+const READ_DIR_LSTAT_CONCURRENCY = 16;
+
+/**
+ * @template T, R
+ * @param {T[]} items
+ * @param {number} limit
+ * @param {(item: T) => Promise<R>} worker
+ * @returns {Promise<R[]>}
+ */
+async function mapLimit(items, limit, worker) {
+  const results = new Array(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next;
+      next += 1;
+      results[index] = await worker(items[index]);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 export async function readDir(relativePath = '.') {
   const normalized = normalizeRelativePath(relativePath);
   const absolute = resolvePortablePath(relativePath);
@@ -142,23 +165,33 @@ export async function readDir(relativePath = '.') {
     throw toUserFsError(error);
   }
 
-  const entries = await fs.readdir(absolute, { withFileTypes: true });
+  const entries = (await fs.readdir(absolute, { withFileTypes: true })).filter(
+    (entry) => !entry.name.startsWith('.'),
+  );
 
-  // Do not stat here. Following cloud/offline/network entries occupies the
-  // libuv pool and can stall every later listing (including 개인폴더).
-  return entries
-    .filter((entry) => !entry.name.startsWith('.'))
-    .map((entry) => {
-      const isDirectory = isDirentDirectory(entry);
-      return {
-        name: entry.name,
-        relativePath: joinRelativePath(relativePath, entry.name),
-        isDirectory,
-        size: 0,
-        modifiedAt: '',
-        extension: isDirectory ? null : path.extname(entry.name).slice(1).toLowerCase(),
-      };
-    });
+  // lstat only — do not follow junctions/cloud placeholders (fs.stat can stall
+  // the libuv pool and freeze later listings).
+  return mapLimit(entries, READ_DIR_LSTAT_CONCURRENCY, async (entry) => {
+    const isDirectory = isDirentDirectory(entry);
+    const item = {
+      name: entry.name,
+      relativePath: joinRelativePath(relativePath, entry.name),
+      isDirectory,
+      size: 0,
+      modifiedAt: '',
+      extension: isDirectory ? null : path.extname(entry.name).slice(1).toLowerCase(),
+    };
+
+    try {
+      const stats = await fs.lstat(path.join(absolute, entry.name));
+      item.size = stats.size;
+      item.modifiedAt = stats.mtime.toISOString();
+      if (!item.isDirectory && stats.isDirectory()) item.isDirectory = true;
+    } catch {
+      item.inaccessible = true;
+    }
+    return item;
+  });
 }
 
 export async function mkdir(relativePath) {

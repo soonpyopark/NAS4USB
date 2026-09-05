@@ -317,6 +317,40 @@ export default function Sidebar({
     }
   };
 
+  const handleExportMarkdown = async (entry) => {
+    if (!entry || entry.isDirectory) return;
+    try {
+      const fileName = entry.name || entry.relativePath.split('/').pop();
+      const { exportHwpxFileAsMarkdown } = await import('../../lib/hwpx/exportHwpxAsMarkdown.js');
+      const saved = await exportHwpxFileAsMarkdown(entry.relativePath, fileName);
+      if (!saved) return;
+      nativeAlert(`Markdown으로 내보냈습니다.\n${saved.absolutePath ?? saved.fileName}`);
+    } catch (err) {
+      nativeAlert(err instanceof Error ? err.message : 'Markdown으로 내보내기에 실패했습니다.');
+    }
+  };
+
+  const handleExportHwpx = async (entry) => {
+    if (!entry || entry.isDirectory) return;
+    try {
+      const fileName = entry.name || entry.relativePath.split('/').pop();
+      let saved;
+      if (isTiptapDocumentRelativePath(entry.relativePath)) {
+        const { exportTiptapFileAsHwpx } = await import('../../lib/tiptap/exportHwpx.js');
+        saved = await exportTiptapFileAsHwpx(entry.relativePath, fileName);
+      } else if (/\.md$/i.test(entry.relativePath)) {
+        const { exportMarkdownFileAsHwpx } = await import('../../lib/text/exportMarkdownAsHwpx.js');
+        saved = await exportMarkdownFileAsHwpx(entry.relativePath, fileName);
+      } else {
+        throw new Error('HWPX 내보내기를 지원하지 않는 파일입니다.');
+      }
+      if (!saved) return;
+      nativeAlert(`HWPX로 내보냈습니다.\n${saved.absolutePath ?? saved.fileName}`);
+    } catch (err) {
+      nativeAlert(err instanceof Error ? err.message : 'HWPX로 내보내기에 실패했습니다.');
+    }
+  };
+
   const getSiblingNames = async (targetPath) => {
     if (targetPath === currentPath) {
       return (tree.childrenMap[targetPath] ?? tree.rootEntries).map((entry) => entry.name);
@@ -829,6 +863,17 @@ export default function Sidebar({
         passwordActionLabel: canRemoveFilePassword(contextTarget) ? '비밀번호 해제' : '비밀번호 설정',
         onExportHtml: () => handleExportHtml(contextTarget),
         canExportHtml: Boolean(
+          contextTarget &&
+            !contextTarget.isDirectory &&
+            (isTiptapDocumentRelativePath(contextTarget.relativePath) ||
+              /\.md$/i.test(contextTarget.relativePath)),
+        ),
+        onExportMarkdown: () => handleExportMarkdown(contextTarget),
+        canExportMarkdown: Boolean(
+          contextTarget && !contextTarget.isDirectory && /\.hwpx$/i.test(contextTarget.relativePath),
+        ),
+        onExportHwpx: () => handleExportHwpx(contextTarget),
+        canExportHwpx: Boolean(
           contextTarget &&
             !contextTarget.isDirectory &&
             (isTiptapDocumentRelativePath(contextTarget.relativePath) ||

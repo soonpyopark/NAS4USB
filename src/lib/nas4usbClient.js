@@ -355,6 +355,27 @@ export function createHttpNas4usbClient() {
         ),
     },
 
+    kordoc: {
+      hwpxToMarkdown: (payload) =>
+        apiFetch(
+          '/kordoc/hwpxToMarkdown',
+          {
+            method: 'POST',
+            body: JSON.stringify(payload ?? {}),
+          },
+          180000,
+        ),
+      markdownToHwpx: (payload) =>
+        apiFetch(
+          '/kordoc/markdownToHwpx',
+          {
+            method: 'POST',
+            body: JSON.stringify(payload ?? {}),
+          },
+          180000,
+        ),
+    },
+
     auth: {
       login: ({ id, password, rememberMe }) =>
         apiFetch('/auth/login', {

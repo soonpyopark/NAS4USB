@@ -1281,6 +1281,22 @@ export async function handleHttpApiRequest(req, res) {
       return true;
     }
 
+    if (method === 'POST' && url.pathname === '/api/kordoc/hwpxToMarkdown') {
+      const body = await readJsonBody(req);
+      const { hwpxBase64ToMarkdown } = await import('./kordocConvertService.js');
+      const result = await hwpxBase64ToMarkdown({ hwpxBase64: body.hwpxBase64 ?? '' });
+      sendJson(res, 200, result);
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/kordoc/markdownToHwpx') {
+      const body = await readJsonBody(req);
+      const { markdownToHwpxBase64 } = await import('./kordocConvertService.js');
+      const result = await markdownToHwpxBase64({ markdown: body.markdown ?? '' });
+      sendJson(res, 200, result);
+      return true;
+    }
+
     if (method === 'POST' && url.pathname === '/api/pdf/fromHtml') {
       // Host renders the export HTML with Chromium so LAN clients get the same PDF.
       const body = await readJsonBody(req);

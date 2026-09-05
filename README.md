@@ -24,9 +24,9 @@ USB(또는 단일 폴더)만으로 **오프라인 LAN NAS**와 **실시간 공�
 | USB 포터블 | `NAS4USB.exe` + 데이터 폴더를 USB에 복사해 실행 |
 | 워크스페이스 | UI **공유폴더** / **개인폴더** ↔ 디스크 `share` / `private` |
 | LAN 동기화 | Y.js WebSocket — 같은 방(room)에 접속한 클라이언트 간 CRDT 동기화 |
-| HWPX 편집 | rhwp-studio 기반 `.hwpx` 브라우저 에디터 |
-| TipTap 문서 | `.tiptap` — Notion-like TipTap 에디터 (ZIP+첨부, 슬래시 메뉴, 실시간 협업, 원노트 가져오기, HTML 내보내기) |
-| Markdown / TXT | CodeMirror 편집 · MD 미리보기 · MD는 HTML 내보내기 |
+| HWPX 편집 | rhwp-studio 기반 `.hwpx` 브라우저 에디터 · Markdown 내보내기 |
+| TipTap 문서 | `.tiptap` — Notion-like TipTap 에디터 (ZIP+첨부, 슬래시 메뉴, 실시간 협업, 원노트 가져오기, HTML·HWPX 내보내기) |
+| Markdown / TXT | CodeMirror 편집 · MD 미리보기 · MD는 HTML·HWPX 내보내기 |
 | 스프레드시트 | FortuneSheet — `.xlsx` / `.xls` |
 | 화이트보드 | `.wb4s` — WhiteBoard4Share 엔진 |
 | PDF 미리보기 | 썸네일 · 너비/높이/페이지 맞춤 · 2쪽 보기 · 검색 · 형광펜/밑줄 · 엑셀 내보내기 |
@@ -256,6 +256,7 @@ NAS4USB/
 | 코어 | 패키지 / 경로 | 라이선스 (업스트림) |
 |------|----------------|---------------------|
 | HWPX (rhwp) | `@rhwp/core`, `@rhwp/editor` | MIT |
+| HWPX ↔ Markdown | `kordoc` | MIT |
 | Spreadsheet | `@fortune-sheet/react` | MIT |
 | Whiteboard | `lib/updates/wb4s` / WhiteBoard4Share | AGPL-3.0-only |
 | TipTap | `@tiptap/react`, `@tiptap/starter-kit` 등 | MIT |

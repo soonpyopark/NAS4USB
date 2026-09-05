@@ -92,6 +92,10 @@ window.nas4usb = {
     fromHtml: (payload) => {},
     embedMarkups: (payload) => {},
   },
+  kordoc: {
+    hwpxToMarkdown: (payload) => {},
+    markdownToHwpx: (payload) => {},
+  },
   auth: {
     login: ({ id, password, rememberMe }) => {},
     showDefaultAdminHint: () => {},

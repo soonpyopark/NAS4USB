@@ -11,6 +11,9 @@
     {
       "cidr": "100.64.0.0/10",
       "description": "Tailscale 전체 대역"
+    },
+    {
+      "cidr": "211.248.230.63"
     }
   ],
   "guestPermissions": {
@@ -26,6 +29,7 @@
   "webServerPort": 3009,
   "webServerMode": "lan",
   "httpsEnabled": true,
+  "tlsHostnames": [],
   "themeAccentColor": "#57534e",
   "dataRoot": "D:\\NAS4USB_Data",
   "externalFolders": [

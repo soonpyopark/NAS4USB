@@ -25,6 +25,7 @@ updated (NAS4USB **1.0.8**). Exact resolved versions are in `package-lock.json`.
 | CodeMirror 6 | 6.x | MIT | https://github.com/codemirror/dev |
 | FortuneSheet (`@fortune-sheet/react`) | 1.0.4 | MIT | https://github.com/ruilisi/fortune-sheet |
 | rhwp (`@rhwp/core`, `@rhwp/editor`) | 0.8.4 | MIT | https://github.com/edwardkim/rhwp |
+| kordoc | 4.12.x | MIT | https://github.com/chrisryugj/kordoc |
 | WhiteBoard4Share | 1.0.6 | AGPL-3.0-only | https://github.com/soonpyopark/WhiteBoard4Share |
 | PDF.js (`pdfjs-dist`) | 6.x | Apache-2.0 | https://github.com/mozilla/pdf.js |
 | Video.js | 8.24.x | Apache-2.0 | https://github.com/videojs/video.js |
@@ -59,6 +60,7 @@ Bundled editor outputs (`public/rhwp-studio/`, `public/rhwp-core/`,
 | `@rhwp/editor` | MIT |
 | `@tiptap/*` (core, react, starter-kit, extensions, …) | MIT (most packages); see each package for details |
 | `@tiptap/y-tiptap` | MIT |
+| `kordoc` | MIT |
 | `jszip` | MIT OR GPL-3.0-or-later |
 | `hls.js` | Apache-2.0 |
 | `video.js` | Apache-2.0 |

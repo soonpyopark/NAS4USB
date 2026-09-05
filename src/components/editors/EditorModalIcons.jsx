@@ -110,6 +110,37 @@ export function IconPrint() {
   );
 }
 
+/** Markdown 내보내기 — document marked M with an arrow going out */
+export function IconExportMarkdown() {
+  return (
+    <Glyph>
+      <path
+        fill="currentColor"
+        d="M13 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-8h-2v8H6V5h7Z"
+      />
+      <path fill="currentColor" d="M17 2l4.5 4.5-1.4 1.4L18 5.8V11h-2V5.8l-2.1 2.1-1.4-1.4Z" />
+      <path
+        fill="currentColor"
+        d="M8 13.2h1.4l1.1 2.6 1.1-2.6H13V19h-1.35v-3.2L10.4 19H9.6l-1.25-3.2V19H8Z"
+      />
+    </Glyph>
+  );
+}
+
+/** HWPX 내보내기 — document marked H with an arrow going out */
+export function IconExportHwpx() {
+  return (
+    <Glyph>
+      <path
+        fill="currentColor"
+        d="M13 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-8h-2v8H6V5h7Z"
+      />
+      <path fill="currentColor" d="M17 2l4.5 4.5-1.4 1.4L18 5.8V11h-2V5.8l-2.1 2.1-1.4-1.4Z" />
+      <path fill="currentColor" d="M8 13h1.45v2.2h2.1V13H13v6h-1.45v-2.3h-2.1V19H8Z" />
+    </Glyph>
+  );
+}
+
 /** PDF 내보내기 — document marked P with an arrow going out */
 export function IconExportPdf() {
   return (
