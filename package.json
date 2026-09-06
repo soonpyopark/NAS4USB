@@ -41,7 +41,7 @@
     "@xmldom/xmldom": "^0.9.10",
     "autoprefixer": "^10.4.20",
     "concurrently": "^9.1.2",
-    "electron": "^44.1.1",
+    "electron": "^44.2.0",
     "electron-builder": "^26.15.3",
     "png-to-ico": "^3.0.2",
     "postcss": "^8.4.49",
@@ -67,12 +67,12 @@
     "@rhwp/core": "^0.8.6",
     "@rhwp/editor": "^0.8.6",
     "@tedyang2003/onenote-converter-wasm": "^1.0.1",
-    "@tiptap/core": "^3.31.0",
-    "@tiptap/extension-bubble-menu": "^3.31.0",
+    "@tiptap/core": "^3.31.3",
+    "@tiptap/extension-bubble-menu": "^3.31.3",
     "@tiptap/extension-character-count": "^3.30.0",
     "@tiptap/extension-code-block-lowlight": "^3.30.0",
-    "@tiptap/extension-collaboration": "^3.31.0",
-    "@tiptap/extension-collaboration-caret": "^3.31.0",
+    "@tiptap/extension-collaboration": "^3.31.3",
+    "@tiptap/extension-collaboration-caret": "^3.31.3",
     "@tiptap/extension-color": "^3.30.0",
     "@tiptap/extension-details": "^3.30.0",
     "@tiptap/extension-drag-handle": "^3.30.0",
@@ -102,9 +102,9 @@
     "@tiptap/extension-unique-id": "^3.30.0",
     "@tiptap/extension-youtube": "^3.30.0",
     "@tiptap/markdown": "^3.30.0",
-    "@tiptap/pm": "^3.31.0",
-    "@tiptap/react": "^3.31.0",
-    "@tiptap/starter-kit": "^3.31.0",
+    "@tiptap/pm": "^3.31.3",
+    "@tiptap/react": "^3.31.3",
+    "@tiptap/starter-kit": "^3.31.3",
     "@tiptap/suggestion": "^3.30.0",
     "@tiptap/y-tiptap": "3.0.7",
     "7zip-min": "^3.0.1",
@@ -138,7 +138,7 @@
     "@tiptap/pm": "$@tiptap/pm"
   },
   "allowScripts": {
-    "electron@44.1.1": true
+    "electron@44.2.0": true
   },
   "build": {
     "appId": "com.nas4usb.app",
