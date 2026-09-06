@@ -1,5 +1,8 @@
-/** Default Y.js WebSocket broker port (LAN sync). */
+/** Default Y.js WebSocket broker port (LAN sync, Windows / dev). */
 export const DEFAULT_SYNC_PORT = 3009;
+
+/** Packaged macOS builds use a different port so they can run beside Windows/dev. */
+export const DEFAULT_MAC_SYNC_PORT = 3011;
 
 /** Application display version. */
 export const APP_VERSION = '1.0.8';
@@ -9,7 +12,7 @@ export const APP_VERSION = '1.0.8';
  * Refreshed by `build:release` / `build:msi` / `build:dist:exe` for update checks
  * when the GitHub tag version is unchanged (same-version republish).
  */
-export const APP_BUILD_STAMP = '260905_160025';
+export const APP_BUILD_STAMP = '260906_223525';
 
 /** Application display name. */
 export const APP_NAME = 'NAS4USB';

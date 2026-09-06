@@ -111,11 +111,12 @@ export async function findUnpackedDir(outputDir, pattern) {
  * never wipe a user's `dataRoot`; runtime seeds from `app.asar/seed/data`.
  *
  * @param {string} portableDir
- * @param {{ includeSampleData?: boolean, writeSettings?: boolean }} [options]
+ * @param {{ includeSampleData?: boolean, writeSettings?: boolean, stripSessions?: boolean }} [options]
  */
 export async function seedPortableData(portableDir, options = {}) {
   const includeSampleData = options.includeSampleData !== false;
   const writeSettings = options.writeSettings !== false;
+  const stripSessions = options.stripSessions !== false;
   const dataDir = path.join(portableDir, '공유폴더');
   const seedDir = path.join(projectRoot, 'seed', 'data');
   await fs.mkdir(dataDir, { recursive: true });
@@ -125,7 +126,8 @@ export async function seedPortableData(portableDir, options = {}) {
     await fs.cp(seedDir, dataDir, { recursive: true });
   }
 
-  if (writeSettings) {
+  const settingsPath = path.join(portableDir, '.nas4usb-settings.json');
+  if (writeSettings && !(await pathExists(settingsPath))) {
     const settings = {
       allowedIpCidrs: [],
       guestPermissions: { ...DEFAULT_GUEST_PERMISSIONS },
@@ -133,14 +135,16 @@ export async function seedPortableData(portableDir, options = {}) {
       themeAccentColor: DEFAULT_ACCENT_COLOR,
     };
     await fs.writeFile(
-      path.join(portableDir, '.nas4usb-settings.json'),
+      settingsPath,
       `${JSON.stringify(settings, null, 2)}\n`,
       'utf8',
     );
   }
 
   // A dev machine's "로그인 유지" tokens must never ship inside a build.
-  await fs.rm(path.join(portableDir, '.nas4usb-sessions.json'), { force: true });
+  if (stripSessions) {
+    await fs.rm(path.join(portableDir, '.nas4usb-sessions.json'), { force: true });
+  }
 
   await fs.copyFile(path.join(projectRoot, 'LICENSE'), path.join(portableDir, 'LICENSE'));
   await fs.copyFile(
@@ -149,6 +153,68 @@ export async function seedPortableData(portableDir, options = {}) {
   );
 
   await copyFileIfMissing(path.join(projectRoot, '.env.example'), path.join(portableDir, '.env.example'));
+}
+
+/** Keep in sync with electron/portablePaths.js */
+const MAC_BUNDLE_STATE_FILES = [
+  '.nas4usb-settings.json',
+  '.nas4usb-members.json',
+  '.nas4usb-sessions.json',
+  '.nas4usb-shares.json',
+  '.nas4usb-file-access.json',
+  '.nas4usb-favorites.json',
+  '.nas4usb-folder-colors.json',
+  '.nas4usb-folder-order.json',
+  '.nas4usb-trash.json',
+  '.env',
+];
+
+const MAC_BUNDLE_STATE_DIRS = ['.nas4usb', 'share', 'private', 'data', '공유폴더', '개인폴더'];
+
+/**
+ * Older Mac builds stored settings inside NAS4USB.app/Contents/MacOS.
+ * Copy them next to the .app before replacing the bundle (Windows-style).
+ *
+ * @param {string} appPath
+ * @param {string} destRoot
+ * @returns {Promise<string[]>}
+ */
+export async function rescueMacAppBundleState(appPath, destRoot) {
+  const macosDir = path.join(appPath, 'Contents', 'MacOS');
+  if (!(await pathExists(macosDir))) return [];
+
+  /** @type {string[]} */
+  const migrated = [];
+  await fs.mkdir(destRoot, { recursive: true });
+
+  for (const name of MAC_BUNDLE_STATE_FILES) {
+    const from = path.join(macosDir, name);
+    const to = path.join(destRoot, name);
+    if (!(await pathExists(from))) continue;
+    await fs.copyFile(from, to);
+    migrated.push(name);
+  }
+
+  for (const name of MAC_BUNDLE_STATE_DIRS) {
+    const from = path.join(macosDir, name);
+    const to = path.join(destRoot, name);
+    if (!(await pathExists(from))) continue;
+    if (await pathExists(to)) {
+      await fs.cp(from, to, { recursive: true, force: true });
+    } else {
+      try {
+        await fs.rename(from, to);
+      } catch {
+        await fs.cp(from, to, { recursive: true });
+      }
+    }
+    migrated.push(name);
+  }
+
+  if (migrated.length > 0) {
+    console.log(`[build] rescued app-bundle state → ${destRoot} (${migrated.join(', ')})`);
+  }
+  return migrated;
 }
 
 /**

@@ -4,6 +4,7 @@ import { isElectronRenderer } from '../../lib/runtime.js';
 import { formatByteSize } from '../../../shared/videoPreviewCache.js';
 import {
   DEFAULT_WORKSPACE_BACKUP,
+  describeWorkspaceBackupRestore,
   formatBackupDayListLabel,
   groupWorkspaceBackupsByDay,
   normalizeBackupTime,
@@ -12,6 +13,11 @@ import {
 
 const BUTTON_CLASS =
   'rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50';
+
+function ipcErrorMessage(error) {
+  const raw = error instanceof Error ? error.message : String(error ?? '');
+  return raw.replace(/^Error invoking remote method '[^']+':\s*(?:Error:\s*)?/i, '').trim() || raw;
+}
 
 /** Archives are listed as `YYYYMMDD/파일명`; ones made before day folders have no prefix. */
 function splitArchiveName(name) {
@@ -130,6 +136,64 @@ export default function BackupSettingsPanel() {
       });
     } finally {
       setBusy(false);
+    }
+  };
+
+  const importArchive = async () => {
+    if (!electron) return;
+    if (!config.destPath) {
+      void appAlert({ title: '백업 가져오기', body: '백업 폴더를 먼저 지정해 주세요.' });
+      return;
+    }
+    const zipPath = await window.nas4usb.dialog.pickFile({
+      title: '백업 가져오기',
+      filters: [
+        { name: 'NAS4USB 백업', extensions: ['zip'] },
+        { name: 'All Files', extensions: ['*'] },
+      ],
+    });
+    if (!zipPath) return;
+    const ok = await appConfirm({
+      title: '백업 가져오기',
+      body: '선택한 ZIP을 백업 폴더에 복사합니다. 복원은 아래 목록의 복원 버튼을 사용하세요.',
+      confirmLabel: '가져오기',
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      applyArchiveList(await window.nas4usb.backup.importArchive(zipPath));
+      void appAlert({ title: '백업 가져오기', body: '백업 ZIP을 가져왔습니다.' });
+    } catch (error) {
+      void appAlert({
+        title: '백업 가져오기 실패',
+        body: ipcErrorMessage(error) || '백업을 가져오지 못했습니다.',
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const restoreArchive = async (fileName) => {
+    const copy = describeWorkspaceBackupRestore(fileName);
+    const ok = await appConfirm({
+      title: copy.title,
+      body: `"${fileName}" 을 복원할까요?\n\n${copy.body}`,
+      confirmLabel: '복원',
+    });
+    if (!ok) return;
+    setBusy(true);
+    setRunning(true);
+    try {
+      await window.nas4usb.backup.restore(fileName);
+      void appAlert({ title: copy.title, body: '복원했습니다.' });
+    } catch (error) {
+      void appAlert({
+        title: '백업 복원 실패',
+        body: ipcErrorMessage(error) || '백업을 복원하지 못했습니다.',
+      });
+    } finally {
+      setBusy(false);
+      setRunning(false);
     }
   };
 
@@ -347,17 +411,27 @@ export default function BackupSettingsPanel() {
           <code className="rounded bg-slate-100 px-1 text-[12px]">
             NAS4USB_백업_private_아이디_YYMMDD_HHMMSS.zip
           </code>
-          을 넣습니다. 같은 날 백업 횟수가 하루 한도를 넘으면 그 폴더에서 오래된 회차부터
-          지웁니다.
+          을 넣습니다. 「백업 가져오기」는 다른 위치의 ZIP을 이 폴더로 복사합니다. 같은 날
+          백업 횟수가 하루 한도를 넘으면 그 폴더에서 오래된 회차부터 지웁니다.
         </p>
-        <button
-          type="button"
-          className={BUTTON_CLASS}
-          disabled={busy || running || !electron || !config.destPath}
-          onClick={() => void runNow()}
-        >
-          {running ? '백업 중…' : '지금 백업'}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className={BUTTON_CLASS}
+            disabled={busy || running || !electron || !config.destPath}
+            onClick={() => void runNow()}
+          >
+            {running ? '백업 중…' : '지금 백업'}
+          </button>
+          <button
+            type="button"
+            className={BUTTON_CLASS}
+            disabled={busy || running || !electron || !config.destPath}
+            onClick={() => void importArchive()}
+          >
+            백업 가져오기…
+          </button>
+        </div>
       </section>
 
       <section className="space-y-3">
@@ -495,14 +569,24 @@ export default function BackupSettingsPanel() {
                               {typeof item.bytes === 'number' ? ` · ${formatByteSize(item.bytes)}` : ''}
                             </p>
                           </div>
-                          <button
-                            type="button"
-                            className="shrink-0 rounded-md border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
-                            disabled={busy || running || !electron}
-                            onClick={() => void deleteArchive(item.fileName)}
-                          >
-                            삭제
-                          </button>
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            <button
+                              type="button"
+                              className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                              disabled={busy || running || !electron}
+                              onClick={() => void restoreArchive(item.fileName)}
+                            >
+                              복원
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded-md border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                              disabled={busy || running || !electron}
+                              onClick={() => void deleteArchive(item.fileName)}
+                            >
+                              삭제
+                            </button>
+                          </div>
                         </li>
                       );
                     })}

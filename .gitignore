@@ -12,6 +12,7 @@ msi/NAS4USB/
 msi/*.msi
 msi/*.wixpdb
 msi/*.zip
+msi/*.dmg
 *.log
 .DS_Store
 Thumbs.db

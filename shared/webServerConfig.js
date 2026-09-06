@@ -1,4 +1,4 @@
-import { DEFAULT_SYNC_PORT } from './constants.js';
+import { DEFAULT_MAC_SYNC_PORT, DEFAULT_SYNC_PORT } from './constants.js';
 
 /** @typedef {'local' | 'lan'} WebServerMode */
 
@@ -17,13 +17,26 @@ export function normalizeWebServerPort(value) {
 }
 
 /**
+ * Built-in port when settings and `.env` are both unset.
+ * Packaged macOS uses 3011 so it can run next to Windows / `npm run dev` (3009).
+ *
+ * @param {{ platform?: string, packaged?: boolean }} [options]
+ */
+export function fallbackSyncPort(options = {}) {
+  const platform = options.platform ?? (typeof process !== 'undefined' ? process.platform : '');
+  if (options.packaged && platform === 'darwin') return DEFAULT_MAC_SYNC_PORT;
+  return DEFAULT_SYNC_PORT;
+}
+
+/**
  * Stored setting wins over `.env`, which wins over the built-in default.
  *
  * @param {unknown} preferred
  * @param {string | null} [envRaw]
+ * @param {number} [fallback]
  */
-export function resolveWebServerPort(preferred, envRaw) {
-  return normalizeWebServerPort(preferred) ?? normalizeWebServerPort(envRaw) ?? DEFAULT_SYNC_PORT;
+export function resolveWebServerPort(preferred, envRaw, fallback = DEFAULT_SYNC_PORT) {
+  return normalizeWebServerPort(preferred) ?? normalizeWebServerPort(envRaw) ?? fallback;
 }
 
 /**

@@ -127,9 +127,21 @@ export function isWorkspaceBackupDayFolder(name) {
  * @param {string} name
  * @returns {string | null}
  */
-export function extractBackupStamp(name) {
+/**
+ * APFS/Finder often store Korean names as NFD. Compare as NFC.
+ * @param {string} name
+ */
+export function normalizeBackupBaseName(name) {
   const base = String(name ?? '').split(/[/\\]/).pop() ?? '';
-  const match = /_(\d{6}_\d{6})\.zip$/i.exec(base);
+  try {
+    return base.normalize('NFC');
+  } catch {
+    return base;
+  }
+}
+
+export function extractBackupStamp(name) {
+  const match = /_(\d{6}_\d{6})\.zip$/i.exec(normalizeBackupBaseName(name));
   return match ? match[1] : null;
 }
 
@@ -225,17 +237,65 @@ export function backupPrivateFileName(userFolder, date = new Date()) {
  * @param {string} name
  */
 export function isWorkspaceBackupFileName(name) {
-  const base = String(name ?? '').split(/[/\\]/).pop() ?? '';
-  if (!base || base.includes('..')) return false;
+  return Boolean(parseWorkspaceBackupKind(name));
+}
+
+/**
+ * @param {string} name
+ * @returns {{ kind: 'share' | 'private' | 'legacy', userFolder: string | null } | null}
+ */
+export function parseWorkspaceBackupKind(name) {
+  const base = normalizeBackupBaseName(name);
+  if (!base || base.includes('..')) return null;
   if (!base.startsWith(WORKSPACE_BACKUP_FILE_PREFIX) || !base.toLowerCase().endsWith('.zip')) {
-    return false;
+    return null;
   }
   const rest = base.slice(WORKSPACE_BACKUP_FILE_PREFIX.length, -4);
-  return (
-    /^\d{6}_\d{6}$/.test(rest) ||
-    /^share_\d{6}_\d{6}$/i.test(rest) ||
-    /^private_.+_\d{6}_\d{6}$/i.test(rest)
-  );
+  if (/^share_\d{6}_\d{6}$/i.test(rest)) {
+    return { kind: 'share', userFolder: null };
+  }
+  const privateMatch = /^private_(.+)_\d{6}_\d{6}$/i.exec(rest);
+  if (privateMatch) {
+    return { kind: 'private', userFolder: privateMatch[1] };
+  }
+  if (/^\d{6}_\d{6}$/.test(rest)) {
+    return { kind: 'legacy', userFolder: null };
+  }
+  return null;
+}
+
+/**
+ * Day folder (`YYYYMMDD`) implied by the stamp in the archive name.
+ * @param {string} name
+ */
+export function dayFolderFromBackupName(name) {
+  const stamp = extractBackupStamp(name);
+  if (!stamp) return formatBackupDayFolder();
+  return `20${stamp.slice(0, 6)}`;
+}
+
+/**
+ * @param {string} fileName
+ * @returns {{ title: string, body: string }}
+ */
+export function describeWorkspaceBackupRestore(fileName) {
+  const kind = parseWorkspaceBackupKind(fileName);
+  if (kind?.kind === 'share') {
+    return {
+      title: '공유폴더 복원',
+      body: '공유폴더의 같은 경로 파일을 덮어씁니다. 백업에 없는 파일은 그대로 둡니다.',
+    };
+  }
+  if (kind?.kind === 'private') {
+    return {
+      title: '개인폴더 복원',
+      body: `개인폴더(${kind.userFolder})의 같은 경로 파일을 덮어씁니다. 백업에 없는 파일은 그대로 둡니다.`,
+    };
+  }
+  return {
+    title: '백업 복원',
+    body: '워크스페이스의 같은 경로 파일을 덮어씁니다. 백업에 없는 파일은 그대로 둡니다.',
+  };
 }
 
 /**
@@ -246,6 +306,7 @@ export function isWorkspaceBackupFileName(name) {
  */
 export function parseWorkspaceBackupPath(name) {
   const parts = String(name ?? '')
+    .normalize('NFC')
     .replace(/\\/g, '/')
     .split('/')
     .filter(Boolean);

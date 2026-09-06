@@ -1,18 +1,27 @@
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { getDataRoot, getHomesRoot, getPortableRoot } from './appContext.js';
 import { getAppSettings, updateAppSettings } from './settingsService.js';
 import { sevenZipMin } from './sevenZip.js';
+import { repairExtractedNameTree, repairZipEntryName } from './zipNameEncoding.js';
+import { SHARED_FOLDER } from '../shared/constants.js';
+import { HOMES_FOLDER } from '../shared/memberHomes.js';
+import { isPcSettingsBackupFileName } from '../shared/pcSettingsBackup.js';
 import {
   backupArchiveDayKey,
+  backupFileName,
   backupPrivateFileName,
   backupShareFileName,
   backupSlotKey,
+  dayFolderFromBackupName,
   extractBackupStamp,
   formatBackupDayFolder,
   isWorkspaceBackupDayFolder,
   isWorkspaceBackupFileName,
+  normalizeBackupBaseName,
   normalizeWorkspaceBackup,
+  parseWorkspaceBackupKind,
   parseWorkspaceBackupPath,
 } from '../shared/workspaceBackup.js';
 
@@ -144,6 +153,7 @@ async function zipBackupSource(destZip, sourceAbs) {
     'a',
     '-tzip',
     '-mx=1',
+    '-mcu=on',
     '-x!.nas4usb',
     '-x!*/.nas4usb',
     destZip,
@@ -384,8 +394,13 @@ export async function listWorkspaceBackups() {
     try {
       const stat = await fs.stat(archive.filePath);
       if (!stat.isFile()) continue;
+      const parsed = parseWorkspaceBackupPath(archive.fileName);
       items.push({
-        fileName: archive.fileName,
+        fileName: parsed
+          ? parsed.dayFolder
+            ? `${parsed.dayFolder}/${parsed.fileName}`
+            : parsed.fileName
+          : archive.fileName,
         filePath: archive.filePath,
         bytes: stat.size,
         at: stat.mtime.toISOString(),
@@ -418,7 +433,7 @@ async function removeEmptyDayFolder(dayDir) {
 /**
  * @param {string} fileName `YYYYMMDD/NAS4USB_백업_….zip`, or a bare name for older archives
  */
-export async function deleteWorkspaceBackup(fileName) {
+async function resolveBackupArchive(fileName) {
   const parsed = parseWorkspaceBackupPath(fileName);
   if (!parsed) {
     throw new Error('백업 파일이 아닙니다.');
@@ -433,6 +448,240 @@ export async function deleteWorkspaceBackup(fileName) {
   if (!isEqualOrInside(destZip, destDir)) {
     throw new Error('잘못된 백업 파일입니다.');
   }
+  return { destDir, dayDir, destZip, parsed };
+}
+
+/**
+ * @param {string} zipPath
+ * @returns {Promise<string[]>}
+ */
+async function listZipTopLevelNames(zipPath) {
+  const output = await sevenZipMin.cmd(['l', '-slt', zipPath]);
+  const text = String(output ?? '');
+  const body = text.includes('----------') ? text.slice(text.indexOf('----------') + 10) : text;
+  const names = new Set();
+  const archiveBase = normalizeBackupBaseName(zipPath);
+  for (const match of body.matchAll(/^Path = (.+)$/gm)) {
+    const entry = match[1].trim().replace(/\\/g, '/');
+    if (!entry || normalizeBackupBaseName(entry) === archiveBase) continue;
+    const top = repairZipEntryName(entry.split('/').filter(Boolean)[0] ?? '');
+    if (!top || top === '__MACOSX' || top === '.DS_Store') continue;
+    names.add(top);
+  }
+  return [...names];
+}
+
+/**
+ * @param {string[]} tops
+ * @returns {{ kind: 'share' | 'private' | 'legacy', userFolder: string | null } | null}
+ */
+function guessKindFromZipTops(tops) {
+  const names = tops.map((item) => String(item).normalize('NFC'));
+  const set = new Set(names);
+  if (set.has('manifest.json')) return null;
+  if (
+    (set.has('share') || set.has(SHARED_FOLDER)) &&
+    (set.has('private') || set.has(HOMES_FOLDER))
+  ) {
+    return { kind: 'legacy', userFolder: null };
+  }
+  if (set.has('share') || set.has(SHARED_FOLDER)) {
+    return { kind: 'share', userFolder: null };
+  }
+  if (set.has('private') || set.has(HOMES_FOLDER)) {
+    return { kind: 'legacy', userFolder: null };
+  }
+  if (names.length === 1 && names[0]) {
+    return { kind: 'private', userFolder: names[0] };
+  }
+  return null;
+}
+
+/**
+ * @param {{ kind: 'share' | 'private' | 'legacy', userFolder: string | null }} kind
+ */
+function officialBackupFileName(kind, date = new Date()) {
+  if (kind.kind === 'share') return backupShareFileName(date);
+  if (kind.kind === 'private') return backupPrivateFileName(kind.userFolder, date);
+  return backupFileName(date);
+}
+
+/**
+ * @param {string} extractRoot
+ */
+async function listExtractTops(extractRoot) {
+  const entries = await fs.readdir(extractRoot, { withFileTypes: true });
+  return entries
+    .map((entry) => entry.name)
+    .filter((name) => name !== '__MACOSX' && name !== '.DS_Store')
+    .map((name) => name.normalize('NFC'));
+}
+
+/**
+ * @param {string} extractRoot
+ * @param {string} folderName
+ */
+function findExtractedFolder(extractRoot, folderName) {
+  return fs.readdir(extractRoot).then((names) => {
+    const match = names.find((name) => name.normalize('NFC') === folderName);
+    return match ? path.join(extractRoot, match) : null;
+  });
+}
+
+/**
+ * @param {string} from
+ * @param {string} to
+ */
+async function copyTreeInto(from, to) {
+  await fs.mkdir(to, { recursive: true });
+  await fs.cp(from, to, { recursive: true });
+}
+
+/**
+ * @param {{ kind: 'share' | 'private' | 'legacy', userFolder: string | null }} kind
+ * @param {string} zipPath
+ */
+async function extractWorkspaceBackup(kind, zipPath) {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'nas4usb-restore-'));
+  try {
+    await sevenZipMin.cmd(['x', zipPath, `-o${tmp}`, '-y', '-aoa']);
+    await repairExtractedNameTree(tmp);
+    const tops = await listExtractTops(tmp);
+    const shareFrom =
+      (await findExtractedFolder(tmp, 'share')) || (await findExtractedFolder(tmp, SHARED_FOLDER));
+    const privateFrom =
+      (await findExtractedFolder(tmp, 'private')) || (await findExtractedFolder(tmp, HOMES_FOLDER));
+
+    if (shareFrom) {
+      await repairExtractedNameTree(getDataRoot());
+      await copyTreeInto(shareFrom, getDataRoot());
+      await repairExtractedNameTree(getDataRoot());
+    }
+    if (privateFrom) {
+      await repairExtractedNameTree(getHomesRoot());
+      await copyTreeInto(privateFrom, getHomesRoot());
+      await repairExtractedNameTree(getHomesRoot());
+    }
+    if (shareFrom || privateFrom) return;
+
+    if (kind.kind === 'private') {
+      const user = kind.userFolder;
+      let userFrom = user ? await findExtractedFolder(tmp, user) : null;
+      if (!userFrom && tops.length === 1) {
+        userFrom = await findExtractedFolder(tmp, tops[0]);
+      }
+      if (!userFrom) {
+        throw new Error('개인폴더 백업에서 사용자 폴더를 찾지 못했습니다.');
+      }
+      const destUser = path.join(getHomesRoot(), user || path.basename(userFrom));
+      await repairExtractedNameTree(destUser);
+      await copyTreeInto(userFrom, destUser);
+      await repairExtractedNameTree(destUser);
+      return;
+    }
+
+    await repairExtractedNameTree(getDataRoot());
+    await copyTreeInto(tmp, getDataRoot());
+    await repairExtractedNameTree(getDataRoot());
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
+/**
+ * Copy an external NAS4USB document backup ZIP into the configured backup folder.
+ * @param {string} zipPath
+ */
+export async function importWorkspaceBackup(zipPath) {
+  const source = path.resolve(String(zipPath ?? '').trim());
+  if (!source) {
+    throw new Error('가져올 백업 파일을 선택해 주세요.');
+  }
+  const base = normalizeBackupBaseName(source);
+  if (isPcSettingsBackupFileName(base)) {
+    throw new Error(
+      '이 파일은 PC 설정 백업입니다. 백업 관리 위쪽 「PC 설정 (이사)」의 설정 가져오기를 사용하세요.',
+    );
+  }
+
+  let destName = base;
+  if (!isWorkspaceBackupFileName(base)) {
+    const tops = await listZipTopLevelNames(source);
+    const guessed = guessKindFromZipTops(tops);
+    if (!guessed) {
+      throw new Error(
+        'NAS4USB 문서 백업 ZIP이 아닙니다. NAS4USB_백업_share_… / NAS4USB_백업_private_… 파일이거나, 공유폴더(share)·개인폴더가 들어 있는 ZIP이어야 합니다.',
+      );
+    }
+    destName = officialBackupFileName(guessed);
+  }
+
+  const settings = normalizeWorkspaceBackup((await getAppSettings()).workspaceBackup);
+  if (!settings.destPath) {
+    throw new Error('백업 폴더를 먼저 지정해 주세요.');
+  }
+  const destDir = assertBackupDestAllowed(settings.destPath);
+  if (isEqualOrInside(source, destDir) && normalizeBackupBaseName(source) === destName) {
+    throw new Error('이미 백업 폴더에 있는 파일입니다.');
+  }
+  try {
+    const stat = await fs.stat(source);
+    if (!stat.isFile()) throw new Error('백업 파일을 찾을 수 없습니다.');
+  } catch (error) {
+    if (error instanceof Error && error.message === '백업 파일을 찾을 수 없습니다.') throw error;
+    throw new Error('백업 파일을 찾을 수 없습니다.');
+  }
+
+  const dayFolder = dayFolderFromBackupName(destName);
+  const dayDir = path.join(destDir, dayFolder);
+  const destZip = path.join(dayDir, destName);
+  if (!isEqualOrInside(destZip, destDir)) {
+    throw new Error('잘못된 백업 파일입니다.');
+  }
+  await fs.mkdir(dayDir, { recursive: true });
+  await fs.copyFile(source, destZip);
+  return listWorkspaceBackups();
+}
+
+/**
+ * Extract one listed archive back onto share or private.
+ * @param {string} fileName
+ */
+export async function restoreWorkspaceBackup(fileName) {
+  if (running) {
+    throw new Error('이미 백업이 진행 중입니다.');
+  }
+  const { destZip } = await resolveBackupArchive(fileName);
+  const kind = parseWorkspaceBackupKind(fileName);
+  if (!kind) {
+    throw new Error('백업 파일이 아닙니다.');
+  }
+  try {
+    const stat = await fs.stat(destZip);
+    if (!stat.isFile()) throw new Error('백업 파일을 찾을 수 없습니다.');
+  } catch (error) {
+    if (error instanceof Error && error.message === '백업 파일을 찾을 수 없습니다.') throw error;
+    throw new Error('백업 파일을 찾을 수 없습니다.');
+  }
+
+  running = true;
+  try {
+    await extractWorkspaceBackup(kind, destZip);
+    return {
+      fileName,
+      kind: kind.kind,
+      userFolder: kind.userFolder,
+    };
+  } finally {
+    running = false;
+  }
+}
+
+/**
+ * @param {string} fileName `YYYYMMDD/NAS4USB_백업_….zip`, or a bare name for older archives
+ */
+export async function deleteWorkspaceBackup(fileName) {
+  const { destZip, dayDir, parsed } = await resolveBackupArchive(fileName);
   await fs.rm(destZip);
   if (parsed.dayFolder) await removeEmptyDayFolder(dayDir);
 

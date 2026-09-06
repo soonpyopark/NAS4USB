@@ -585,6 +585,12 @@ export function createHttpNas4usbClient() {
       deleteDay: () => {
         throw new Error('문서 백업 삭제는 서버 PC의 NAS4USB 앱에서만 할 수 있습니다.');
       },
+      importArchive: () => {
+        throw new Error('문서 백업 가져오기는 서버 PC의 NAS4USB 앱에서만 할 수 있습니다.');
+      },
+      restore: () => {
+        throw new Error('문서 백업 복원은 서버 PC의 NAS4USB 앱에서만 할 수 있습니다.');
+      },
       exportPcSettings: () => {
         throw new Error('PC 설정 내보내기는 서버 PC의 NAS4USB 앱에서만 할 수 있습니다.');
       },

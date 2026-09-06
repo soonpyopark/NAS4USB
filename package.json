@@ -19,6 +19,7 @@
     "build": "npm run prepare:icons && npm run prepare:pdfjs && npm run build:rhwp-studio && npm run build:wb4s-editor && npm run prepare:wb4s-src && vite build",
     "build:dist:exe": "npm run prepare:icons && node scripts/build-dist-exe.mjs",
     "build:dist:mac": "npm run prepare:icons && node scripts/build-dist-mac.mjs",
+    "build:dist:mac:update": "npm run prepare:icons && node scripts/build-dist-mac.mjs --update",
     "build:msi": "npm run prepare:icons && node scripts/build-msi.mjs",
     "build:release": "node scripts/build-release.mjs",
     "sync-version": "node scripts/sync-version.mjs",

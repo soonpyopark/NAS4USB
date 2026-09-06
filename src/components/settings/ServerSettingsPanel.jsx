@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { DEFAULT_SYNC_PORT } from '../../../shared/constants.js';
+import { DEFAULT_MAC_SYNC_PORT, DEFAULT_SYNC_PORT } from '../../../shared/constants.js';
 import { formatAccessUrl } from '../../../shared/httpsConfig.js';
 import { normalizeWebServerPort } from '../../../shared/webServerConfig.js';
 import { useAppConfirm } from '../../hooks/useAppConfirm.jsx';
@@ -282,7 +282,8 @@ export default function ServerSettingsPanel() {
           <code className="rounded bg-slate-100 px-1 text-[12px]">.nas4usb-settings.json</code>에
           기록되어 <code className="rounded bg-slate-100 px-1 text-[12px]">.env</code>의{' '}
           <code className="rounded bg-slate-100 px-1 text-[12px]">PORT</code>보다 우선 적용됩니다.
-          저장하지 않으면 .env(없으면 {DEFAULT_SYNC_PORT})를 따릅니다.
+          저장하지 않으면 .env(없으면 Windows {DEFAULT_SYNC_PORT}, macOS 빌드{' '}
+          {DEFAULT_MAC_SYNC_PORT})를 따릅니다.
         </p>
         <div className="flex flex-wrap items-center gap-2">
           <input

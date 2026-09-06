@@ -174,6 +174,8 @@ contextBridge.exposeInMainWorld('nas4usb', {
     runNow: () => ipcRenderer.invoke('backup:runNow'),
     delete: (fileName) => ipcRenderer.invoke('backup:delete', fileName),
     deleteDay: (dayKey) => ipcRenderer.invoke('backup:deleteDay', dayKey),
+    importArchive: (zipPath) => ipcRenderer.invoke('backup:importArchive', zipPath),
+    restore: (fileName) => ipcRenderer.invoke('backup:restore', fileName),
     exportPcSettings: () => ipcRenderer.invoke('backup:exportPcSettings'),
     importPcSettings: (options) => ipcRenderer.invoke('backup:importPcSettings', options),
   },

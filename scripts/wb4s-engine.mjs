@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import {
   WB4S_REPO,
   WB4S_SYNC_EXCLUDE_DIRS,
@@ -18,9 +19,18 @@ import {
  * @param {string[]} args
  * @param {{ shell?: boolean, stdio?: 'inherit' | 'pipe' }} [options]
  */
-export function runCommand(cwd, command, args, { shell = false, stdio = 'inherit' } = {}) {
+function commandEnv(extraEnv) {
+  const env = { ...process.env, ...(extraEnv ?? {}) };
+  if (process.platform === 'darwin') {
+    const shimDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'mac-python-shim');
+    env.PATH = `${shimDir}${path.delimiter}${env.PATH ?? ''}`;
+  }
+  return env;
+}
+
+export function runCommand(cwd, command, args, { shell = false, stdio = 'inherit', env } = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd, shell, stdio });
+    const child = spawn(command, args, { cwd, shell, stdio, env: commandEnv(env) });
     child.on('error', reject);
     child.on('close', (code) => {
       if (code === 0) resolve(undefined);

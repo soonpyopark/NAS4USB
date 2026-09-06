@@ -12,6 +12,26 @@ export function pcSettingsBackupFileName(date = new Date()) {
 }
 
 /**
+ * @param {string} name
+ */
+export function isPcSettingsBackupFileName(name) {
+  const base = String(name ?? '').split(/[/\\]/).pop() ?? '';
+  const normalized = (() => {
+    try {
+      return base.normalize('NFC');
+    } catch {
+      return base;
+    }
+  })();
+  return (
+    Boolean(normalized) &&
+    !normalized.includes('..') &&
+    normalized.startsWith(PC_SETTINGS_BACKUP_FILE_PREFIX) &&
+    normalized.toLowerCase().endsWith('.zip')
+  );
+}
+
+/**
  * @param {unknown} value
  * @returns {{
  *   kind: string,

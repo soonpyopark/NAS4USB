@@ -54,6 +54,7 @@ import {
 } from './electron/tlsCerts.js';
 import { readServerEnvRaw, resolveDataRoot, resolveWorkspaceRoot } from './electron/envConfig.js';
 import {
+  fallbackSyncPort,
   hostnameForWebServerMode,
   normalizeWebServerMode,
   normalizeWebServerPort,
@@ -428,7 +429,11 @@ async function configureServerFromSettings(root) {
   const storedMode = normalizeWebServerMode(settings.webServerMode);
 
   configureSyncServer({
-    port: resolveWebServerPort(settings.webServerPort, envRaw.portRaw),
+    port: resolveWebServerPort(
+      settings.webServerPort,
+      envRaw.portRaw,
+      fallbackSyncPort({ packaged: !isDev }),
+    ),
     hostname: storedMode ? hostnameForWebServerMode(storedMode) : envRaw.hostname,
     httpsEnabled: normalizeHttpsEnabled(settings.httpsEnabled),
   });
@@ -1786,6 +1791,24 @@ ipcMain.handle('backup:deleteDay', async (event, dayKey) => {
   assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
   const { deleteWorkspaceBackupsByDay } = await import('./electron/workspaceBackupService.js');
   return deleteWorkspaceBackupsByDay(dayKey);
+});
+
+ipcMain.handle('backup:importArchive', async (event, zipPath) => {
+  assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
+  const source = typeof zipPath === 'string' ? zipPath.trim() : '';
+  if (!source) {
+    throw new Error('가져올 백업 파일을 선택해 주세요.');
+  }
+  const { importWorkspaceBackup } = await import('./electron/workspaceBackupService.js');
+  return importWorkspaceBackup(source);
+});
+
+ipcMain.handle('backup:restore', async (event, fileName) => {
+  assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
+  const { restoreWorkspaceBackup } = await import('./electron/workspaceBackupService.js');
+  const result = await restoreWorkspaceBackup(fileName);
+  notifyFsChanged();
+  return result;
 });
 
 ipcMain.handle('backup:exportPcSettings', async (event) => {
