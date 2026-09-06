@@ -105,6 +105,7 @@ import {
 import { getAppSettings, getAccessPermissionsBundle, getEffectiveAccessPermissions, getPublicUiPrefs, updateAppSettings } from './settingsService.js';
 import { setSessionSpellCheckerEnabled } from './spellcheckSession.js';
 import { listMembers, saveMembersPayload, getMembersExportRecords } from './membersService.js';
+import { listLoginAudit } from './loginAuditService.js';
 import {
   syncFortuneSidecarCopy,
   syncFortuneSidecarDelete,
@@ -1258,6 +1259,22 @@ export async function handleHttpApiRequest(req, res) {
       const result = await saveMembersPayload(body ?? {}, getPortableRoot());
       if (result.ok) notifyFsChanged();
       sendJson(res, 200, result);
+      return true;
+    }
+
+    if (method === 'GET' && url.pathname === '/api/members/login-audit') {
+      assertSuperAdminAuthenticated(isSuperAdminAuthenticated(req));
+      sendJson(
+        res,
+        200,
+        await listLoginAudit(
+          {
+            loginId: url.searchParams.get('loginId') ?? '',
+            result: url.searchParams.get('result') ?? '',
+          },
+          getPortableRoot(),
+        ),
+      );
       return true;
     }
 

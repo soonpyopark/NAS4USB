@@ -166,6 +166,7 @@ const MAC_BUNDLE_STATE_FILES = [
   '.nas4usb-folder-colors.json',
   '.nas4usb-folder-order.json',
   '.nas4usb-trash.json',
+  '.nas4usb-login-audit.json',
   '.env',
 ];
 

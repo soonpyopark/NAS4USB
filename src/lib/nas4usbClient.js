@@ -611,6 +611,13 @@ export function createHttpNas4usbClient() {
           method: 'PUT',
           body: JSON.stringify(payload ?? {}),
         }),
+      listLoginAudit: (filter) => {
+        const params = new URLSearchParams();
+        if (filter?.loginId) params.set('loginId', String(filter.loginId));
+        if (filter?.result) params.set('result', String(filter.result));
+        const query = params.toString();
+        return apiFetch(`/members/login-audit${query ? `?${query}` : ''}`);
+      },
     },
 
     comic: {

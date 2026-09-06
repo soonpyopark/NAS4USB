@@ -173,6 +173,7 @@ import {
   ensureBootstrapAdmin,
   getMembersExportRecords,
 } from './electron/membersService.js';
+import { listLoginAudit } from './electron/loginAuditService.js';
 import {
   syncFortuneSidecarCopy,
   syncFortuneSidecarDelete,
@@ -1899,6 +1900,11 @@ ipcMain.handle('members:save', async (event, payload = {}) => {
   const result = await saveMembersPayload(payload, getPortableRoot());
   if (result.ok) notifyFsChanged();
   return result;
+});
+
+ipcMain.handle('members:listLoginAudit', async (event, filter = {}) => {
+  assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
+  return listLoginAudit(filter, getPortableRoot());
 });
 
 function focusMainWindow() {

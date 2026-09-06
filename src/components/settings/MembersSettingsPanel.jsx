@@ -32,8 +32,49 @@ import { useFsSync } from '../../context/FsSyncContext.jsx';
  *   markedDelete?: boolean,
  *   isGuestRow?: boolean,
  * }} MemberDraft
- * @typedef {'member-list' | 'member-add'} MembersSubTab
+ * @typedef {'member-list' | 'member-add' | 'login-audit'} MembersSubTab
+ * @typedef {'success' | 'fail' | 'locked'} LoginAuditResult
+ * @typedef {{
+ *   id: string,
+ *   at: string,
+ *   loginId: string,
+ *   result: LoginAuditResult,
+ *   ip: string,
+ * }} LoginAuditEntry
  */
+
+const LOGIN_AUDIT_RESULT_LABEL = {
+  success: '성공',
+  fail: '실패',
+  locked: '잠금',
+};
+
+/**
+ * @param {string | undefined} iso
+ */
+function formatAuditTime(iso) {
+  if (!iso) return '—';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString('ko-KR');
+}
+
+/**
+ * @param {unknown} value
+ */
+function escapeCsvField(value) {
+  const text = String(value ?? '');
+  if (/[",\n\r]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+  return text;
+}
+
+/**
+ * @param {Date} [date]
+ */
+function loginAuditExportFilename(date = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `NAS4USB_접속이력_${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}.csv`;
+}
 
 /**
  * @param {PublicMember} member
@@ -207,6 +248,13 @@ export default function MembersSettingsPanel() {
   const [memberSearchQuery, setMemberSearchQuery] = useState('');
   const membersImportInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   const [loginLockoutEnabled, setLoginLockoutEnabled] = useState(false);
+  const [loginAuditEnabled, setLoginAuditEnabled] = useState(true);
+  /** @type {[LoginAuditEntry[], Function]} */
+  const [auditEntries, setAuditEntries] = useState([]);
+  /** @type {[Record<string, string>, Function]} */
+  const [lastSuccessAt, setLastSuccessAt] = useState({});
+  const [auditLoginFilter, setAuditLoginFilter] = useState('');
+  const [auditResultFilter, setAuditResultFilter] = useState(/** @type {'' | LoginAuditResult} */ (''));
 
   const applyMembers = useCallback((nextMembers, guestPermissions) => {
     const drafts = (Array.isArray(nextMembers) ? nextMembers : []).map(createMemberDraft);
@@ -234,6 +282,19 @@ export default function MembersSettingsPanel() {
       ]);
       applyMembers(result?.members ?? [], settings?.guestPermissions);
       setLoginLockoutEnabled(settings?.loginLockoutEnabled === true);
+      setLoginAuditEnabled(settings?.loginAuditEnabled !== false);
+      if (window.nas4usb.members.listLoginAudit) {
+        try {
+          const audit = await window.nas4usb.members.listLoginAudit();
+          setAuditEntries(Array.isArray(audit?.entries) ? audit.entries : []);
+          setLastSuccessAt(
+            audit?.lastSuccessAt && typeof audit.lastSuccessAt === 'object' ? audit.lastSuccessAt : {},
+          );
+        } catch {
+          setAuditEntries([]);
+          setLastSuccessAt({});
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '회원 목록을 불러오지 못했습니다.');
     } finally {
@@ -250,6 +311,14 @@ export default function MembersSettingsPanel() {
     () => visibleMembers.filter((member) => matchesMemberSearch(member, memberSearchQuery)),
     [visibleMembers, memberSearchQuery],
   );
+  const filteredAuditEntries = useMemo(() => {
+    const loginFilter = auditLoginFilter.trim().toLowerCase();
+    return auditEntries.filter((entry) => {
+      if (loginFilter && !entry.loginId.toLowerCase().includes(loginFilter)) return false;
+      if (auditResultFilter && entry.result !== auditResultFilter) return false;
+      return true;
+    });
+  }, [auditEntries, auditLoginFilter, auditResultFilter]);
 
   const editingMember = editingMemberId
     ? members.find((member) => member.id === editingMemberId) ?? null
@@ -294,6 +363,7 @@ export default function MembersSettingsPanel() {
         current?.loggedInPermissions ?? DEFAULT_MEMBER_PERMISSIONS,
       ),
       loginLockoutEnabled,
+      loginAuditEnabled,
     });
     return true;
   };
@@ -310,6 +380,23 @@ export default function MembersSettingsPanel() {
     } catch (err) {
       setLoginLockoutEnabled(previous);
       const message = err instanceof Error ? err.message : '로그인 제한 설정을 저장하지 못했습니다.';
+      setError(message);
+      void appAlert({ title: '회원 관리', body: message });
+    }
+  };
+
+  /**
+   * @param {boolean} enabled
+   */
+  const persistLoginAudit = async (enabled) => {
+    if (!window.nas4usb?.settings?.update) return;
+    const previous = loginAuditEnabled;
+    setLoginAuditEnabled(enabled);
+    try {
+      await window.nas4usb.settings.update({ loginAuditEnabled: enabled });
+    } catch (err) {
+      setLoginAuditEnabled(previous);
+      const message = err instanceof Error ? err.message : '접속 이력 설정을 저장하지 못했습니다.';
       setError(message);
       void appAlert({ title: '회원 관리', body: message });
     }
@@ -578,6 +665,7 @@ export default function MembersSettingsPanel() {
           settings?.loggedInPermissions ?? DEFAULT_MEMBER_PERMISSIONS,
         ),
         loginLockoutEnabled: settings?.loginLockoutEnabled === true,
+        loginAuditEnabled: settings?.loginAuditEnabled !== false,
       });
 
       /** @type {Array<Record<string, unknown>>} */
@@ -658,24 +746,53 @@ export default function MembersSettingsPanel() {
     }
   };
 
+  const handleExportLoginAudit = () => {
+    const header = ['시각', '아이디', '결과', 'IP'];
+    const rows = filteredAuditEntries.map((entry) => [
+      formatAuditTime(entry.at),
+      entry.loginId,
+      LOGIN_AUDIT_RESULT_LABEL[entry.result] ?? entry.result,
+      entry.ip,
+    ]);
+    const csv = [header, ...rows].map((row) => row.map(escapeCsvField).join(',')).join('\r\n');
+    downloadTextFile(loginAuditExportFilename(), `\uFEFF${csv}\r\n`);
+  };
+
   return (
     <div className="space-y-4">
       {dialog}
-      <section className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
-        <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            className="h-4 w-4 rounded border-slate-300 accent-nas-accent"
-            checked={loginLockoutEnabled}
-            disabled={loading || saving}
-            onChange={(event) => void persistLoginLockout(event.target.checked)}
-          />
-          로그인 3회 실패 시 5분간 제한
-        </label>
-        <p className="mt-1 pl-6 text-xs text-slate-500">
-          같은 아이디로 비밀번호를 3번 틀리면 5분간 로그인을 막습니다. 서버 PC(127.0.0.1)는
-          제한되지 않습니다.
-        </p>
+      <section className="grid gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 sm:grid-cols-2">
+        <div>
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-slate-300 accent-nas-accent"
+              checked={loginLockoutEnabled}
+              disabled={loading || saving}
+              onChange={(event) => void persistLoginLockout(event.target.checked)}
+            />
+            로그인 3회 실패 시 5분간 제한
+          </label>
+          <p className="mt-1 pl-6 text-xs text-slate-500">
+            같은 아이디로 비밀번호를 3번 틀리면 5분간 로그인을 막습니다. 서버 PC(127.0.0.1)는
+            제한되지 않습니다.
+          </p>
+        </div>
+        <div>
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-slate-300 accent-nas-accent"
+              checked={loginAuditEnabled}
+              disabled={loading || saving}
+              onChange={(event) => void persistLoginAudit(event.target.checked)}
+            />
+            접속 이력 남기기
+          </label>
+          <p className="mt-1 pl-6 text-xs text-slate-500">
+            로그인 성공·실패·잠금만 기록합니다. 비밀번호는 저장하지 않으며, 최대 1000건·90일입니다.
+          </p>
+        </div>
       </section>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <p className="text-sm text-slate-600">
@@ -736,6 +853,19 @@ export default function MembersSettingsPanel() {
         >
           회원추가
         </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'login-audit'}
+          className={`-mb-px rounded-t-md px-3 py-2 text-sm ${
+            tab === 'login-audit'
+              ? 'border border-b-white border-slate-200 bg-white font-semibold text-slate-900'
+              : 'border border-transparent font-medium text-slate-500 hover:text-slate-800'
+          }`}
+          onClick={() => setTab('login-audit')}
+        >
+          접속 이력
+        </button>
       </div>
 
       {loading ? <p className="text-sm text-slate-500">회원 목록을 불러오는 중…</p> : null}
@@ -776,6 +906,7 @@ export default function MembersSettingsPanel() {
           <p className="text-xs leading-relaxed text-slate-500">
             공유폴더 기준입니다. 보기가 꺼져 있으면 목록이 비고, 읽기는 열기·다운로드, 쓰기는
             생성·수정·삭제·휴지통 권한입니다. 개인폴더는 본인만, 외부폴더는 총괄관리자만 이용합니다.
+            이름 옆 시각은 최근 로그인 성공 시각입니다.
           </p>
 
           {filteredMembers.length === 0 ? (
@@ -790,7 +921,7 @@ export default function MembersSettingsPanel() {
                 return (
                   <li
                     key={member.id}
-                    className={`grid grid-cols-[minmax(0,1fr)_7.5rem_11.5rem] items-center gap-x-3 px-3 py-2.5 ${
+                    className={`grid grid-cols-[minmax(0,1fr)_8.5rem_7.5rem_11.5rem] items-center gap-x-3 px-3 py-2.5 ${
                       editingMemberId === member.id
                         ? 'bg-nas-accentSoft'
                         : guestRow
@@ -820,6 +951,12 @@ export default function MembersSettingsPanel() {
                             }`}
                       </p>
                     </div>
+
+                    <p className="truncate text-right text-xs text-slate-500" title="최근 접속">
+                      {guestRow
+                        ? '—'
+                        : formatAuditTime(lastSuccessAt[member.loginId.toLowerCase()])}
+                    </p>
 
                     <div className="flex h-7 items-center justify-end gap-1.5">
                       {guestRow ? null : (
@@ -855,6 +992,97 @@ export default function MembersSettingsPanel() {
                 );
               })}
             </ul>
+          )}
+        </section>
+      ) : null}
+
+      {!loading && tab === 'login-audit' ? (
+        <section className="space-y-3">
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800">접속 이력</h3>
+              <p className="text-xs text-slate-500">
+                {auditEntries.length}건
+                {auditLoginFilter.trim() || auditResultFilter
+                  ? ` · 필터 ${filteredAuditEntries.length}건`
+                  : ''}
+                {loginAuditEnabled ? '' : ' · 기록 중지됨'}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="search"
+                className="h-8 w-40 rounded-md border border-slate-300 px-2 text-sm outline-none focus:border-nas-accent"
+                value={auditLoginFilter}
+                onChange={(event) => setAuditLoginFilter(event.target.value)}
+                placeholder="아이디 검색"
+                aria-label="접속 이력 아이디 검색"
+              />
+              <select
+                className="h-8 rounded-md border border-slate-300 px-2 text-sm outline-none focus:border-nas-accent"
+                value={auditResultFilter}
+                onChange={(event) =>
+                  setAuditResultFilter(/** @type {'' | LoginAuditResult} */ (event.target.value))
+                }
+                aria-label="접속 결과 필터"
+              >
+                <option value="">전체 결과</option>
+                <option value="success">성공</option>
+                <option value="fail">실패</option>
+                <option value="locked">잠금</option>
+              </select>
+              <button
+                type="button"
+                className="h-8 rounded-md border border-slate-300 bg-white px-3 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                disabled={filteredAuditEntries.length === 0}
+                onClick={handleExportLoginAudit}
+              >
+                CSV 내보내기
+              </button>
+            </div>
+          </div>
+
+          {filteredAuditEntries.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-slate-300 px-3 py-4 text-sm text-slate-500">
+              표시할 접속 이력이 없습니다.
+            </p>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-slate-200">
+              <table className="min-w-full text-left text-sm">
+                <thead className="bg-slate-50 text-xs text-slate-500">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">시각</th>
+                    <th className="px-3 py-2 font-medium">아이디</th>
+                    <th className="px-3 py-2 font-medium">결과</th>
+                    <th className="px-3 py-2 font-medium">IP</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  {filteredAuditEntries.map((entry) => (
+                    <tr key={entry.id} className="bg-white">
+                      <td className="whitespace-nowrap px-3 py-2 text-slate-700">
+                        {formatAuditTime(entry.at)}
+                      </td>
+                      <td className="px-3 py-2 font-medium text-slate-800">{entry.loginId}</td>
+                      <td className="px-3 py-2">
+                        <span
+                          className={
+                            entry.result === 'success'
+                              ? 'text-emerald-700'
+                              : entry.result === 'locked'
+                                ? 'text-amber-700'
+                                : 'text-red-600'
+                          }
+                        >
+                          {LOGIN_AUDIT_RESULT_LABEL[entry.result] ?? entry.result}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-slate-600">{entry.ip}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </section>
       ) : null}

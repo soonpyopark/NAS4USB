@@ -38,6 +38,7 @@ const SETTINGS_FILE = '.nas4usb-settings.json';
  *   useLegacyImagePdfViewers: boolean,
  *   spellcheckEnabled: boolean,
  *   loginLockoutEnabled: boolean,
+ *   loginAuditEnabled: boolean,
  *   workspaceBackup: import('../shared/workspaceBackup.js').WorkspaceBackupSettings,
  * }} AppSettings
  *
@@ -95,6 +96,14 @@ export function normalizeLoginLockoutEnabled(value) {
 }
 
 /**
+ * Record member login success/fail/lock. Missing field defaults on.
+ * @param {unknown} value
+ */
+export function normalizeLoginAuditEnabled(value) {
+  return value !== false;
+}
+
+/**
  * @returns {AppSettings}
  */
 function emptySettings() {
@@ -114,6 +123,7 @@ function emptySettings() {
     useLegacyImagePdfViewers: false,
     spellcheckEnabled: false,
     loginLockoutEnabled: false,
+    loginAuditEnabled: true,
     workspaceBackup: normalizeWorkspaceBackup(null),
   };
 }
@@ -160,6 +170,7 @@ async function loadStore(portableRoot) {
       useLegacyImagePdfViewers: normalizeUseLegacyImagePdfViewers(parsed?.useLegacyImagePdfViewers),
       spellcheckEnabled: normalizeSpellcheckEnabled(parsed?.spellcheckEnabled),
       loginLockoutEnabled: normalizeLoginLockoutEnabled(parsed?.loginLockoutEnabled),
+      loginAuditEnabled: normalizeLoginAuditEnabled(parsed?.loginAuditEnabled),
       workspaceBackup: normalizeWorkspaceBackup(parsed?.workspaceBackup),
     };
   } catch {
@@ -338,6 +349,9 @@ export async function updateAppSettings(patch, portableRoot = getPortableRoot())
   }
   if (patch && 'loginLockoutEnabled' in patch) {
     settings.loginLockoutEnabled = normalizeLoginLockoutEnabled(patch.loginLockoutEnabled);
+  }
+  if (patch && 'loginAuditEnabled' in patch) {
+    settings.loginAuditEnabled = normalizeLoginAuditEnabled(patch.loginAuditEnabled);
   }
   if (patch && 'workspaceBackup' in patch) {
     settings.workspaceBackup = normalizeWorkspaceBackup(patch.workspaceBackup);

@@ -10,6 +10,7 @@ import {
   hasMemberLoginId,
 } from './membersService.js';
 import { getAppSettings } from './settingsService.js';
+import { recordLoginAudit } from './loginAuditService.js';
 
 const SESSIONS_FILE = '.nas4usb-sessions.json';
 const REMEMBER_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -301,6 +302,10 @@ export async function loginAdmin(
   if (enforceLockout) {
     const locked = getLoginAttemptState(attemptKey);
     if (locked?.lockedUntil && locked.lockedUntil > Date.now()) {
+      void recordLoginAudit(
+        { loginId: providedId || attemptKey, result: 'locked', clientIp },
+        portableRoot,
+      );
       return lockedLoginResult(locked);
     }
   }
@@ -316,6 +321,10 @@ export async function loginAdmin(
     } catch (err) {
       console.warn('[auth] ensure member home failed:', err);
     }
+    void recordLoginAudit(
+      { loginId: member.loginId, result: 'success', clientIp },
+      portableRoot,
+    );
     return {
       success: true,
       adminId: member.loginId,
@@ -338,16 +347,25 @@ export async function loginAdmin(
     } catch (err) {
       console.warn('[auth] ensure member home failed:', err);
     }
+    void recordLoginAudit({ loginId: adminId, result: 'success', clientIp }, portableRoot);
     return { success: true, adminId, role: 'super_admin', token };
   }
 
   if (enforceLockout) {
     const state = recordLoginFailure(attemptKey);
     if (state.lockedUntil && state.lockedUntil > Date.now()) {
+      void recordLoginAudit(
+        { loginId: providedId || attemptKey, result: 'locked', clientIp },
+        portableRoot,
+      );
       return lockedLoginResult(state);
     }
   }
 
+  void recordLoginAudit(
+    { loginId: providedId || attemptKey || '(empty)', result: 'fail', clientIp },
+    portableRoot,
+  );
   return { success: false };
 }
 
