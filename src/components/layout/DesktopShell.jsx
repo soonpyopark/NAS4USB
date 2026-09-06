@@ -1,5 +1,4 @@
 import { Children, cloneElement, isValidElement, useCallback, useEffect, useRef, useState } from 'react';
-import { useTouchUi } from '../../hooks/useTouchUi.js';
 import Sidebar from './Sidebar.jsx';
 import TopBar from './TopBar.jsx';
 import StatusBar from './StatusBar.jsx';
@@ -8,7 +7,7 @@ const SIDEBAR_DEFAULT_WIDTH = 288;
 /** Do not allow shrinking below the initial startup width. */
 const SIDEBAR_MIN_WIDTH = SIDEBAR_DEFAULT_WIDTH;
 const SIDEBAR_MAX_RATIO = 0.5;
-/** Below this width: one pane at a time (folder | files). */
+/** Below this width: one pane at a time (folder | files). Wide tablets use two panes. */
 const COMPACT_LAYOUT_MAX = 900;
 const SIDEBAR_COLLAPSED_KEY = 'nas4usb.sidebarCollapsed';
 
@@ -38,9 +37,8 @@ export default function DesktopShell({
   const [isResizing, setIsResizing] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed);
   const [mobilePane, setMobilePane] = useState(/** @type {'folders' | 'files'} */ ('files'));
-  const touchUi = useTouchUi();
 
-  const isCompact = touchUi || (layoutWidth > 0 && layoutWidth < COMPACT_LAYOUT_MAX);
+  const isCompact = layoutWidth > 0 && layoutWidth < COMPACT_LAYOUT_MAX;
 
   const clampSidebarWidth = useCallback((nextWidth, containerWidth) => {
     const maxWidth = Math.max(SIDEBAR_MIN_WIDTH, containerWidth * SIDEBAR_MAX_RATIO);
