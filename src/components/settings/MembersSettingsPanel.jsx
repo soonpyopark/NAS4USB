@@ -794,12 +794,12 @@ export default function MembersSettingsPanel() {
           </p>
         </div>
       </section>
-      <div className="flex flex-wrap items-start justify-between gap-2">
+      <div className="space-y-2">
         <p className="text-sm text-slate-600">
           회원별로 공유폴더의 보기·읽기·쓰기 권한을 설정합니다. 외부폴더는 총괄관리자에게만 보이며
           이 권한과 무관합니다. 기본 관리자 아래의 손님(Guest)은 로그인하지 않은 사용자 권한입니다.
         </p>
-        <div className="flex shrink-0 gap-2">
+        <div className="flex gap-2">
           <button
             type="button"
             className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"

@@ -52,6 +52,15 @@ export default function BackupSettingsPanel() {
 
   const refresh = useCallback(async () => {
     try {
+      if (!electron) {
+        const settings = await window.nas4usb.settings.get();
+        setConfig(normalizeWorkspaceBackup(settings?.workspaceBackup));
+        setLast(null);
+        setArchives([]);
+        setRunning(false);
+        setLoadError('');
+        return;
+      }
       const [settings, status] = await Promise.all([
         window.nas4usb.settings.get(),
         window.nas4usb.backup.getStatus(),
@@ -64,7 +73,7 @@ export default function BackupSettingsPanel() {
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : '백업 설정을 불러오지 못했습니다.');
     }
-  }, []);
+  }, [electron]);
 
   useEffect(() => {
     void refresh();
@@ -320,6 +329,12 @@ export default function BackupSettingsPanel() {
   return (
     <div className="space-y-8">
       {backupDialog}
+
+      {!electron ? (
+        <p className="rounded-lg border border-dashed border-slate-300 px-3 py-4 text-sm text-slate-500">
+          백업 상태는 서버 PC의 NAS4USB 앱에서만 볼 수 있습니다.
+        </p>
+      ) : null}
 
       {loadError ? (
         <div className="space-y-2">
