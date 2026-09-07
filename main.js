@@ -173,7 +173,7 @@ import {
   ensureBootstrapAdmin,
   getMembersExportRecords,
 } from './electron/membersService.js';
-import { listLoginAudit } from './electron/loginAuditService.js';
+import { clearLoginAudit, deleteLoginAudit, listLoginAudit } from './electron/loginAuditService.js';
 import {
   syncFortuneSidecarCopy,
   syncFortuneSidecarDelete,
@@ -1905,6 +1905,16 @@ ipcMain.handle('members:save', async (event, payload = {}) => {
 ipcMain.handle('members:listLoginAudit', async (event, filter = {}) => {
   assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
   return listLoginAudit(filter, getPortableRoot());
+});
+
+ipcMain.handle('members:deleteLoginAudit', async (event, entryId) => {
+  assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
+  return deleteLoginAudit(entryId, getPortableRoot());
+});
+
+ipcMain.handle('members:clearLoginAudit', async (event) => {
+  assertSuperAdminAuthenticated(isSuperAdminFromEvent(event));
+  return clearLoginAudit(getPortableRoot());
 });
 
 function focusMainWindow() {

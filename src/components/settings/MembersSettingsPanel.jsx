@@ -77,6 +77,17 @@ function loginAuditExportFilename(date = new Date()) {
 }
 
 /**
+ * @param {unknown} audit
+ */
+function snapshotFromAudit(audit) {
+  return {
+    entries: Array.isArray(audit?.entries) ? audit.entries : [],
+    lastSuccessAt:
+      audit?.lastSuccessAt && typeof audit.lastSuccessAt === 'object' ? audit.lastSuccessAt : {},
+  };
+}
+
+/**
  * @param {PublicMember} member
  * @returns {MemberDraft}
  */
@@ -285,11 +296,9 @@ export default function MembersSettingsPanel() {
       setLoginAuditEnabled(settings?.loginAuditEnabled !== false);
       if (window.nas4usb.members.listLoginAudit) {
         try {
-          const audit = await window.nas4usb.members.listLoginAudit();
-          setAuditEntries(Array.isArray(audit?.entries) ? audit.entries : []);
-          setLastSuccessAt(
-            audit?.lastSuccessAt && typeof audit.lastSuccessAt === 'object' ? audit.lastSuccessAt : {},
-          );
+          const snapshot = snapshotFromAudit(await window.nas4usb.members.listLoginAudit());
+          setAuditEntries(snapshot.entries);
+          setLastSuccessAt(snapshot.lastSuccessAt);
         } catch {
           setAuditEntries([]);
           setLastSuccessAt({});
@@ -758,6 +767,69 @@ export default function MembersSettingsPanel() {
     downloadTextFile(loginAuditExportFilename(), `\uFEFF${csv}\r\n`);
   };
 
+  /**
+   * @param {unknown} audit
+   */
+  const applyAuditSnapshot = (audit) => {
+    const snapshot = snapshotFromAudit(audit);
+    setAuditEntries(snapshot.entries);
+    setLastSuccessAt(snapshot.lastSuccessAt);
+  };
+
+  /**
+   * @param {LoginAuditEntry} entry
+   */
+  const handleDeleteLoginAudit = async (entry) => {
+    if (!window.nas4usb?.members?.deleteLoginAudit) {
+      void appAlert({ title: '접속 이력', body: '앱을 다시 실행해 주세요.' });
+      return;
+    }
+    const resultLabel = LOGIN_AUDIT_RESULT_LABEL[entry.result] ?? entry.result;
+    const ok = await appConfirm({
+      title: '접속 이력 삭제',
+      body: `${formatAuditTime(entry.at)} · ${entry.loginId} · ${resultLabel} 기록을 삭제할까요?`,
+      confirmLabel: '삭제',
+      confirmVariant: 'danger',
+    });
+    if (!ok) return;
+    setSaving(true);
+    setError('');
+    try {
+      applyAuditSnapshot(await window.nas4usb.members.deleteLoginAudit(entry.id));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '접속 이력을 삭제하지 못했습니다.';
+      setError(message);
+      void appAlert({ title: '접속 이력', body: message });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleClearLoginAudit = async () => {
+    if (!window.nas4usb?.members?.clearLoginAudit) {
+      void appAlert({ title: '접속 이력', body: '앱을 다시 실행해 주세요.' });
+      return;
+    }
+    const ok = await appConfirm({
+      title: '접속 이력 전체 삭제',
+      body: `저장된 접속 이력 ${auditEntries.length}건을 모두 삭제할까요?\n복구할 수 없습니다.`,
+      confirmLabel: '전체 삭제',
+      confirmVariant: 'danger',
+    });
+    if (!ok) return;
+    setSaving(true);
+    setError('');
+    try {
+      applyAuditSnapshot(await window.nas4usb.members.clearLoginAudit());
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '접속 이력을 삭제하지 못했습니다.';
+      setError(message);
+      void appAlert({ title: '접속 이력', body: message });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {dialog}
@@ -1039,6 +1111,14 @@ export default function MembersSettingsPanel() {
               >
                 CSV 내보내기
               </button>
+              <button
+                type="button"
+                className="h-8 rounded-md border border-red-200 bg-white px-3 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                disabled={saving || auditEntries.length === 0}
+                onClick={() => void handleClearLoginAudit()}
+              >
+                전체 삭제
+              </button>
             </div>
           </div>
 
@@ -1055,6 +1135,9 @@ export default function MembersSettingsPanel() {
                     <th className="px-3 py-2 font-medium">아이디</th>
                     <th className="px-3 py-2 font-medium">결과</th>
                     <th className="px-3 py-2 font-medium">IP</th>
+                    <th className="px-3 py-2 font-medium">
+                      <span className="sr-only">삭제</span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
@@ -1078,6 +1161,16 @@ export default function MembersSettingsPanel() {
                         </span>
                       </td>
                       <td className="px-3 py-2 text-slate-600">{entry.ip}</td>
+                      <td className="px-3 py-2 text-right">
+                        <button
+                          type="button"
+                          className="rounded-md border border-red-200 bg-white px-2 py-1 text-xs text-red-600 hover:bg-red-50 disabled:opacity-50"
+                          disabled={saving}
+                          onClick={() => void handleDeleteLoginAudit(entry)}
+                        >
+                          삭제
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

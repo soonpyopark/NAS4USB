@@ -618,6 +618,16 @@ export function createHttpNas4usbClient() {
         const query = params.toString();
         return apiFetch(`/members/login-audit${query ? `?${query}` : ''}`);
       },
+      deleteLoginAudit: (entryId) =>
+        apiFetch('/members/login-audit/delete', {
+          method: 'POST',
+          body: JSON.stringify({ id: entryId }),
+        }),
+      clearLoginAudit: () =>
+        apiFetch('/members/login-audit/clear', {
+          method: 'POST',
+          body: '{}',
+        }),
     },
 
     comic: {

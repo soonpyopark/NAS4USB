@@ -180,6 +180,8 @@ window.nas4usb = {
     export: () => {},
     save: (payload) => {},
     listLoginAudit: (filter) => {},
+    deleteLoginAudit: (entryId) => {},
+    clearLoginAudit: () => {},
   },
   pdfViewer: {
     setVolumeKeysForPaging: (enabled) => {},

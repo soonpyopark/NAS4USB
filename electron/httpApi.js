@@ -105,7 +105,7 @@ import {
 import { getAppSettings, getAccessPermissionsBundle, getEffectiveAccessPermissions, getPublicUiPrefs, updateAppSettings } from './settingsService.js';
 import { setSessionSpellCheckerEnabled } from './spellcheckSession.js';
 import { listMembers, saveMembersPayload, getMembersExportRecords } from './membersService.js';
-import { listLoginAudit } from './loginAuditService.js';
+import { clearLoginAudit, deleteLoginAudit, listLoginAudit } from './loginAuditService.js';
 import {
   syncFortuneSidecarCopy,
   syncFortuneSidecarDelete,
@@ -1275,6 +1275,19 @@ export async function handleHttpApiRequest(req, res) {
           getPortableRoot(),
         ),
       );
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/members/login-audit/delete') {
+      assertSuperAdminAuthenticated(isSuperAdminAuthenticated(req));
+      const body = await readJsonBody(req);
+      sendJson(res, 200, await deleteLoginAudit(body?.id ?? '', getPortableRoot()));
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/members/login-audit/clear') {
+      assertSuperAdminAuthenticated(isSuperAdminAuthenticated(req));
+      sendJson(res, 200, await clearLoginAudit(getPortableRoot()));
       return true;
     }
 

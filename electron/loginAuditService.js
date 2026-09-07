@@ -152,6 +152,14 @@ export async function listLoginAudit(filter = {}, portableRoot) {
     if (resultFilter && entry.result !== resultFilter) return false;
     return true;
   });
+  return { entries: filtered, lastSuccessAt: lastSuccessMap(entries) };
+}
+
+/**
+ * @param {LoginAuditEntry[]} entries
+ * @returns {Record<string, string>}
+ */
+function lastSuccessMap(entries) {
   /** @type {Record<string, string>} */
   const lastSuccessAt = {};
   for (const entry of entries) {
@@ -159,5 +167,42 @@ export async function listLoginAudit(filter = {}, portableRoot) {
     const key = entry.loginId.toLowerCase();
     if (!lastSuccessAt[key]) lastSuccessAt[key] = entry.at;
   }
-  return { entries: filtered, lastSuccessAt };
+  return lastSuccessAt;
+}
+
+/**
+ * @param {string} [portableRoot]
+ * @param {(entries: LoginAuditEntry[]) => LoginAuditEntry[]} mutator
+ */
+function mutateLoginAudit(portableRoot, mutator) {
+  const run = writeChain.then(async () => {
+    const root = portableRoot ?? getPortableRoot();
+    const next = pruneEntries(mutator(await loadEntries(root)));
+    await saveEntries(root, next);
+  });
+  writeChain = run.catch((err) => {
+    console.warn('[auth] login audit write failed:', err);
+  });
+  return run;
+}
+
+/**
+ * @param {string} entryId
+ * @param {string} [portableRoot]
+ */
+export async function deleteLoginAudit(entryId, portableRoot) {
+  const id = String(entryId ?? '').trim();
+  if (!id) {
+    throw new Error('삭제할 이력을 지정해 주세요.');
+  }
+  await mutateLoginAudit(portableRoot, (entries) => entries.filter((entry) => entry.id !== id));
+  return listLoginAudit({}, portableRoot);
+}
+
+/**
+ * @param {string} [portableRoot]
+ */
+export async function clearLoginAudit(portableRoot) {
+  await mutateLoginAudit(portableRoot, () => []);
+  return listLoginAudit({}, portableRoot);
 }

@@ -206,6 +206,8 @@ contextBridge.exposeInMainWorld('nas4usb', {
     export: () => ipcRenderer.invoke('members:export'),
     save: (payload) => ipcRenderer.invoke('members:save', payload ?? {}),
     listLoginAudit: (filter) => ipcRenderer.invoke('members:listLoginAudit', filter ?? {}),
+    deleteLoginAudit: (entryId) => ipcRenderer.invoke('members:deleteLoginAudit', entryId),
+    clearLoginAudit: () => ipcRenderer.invoke('members:clearLoginAudit'),
   },
 
   find: {
