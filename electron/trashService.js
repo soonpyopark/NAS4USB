@@ -445,13 +445,13 @@ export async function emptyTrash(portableRoot = getPortableRoot(), auth = null) 
     }
   }
 
-  const store = await loadIndex(portableRoot);
+  const nextStore = await loadIndex(portableRoot);
   const remaining = await fsService.readDir(TRASH_FOLDER).catch(() => []);
   const remainingKeys = new Set(remaining.map((entry) => entry.relativePath));
-  for (const key of Object.keys(store.items)) {
-    if (!remainingKeys.has(key)) delete store.items[key];
+  for (const key of Object.keys(nextStore.items)) {
+    if (!remainingKeys.has(key)) delete nextStore.items[key];
   }
-  await saveIndex(portableRoot, store);
+  await saveIndex(portableRoot, nextStore);
 
   if (failures.length > 0) {
     throw new Error(`${failures.length}개 항목을 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.`);
