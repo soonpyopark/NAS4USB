@@ -346,6 +346,29 @@ export async function migrateStoredWorkspacePaths(portableRoot = getPortableRoot
             next = { ...parsed, links };
             changed = true;
           }
+        } else if (parsed.users && typeof parsed.users === 'object') {
+          /** @type {Record<string, unknown>} */
+          const users = {};
+          for (const [id, bucket] of Object.entries(parsed.users)) {
+            if (!bucket || typeof bucket !== 'object') {
+              users[id] = bucket;
+              continue;
+            }
+            users[id] = {
+              ...bucket,
+              favorites: rewritePathKeyedMap(bucket.favorites),
+              folderOrder: Array.isArray(bucket.folderOrder)
+                ? bucket.folderOrder.map((item) => rewritePathValue(item))
+                : bucket.folderOrder,
+              fileOrder: Array.isArray(bucket.fileOrder)
+                ? bucket.fileOrder.map((item) => rewritePathValue(item))
+                : bucket.fileOrder,
+            };
+          }
+          if (JSON.stringify(users) !== JSON.stringify(parsed.users)) {
+            next = { ...parsed, users };
+            changed = true;
+          }
         } else if (parsed.favorites && typeof parsed.favorites === 'object') {
           const favorites = rewritePathKeyedMap(parsed.favorites);
           if (JSON.stringify(favorites) !== JSON.stringify(parsed.favorites)) {

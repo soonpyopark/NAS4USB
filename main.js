@@ -1529,11 +1529,11 @@ ipcMain.handle('fileAccess:canEdit', async (event, relativePath) => {
 ipcMain.handle('favorites:getMap', async (event) => {
   const auth = getAccessAuthFromEvent(event);
   const perms = await getEffectiveAccessPermissions(auth, getPortableRoot());
-  if (!perms.view && !perms.write) return {};
+  if (!auth.isLoggedIn || (!perms.view && !perms.write)) return {};
   if (perms.write) {
-    return filterFavoritesMapForAuth(await getFavoritesMap(getPortableRoot()), auth);
+    return filterFavoritesMapForAuth(await getFavoritesMap(auth.loginId), auth);
   }
-  const map = await getFavoritesMap(getPortableRoot());
+  const map = await getFavoritesMap(auth.loginId);
   const accessMap = await getFileAccessMap(getPortableRoot());
   return filterFavoritesMapForAuth(
     Object.fromEntries(
@@ -1546,11 +1546,11 @@ ipcMain.handle('favorites:getMap', async (event) => {
 ipcMain.handle('favorites:listEntries', async (event) => {
   const auth = getAccessAuthFromEvent(event);
   const perms = await getEffectiveAccessPermissions(auth, getPortableRoot());
-  if (!perms.view && !perms.write) return [];
+  if (!auth.isLoggedIn || (!perms.view && !perms.write)) return [];
   if (perms.write) {
-    return filterFavoriteEntriesForAuth(await listFavoriteEntries(getPortableRoot()), auth);
+    return filterFavoriteEntriesForAuth(await listFavoriteEntries(auth.loginId), auth);
   }
-  const entries = await listFavoriteEntries(getPortableRoot());
+  const entries = await listFavoriteEntries(auth.loginId);
   const accessMap = await getFileAccessMap(getPortableRoot());
   return filterFavoriteEntriesForAuth(
     entries.filter((entry) => canViewFileEntry(entry.relativePath, accessMap, false)),
@@ -1560,14 +1560,18 @@ ipcMain.handle('favorites:listEntries', async (event) => {
 
 ipcMain.handle('favorites:set', async (event, { path: relativePath, favorited } = {}) => {
   assertAdminAuthenticated(isAdminFromEvent(event));
-  const result = await setFavorite(relativePath, Boolean(favorited), getPortableRoot());
+  const result = await setFavorite(
+    relativePath,
+    Boolean(favorited),
+    getAccessAuthFromEvent(event).loginId,
+  );
   notifyFsChanged(relativePath);
   return result;
 });
 
 ipcMain.handle('favorites:setOrder', async (event, { kind, paths } = {}) => {
   assertAdminAuthenticated(isAdminFromEvent(event));
-  const result = await setFavoriteOrder(kind, paths, getPortableRoot());
+  const result = await setFavoriteOrder(kind, paths, getAccessAuthFromEvent(event).loginId);
   notifyFsChanged(FAVORITES_FOLDER);
   return result;
 });
@@ -1695,7 +1699,7 @@ ipcMain.handle('trash:move', async (event, { path: relativePath } = {}) => {
   const shareToken = getShareTokenFromEvent(event);
   assertHomeSystemPathMutable(relativePath, 'mutate');
   await assertCanEditFile(relativePath, auth, shareToken);
-  const result = await trashPath(relativePath, getPortableRoot());
+  const result = await trashPath(relativePath, getPortableRoot(), { deletedBy: auth.loginId });
   notifyFsChanged(relativePath);
   return result;
 });
@@ -1715,8 +1719,9 @@ ipcMain.handle('trash:restore', async (event, { path: relativePath } = {}) => {
 });
 
 ipcMain.handle('trash:empty', async (event) => {
-  await assertGuestCanWrite(getAccessAuthFromEvent(event));
-  const result = await emptyTrash(getPortableRoot());
+  const auth = getAccessAuthFromEvent(event);
+  await assertCanAccessTrash(auth);
+  const result = await emptyTrash(getPortableRoot(), auth);
   notifyFsChanged();
   return result;
 });

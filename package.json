@@ -25,6 +25,7 @@
     "sync-version": "node scripts/sync-version.mjs",
     "update:all": "node scripts/update-all.mjs",
     "build:update_all": "update_all.bat _inner build && npm run build:release",
+    "build:update_all:mac": "node scripts/update-all.mjs && npm run build:dist:mac",
     "start": "npm run build && electron .",
     "preview": "vite preview --port 3009 --strictPort"
   },

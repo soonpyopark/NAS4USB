@@ -82,8 +82,22 @@ function queryNpmVersion(pkg) {
 }
 
 function electronBinaryPath() {
-  const name = process.platform === 'win32' ? 'electron.exe' : 'electron';
-  return path.join(root, 'node_modules', 'electron', 'dist', name);
+  if (process.platform === 'win32') {
+    return path.join(root, 'node_modules', 'electron', 'dist', 'electron.exe');
+  }
+  if (process.platform === 'darwin') {
+    return path.join(
+      root,
+      'node_modules',
+      'electron',
+      'dist',
+      'Electron.app',
+      'Contents',
+      'MacOS',
+      'Electron',
+    );
+  }
+  return path.join(root, 'node_modules', 'electron', 'dist', 'electron');
 }
 
 /**

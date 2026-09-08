@@ -41,7 +41,7 @@ import * as fsService from './fsService.js';
 import { getFileAccessMap } from './fileAccessService.js';
 import { getEffectiveAccessPermissions } from './settingsService.js';
 import { resolveShareToken } from './shareLinkService.js';
-import { getTrashMap } from './trashService.js';
+import { getTrashMap, normalizeTrashItem, trashOwnerKey } from './trashService.js';
 import { SHARE_LINK_MODE_EDIT } from '../shared/shareLinkModes.js';
 import {
   getSpreadsheetPathForFortuneSidecar,
@@ -662,18 +662,24 @@ export async function assertCanAccessTrash(auth, portableRoot = getPortableRoot(
 }
 
 /**
- * Hide trash items whose original path is outside the caller's home visibility.
- * @param {Record<string, { originalPath?: string }>} trashMap
+ * Super admin sees every trash item. Others see only what they deleted,
+ * and still cannot see another member's personal-folder origin.
+ * @param {Record<string, { originalPath?: string, deletedBy?: string }>} trashMap
  * @param {AccessAuth} auth
  */
 export function filterTrashMapByHomeAccess(trashMap, auth) {
   const home = homeAuthFrom(auth);
+  const owner = trashOwnerKey(home.loginId);
   return Object.fromEntries(
-    Object.entries(trashMap ?? {}).filter(([, meta]) => {
-      const originalPath = String(meta?.originalPath ?? '');
-      if (!originalPath) return true;
-      return resolveHomePathAccess(originalPath, home) !== 'deny';
-    }),
+    Object.entries(trashMap ?? {})
+      .map(([key, meta]) => [key, normalizeTrashItem(meta)])
+      .filter(([, meta]) => {
+        if (isSuperAdminAuth(auth)) return true;
+        if (!owner || meta.deletedBy !== owner) return false;
+        const originalPath = String(meta?.originalPath ?? '');
+        if (!originalPath) return true;
+        return resolveHomePathAccess(originalPath, home) !== 'deny';
+      }),
   );
 }
 

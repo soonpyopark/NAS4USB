@@ -161,6 +161,12 @@ GitHub Release에 올릴 때 에셋 이름에 `_YYMMDD_HHMMSS`를 유지하세�
 npm run build:dist:mac
 ```
 
+코어 업데이트 후 macOS 배포(`.app` + DMG + ZIP)까지:
+
+```bash
+npm run build:update_all:mac
+```
+
 ---
 
 ## 앱 업데이트 확인
@@ -190,6 +196,14 @@ npm run build:update_all
 
 (`update_all.bat` 후 `npm run build:release` — MSI + portable 동일 스탬프)
 
+macOS에서는:
+
+```bash
+npm run build:update_all:mac
+```
+
+(`npm run update:all` 후 `npm run build:dist:mac`)
+
 또는:
 
 ```bat
@@ -216,7 +230,8 @@ npm run build:release
 | `npm run build:release` | MSI + portable zip을 `msi/`에 동일 스탬프로 생성 |
 | `npm run sync-version` | `APP_VERSION` → package.json / MSI License 동기화 |
 | `npm run update:all` | 에디터 코어 + npm 의존성 + Electron latest |
-| `npm run build:update_all` | 코어 업데이트 + `build:release` |
+| `npm run build:update_all` | 코어 업데이트 + `build:release` (Windows) |
+| `npm run build:update_all:mac` | 코어 업데이트 + `build:dist:mac` (macOS) |
 
 ---
 

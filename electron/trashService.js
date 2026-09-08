@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { EXTERNAL_FOLDER, TRASH_FOLDER } from '../shared/constants.js';
+import { DEFAULT_ADMIN_ID, EXTERNAL_FOLDER, TRASH_FOLDER } from '../shared/constants.js';
+import { getHomeOwnerFolderFromPath, sanitizeLoginIdForHomeFolder } from '../shared/memberHomes.js';
 import { resolveUniqueName } from '../shared/uniqueName.js';
 import {
   isExternalFolderPath,
@@ -41,9 +42,48 @@ export const EXTERNAL_MOUNT_DELETE_MESSAGE =
 const TRASH_INDEX_FILE = '.nas4usb-trash.json';
 
 /**
- * @typedef {{ originalPath: string, deletedAt: string, isDirectory: boolean }} TrashItemRecord
+ * @typedef {{
+ *   originalPath: string,
+ *   deletedAt: string,
+ *   isDirectory: boolean,
+ *   deletedBy: string,
+ * }} TrashItemRecord
  * @typedef {{ items: Record<string, TrashItemRecord> }} TrashStore
  */
+
+/**
+ * @param {unknown} loginId
+ */
+export function trashOwnerKey(loginId) {
+  return sanitizeLoginIdForHomeFolder(loginId).toLowerCase();
+}
+
+/**
+ * Legacy items: personal-folder owner, otherwise the default admin.
+ * @param {string} [originalPath]
+ */
+export function inferTrashDeletedBy(originalPath) {
+  const owner = getHomeOwnerFolderFromPath(originalPath);
+  if (owner) return owner.toLowerCase();
+  return trashOwnerKey(DEFAULT_ADMIN_ID) || 'admin';
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {TrashItemRecord}
+ */
+export function normalizeTrashItem(raw) {
+  const item = raw && typeof raw === 'object' ? raw : {};
+  const originalPath = String(item.originalPath ?? '').replace(/\\/g, '/');
+  const deletedBy =
+    trashOwnerKey(item.deletedBy) || inferTrashDeletedBy(originalPath);
+  return {
+    originalPath,
+    deletedAt: String(item.deletedAt ?? ''),
+    isDirectory: Boolean(item.isDirectory),
+    deletedBy,
+  };
+}
 
 /**
  * @param {string} relativePath
@@ -89,7 +129,18 @@ async function loadIndex(portableRoot) {
       const raw = await fs.readFile(filePath, 'utf8');
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed.items === 'object') {
-        return { items: parsed.items };
+        /** @type {Record<string, TrashItemRecord>} */
+        const items = {};
+        let inferred = false;
+        for (const [key, value] of Object.entries(parsed.items)) {
+          const next = normalizeTrashItem(value);
+          const previous = String(value?.deletedBy ?? '').trim().toLowerCase();
+          if (next.deletedBy !== previous) inferred = true;
+          items[key] = next;
+        }
+        const store = { items };
+        if (inferred) await saveIndex(portableRoot, store);
+        return store;
       }
     } catch {
       // try next
@@ -147,11 +198,11 @@ async function syncTrashIndexWithDisk(portableRoot) {
       indexedKeys.delete(entry.relativePath);
       if (store.items[entry.relativePath]) continue;
 
-      store.items[entry.relativePath] = {
+      store.items[entry.relativePath] = normalizeTrashItem({
         originalPath: getBaseName(entry.relativePath),
         deletedAt: entry.inaccessible ? new Date().toISOString() : entry.modifiedAt,
         isDirectory: entry.isDirectory,
-      };
+      });
       changed = true;
     }
 
@@ -181,8 +232,13 @@ export async function getTrashMap(portableRoot = getPortableRoot()) {
 /**
  * @param {string} relativePath
  * @param {string} [portableRoot]
+ * @param {{ deletedBy?: string }} [options]
  */
-export async function trashPath(relativePath, portableRoot = getPortableRoot()) {
+export async function trashPath(
+  relativePath,
+  portableRoot = getPortableRoot(),
+  { deletedBy } = {},
+) {
   const normalized = normalizePath(relativePath);
   if (!normalized || normalized === '.' || isTrashPath(normalized)) {
     throw new Error('삭제(휴지통)할 수 없는 항목입니다.');
@@ -239,11 +295,12 @@ export async function trashPath(relativePath, portableRoot = getPortableRoot()) 
   await fsService.movePath(normalized, trashDest);
 
   const store = await loadIndex(portableRoot);
-  store.items[trashDest] = {
+  store.items[trashDest] = normalizeTrashItem({
     originalPath: normalized,
     deletedAt: new Date().toISOString(),
     isDirectory: stat.isDirectory,
-  };
+    deletedBy,
+  });
   await saveIndex(portableRoot, store);
 
   return { trashPath: trashDest, originalPath: normalized };
@@ -357,15 +414,22 @@ export async function deletePermanent(relativePath, portableRoot = getPortableRo
 }
 
 /**
+ * Super admin empties every item. Other members empty only their own.
  * @param {string} [portableRoot]
+ * @param {{ loginId?: string | null, role?: string | null }} [auth]
  */
-export async function emptyTrash(portableRoot = getPortableRoot()) {
+export async function emptyTrash(portableRoot = getPortableRoot(), auth = null) {
   /** @type {Error[]} */
   const failures = [];
+  const store = await syncTrashIndexWithDisk(portableRoot);
+  const owner = trashOwnerKey(auth?.loginId);
+  const emptyAll = auth?.role === 'super_admin';
 
   try {
     const entries = await fsService.readDir(TRASH_FOLDER);
     for (const entry of entries) {
+      const meta = store.items[entry.relativePath];
+      if (!emptyAll && (!owner || !meta || meta.deletedBy !== owner)) continue;
       try {
         await deletePermanent(entry.relativePath, portableRoot);
       } catch (error) {

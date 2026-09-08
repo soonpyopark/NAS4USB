@@ -752,15 +752,15 @@ export async function handleHttpApiRequest(req, res) {
     if (method === 'GET' && url.pathname === '/api/favorites/map') {
       const auth = getAccessAuth(req);
       const perms = await getEffectiveAccessPermissions(auth, getPortableRoot());
-      if (!perms.view && !perms.write) {
+      if (!auth.isLoggedIn || (!perms.view && !perms.write)) {
         sendJson(res, 200, {});
         return true;
       }
       if (perms.write) {
-        sendJson(res, 200, filterFavoritesMapForAuth(await getFavoritesMap(getPortableRoot()), auth));
+        sendJson(res, 200, filterFavoritesMapForAuth(await getFavoritesMap(auth.loginId), auth));
         return true;
       }
-      const map = await getFavoritesMap(getPortableRoot());
+      const map = await getFavoritesMap(auth.loginId);
       const accessMap = await getFileAccessMap(getPortableRoot());
       sendJson(
         res,
@@ -778,7 +778,7 @@ export async function handleHttpApiRequest(req, res) {
     if (method === 'GET' && url.pathname === '/api/favorites/listEntries') {
       const auth = getAccessAuth(req);
       const perms = await getEffectiveAccessPermissions(auth, getPortableRoot());
-      if (!perms.view && !perms.write) {
+      if (!auth.isLoggedIn || (!perms.view && !perms.write)) {
         sendJson(res, 200, []);
         return true;
       }
@@ -786,11 +786,11 @@ export async function handleHttpApiRequest(req, res) {
         sendJson(
           res,
           200,
-          filterFavoriteEntriesForAuth(await listFavoriteEntries(getPortableRoot()), auth),
+          filterFavoriteEntriesForAuth(await listFavoriteEntries(auth.loginId), auth),
         );
         return true;
       }
-      const entries = await listFavoriteEntries(getPortableRoot());
+      const entries = await listFavoriteEntries(auth.loginId);
       const accessMap = await getFileAccessMap(getPortableRoot());
       sendJson(
         res,
@@ -806,7 +806,11 @@ export async function handleHttpApiRequest(req, res) {
     if (method === 'POST' && url.pathname === '/api/favorites/set') {
       assertAdminAuthenticated(isAdminAuthenticated(req));
       const body = await readJsonBody(req);
-      const result = await setFavorite(body.path, Boolean(body.favorited), getPortableRoot());
+      const result = await setFavorite(
+        body.path,
+        Boolean(body.favorited),
+        getAccessAuth(req).loginId,
+      );
       notifyFsChanged(body.path);
       sendJson(res, 200, result);
       return true;
@@ -815,7 +819,7 @@ export async function handleHttpApiRequest(req, res) {
     if (method === 'POST' && url.pathname === '/api/favorites/setOrder') {
       assertAdminAuthenticated(isAdminAuthenticated(req));
       const body = await readJsonBody(req);
-      const result = await setFavoriteOrder(body.kind, body.paths, getPortableRoot());
+      const result = await setFavoriteOrder(body.kind, body.paths, getAccessAuth(req).loginId);
       notifyFsChanged(FAVORITES_FOLDER);
       sendJson(res, 200, result);
       return true;
@@ -1092,7 +1096,7 @@ export async function handleHttpApiRequest(req, res) {
       const shareToken = getShareTokenFromQuery(url);
       assertHomeSystemPathMutable(body.path, 'mutate');
       await assertCanEditFile(body.path ?? '', auth, shareToken);
-      const result = await trashPath(body.path, getPortableRoot());
+      const result = await trashPath(body.path, getPortableRoot(), { deletedBy: auth.loginId });
       notifyFsChanged(body.path);
       sendJson(res, 200, result);
       return true;
@@ -1116,8 +1120,9 @@ export async function handleHttpApiRequest(req, res) {
     }
 
     if (method === 'POST' && url.pathname === '/api/trash/empty') {
-      await assertGuestCanWrite(getAccessAuth(req));
-      const result = await emptyTrash(getPortableRoot());
+      const auth = getAccessAuth(req);
+      await assertCanAccessTrash(auth);
+      const result = await emptyTrash(getPortableRoot(), auth);
       notifyFsChanged();
       sendJson(res, 200, result);
       return true;
