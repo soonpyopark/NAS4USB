@@ -1,9 +1,9 @@
 {
-  "updatedAt": "2026-09-10T12:53:19.961Z",
+  "updatedAt": "2026-09-10T14:03:31.687Z",
   "cores": {
     "rhwp": {
       "version": "@rhwp/core@0.8.6, @rhwp/editor@0.8.6",
-      "updatedAt": "2026-09-10T12:53:19.961Z",
+      "updatedAt": "2026-09-10T14:03:31.687Z",
       "method": "npm"
     },
     "wb4s": {
@@ -13,17 +13,17 @@
     },
     "fortune-sheet": {
       "version": "@fortune-sheet/react@1.0.4",
-      "updatedAt": "2026-09-10T12:53:19.961Z",
+      "updatedAt": "2026-09-10T14:03:31.687Z",
       "method": "npm"
     },
     "tiptap": {
       "version": "@tiptap/core@3.31.3, @tiptap/pm@3.31.3, @tiptap/react@3.31.3, @tiptap/starter-kit@3.31.3, @tiptap/extension-collaboration@3.31.3, @tiptap/extension-collaboration-caret@3.31.3, @tiptap/extension-bubble-menu@3.31.3",
-      "updatedAt": "2026-09-10T12:53:19.961Z",
+      "updatedAt": "2026-09-10T14:03:31.687Z",
       "method": "npm"
     },
     "comic-reader": {
       "version": "epubjs@0.3.93, 7zip-min@3.0.1",
-      "updatedAt": "2026-09-10T12:53:19.961Z",
+      "updatedAt": "2026-09-10T14:03:31.687Z",
       "method": "npm"
     }
   }

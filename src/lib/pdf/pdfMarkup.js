@@ -76,8 +76,8 @@ export const PDF_UNDERLINE_PRESET_LABELS = {
 /** Tiny live-selection blue ≈ QColor(51, 153, 255, 90). */
 export const PDF_LIVE_SELECTION_FILL = 'rgba(51, 153, 255, 0.35)';
 
-/** Tiny highlight annot opacity 0.45 / overlay alpha 115. */
-export const PDF_HIGHLIGHT_OVERLAY_OPACITY = 0.45;
+/** Viewer highlight wash — keep text readable under the tint. */
+export const PDF_HIGHLIGHT_OVERLAY_OPACITY = 0.28;
 
 export function pdfHighlightPresetColor(id = 'yellow') {
   return HIGHLIGHT_PRESETS[id] || HIGHLIGHT_PRESETS.yellow;

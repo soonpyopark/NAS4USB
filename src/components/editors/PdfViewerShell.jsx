@@ -1695,16 +1695,25 @@ export default function PdfViewerShell({
     repaintMarkupLayers();
   }, [markups, activeMarkupId, repaintMarkupLayers]);
 
-  // Mouse/pen: drag selects. Touch: pan scrolls; double-tap selects a word; handles extend range.
+  // Mouse/pen: drag selects. Touch: pan scrolls; long-press or double-tap selects a word.
   useEffect(() => {
     const scroller = scrollRef.current;
     if (!scroller || !docReady) return undefined;
 
     const TOUCH_SCROLL_SLOP_PX = 12;
+    const TOUCH_LONG_PRESS_MS = 450;
     const DOUBLE_TAP_MS = 420;
     const DOUBLE_TAP_SLOP_PX = 40;
+    let touchHoldTimer = 0;
+
+    const clearTouchHoldTimer = () => {
+      if (!touchHoldTimer) return;
+      window.clearTimeout(touchHoldTimer);
+      touchHoldTimer = 0;
+    };
 
     const clearSelectionDrag = () => {
+      clearTouchHoldTimer();
       selectionDragRef.current = null;
     };
 
@@ -1814,6 +1823,32 @@ export default function PdfViewerShell({
       capturePointer(event.target instanceof Element ? event.target : hit, event.pointerId);
     };
 
+    const armTouchWordSelection = (drag) => {
+      const pageWrap = scroller.querySelector(`[data-pdf-page="${drag.pageNumber}"]`);
+      const words = pageWordsRefs.current.get(drag.pageNumber);
+      if (!(pageWrap instanceof HTMLElement) || !words?.length) return false;
+      const wordIdx = wordIndexAtPoint(words, drag.anchor);
+      const picked = getTextBlockSelectionByIndices(words, wordIdx, wordIdx);
+      if (!picked?.text?.trim()) return false;
+      const word = words[wordIdx];
+      drag.touchPhase = 'selecting';
+      drag.moved = true;
+      drag.pendingMarkupId = '';
+      drag.anchor = { x: word.x0, y: (word.y0 + word.y1) / 2 };
+      drag.selection = picked;
+      lastTapRef.current = null;
+      window.getSelection()?.removeAllRanges();
+      try {
+        navigator.vibrate?.(10);
+      } catch {
+        // ignore
+      }
+      const hit = hitLayerForPage(drag.pageNumber);
+      if (hit) hit.style.touchAction = 'none';
+      updateLive(drag.pageNumber, picked, true);
+      return true;
+    };
+
     const onPointerDown = (event) => {
       if (event.button !== 0) return;
       const target = event.target;
@@ -1891,6 +1926,15 @@ export default function PdfViewerShell({
       if (isTouch) {
         drag.touchPhase = 'pending';
         selectionDragRef.current = drag;
+        clearTouchHoldTimer();
+        touchHoldTimer = window.setTimeout(() => {
+          touchHoldTimer = 0;
+          const current = selectionDragRef.current;
+          if (!current || current.pointerId !== drag.pointerId || current.touchPhase !== 'pending') {
+            return;
+          }
+          armTouchWordSelection(current);
+        }, TOUCH_LONG_PRESS_MS);
         return;
       }
 
@@ -2083,6 +2127,10 @@ export default function PdfViewerShell({
 
       const pageWrap = target.closest('[data-pdf-page]');
       if (!(pageWrap instanceof HTMLElement) || !scroller.contains(pageWrap)) return;
+
+      // iPad long-press otherwise starts native selection on the toolbar/title.
+      event.preventDefault();
+      if (event.pointerType === 'touch' || detectTouchUi()) return;
       if (pageWrap.dataset.pdfReady !== '1') return;
 
       const pageNumber = Number(pageWrap.dataset.pdfPage || '0');
@@ -2097,8 +2145,29 @@ export default function PdfViewerShell({
       openMarksContextMenuRef.current(event, hitMarkup);
     };
 
+    const onSelectStart = (event) => {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      if (target.closest('[data-pdf-selection-menu]')) return;
+      if (target.closest('[data-pdf-marks-menu]')) return;
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+        if (document.activeElement === target) return;
+      }
+      event.preventDefault();
+    };
+
+    const onModalContextMenu = (event) => {
+      if (!(event.pointerType === 'touch' || detectTouchUi())) return;
+      const target = event.target;
+      if (target instanceof Element && target.closest('[data-pdf-selection-menu]')) return;
+      event.preventDefault();
+    };
+
+    const modalRoot = scroller.closest('.modal-overlay');
     scroller.addEventListener('pointerdown', onPointerDown);
     scroller.addEventListener('contextmenu', onContextMenu);
+    modalRoot?.addEventListener('selectstart', onSelectStart, true);
+    modalRoot?.addEventListener('contextmenu', onModalContextMenu);
     window.addEventListener('pointermove', onPointerMove, { passive: false });
     window.addEventListener('pointerup', finishPointer);
     window.addEventListener('pointercancel', finishPointer);
@@ -2107,6 +2176,8 @@ export default function PdfViewerShell({
       clearSelectionDrag();
       scroller.removeEventListener('pointerdown', onPointerDown);
       scroller.removeEventListener('contextmenu', onContextMenu);
+      modalRoot?.removeEventListener('selectstart', onSelectStart, true);
+      modalRoot?.removeEventListener('contextmenu', onModalContextMenu);
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', finishPointer);
       window.removeEventListener('pointercancel', finishPointer);
@@ -2619,7 +2690,7 @@ export default function PdfViewerShell({
         </AppModalActions>
       </AppModal>
 
-      <div className="flex flex-wrap items-center gap-0.5 border-b border-slate-200 bg-slate-50 px-2 py-1">
+      <div className="pdf-viewer-toolbar flex flex-wrap items-center gap-0.5 border-b border-slate-200 bg-slate-50 px-2 py-1">
         <button
           type="button"
           className={`pdf-tb-btn ${showThumbnails ? 'pdf-tb-btn--active' : ''}`}
@@ -2968,7 +3039,7 @@ export default function PdfViewerShell({
                 <p className="px-1 py-2 text-[11px] leading-relaxed text-slate-600">
                   {markupScanPending
                     ? 'PDF에 저장된 형광펜을 불러오는 중입니다. 페이지가 많을수록 조금 걸릴 수 있습니다.'
-                    : '형광펜이나 밑줄 친 내용이 없습니다. 본문에서 텍스트를 선택한 뒤 메뉴에서 형광펜·밑줄을 추가하고 [저장]으로 원본 PDF에 기록하세요. 태블릿은 손가락으로 스크롤하고, 텍스트는 더블 탭한 뒤 파란 핸들로 범위를 조절하세요. 읽던 위치는 자동 보관됩니다.'}
+                    : '형광펜이나 밑줄 친 내용이 없습니다. 본문에서 텍스트를 선택한 뒤 메뉴에서 형광펜·밑줄을 추가하고 [저장]으로 원본 PDF에 기록하세요. 태블릿은 손가락으로 스크롤하고, 텍스트는 꾸욱 누르거나 더블 탭한 뒤 파란 핸들로 범위를 조절하세요. 읽던 위치는 자동 보관됩니다.'}
                 </p>
               ) : (
                 <ul className="flex flex-col gap-1.5">
@@ -3190,6 +3261,21 @@ export default function PdfViewerShell({
 
       <style>{`
         .pdf-scroll { scrollbar-gutter: stable; }
+        .pdf-viewer-toolbar,
+        .pdf-viewer-toolbar *,
+        .pdf-scroll,
+        .pdf-page-wrap,
+        .pdf-page-fab {
+          -webkit-user-select: none;
+          user-select: none;
+          -webkit-touch-callout: none;
+        }
+        .modal-overlay:has(.pdf-viewer-toolbar) .modal-editor-header,
+        .modal-overlay:has(.pdf-viewer-toolbar) .modal-editor-header * {
+          -webkit-user-select: none;
+          user-select: none;
+          -webkit-touch-callout: none;
+        }
         .pdf-page-fab {
           position: absolute;
           bottom: 30%;
@@ -3373,12 +3459,12 @@ export default function PdfViewerShell({
           box-sizing: border-box;
         }
         .pdf-markup--highlight {
-          opacity: 0.45;
+          opacity: 0.28;
           mix-blend-mode: multiply;
           border-radius: 1px;
         }
         html.touch-ui .pdf-markup--highlight {
-          opacity: 0.72;
+          opacity: 0.42;
           mix-blend-mode: multiply;
         }
         .pdf-markup--underline {
