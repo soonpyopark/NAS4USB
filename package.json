@@ -1,6 +1,6 @@
 {
   "name": "nas4usb",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "Offline LAN NAS & real-time collaborative HWPX editor",
   "main": "main.js",
   "type": "module",
@@ -43,7 +43,7 @@
     "@xmldom/xmldom": "^0.9.10",
     "autoprefixer": "^10.4.20",
     "concurrently": "^9.1.2",
-    "electron": "^44.2.0",
+    "electron": "^44.3.0",
     "electron-builder": "^26.15.3",
     "png-to-ico": "^3.0.2",
     "postcss": "^8.4.49",
@@ -140,7 +140,7 @@
     "@tiptap/pm": "$@tiptap/pm"
   },
   "allowScripts": {
-    "electron@44.2.0": true
+    "electron@44.3.0": true
   },
   "build": {
     "appId": "com.nas4usb.app",
@@ -158,6 +158,7 @@
       "scripts/wb4s-upstream.mjs",
       "dist/**/*",
       "seed/data/**/*",
+      "lib/cores-manifest.json",
       "package.json",
       "!**/node_modules/onnxruntime-node/**",
       "!**/node_modules/@huggingface/transformers/**",

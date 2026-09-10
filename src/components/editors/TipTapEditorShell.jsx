@@ -93,11 +93,13 @@ export default function TipTapEditorShell({
   const [showHistory, setShowHistory] = useState(false);
   const [exportingHtml, setExportingHtml] = useState(false);
   const [importingHtml, setImportingHtml] = useState(false);
+  const [importingHwpx, setImportingHwpx] = useState(false);
   const [importingOnenote, setImportingOnenote] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [exportingHwpx, setExportingHwpx] = useState(false);
   const [printing, setPrinting] = useState(false);
   const htmlImportInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
+  const hwpxImportInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
   const onenoteImportInputRef = useRef(/** @type {HTMLInputElement | null} */ (null));
 
   const editorRef = useRef(/** @type {import('@tiptap/core').Editor | null} */ (null));
@@ -268,33 +270,29 @@ export default function TipTapEditorShell({
     [collaborationEnabled, doc, relativePath, workspace],
   );
 
+  const transferBusy =
+    exportingHtml ||
+    exportingPdf ||
+    exportingHwpx ||
+    printing ||
+    importingHtml ||
+    importingHwpx ||
+    importingOnenote;
+
   const handleImportHtml = useCallback(() => {
-    if (
-      exportingHtml ||
-      exportingPdf ||
-      printing ||
-      importingHtml ||
-      importingOnenote ||
-      !editorRef.current
-    ) {
-      return;
-    }
+    if (transferBusy || !editorRef.current) return;
     htmlImportInputRef.current?.click();
-  }, [exportingHtml, exportingPdf, importingHtml, importingOnenote, printing]);
+  }, [transferBusy]);
+
+  const handleImportHwpx = useCallback(() => {
+    if (transferBusy || !editorRef.current) return;
+    hwpxImportInputRef.current?.click();
+  }, [transferBusy]);
 
   const handleImportOnenote = useCallback(() => {
-    if (
-      exportingHtml ||
-      exportingPdf ||
-      printing ||
-      importingHtml ||
-      importingOnenote ||
-      !editorRef.current
-    ) {
-      return;
-    }
+    if (transferBusy || !editorRef.current) return;
     onenoteImportInputRef.current?.click();
-  }, [exportingHtml, exportingPdf, importingHtml, importingOnenote, printing]);
+  }, [transferBusy]);
 
   const handleImportOnenotePicked = useCallback(
     async (event) => {
@@ -458,8 +456,44 @@ export default function TipTapEditorShell({
     [relativePath],
   );
 
+  const handleImportHwpxPicked = useCallback(
+    async (event) => {
+      const input = event.currentTarget;
+      const file = input.files?.[0];
+      input.value = '';
+      if (!file || !editorRef.current) return;
+
+      if (!editorRef.current.isEmpty) {
+        const { showAppChoice } = await import('../../lib/nativeDialog.js');
+        const choice = await showAppChoice({
+          title: 'HWPX 가져오기',
+          body: '현재 문서 내용을 선택한 HWPX로 바꿀까요?',
+          primaryLabel: '바꾸기',
+          cancelLabel: '취소',
+        });
+        if (choice !== 'primary') return;
+      }
+
+      setImportingHwpx(true);
+      setLoadError(null);
+      try {
+        const { importHwpxIntoEditor } = await import('../../lib/tiptap/importHwpx.js');
+        const { createTiptapUploadFile } = await import('../../lib/tiptap/uploadFile.js');
+        await importHwpxIntoEditor(editorRef.current, file, {
+          uploadFile: createTiptapUploadFile(relativePath),
+          destTiptapPath: relativePath,
+        });
+      } catch (err) {
+        setLoadError(err instanceof Error ? err.message : 'HWPX 가져오기에 실패했습니다.');
+      } finally {
+        setImportingHwpx(false);
+      }
+    },
+    [relativePath],
+  );
+
   const handleExportHtml = useCallback(async () => {
-    if (exportingHtml || exportingPdf || exportingHwpx || printing || !editorRef.current) return;
+    if (transferBusy || !editorRef.current) return;
     setExportingHtml(true);
     setLoadError(null);
     try {
@@ -480,10 +514,10 @@ export default function TipTapEditorShell({
     } finally {
       setExportingHtml(false);
     }
-  }, [exportingHtml, exportingHwpx, exportingPdf, fileName, printing, relativePath]);
+  }, [fileName, relativePath, transferBusy]);
 
   const handleExportHwpx = useCallback(async () => {
-    if (exportingHtml || exportingPdf || exportingHwpx || printing || !editorRef.current) return;
+    if (transferBusy || !editorRef.current) return;
     setExportingHwpx(true);
     setLoadError(null);
     try {
@@ -504,10 +538,10 @@ export default function TipTapEditorShell({
     } finally {
       setExportingHwpx(false);
     }
-  }, [exportingHtml, exportingHwpx, exportingPdf, fileName, printing, relativePath]);
+  }, [fileName, relativePath, transferBusy]);
 
   const handleExportPdf = useCallback(async () => {
-    if (exportingHtml || exportingPdf || exportingHwpx || printing || !editorRef.current) return;
+    if (transferBusy || !editorRef.current) return;
     setExportingPdf(true);
     setLoadError(null);
     try {
@@ -528,10 +562,10 @@ export default function TipTapEditorShell({
     } finally {
       setExportingPdf(false);
     }
-  }, [exportingHtml, exportingHwpx, exportingPdf, fileName, printing, relativePath]);
+  }, [fileName, relativePath, transferBusy]);
 
   const handlePrint = useCallback(async () => {
-    if (exportingHtml || exportingPdf || exportingHwpx || printing || !editorRef.current) return;
+    if (transferBusy || !editorRef.current) return;
     setPrinting(true);
     setLoadError(null);
     try {
@@ -542,7 +576,7 @@ export default function TipTapEditorShell({
     } finally {
       setPrinting(false);
     }
-  }, [exportingHtml, exportingHwpx, exportingPdf, fileName, printing, relativePath]);
+  }, [fileName, relativePath, transferBusy]);
 
   const handleClose = useCallback(async () => {
     const canFlush = Boolean(!shareReadOnly && editorRef.current && contentReady && roomReady);
@@ -585,6 +619,8 @@ export default function TipTapEditorShell({
         exportingHwpx={exportingHwpx}
         onImportHtml={isLoading || shareReadOnly ? undefined : handleImportHtml}
         importingHtml={importingHtml}
+        onImportHwpx={isLoading || shareReadOnly ? undefined : handleImportHwpx}
+        importingHwpx={importingHwpx}
         onImportOnenote={isLoading || shareReadOnly ? undefined : handleImportOnenote}
         importingOnenote={importingOnenote}
         onExportPdf={isLoading || shareReadOnly ? undefined : handleExportPdf}
@@ -662,6 +698,13 @@ export default function TipTapEditorShell({
         accept=".html,.htm,text/html"
         hidden
         onChange={handleImportHtmlPicked}
+      />
+      <input
+        ref={hwpxImportInputRef}
+        type="file"
+        accept=".hwpx,application/haansofthwpx"
+        hidden
+        onChange={handleImportHwpxPicked}
       />
       <input
         ref={onenoteImportInputRef}

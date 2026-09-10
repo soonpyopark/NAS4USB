@@ -10,10 +10,27 @@ import { CORES_MANIFEST_PATH, EDITOR_CORES } from '../shared/editorCores.js';
  * @param {string} [installRoot]
  */
 function resolveRoots(portableRoot, installRoot = portableRoot) {
-  if (!installRoot || installRoot === portableRoot) {
-    return [portableRoot];
+  /** @type {string[]} */
+  const roots = [];
+  const add = (value) => {
+    const resolved = value ? path.resolve(value) : '';
+    if (!resolved || roots.includes(resolved)) return;
+    roots.push(resolved);
+  };
+
+  add(installRoot);
+  add(portableRoot);
+
+  // electron-builder extraFiles land in Contents/ (Mac) or next to the exe,
+  // while installRoot is often .../Resources/app.asar — look one and two
+  // levels up so lib/cores-manifest.json and public/wb4s-editor are visible.
+  if (installRoot) {
+    const parent = path.dirname(path.resolve(installRoot));
+    add(parent);
+    add(path.dirname(parent));
   }
-  return [installRoot, portableRoot];
+
+  return roots.length > 0 ? roots : [portableRoot];
 }
 
 /**
@@ -182,6 +199,35 @@ async function readCoreVersion(appPath, core) {
  * @param {string[]} roots
  * @param {import('../shared/editorCores.js').EditorCoreDefinition} core
  */
+/**
+ * @param {string} filePath
+ */
+async function readJsonVersionField(filePath) {
+  try {
+    const raw = await fs.readFile(filePath, 'utf8');
+    const parsed = JSON.parse(raw);
+    const version = parsed.version ?? parsed.name;
+    return typeof version === 'string' && version.trim() ? version.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * @param {import('../shared/editorCores.js').EditorCoreDefinition} core
+ */
+function versionFileCandidates(core) {
+  /** @type {string[]} */
+  const files = [path.join(core.libDir, 'package.json')];
+  if (core.updatePackageDir) {
+    files.push(path.join(core.updatePackageDir, 'package.json'));
+  }
+  if (core.id === 'wb4s') {
+    files.push(path.join('public', 'wb4s-editor', 'version.json'));
+  }
+  return files;
+}
+
 async function readCoreVersionFromRoots(roots, core) {
   const npmPackages = getNpmPackages(core);
   if (npmPackages.length > 0) {
@@ -200,14 +246,14 @@ async function readCoreVersionFromRoots(roots, core) {
   }
 
   for (const root of roots) {
-    try {
-      const packagePath = path.join(root, core.libDir, 'package.json');
-      const raw = await fs.readFile(packagePath, 'utf8');
-      const parsed = JSON.parse(raw);
-      return parsed.version ?? parsed.name ?? 'unknown';
-    } catch {
-      // try next root
+    for (const relative of versionFileCandidates(core)) {
+      const version = await readJsonVersionField(path.join(root, relative));
+      if (version) return version;
     }
+  }
+
+  if (typeof core.bundledVersion === 'string' && core.bundledVersion.trim()) {
+    return core.bundledVersion.trim();
   }
 
   return 'not-installed';
@@ -267,7 +313,10 @@ async function readAvailableCoreVersion(core) {
         if (tag && /\d/.test(tag)) return tag;
       }
     } catch {
-      // offline — available unknown
+      // offline — fall through to the bundled pin
+    }
+    if (typeof core.bundledVersion === 'string' && core.bundledVersion.trim()) {
+      return core.bundledVersion.trim();
     }
   }
 
@@ -280,7 +329,7 @@ async function readAvailableCoreVersion(core) {
  */
 export async function getEditorCoresStatus(portableRoot, installRoot = portableRoot) {
   const roots = resolveRoots(portableRoot, installRoot);
-  const projectRoot = roots[roots.length - 1];
+  const projectRoot = installRoot || portableRoot;
   const manifest = await readManifestFromRoots(roots);
   const cores = {};
 

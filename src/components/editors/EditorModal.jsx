@@ -9,6 +9,7 @@ import {
   IconPrint,
   IconHistory,
   IconImportHtml,
+  IconImportHwpx,
   IconImportOnenote,
 } from './EditorModalIcons.jsx';
 
@@ -93,6 +94,8 @@ export default function EditorModal({
   exportingHwpx = false,
   onImportHtml,
   importingHtml = false,
+  onImportHwpx,
+  importingHwpx = false,
   onImportOnenote,
   importingOnenote = false,
   onExportPdf,
@@ -108,6 +111,7 @@ export default function EditorModal({
     exportingPdf ||
     printing ||
     importingHtml ||
+    importingHwpx ||
     importingOnenote;
 
   return (
@@ -179,6 +183,17 @@ export default function EditorModal({
               disabled={transferBusy}
             >
               <IconExportMarkdown />
+            </HeaderIconButton>
+          )}
+          {onImportHwpx && (
+            <HeaderIconButton
+              label="HWPX 가져오기"
+              busyLabel="가져오는 중…"
+              busy={importingHwpx}
+              onClick={onImportHwpx}
+              disabled={transferBusy}
+            >
+              <IconImportHwpx />
             </HeaderIconButton>
           )}
           {onExportHwpx && (

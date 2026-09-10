@@ -4,7 +4,7 @@
 
 # NAS4USB
 
-USB(또는 단일 폴더)만으로 **오프라인 LAN NAS**와 **실시간 공동 편집**을 제공하는 Windows/macOS Electron 앱입니다. (v1.0.8)
+USB(또는 단일 폴더)만으로 **오프라인 LAN NAS**와 **실시간 공동 편집**을 제공하는 Windows/macOS Electron 앱입니다. (v1.0.9)
 
 - **Electron + Vite + React** — 로컬 파일 탐색기 UI
 - **Y.js** — HWPX·XLSX·화이트보드·TipTap 실시간 동기화 (기본 포트 `3009`)
@@ -25,7 +25,7 @@ USB(또는 단일 폴더)만으로 **오프라인 LAN NAS**와 **실시간 공�
 | 워크스페이스 | UI **공유폴더** / **개인폴더** ↔ 디스크 `share` / `private` |
 | LAN 동기화 | Y.js WebSocket — 같은 방(room)에 접속한 클라이언트 간 CRDT 동기화 |
 | HWPX 편집 | rhwp-studio 기반 `.hwpx` 브라우저 에디터 · Markdown 내보내기 |
-| TipTap 문서 | `.tiptap` — Notion-like TipTap 에디터 (ZIP+첨부, 슬래시 메뉴, 실시간 협업, 원노트 가져오기, HTML·HWPX 내보내기) |
+| TipTap 문서 | `.tiptap` — Notion-like TipTap 에디터 (ZIP+첨부, 슬래시 메뉴, 실시간 협업, 원노트·HTML·HWPX 가져오기, HTML·HWPX 내보내기) |
 | Markdown / TXT | CodeMirror 편집 · MD 미리보기 · MD는 HTML·HWPX 내보내기 |
 | 스프레드시트 | FortuneSheet — `.xlsx` / `.xls` |
 | 화이트보드 | `.wb4s` — WhiteBoard4Share 엔진 |

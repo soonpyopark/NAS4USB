@@ -1,5 +1,8 @@
 /** @typedef {'rhwp' | 'wb4s' | 'fortune-sheet' | 'tiptap' | 'comic-reader'} EditorCoreId */
 
+/** WhiteBoard4Share version shipped with this app (keep in sync with GitHub releases). */
+export const WB4S_BUNDLED_VERSION = '1.0.6';
+
 /** @typedef {Object} EditorCoreDefinition
  * @property {EditorCoreId} id
  * @property {string} label
@@ -10,6 +13,7 @@
  * @property {string | null} [npmPackage]
  * @property {string[]} [npmPackages]
  * @property {string} [overlayDir]
+ * @property {string} [bundledVersion]
  */
 
 /** @type {EditorCoreDefinition[]} */
@@ -33,6 +37,7 @@ export const EDITOR_CORES = [
     overlayDir: 'vendor/wb4s-nas4usb-overlay',
     repositoryUrl: 'https://github.com/soonpyopark/WhiteBoard4Share',
     npmPackage: null,
+    bundledVersion: WB4S_BUNDLED_VERSION,
   },
   {
     id: 'fortune-sheet',

@@ -260,5 +260,10 @@ export async function buildWb4sEditorBundle(root) {
   const distDir = path.join(engineRoot, 'dist');
   await fs.rm(publicOut, { recursive: true, force: true });
   await fs.cp(distDir, publicOut, { recursive: true });
-  console.log(`[wb4s-editor] published → ${publicOut}`);
+  await fs.writeFile(
+    path.join(publicOut, 'version.json'),
+    `${JSON.stringify({ name: 'whiteboard4share', version: WB4S_UPSTREAM_VERSION }, null, 2)}\n`,
+    'utf8',
+  );
+  console.log(`[wb4s-editor] published → ${publicOut} (v${WB4S_UPSTREAM_VERSION})`);
 }

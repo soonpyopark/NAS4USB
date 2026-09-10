@@ -127,6 +127,20 @@ export function IconExportMarkdown() {
   );
 }
 
+/** HWPX 가져오기 — document marked H with an arrow coming in */
+export function IconImportHwpx() {
+  return (
+    <Glyph>
+      <path
+        fill="currentColor"
+        d="M13 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-8h-2v8H6V5h7Z"
+      />
+      <path fill="currentColor" d="M18 2v5.6l2.1-2.1 1.4 1.4L17 11.4 12.5 6.9l1.4-1.4L16 7.6V2Z" />
+      <path fill="currentColor" d="M8 13h1.45v2.2h2.1V13H13v6h-1.45v-2.3h-2.1V19H8Z" />
+    </Glyph>
+  );
+}
+
 /** HWPX 내보내기 — document marked H with an arrow going out */
 export function IconExportHwpx() {
   return (
