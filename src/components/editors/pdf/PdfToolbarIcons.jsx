@@ -170,3 +170,23 @@ export function IconPdfTriangleDown() {
     </svg>
   );
 }
+
+export function IconPdfFabDockLeft() {
+  return (
+    <Svg>
+      <rect x="5" y="3" width="14" height="18" rx="1.5" />
+      <circle cx="8.5" cy="9" r="1.55" fill="currentColor" stroke="none" />
+      <circle cx="8.5" cy="15" r="1.55" fill="currentColor" stroke="none" />
+    </Svg>
+  );
+}
+
+export function IconPdfFabDockRight() {
+  return (
+    <Svg>
+      <rect x="5" y="3" width="14" height="18" rx="1.5" />
+      <circle cx="15.5" cy="9" r="1.55" fill="currentColor" stroke="none" />
+      <circle cx="15.5" cy="15" r="1.55" fill="currentColor" stroke="none" />
+    </Svg>
+  );
+}

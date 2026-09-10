@@ -49,6 +49,8 @@ import {
   IconPdfChevronLeft,
   IconPdfChevronRight,
   IconPdfExportExcel,
+  IconPdfFabDockLeft,
+  IconPdfFabDockRight,
   IconPdfFitHeight,
   IconPdfFitPage,
   IconPdfFitWidth,
@@ -58,6 +60,8 @@ import {
   IconPdfSearch,
   IconPdfSearchClose,
   IconPdfThumbs,
+  IconPdfTriangleDown,
+  IconPdfTriangleUp,
   IconPdfTwoPages,
   IconPdfZoomIn,
   IconPdfZoomOut,
@@ -80,6 +84,29 @@ const PAGE_MAX_CONCURRENT = 2;
 const PAGE_ROOT_MARGIN = '1400px 0px';
 /** Shared width for thumbnail rail and highlight-marks rail. */
 const PDF_SIDE_RAIL_WIDTH_PX = 220;
+const PDF_FAB_SIDE_KEY = 'nas4usb.pdfPageFabSide';
+
+/**
+ * @returns {'left' | 'right'}
+ */
+function readPdfFabSide() {
+  try {
+    return window.localStorage.getItem(PDF_FAB_SIDE_KEY) === 'left' ? 'left' : 'right';
+  } catch {
+    return 'right';
+  }
+}
+
+/**
+ * @param {'left' | 'right'} side
+ */
+function writePdfFabSide(side) {
+  try {
+    window.localStorage.setItem(PDF_FAB_SIDE_KEY, side);
+  } catch {
+    // ignore quota / private mode
+  }
+}
 
 /**
  * Chromium-like PDF.js viewer: zoom, page nav, rotate, print, markup Excel export, search.
@@ -234,6 +261,7 @@ export default function PdfViewerShell({
   const [displayScale, setDisplayScale] = useState(1);
   const [rotation, setRotation] = useState(0);
   const [twoPageView, setTwoPageView] = useState(false);
+  const [fabSide, setFabSide] = useState(/** @type {'left' | 'right'} */ (readPdfFabSide));
   const [docReady, setDocReady] = useState(false);
   const touchUi = useTouchUi();
   const [sidePanel, setSidePanel] = useState(
@@ -1467,6 +1495,13 @@ export default function PdfViewerShell({
   const toggleTwoPageView = useCallback(() => {
     setTwoPageView((prev) => !prev);
   }, []);
+  const toggleFabSide = useCallback(() => {
+    setFabSide((prev) => {
+      const next = prev === 'left' ? 'right' : 'left';
+      writePdfFabSide(next);
+      return next;
+    });
+  }, []);
   const resetZoom = useCallback(() => {
     setZoomMode('custom');
     setCustomScale(1);
@@ -1785,6 +1820,7 @@ export default function PdfViewerShell({
       if (!(target instanceof Element)) return;
       if (target.closest('[data-pdf-selection-menu]')) return;
       if (target.closest('[data-pdf-marks-menu]')) return;
+      if (target.closest('.pdf-page-fab')) return;
       const pageWrap = target.closest('[data-pdf-page]');
       if (!(pageWrap instanceof HTMLElement) || !scroller.contains(pageWrap)) return;
       if (pageWrap.dataset.pdfReady !== '1') return;
@@ -2043,6 +2079,7 @@ export default function PdfViewerShell({
       if (!(target instanceof Element)) return;
       if (target.closest('[data-pdf-selection-menu]')) return;
       if (target.closest('[data-pdf-marks-menu]')) return;
+      if (target.closest('.pdf-page-fab')) return;
 
       const pageWrap = target.closest('[data-pdf-page]');
       if (!(pageWrap instanceof HTMLElement) || !scroller.contains(pageWrap)) return;
@@ -2781,6 +2818,25 @@ export default function PdfViewerShell({
         >
           <IconPdfSearch />
         </button>
+        <button
+          type="button"
+          className={`pdf-tb-btn ml-auto ${fabSide === 'left' ? 'pdf-tb-btn--active' : ''}`}
+          disabled={busy}
+          onClick={toggleFabSide}
+          title={
+            fabSide === 'left'
+              ? '페이지 이동 버튼을 오른쪽으로'
+              : '페이지 이동 버튼을 왼쪽으로'
+          }
+          aria-label={
+            fabSide === 'left'
+              ? '페이지 이동 버튼을 오른쪽으로'
+              : '페이지 이동 버튼을 왼쪽으로'
+          }
+          aria-pressed={fabSide === 'left'}
+        >
+          {fabSide === 'left' ? <IconPdfFabDockLeft /> : <IconPdfFabDockRight />}
+        </button>
       </div>
 
       {saveMessage ? (
@@ -2964,6 +3020,41 @@ export default function PdfViewerShell({
           )}
           <div ref={scrollRef} className="pdf-scroll h-full min-h-0 overflow-auto p-3" />
 
+          {docReady && pageCount > 0 && (
+            <div
+              className={`pdf-page-fab pdf-page-fab--${fabSide}`}
+              role="group"
+              aria-label={zoomMode === 'fitWidth' ? '화면 스크롤' : '페이지 이동'}
+            >
+              <button
+                type="button"
+                className="pdf-page-fab__btn"
+                disabled={
+                  busy ||
+                  (zoomMode === 'fitWidth' ? scrollEdges.atTop : currentPage <= 1)
+                }
+                onClick={() => handleFabNavigate('up')}
+                title={zoomMode === 'fitWidth' ? '위로 스크롤' : '이전 페이지'}
+                aria-label={zoomMode === 'fitWidth' ? '위로 스크롤' : '이전 페이지'}
+              >
+                <IconPdfTriangleUp />
+              </button>
+              <button
+                type="button"
+                className="pdf-page-fab__btn"
+                disabled={
+                  busy ||
+                  (zoomMode === 'fitWidth' ? scrollEdges.atBottom : currentPage >= pageCount)
+                }
+                onClick={() => handleFabNavigate('down')}
+                title={zoomMode === 'fitWidth' ? '아래로 스크롤' : '다음 페이지'}
+                aria-label={zoomMode === 'fitWidth' ? '아래로 스크롤' : '다음 페이지'}
+              >
+                <IconPdfTriangleDown />
+              </button>
+            </div>
+          )}
+
           {selectionMenu &&
             createPortal(
               <div
@@ -3099,6 +3190,46 @@ export default function PdfViewerShell({
 
       <style>{`
         .pdf-scroll { scrollbar-gutter: stable; }
+        .pdf-page-fab {
+          position: absolute;
+          bottom: 30%;
+          z-index: 20;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          pointer-events: none;
+        }
+        .pdf-page-fab--right {
+          right: 14px;
+        }
+        .pdf-page-fab--left {
+          left: 14px;
+        }
+        .pdf-page-fab__btn {
+          pointer-events: auto;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 46px;
+          height: 46px;
+          border-radius: 9999px;
+          border: 1px solid rgba(15, 23, 42, 0.12);
+          background: rgba(255, 255, 255, 0.42);
+          color: rgba(15, 23, 42, 0.72);
+          backdrop-filter: blur(6px);
+          -webkit-backdrop-filter: blur(6px);
+          box-shadow: 0 2px 10px rgba(15, 23, 42, 0.12);
+          cursor: pointer;
+          transition: background 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+        }
+        .pdf-page-fab__btn:hover:not(:disabled) {
+          background: rgba(255, 255, 255, 0.7);
+          color: rgba(15, 23, 42, 0.92);
+        }
+        .pdf-page-fab__btn:disabled {
+          opacity: 0.35;
+          cursor: default;
+        }
         .pdf-spread-row {
           display: flex;
           justify-content: center;
