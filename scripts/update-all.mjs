@@ -14,6 +14,7 @@ function parseArgs(argv) {
   return {
     skipGit: argv.includes('--skip-git'),
     skipNpm: argv.includes('--skip-npm'),
+    skipMajors: argv.includes('--skip-majors'),
     skipCores: argv.includes('--skip-cores'),
     build: argv.includes('--build'),
     force: argv.includes('--force'),
@@ -152,23 +153,89 @@ function assertElectronRuns(expectedVersion) {
 }
 
 /**
- * `npm update` stays inside package.json ranges (`^33` never becomes 44).
- * Install the current npm latest *after* allowScripts + stopping the app,
- * then verify the binary actually launches.
+ * @param {unknown} spec
  */
-async function updateElectronLatest() {
-  const electronVersion = queryNpmVersion('electron');
-  const builderVersion = queryNpmVersion('electron-builder');
-  await writeElectronAllowScripts(electronVersion);
-  run('electron latest', 'npm', ['install', `electron@${electronVersion}`, '--save-dev']);
-  run('electron-builder latest', 'npm', ['install', `electron-builder@${builderVersion}`, '--save-dev']);
+function isInstallableRegistrySpec(spec) {
+  const value = String(spec || '').trim();
+  if (!value) return false;
+  if (/^(file|link|workspace|npm):/i.test(value)) return false;
+  if (/^https?:\/\//i.test(value)) return false;
+  if (/^git(\+|$)/i.test(value)) return false;
+  return true;
+}
+
+/**
+ * @param {{ dependencies?: Record<string, string>, devDependencies?: Record<string, string> }} pkg
+ */
+/**
+ * Latest majors that break the packaged Electron broker.
+ * y-websocket 3 dropped `./bin/utils` (ERR_PACKAGE_PATH_NOT_EXPORTED);
+ * `@y/websocket-server` 0.1.2+ targets Yjs 14.
+ */
+const MAJOR_HOLD_PACKAGES = new Set(['y-websocket']);
+
+function collectDirectPackageNames(pkg) {
+  /** @type {string[]} */
+  const names = [];
+  for (const field of ['dependencies', 'devDependencies']) {
+    const block = pkg[field] && typeof pkg[field] === 'object' ? pkg[field] : {};
+    for (const [name, spec] of Object.entries(block)) {
+      if (isInstallableRegistrySpec(spec)) names.push(name);
+    }
+  }
+  return [...new Set(names)].sort();
+}
+
+/**
+ * `npm update` stays inside package.json ranges (`^18` never becomes 19).
+ * Reinstall every direct dependency at `@latest` so majors move too.
+ */
+async function updateDirectPackagesLatest() {
+  const pkg = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8'));
+  const allNames = collectDirectPackageNames(pkg);
+  const names = allNames.filter((name) => !MAJOR_HOLD_PACKAGES.has(name));
+  const held = allNames.filter((name) => MAJOR_HOLD_PACKAGES.has(name));
+  if (held.length > 0) {
+    console.log(`[update-all] holding majors: ${held.join(', ')}`);
+  }
+  if (names.length === 0) {
+    console.log('[update-all] no registry packages to bump');
+    return;
+  }
+  console.log(`[update-all] ${names.length} direct packages → @latest (majors included)`);
+  run('npm latest (majors)', 'npm', ['install', ...names.map((name) => `${name}@latest`)]);
+}
+
+async function finalizeElectron(expectedVersion) {
   try {
     await fs.access(electronBinaryPath());
   } catch {
     console.log('[update-all] Electron binary missing; running install.js…');
     run('electron install.js', 'node', [path.join('node_modules', 'electron', 'install.js')]);
   }
-  assertElectronRuns(electronVersion);
+  assertElectronRuns(expectedVersion);
+}
+
+/**
+ * Range update, then either all `@latest` (majors) or Electron-only latest.
+ * `allowScripts` is rewritten before Electron is installed.
+ */
+async function updateNpmStack({ skipMajors = false } = {}) {
+  run('npm install', 'npm', ['install']);
+  run('npm update', 'npm', ['update']);
+
+  const electronVersion = queryNpmVersion('electron');
+  await writeElectronAllowScripts(electronVersion);
+
+  if (skipMajors) {
+    const builderVersion = queryNpmVersion('electron-builder');
+    run('electron latest', 'npm', ['install', `electron@${electronVersion}`, '--save-dev']);
+    run('electron-builder latest', 'npm', ['install', `electron-builder@${builderVersion}`, '--save-dev']);
+  } else {
+    await updateDirectPackagesLatest();
+  }
+
+  await finalizeElectron(electronVersion);
 }
 
 /**
@@ -210,9 +277,7 @@ async function main() {
   }
 
   if (!opts.skipNpm) {
-    run('npm install', 'npm', ['install']);
-    run('npm update', 'npm', ['update']);
-    await updateElectronLatest();
+    await updateNpmStack({ skipMajors: opts.skipMajors });
   }
 
   if (!opts.skipCores) {

@@ -9,6 +9,9 @@
 .PARAMETER SkipNpm
   Skip npm install/update and Electron latest.
 
+.PARAMETER SkipMajors
+  Keep package.json ranges; only Electron / electron-builder go to latest.
+
 .PARAMETER SkipCores
   Skip editor core updates (rhwp, wb4s, fortune-sheet, tiptap).
 
@@ -21,6 +24,7 @@
 param(
     [switch]$SkipGit,
     [switch]$SkipNpm,
+    [switch]$SkipMajors,
     [switch]$SkipCores,
     [switch]$BuildDist,
     [switch]$Force
@@ -45,6 +49,7 @@ function Write-UpdateLog {
 $nodeArgs = @('scripts/update-all.mjs')
 if ($SkipGit) { $nodeArgs += '--skip-git' }
 if ($SkipNpm) { $nodeArgs += '--skip-npm' }
+if ($SkipMajors) { $nodeArgs += '--skip-majors' }
 if ($SkipCores) { $nodeArgs += '--skip-cores' }
 if ($BuildDist) { $nodeArgs += '--build' }
 if ($Force) { $nodeArgs += '--force' }

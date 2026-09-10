@@ -51,6 +51,11 @@ if /I "%~1"=="skip-npm" (
     shift
     goto parse_args
 )
+if /I "%~1"=="skip-majors" (
+    set "EXTRA_ARGS=%EXTRA_ARGS% -SkipMajors"
+    shift
+    goto parse_args
+)
 if /I "%~1"=="skip-cores" (
     set "EXTRA_ARGS=%EXTRA_ARGS% -SkipCores"
     shift
@@ -68,7 +73,7 @@ echo ============================================================
 echo  Root : %USB_ROOT%
 echo  Log  : .cache\logs\update-all.log
 echo.
-echo  Options: build force skip-git skip-npm skip-cores
+echo  Options: build force skip-git skip-npm skip-majors skip-cores
 echo ============================================================
 echo.
 

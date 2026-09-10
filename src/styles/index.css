@@ -1,9 +1,7 @@
 @import './print-pagination.css';
 @import './scrollbar.css';
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+@config '../../tailwind.config.js';
 
 @layer base {
   /*
@@ -54,11 +52,11 @@
   }
 
   .nas-btn-primary {
-    @apply nas-btn bg-nas-accent text-white hover:bg-nas-accentHover;
+    @apply inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[10pt] font-medium transition-colors bg-nas-accent text-white hover:bg-nas-accentHover;
   }
 
   .nas-btn-ghost {
-    @apply nas-btn text-slate-600 hover:bg-slate-100;
+    @apply inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[10pt] font-medium transition-colors text-slate-600 hover:bg-slate-100;
   }
 
   .nas-topbar {

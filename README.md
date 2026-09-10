@@ -211,7 +211,7 @@ npm run update:all
 npm run build:release
 ```
 
-옵션: `build` `force` `skip-git` `skip-npm` `skip-cores`  
+옵션: `build` `force` `skip-git` `skip-npm` `skip-majors` `skip-cores`  
 로그: `.cache/logs/update-all.log`  
 상세: [`lib/updates/README.md`](lib/updates/README.md)
 
@@ -229,7 +229,7 @@ npm run build:release
 | `npm run build:msi` | Windows MSI 설치 패키지 생성 (WiX CLI 필요) |
 | `npm run build:release` | MSI + portable zip을 `msi/`에 동일 스탬프로 생성 |
 | `npm run sync-version` | `APP_VERSION` → package.json / MSI License 동기화 |
-| `npm run update:all` | 에디터 코어 + npm 의존성 + Electron latest |
+| `npm run update:all` | 에디터 코어 + npm 의존성(`@latest`, 메이저 포함) + Electron 확인 |
 | `npm run build:update_all` | 코어 업데이트 + `build:release` (Windows) |
 | `npm run build:update_all:mac` | 코어 업데이트 + `build:dist:mac` (macOS) |
 

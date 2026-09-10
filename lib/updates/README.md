@@ -26,8 +26,8 @@ update_all.bat
 npm run build:update_all
 ```
 
-옵션: `build` `force` `skip-git` `skip-npm` `skip-cores`
+옵션: `build` `force` `skip-git` `skip-npm` `skip-majors` `skip-cores`
 
-npm 단계는 실행 중인 NAS4USB를 먼저 종료한 뒤, 범위 안 `npm update`와 **Electron / electron-builder latest**를 받습니다. `allowScripts`를 새 버전에 맞춘 다음 바이너리가 실제로 뜨는지 확인하고, 실패하면 업데이트를 중단합니다. `skip-npm`이면 이 단계도 건너뜁니다.
+npm 단계는 실행 중인 NAS4USB를 먼저 종료한 뒤, 범위 안 `npm update`와 **직접 의존성 `@latest`(메이저 포함)** 를 받습니다. Electron `allowScripts`를 새 버전에 맞춘 다음 바이너리가 실제로 뜨는지 확인하고, 실패하면 업데이트를 중단합니다. `skip-majors`면 예전처럼 Electron / electron-builder만 latest로 올립니다. `skip-npm`이면 이 단계도 건너뜁니다. `y-websocket`은 3이 서버(`bin/utils`)를 빼서 패키지 앱이 기동하지 않으므로 2.1.0에 고정하고 메이저 홀드합니다.
 
 오프라인 USB용 로컬 패키지: `lib/updates/<core>/` (README 참고)
