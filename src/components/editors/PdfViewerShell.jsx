@@ -34,9 +34,11 @@ import {
   hitTestSelectionHandle,
   loadPdfMarkupAnnotations,
   mountPdfTextLayer,
+  paintIosWordTargets,
   paintLiveSelectionOnLayer,
   paintMarkupOnLayer,
   paintSelectionHandles,
+  clearIosWordTargets,
   pdfHighlightPresetColor,
   pdfUnderlinePresetColor,
   pointInSelectionRects,
@@ -58,6 +60,7 @@ import {
   IconPdfPrint,
   IconPdfRotate,
   IconPdfSearch,
+  IconPdfSelectText,
   IconPdfSearchClose,
   IconPdfThumbs,
   IconPdfTriangleDown,
@@ -85,6 +88,7 @@ const PAGE_ROOT_MARGIN = '1400px 0px';
 /** Shared width for thumbnail rail and highlight-marks rail. */
 const PDF_SIDE_RAIL_WIDTH_PX = 220;
 const PDF_FAB_SIDE_KEY = 'nas4usb.pdfPageFabSide';
+const PDF_SELECT_MODE_KEY = 'nas4usb.pdfSelectMode';
 
 /**
  * @returns {'left' | 'right'}
@@ -106,6 +110,39 @@ function writePdfFabSide(side) {
   } catch {
     // ignore quota / private mode
   }
+}
+
+/**
+ * @returns {boolean}
+ */
+function readPdfSelectMode() {
+  try {
+    return window.localStorage.getItem(PDF_SELECT_MODE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * @param {boolean} on
+ */
+function writePdfSelectMode(on) {
+  try {
+    window.localStorage.setItem(PDF_SELECT_MODE_KEY, on ? '1' : '0');
+  } catch {
+    // ignore quota / private mode
+  }
+}
+
+/**
+ * iPadOS reports as Macintosh + multi-touch. Android Chrome must stay on the
+ * pointer-event path — it already selects reliably.
+ */
+function isAppleTouchDevice() {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  const multiTouch = navigator.maxTouchPoints > 1;
+  return /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && multiTouch);
 }
 
 /**
@@ -262,6 +299,11 @@ export default function PdfViewerShell({
   const [rotation, setRotation] = useState(0);
   const [twoPageView, setTwoPageView] = useState(false);
   const [fabSide, setFabSide] = useState(/** @type {'left' | 'right'} */ (readPdfFabSide));
+  const [selectMode, setSelectMode] = useState(readPdfSelectMode);
+  const [wordsEpoch, setWordsEpoch] = useState(0);
+  const [iosHud, setIosHud] = useState(
+    /** @type {{ words: number, last: string }} */ ({ words: 0, last: '대기' }),
+  );
   const [docReady, setDocReady] = useState(false);
   const touchUi = useTouchUi();
   const [sidePanel, setSidePanel] = useState(
@@ -309,7 +351,7 @@ export default function PdfViewerShell({
      *   moved: boolean,
      *   selection: import('../../lib/pdf/pdfMarkup.js').PdfTextSelection | null,
      *   pendingMarkupId?: string,
-     *   pointerId?: number,
+     *   pointerId?: number | string,
      *   pointerType?: string,
      *   touchPhase?: 'pending' | 'selecting' | 'handle',
      *   handleRole?: 'start' | 'end',
@@ -770,38 +812,46 @@ export default function PdfViewerShell({
             pagePaintedRef.current.add(pageNumber);
             reapplyActiveHighlights();
 
-            // PDF text metrics are stable for fit-width; text-layer spans can drift when CSS shrinks.
+            // Words first — TextLayer.render() can stall on iPad Safari and would block extraction.
             void (async () => {
-              try {
-                await mountPdfTextLayer(page, cssViewport, textLayer);
-                if (token !== renderTokenRef.current) return;
-                textLayer.style.pointerEvents = 'none';
-
-                let words = await extractPageWords(page, rot);
-                if (!words.length) {
-                  words = extractWordsFromTextLayer(textLayer, pageWrap, nextScale);
-                }
-                if (token !== renderTokenRef.current) return;
-                pageWordsRefs.current.set(pageNumber, words);
-                pageWrap.dataset.pdfSelectable = words.length ? '1' : '0';
+              const applyWords = (nextWords) => {
+                pageWordsRefs.current.set(pageNumber, nextWords);
+                pageWrap.dataset.pdfWordCount = String(nextWords.length);
+                pageWrap.dataset.pdfSelectable = nextWords.length ? '1' : '0';
                 const hit = pageWrap.querySelector('[data-pdf-hit="1"]');
                 if (hit instanceof HTMLElement) {
-                  hit.style.pointerEvents = words.length ? 'auto' : 'none';
+                  hit.style.pointerEvents = nextWords.length ? 'auto' : 'none';
+                }
+                setWordsEpoch((n) => n + 1);
+              };
+
+              try {
+                let words = [];
+                try {
+                  words = await extractPageWords(page, rot);
+                } catch (err) {
+                  console.warn('[pdf] extractPageWords failed:', err);
+                }
+                if (token !== renderTokenRef.current) return;
+                applyWords(words);
+
+                try {
+                  await mountPdfTextLayer(page, cssViewport, textLayer);
+                  if (token !== renderTokenRef.current) return;
+                  textLayer.style.pointerEvents = 'none';
+                  if (!words.length) {
+                    await new Promise((resolve) => {
+                      requestAnimationFrame(() => requestAnimationFrame(resolve));
+                    });
+                    words = extractWordsFromTextLayer(textLayer, pageWrap, nextScale);
+                    if (token !== renderTokenRef.current) return;
+                    applyWords(words);
+                  }
+                } catch (err) {
+                  console.warn('[pdf] text layer failed:', err);
                 }
               } catch (err) {
                 console.warn('[pdf] text/selection layer failed:', err);
-                try {
-                  const words = await extractPageWords(page, rot);
-                  if (token !== renderTokenRef.current) return;
-                  pageWordsRefs.current.set(pageNumber, words);
-                  pageWrap.dataset.pdfSelectable = words.length ? '1' : '0';
-                  const hit = pageWrap.querySelector('[data-pdf-hit="1"]');
-                  if (hit instanceof HTMLElement) {
-                    hit.style.pointerEvents = words.length ? 'auto' : 'none';
-                  }
-                } catch (inner) {
-                  console.warn('[pdf] word extract failed:', inner);
-                }
               }
             })();
           } catch (err) {
@@ -1502,6 +1552,15 @@ export default function PdfViewerShell({
       return next;
     });
   }, []);
+  const toggleSelectMode = useCallback(() => {
+    setSelectMode((prev) => {
+      const next = !prev;
+      writePdfSelectMode(next);
+      return next;
+    });
+    window.getSelection()?.removeAllRanges();
+    setSelectionMenu(null);
+  }, []);
   const resetZoom = useCallback(() => {
     setZoomMode('custom');
     setCustomScale(1);
@@ -1695,25 +1754,17 @@ export default function PdfViewerShell({
     repaintMarkupLayers();
   }, [markups, activeMarkupId, repaintMarkupLayers]);
 
-  // Mouse/pen: drag selects. Touch: pan scrolls; long-press or double-tap selects a word.
+  // PC/Android: Pointer Events. iPad: native Touch Events + preventDefault (Safari cancels pointers).
   useEffect(() => {
     const scroller = scrollRef.current;
     if (!scroller || !docReady) return undefined;
 
+    const appleTouch = isAppleTouchDevice();
     const TOUCH_SCROLL_SLOP_PX = 12;
-    const TOUCH_LONG_PRESS_MS = 450;
-    const DOUBLE_TAP_MS = 420;
-    const DOUBLE_TAP_SLOP_PX = 40;
-    let touchHoldTimer = 0;
-
-    const clearTouchHoldTimer = () => {
-      if (!touchHoldTimer) return;
-      window.clearTimeout(touchHoldTimer);
-      touchHoldTimer = 0;
-    };
+    const DOUBLE_TAP_MS = appleTouch ? 560 : 420;
+    const DOUBLE_TAP_SLOP_PX = appleTouch ? 64 : 40;
 
     const clearSelectionDrag = () => {
-      clearTouchHoldTimer();
       selectionDragRef.current = null;
     };
 
@@ -1781,6 +1832,66 @@ export default function PdfViewerShell({
       });
     };
 
+    const activateWord = (pageNumber, wordIndex) => {
+      const words = pageWordsRefs.current.get(pageNumber);
+      if (!words?.[wordIndex]) {
+        setIosHud({ words: words?.length || 0, last: `단어 없음 (${wordIndex})` });
+        return false;
+      }
+      const menu = selectionMenuRef.current;
+      let from = wordIndex;
+      const to = wordIndex;
+      if (menu?.showHandles && menu.pageNumber === pageNumber) {
+        const startIdx = wordIndexAtPoint(words, menu.start);
+        if (startIdx >= 0) from = startIdx;
+      }
+      const picked = getTextBlockSelectionByIndices(words, from, to);
+      if (!picked?.text?.trim()) {
+        setIosHud({ words: words.length, last: '선택 실패' });
+        return false;
+      }
+      const startWord = words[from];
+      const endWord = words[to];
+      openSelectionFromRange(
+        pageNumber,
+        picked,
+        { x: startWord.x0, y: (startWord.y0 + startWord.y1) / 2 },
+        { x: endWord.x1, y: (endWord.y0 + endWord.y1) / 2 },
+      );
+      setIosHud({
+        words: words.length,
+        last: from === to ? `탭 “${words[wordIndex].text}”` : `범위 “${picked.text.slice(0, 18)}”`,
+      });
+      return true;
+    };
+
+    const openWordAtClient = (pageNumber, clientX, clientY) => {
+      const pageWrap = scroller.querySelector(`[data-pdf-page="${pageNumber}"]`);
+      const words = pageWordsRefs.current.get(pageNumber);
+      if (!(pageWrap instanceof HTMLElement) || !words?.length) return false;
+      const scale = pageScale(pageNumber);
+      const point = clientPointToPagePoint(pageWrap, clientX, clientY, scale);
+      const wordIdx = wordIndexAtPoint(words, point);
+      if (wordIdx < 0) return false;
+      return activateWord(pageNumber, wordIdx);
+    };
+
+    const pageWrapFromPoint = (clientX, clientY, fallbackTarget) => {
+      const fromTarget =
+        fallbackTarget instanceof Element ? fallbackTarget.closest('[data-pdf-page]') : null;
+      if (fromTarget instanceof HTMLElement && scroller.contains(fromTarget)) return fromTarget;
+      const stacked =
+        typeof document.elementsFromPoint === 'function'
+          ? document.elementsFromPoint(clientX, clientY)
+          : [];
+      for (const node of stacked) {
+        if (!(node instanceof Element)) continue;
+        const page = node.closest('[data-pdf-page]');
+        if (page instanceof HTMLElement && scroller.contains(page)) return page;
+      }
+      return null;
+    };
+
     const capturePointer = (target, pointerId) => {
       try {
         if (target instanceof Element && typeof target.setPointerCapture === 'function') {
@@ -1823,33 +1934,22 @@ export default function PdfViewerShell({
       capturePointer(event.target instanceof Element ? event.target : hit, event.pointerId);
     };
 
-    const armTouchWordSelection = (drag) => {
-      const pageWrap = scroller.querySelector(`[data-pdf-page="${drag.pageNumber}"]`);
-      const words = pageWordsRefs.current.get(drag.pageNumber);
-      if (!(pageWrap instanceof HTMLElement) || !words?.length) return false;
-      const wordIdx = wordIndexAtPoint(words, drag.anchor);
-      const picked = getTextBlockSelectionByIndices(words, wordIdx, wordIdx);
-      if (!picked?.text?.trim()) return false;
-      const word = words[wordIdx];
-      drag.touchPhase = 'selecting';
-      drag.moved = true;
-      drag.pendingMarkupId = '';
-      drag.anchor = { x: word.x0, y: (word.y0 + word.y1) / 2 };
-      drag.selection = picked;
-      lastTapRef.current = null;
-      window.getSelection()?.removeAllRanges();
-      try {
-        navigator.vibrate?.(10);
-      } catch {
-        // ignore
-      }
-      const hit = hitLayerForPage(drag.pageNumber);
-      if (hit) hit.style.touchAction = 'none';
-      updateLive(drag.pageNumber, picked, true);
-      return true;
+    const clientFromTouch = (event) => {
+      const touch = event.changedTouches?.[0] || event.touches?.[0];
+      if (!touch) return null;
+      // Apple Pencil also emits Touch Events; keep it on the pointer path.
+      if (touch.touchType === 'stylus') return null;
+      return { clientX: touch.clientX, clientY: touch.clientY, target: event.target };
     };
 
     const onPointerDown = (event) => {
+      // iPad fingers: Safari cancels Pointer Events. Selection uses Touch Events.
+      // Mouse / Apple Pencil still use this path.
+      if (appleTouch && (event.pointerType === 'touch' || !event.pointerType)) {
+        const lockScroll = selectMode || Boolean(selectionMenuRef.current?.showHandles);
+        if (lockScroll && event.cancelable) event.preventDefault();
+        return;
+      }
       if (event.button !== 0) return;
       const target = event.target;
       if (!(target instanceof Element)) return;
@@ -1923,18 +2023,9 @@ export default function PdfViewerShell({
         startClientY: event.clientY,
       };
 
-      if (isTouch) {
+      if (isTouch && !selectMode) {
         drag.touchPhase = 'pending';
         selectionDragRef.current = drag;
-        clearTouchHoldTimer();
-        touchHoldTimer = window.setTimeout(() => {
-          touchHoldTimer = 0;
-          const current = selectionDragRef.current;
-          if (!current || current.pointerId !== drag.pointerId || current.touchPhase !== 'pending') {
-            return;
-          }
-          armTouchWordSelection(current);
-        }, TOUCH_LONG_PRESS_MS);
         return;
       }
 
@@ -1987,6 +2078,10 @@ export default function PdfViewerShell({
         return;
       }
 
+      const clientDx = event.clientX - (drag.startClientX || 0);
+      const clientDy = event.clientY - (drag.startClientY || 0);
+      const tapSlop = appleTouch || drag.pointerType === 'touch' ? 28 : 3;
+      if (!drag.moved && clientDx * clientDx + clientDy * clientDy < tapSlop * tapSlop) return;
       const dx = cursor.x - drag.anchor.x;
       const dy = cursor.y - drag.anchor.y;
       if (!drag.moved && dx * dx + dy * dy < 0.35) return;
@@ -2037,6 +2132,20 @@ export default function PdfViewerShell({
       const anchor = drag.anchor;
       clearSelectionDrag();
 
+      if (!moved && !wasHandle && selectMode) {
+        lastTapRef.current = null;
+        if (openWordAtClient(pageNumber, event.clientX, event.clientY)) return;
+        if (pendingMarkupId) {
+          const entry = markupsRef.current.find((item) => item.id === pendingMarkupId);
+          if (entry) {
+            selectMarkupEntryRef.current(entry);
+            return;
+          }
+        }
+        clearAllLiveSelections();
+        return;
+      }
+
       if (wasTouchPending) {
         const now = Date.now();
         const last = lastTapRef.current;
@@ -2051,21 +2160,7 @@ export default function PdfViewerShell({
         if (isDouble && words?.length && pageWrap instanceof HTMLElement) {
           event.preventDefault();
           lastTapRef.current = null;
-          const point = clientPointToPagePoint(pageWrap, event.clientX, event.clientY, scale);
-          const wordIdx = wordIndexAtPoint(words, point);
-          const picked = getTextBlockSelectionByIndices(words, wordIdx, wordIdx);
-          if (picked?.text?.trim()) {
-            const word = words[wordIdx];
-            const start = { x: word.x0, y: (word.y0 + word.y1) / 2 };
-            const end = { x: word.x1, y: (word.y0 + word.y1) / 2 };
-            try {
-              navigator.vibrate?.(10);
-            } catch {
-              // ignore
-            }
-            openSelectionFromRange(pageNumber, picked, start, end);
-            return;
-          }
+          if (openWordAtClient(pageNumber, event.clientX, event.clientY)) return;
         }
 
         lastTapRef.current = {
@@ -2106,6 +2201,172 @@ export default function PdfViewerShell({
       clearAllLiveSelections();
     };
 
+    const onIosTouchStart = (event) => {
+      if (event.touches.length > 1) {
+        clearSelectionDrag();
+        return;
+      }
+      const pos = clientFromTouch(event);
+      if (!pos) return;
+      const target = event.target;
+      if (target instanceof Element) {
+        if (target.closest('[data-pdf-selection-menu]')) return;
+        if (target.closest('[data-pdf-marks-menu]')) return;
+        if (target.closest('.pdf-page-fab')) return;
+      }
+      // Capture + preventDefault before WebKit starts the loupe on the canvas.
+      if (selectMode && event.cancelable) event.preventDefault();
+      const pageWrap = pageWrapFromPoint(pos.clientX, pos.clientY, target);
+      if (!(pageWrap instanceof HTMLElement) || !scroller.contains(pageWrap)) return;
+      if (pageWrap.dataset.pdfReady !== '1') return;
+
+      const pageNumber = Number(pageWrap.dataset.pdfPage || '0');
+      if (!pageNumber) return;
+
+      const scale = pageScale(pageNumber);
+      const point = clientPointToPagePoint(pageWrap, pos.clientX, pos.clientY, scale);
+      const menu = selectionMenuRef.current;
+      const lockScroll = selectMode || Boolean(menu?.showHandles);
+
+      if (menu?.showHandles && menu.pageNumber === pageNumber && menu.rects?.length) {
+        const fromDom =
+          target instanceof Element ? target.closest('[data-pdf-sel-handle]') : null;
+        const domRole = fromDom?.getAttribute('data-pdf-sel-handle');
+        const handleHitRadius = 36 / Math.max(0.35, scale);
+        const handleRole =
+          domRole === 'start' || domRole === 'end'
+            ? domRole
+            : hitTestSelectionHandle(point, menu.rects, handleHitRadius);
+        if (handleRole === 'start' || handleRole === 'end') {
+          event.preventDefault();
+          beginHandleDrag(
+            {
+              preventDefault: () => event.preventDefault(),
+              stopPropagation: () => event.stopPropagation(),
+              clientX: pos.clientX,
+              clientY: pos.clientY,
+              pointerId: 'ios-touch',
+              pointerType: 'touch',
+              target,
+            },
+            pageNumber,
+            handleRole,
+            menu,
+          );
+          return;
+        }
+        if (pointInSelectionRects(point, menu.rects, 10 / Math.max(0.35, scale))) {
+          event.preventDefault();
+          return;
+        }
+      }
+
+      const wordBtn =
+        target instanceof Element ? target.closest('[data-pdf-word]') : null;
+      if (wordBtn && selectMode) {
+        const wordIndex = Number(wordBtn.dataset.pdfWord);
+        if (Number.isFinite(wordIndex) && wordIndex >= 0) {
+          activateWord(pageNumber, wordIndex);
+          return;
+        }
+      }
+
+      closeSelectionMenu();
+      closeMarksContextMenu();
+      window.getSelection()?.removeAllRanges();
+      clearAllLiveSelections();
+
+      const words = pageWordsRefs.current.get(pageNumber);
+      if (!words?.length) {
+        const hitMarkup = findMarkupAtPagePoint(markupsRef.current, pageNumber, point);
+        if (hitMarkup) {
+          event.preventDefault();
+          selectMarkupEntryRef.current(hitMarkup);
+        } else {
+          setActiveMarkupId('');
+        }
+        clearSelectionDrag();
+        return;
+      }
+
+      const pendingMarkup = findMarkupAtPagePoint(markupsRef.current, pageNumber, point);
+      setActiveMarkupId('');
+
+      /** @type {NonNullable<typeof selectionDragRef.current>} */
+      const drag = {
+        pageNumber,
+        anchor: point,
+        moved: false,
+        selection: null,
+        pendingMarkupId: pendingMarkup?.id || '',
+        pointerId: 'ios-touch',
+        pointerType: 'touch',
+        startClientX: pos.clientX,
+        startClientY: pos.clientY,
+      };
+
+      if (!lockScroll) {
+        const last = lastTapRef.current;
+        const dx = last ? pos.clientX - last.x : 0;
+        const dy = last ? pos.clientY - last.y : 0;
+        const maybeDouble =
+          Boolean(last) &&
+          last.pageNumber === pageNumber &&
+          Date.now() - last.time <= DOUBLE_TAP_MS &&
+          dx * dx + dy * dy <= DOUBLE_TAP_SLOP_PX * DOUBLE_TAP_SLOP_PX;
+        if (maybeDouble && event.cancelable) event.preventDefault();
+        drag.touchPhase = 'pending';
+        selectionDragRef.current = drag;
+        return;
+      }
+
+      event.preventDefault();
+      selectionDragRef.current = drag;
+    };
+
+    const onIosTouchMove = (event) => {
+      if (event.touches.length > 1) {
+        clearSelectionDrag();
+        return;
+      }
+      const drag = selectionDragRef.current;
+      if (!drag || drag.pointerId !== 'ios-touch') return;
+      const pos = clientFromTouch(event);
+      if (!pos) return;
+
+      if (drag.touchPhase === 'pending') {
+        const dx = pos.clientX - (drag.startClientX || 0);
+        const dy = pos.clientY - (drag.startClientY || 0);
+        if (dx * dx + dy * dy >= TOUCH_SCROLL_SLOP_PX * TOUCH_SCROLL_SLOP_PX) {
+          clearSelectionDrag();
+          lastTapRef.current = null;
+        }
+        return;
+      }
+
+      event.preventDefault();
+      onPointerMove({
+        pointerId: 'ios-touch',
+        clientX: pos.clientX,
+        clientY: pos.clientY,
+        preventDefault: () => event.preventDefault(),
+      });
+    };
+
+    const onIosTouchEnd = (event) => {
+      const drag = selectionDragRef.current;
+      if (!drag || drag.pointerId !== 'ios-touch') return;
+      if (drag.touchPhase !== 'pending' && event.cancelable) event.preventDefault();
+      const pos = clientFromTouch(event);
+      finishPointer({
+        pointerId: 'ios-touch',
+        clientX: pos?.clientX ?? drag.startClientX,
+        clientY: pos?.clientY ?? drag.startClientY,
+        target: event.target,
+        preventDefault: () => event.preventDefault(),
+      });
+    };
+
     const onKeyDown = (event) => {
       if (event.key === 'Escape') {
         closeSelectionMenu();
@@ -2127,10 +2388,10 @@ export default function PdfViewerShell({
 
       const pageWrap = target.closest('[data-pdf-page]');
       if (!(pageWrap instanceof HTMLElement) || !scroller.contains(pageWrap)) return;
-
-      // iPad long-press otherwise starts native selection on the toolbar/title.
-      event.preventDefault();
-      if (event.pointerType === 'touch' || detectTouchUi()) return;
+      if (appleTouch) {
+        event.preventDefault();
+        return;
+      }
       if (pageWrap.dataset.pdfReady !== '1') return;
 
       const pageNumber = Number(pageWrap.dataset.pdfPage || '0');
@@ -2145,45 +2406,92 @@ export default function PdfViewerShell({
       openMarksContextMenuRef.current(event, hitMarkup);
     };
 
-    const onSelectStart = (event) => {
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      if (target.closest('[data-pdf-selection-menu]')) return;
-      if (target.closest('[data-pdf-marks-menu]')) return;
-      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
-        if (document.activeElement === target) return;
-      }
-      event.preventDefault();
-    };
-
-    const onModalContextMenu = (event) => {
-      if (!(event.pointerType === 'touch' || detectTouchUi())) return;
-      const target = event.target;
-      if (target instanceof Element && target.closest('[data-pdf-selection-menu]')) return;
-      event.preventDefault();
-    };
-
-    const modalRoot = scroller.closest('.modal-overlay');
-    scroller.addEventListener('pointerdown', onPointerDown);
     scroller.addEventListener('contextmenu', onContextMenu);
-    modalRoot?.addEventListener('selectstart', onSelectStart, true);
-    modalRoot?.addEventListener('contextmenu', onModalContextMenu);
+    window.addEventListener('keydown', onKeyDown);
+
+    if (appleTouch && !selectMode) {
+      // I off: scroll only. Selection starts after the toolbar I toggle.
+      return () => {
+        clearSelectionDrag();
+        scroller.removeEventListener('contextmenu', onContextMenu);
+        window.removeEventListener('keydown', onKeyDown);
+      };
+    }
+
+    scroller.addEventListener('pointerdown', onPointerDown, { passive: false });
     window.addEventListener('pointermove', onPointerMove, { passive: false });
     window.addEventListener('pointerup', finishPointer);
     window.addEventListener('pointercancel', finishPointer);
-    window.addEventListener('keydown', onKeyDown);
+    if (appleTouch) {
+      scroller.addEventListener('touchstart', onIosTouchStart, { passive: false, capture: true });
+      window.addEventListener('touchmove', onIosTouchMove, { passive: false, capture: true });
+      window.addEventListener('touchend', onIosTouchEnd, { capture: true });
+      window.addEventListener('touchcancel', onIosTouchEnd, { capture: true });
+    }
     return () => {
       clearSelectionDrag();
       scroller.removeEventListener('pointerdown', onPointerDown);
       scroller.removeEventListener('contextmenu', onContextMenu);
-      modalRoot?.removeEventListener('selectstart', onSelectStart, true);
-      modalRoot?.removeEventListener('contextmenu', onModalContextMenu);
+      scroller.removeEventListener('touchstart', onIosTouchStart, true);
+      window.removeEventListener('touchmove', onIosTouchMove, true);
+      window.removeEventListener('touchend', onIosTouchEnd, true);
+      window.removeEventListener('touchcancel', onIosTouchEnd, true);
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', finishPointer);
       window.removeEventListener('pointercancel', finishPointer);
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [clearAllLiveSelections, closeMarksContextMenu, closeSelectionMenu, docReady]);
+  }, [clearAllLiveSelections, closeMarksContextMenu, closeSelectionMenu, docReady, selectMode]);
+
+  useEffect(() => {
+    const scroller = scrollRef.current;
+    if (!scroller || !docReady) return;
+    const iosPick = isAppleTouchDevice() && selectMode;
+    let visibleWords = 0;
+    let pageReady = false;
+    let wordsKnown = false;
+    scroller.querySelectorAll('[data-pdf-page]').forEach((pageWrap) => {
+      if (!(pageWrap instanceof HTMLElement)) return;
+      const pageNumber = Number(pageWrap.dataset.pdfPage || '0');
+      const hit = pageWrap.querySelector('[data-pdf-hit="1"]');
+      if (!(hit instanceof HTMLElement)) return;
+      const words = pageWordsRefs.current.get(pageNumber) || [];
+      if (pageNumber === currentPage) {
+        visibleWords = words.length;
+        pageReady = pageWrap.dataset.pdfReady === '1';
+        wordsKnown = pageWordsRefs.current.has(pageNumber);
+      }
+      if (!iosPick) {
+        clearIosWordTargets(hit);
+        return;
+      }
+      const scale = getPageDisplayScale(
+        pageWrap,
+        pageCssScaleRef.current || displayScaleRef.current || 1,
+      );
+      paintIosWordTargets(hit, words, scale);
+      hit.style.pointerEvents = words.length ? 'auto' : 'none';
+    });
+    setIosHud((prev) => {
+      let last;
+      if (!iosPick) last = 'I 꺼짐 · 스크롤';
+      else if (!pageReady) last = '페이지 그리는 중';
+      else if (!wordsKnown) last = '단어 추출 중';
+      else if (!visibleWords) last = '이 페이지에 글자 없음(스캔?)';
+      else if (
+        !prev.last ||
+        prev.last === '대기' ||
+        prev.last.startsWith('I 꺼짐') ||
+        prev.last.includes('중') ||
+        prev.last.includes('없음')
+      ) {
+        last = '단어를 탭하세요';
+      } else {
+        last = prev.last;
+      }
+      return { words: visibleWords, last };
+    });
+  }, [currentPage, displayScale, docReady, rotation, selectMode, wordsEpoch]);
 
   useEffect(() => {
     if (!marksContextMenu) return undefined;
@@ -2713,6 +3021,21 @@ export default function PdfViewerShell({
         >
           <IconPdfHighlight />
         </button>
+        <button
+          type="button"
+          className={`pdf-tb-btn ${selectMode ? 'pdf-tb-btn--active' : ''}`}
+          disabled={busy}
+          onClick={toggleSelectMode}
+          title={
+            selectMode
+              ? '선택 모드 끄기 (스크롤)'
+              : '텍스트 선택 모드 (단어 탭)'
+          }
+          aria-label={selectMode ? '선택 모드 끄기' : '텍스트 선택 모드'}
+          aria-pressed={selectMode}
+        >
+          <IconPdfSelectText />
+        </button>
 
         <span className="mx-1 h-4 w-px bg-slate-300" />
 
@@ -2983,6 +3306,12 @@ export default function PdfViewerShell({
         </div>
       ) : null}
 
+      {isAppleTouchDevice() ? (
+        <div className="pdf-ios-debug" aria-live="polite">
+          I {selectMode ? '켜짐' : '꺼짐'} · {currentPage}쪽 단어 {iosHud.words}개 · {iosHud.last}
+        </div>
+      ) : null}
+
       <div className="relative flex min-h-0 flex-1 bg-slate-200">
         {showThumbnails && (
           <aside
@@ -3039,7 +3368,7 @@ export default function PdfViewerShell({
                 <p className="px-1 py-2 text-[11px] leading-relaxed text-slate-600">
                   {markupScanPending
                     ? 'PDF에 저장된 형광펜을 불러오는 중입니다. 페이지가 많을수록 조금 걸릴 수 있습니다.'
-                    : '형광펜이나 밑줄 친 내용이 없습니다. 본문에서 텍스트를 선택한 뒤 메뉴에서 형광펜·밑줄을 추가하고 [저장]으로 원본 PDF에 기록하세요. 태블릿은 손가락으로 스크롤하고, 텍스트는 꾸욱 누르거나 더블 탭한 뒤 파란 핸들로 범위를 조절하세요. 읽던 위치는 자동 보관됩니다.'}
+                    : '형광펜이나 밑줄 친 내용이 없습니다. 본문에서 텍스트를 선택한 뒤 메뉴에서 형광펜·밑줄을 추가하고 [저장]으로 원본 PDF에 기록하세요. 아이패드는 툴바의 선택(I)을 켠 뒤 단어를 탭하세요. 다른 단어를 탭하면 범위가 늘어나고, 파란 핸들로도 조절할 수 있습니다. 읽던 위치는 자동 보관됩니다.'}
                 </p>
               ) : (
                 <ul className="flex flex-col gap-1.5">
@@ -3089,7 +3418,10 @@ export default function PdfViewerShell({
                   : '레이아웃 준비 중…'}
             </p>
           )}
-          <div ref={scrollRef} className="pdf-scroll h-full min-h-0 overflow-auto p-3" />
+          <div
+            ref={scrollRef}
+            className={`pdf-scroll h-full min-h-0 overflow-auto p-3${selectMode ? ' pdf-scroll--select' : ''}`}
+          />
 
           {docReady && pageCount > 0 && (
             <div
@@ -3260,15 +3592,28 @@ export default function PdfViewerShell({
       </div>
 
       <style>{`
-        .pdf-scroll { scrollbar-gutter: stable; }
+        .pdf-scroll {
+          scrollbar-gutter: stable;
+          touch-action: manipulation;
+        }
+        .pdf-scroll--select,
+        .pdf-scroll--select .pdf-hit-layer {
+          touch-action: none;
+          overscroll-behavior: none;
+        }
         .pdf-viewer-toolbar,
-        .pdf-viewer-toolbar *,
+        .pdf-viewer-toolbar *:not(input):not(textarea),
         .pdf-scroll,
         .pdf-page-wrap,
         .pdf-page-fab {
           -webkit-user-select: none;
           user-select: none;
           -webkit-touch-callout: none;
+        }
+        .pdf-viewer-toolbar input,
+        .pdf-viewer-toolbar textarea {
+          -webkit-user-select: text;
+          user-select: text;
         }
         .modal-overlay:has(.pdf-viewer-toolbar) .modal-editor-header,
         .modal-overlay:has(.pdf-viewer-toolbar) .modal-editor-header * {
@@ -3381,6 +3726,9 @@ export default function PdfViewerShell({
           width: 100% !important;
           height: auto !important;
           max-width: none;
+          pointer-events: none;
+          -webkit-touch-callout: none;
+          -webkit-user-select: none;
         }
         .pdf-highlight-layer,
         .pdf-selection-layer {
@@ -3396,15 +3744,42 @@ export default function PdfViewerShell({
           position: absolute;
           inset: 0;
           z-index: 4;
-          cursor: text;
-          /* Allow finger pan/scroll; long-press arms text selection in JS. */
-          touch-action: pan-x pan-y;
-          background: transparent;
+          cursor: pointer;
+          touch-action: manipulation;
+          /* iOS skips hit-testing fully transparent empty layers. */
+          background: rgba(0, 0, 0, 0.01);
+          -webkit-tap-highlight-color: transparent;
+          -webkit-touch-callout: none;
         }
         .pdf-live-selection {
           position: absolute;
           background: rgba(51, 153, 255, 0.35);
           border-radius: 1px;
+        }
+        .pdf-ios-debug {
+          flex-shrink: 0;
+          padding: 4px 10px;
+          font-size: 11px;
+          line-height: 1.35;
+          color: #0f172a;
+          background: #fef3c7;
+          border-bottom: 1px solid #fcd34d;
+        }
+        .pdf-ios-word {
+          position: absolute;
+          z-index: 6;
+          margin: 0;
+          padding: 0;
+          border: 0;
+          border-radius: 3px;
+          background: rgba(51, 153, 255, 0.08);
+          pointer-events: auto;
+          touch-action: manipulation;
+          -webkit-user-select: none;
+          user-select: none;
+          -webkit-touch-callout: none;
+          -webkit-tap-highlight-color: rgba(51, 153, 255, 0.2);
+          cursor: pointer;
         }
         .pdf-sel-handle {
           position: absolute;

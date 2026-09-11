@@ -39,6 +39,15 @@ export function IconPdfHighlight() {
   );
 }
 
+export function IconPdfSelectText() {
+  return (
+    <Svg>
+      <path d="M4 5h7M7.5 5v14M4 19h7" />
+      <path d="M14 8h7M14 12h6M14 16h4" />
+    </Svg>
+  );
+}
+
 export function IconPdfChevronLeft() {
   return (
     <Svg>

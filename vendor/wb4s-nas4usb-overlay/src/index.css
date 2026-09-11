@@ -1,0 +1,78 @@
+/*
+ * NAS4USB overlay: scope every global reset to html.wb4s-embed-mode.
+ *
+ * Vite never unloads this file after the lazy editor chunk loads. Unscoped
+ * `* { margin:0; padding:0 }` and `body { overflow:hidden }` therefore stay
+ * after 닫기 and beat Tailwind utilities (unlayered > @layer).
+ *
+ * :where() keeps the same 0 extra specificity as upstream `*`, so App.css
+ * class padding still wins inside the editor.
+ */
+
+:where(html.wb4s-embed-mode),
+:where(html.wb4s-embed-mode) *,
+:where(html.wb4s-embed-mode) *::before,
+:where(html.wb4s-embed-mode) *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:where(html.wb4s-embed-mode) {
+  --app-header-padding-y: 0.75rem;
+  --app-header-padding-x: 1.5rem;
+  --app-header-content-height: 32px;
+  --app-header-min-height: calc(var(--app-header-padding-y) * 2 + var(--app-header-content-height));
+  --app-viewport-height: 100vh;
+  --app-safe-top: env(safe-area-inset-top, 0px);
+  --app-safe-right: env(safe-area-inset-right, 0px);
+  --app-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --app-safe-left: env(safe-area-inset-left, 0px);
+  --wb-accent: #3b82f6;
+  --wb-accent-hover: #2f68c5;
+}
+
+@supports (height: 100svh) {
+  :where(html.wb4s-embed-mode) {
+    --app-viewport-height: 100svh;
+  }
+}
+
+:where(html.wb4s-embed-mode) {
+  height: var(--app-viewport-height);
+  max-height: var(--app-viewport-height);
+  overflow: hidden;
+}
+
+:where(html.wb4s-embed-mode) body,
+:where(html.wb4s-embed-mode) #root,
+:where(html.wb4s-embed-mode) .app-shell,
+:where(html.wb4s-embed-mode) .app.editor {
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+:where(html.wb4s-embed-mode) body {
+  font-family:
+    'Segoe UI',
+    system-ui,
+    -apple-system,
+    sans-serif;
+  background: #eef1f6;
+  color: #1a1a2e;
+  -webkit-font-smoothing: antialiased;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+:where(html.wb4s-embed-mode) input,
+:where(html.wb4s-embed-mode) textarea,
+:where(html.wb4s-embed-mode) [contenteditable='true'],
+:where(html.wb4s-embed-mode) .canvas-text-editor {
+  -webkit-touch-callout: default;
+  -webkit-user-select: text;
+  user-select: text;
+}

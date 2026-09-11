@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { EditorView } from '@wb4s-engine/components/EditorView.tsx';
 import { EmbedDeptSessionProvider } from '@wb4s-engine/context/DeptSessionContext.tsx';
 import { parseWhiteboardFileText } from '@wb4s-engine/lib/whiteboard/whiteboardFile.ts';
-import '@wb4s-engine/index.css';
+import '../../vendor/wb4s-nas4usb-overlay/src/index.css';
 import '@wb4s-engine/App.css';
 import {
   getWb4sByDept,

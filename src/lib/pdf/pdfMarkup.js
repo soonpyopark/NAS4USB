@@ -1,4 +1,5 @@
 import { AnnotationType, TextLayer, Util } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { getPageTextContent } from './pdfjs.js';
 
 /**
  * @typedef {{
@@ -223,7 +224,7 @@ function reassignLineNumbers(words) {
  */
 export async function extractPageWords(page, rotation = 0) {
   const viewport = page.getViewport({ scale: 1, rotation });
-  const textContent = await page.getTextContent();
+  const textContent = await getPageTextContent(page);
   /** @type {PdfWord[]} */
   const words = [];
   let wordNo = 0;
@@ -913,7 +914,7 @@ export async function loadPdfMarkupAnnotations(pdf, options = {}) {
 export async function mountPdfTextLayer(page, cssViewport, container) {
   container.replaceChildren();
   container.className = 'pdf-text-layer textLayer';
-  const textContent = await page.getTextContent();
+  const textContent = await getPageTextContent(page);
   const textLayer = new TextLayer({
     textContentSource: textContent,
     container,
@@ -967,6 +968,46 @@ export function paintSelectionHandles(layer, rects, cssScale) {
     el.style.top = `${point.y * scale}px`;
     layer.appendChild(el);
   }
+}
+
+/**
+ * iPad select-mode: real tappable boxes so WebKit does not ignore an empty overlay.
+ * @param {HTMLElement} layer
+ * @param {PdfWord[]} words
+ * @param {number} cssScale
+ */
+export function paintIosWordTargets(layer, words, cssScale) {
+  layer.querySelectorAll('[data-pdf-word]').forEach((node) => node.remove());
+  if (!Array.isArray(words) || !words.length) return;
+  const scale = Math.max(0.01, cssScale || 1);
+  const minCss = 36;
+  for (let index = 0; index < words.length; index += 1) {
+    const word = words[index];
+    const rawW = Math.max(4, (word.x1 - word.x0) * scale);
+    const rawH = Math.max(4, (word.y1 - word.y0) * scale);
+    const width = Math.max(minCss, rawW);
+    const height = Math.max(minCss, rawH);
+    const cx = ((word.x0 + word.x1) / 2) * scale;
+    const cy = ((word.y0 + word.y1) / 2) * scale;
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.dataset.pdfWord = String(index);
+    el.className = 'pdf-ios-word';
+    el.setAttribute('aria-label', word.text || '단어');
+    el.style.left = `${cx - width / 2}px`;
+    el.style.top = `${cy - height / 2}px`;
+    el.style.width = `${width}px`;
+    el.style.height = `${height}px`;
+    layer.appendChild(el);
+  }
+}
+
+/**
+ * @param {HTMLElement} layer
+ */
+export function clearIosWordTargets(layer) {
+  if (!layer) return;
+  layer.querySelectorAll('[data-pdf-word]').forEach((node) => node.remove());
 }
 
 /**

@@ -12,6 +12,66 @@ export { PasswordResponses };
 let workerReady = false;
 
 /**
+ * Safari / iPad: ReadableStream has no async iterator, so pdf.js
+ * `getTextContent()` throws and callers see an empty page
+ * (mozilla/pdf.js#20973, #21557).
+ */
+export function ensureSafariReadableStreamIterator() {
+  if (typeof ReadableStream === 'undefined') return;
+  const proto = ReadableStream.prototype;
+  if (typeof proto[Symbol.asyncIterator] === 'function') return;
+  proto[Symbol.asyncIterator] = async function* safariReadableStreamAsyncIterator() {
+    const reader = this.getReader();
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) return;
+        yield value;
+      }
+    } finally {
+      try {
+        reader.releaseLock();
+      } catch {
+        // already released
+      }
+    }
+  };
+}
+
+ensureSafariReadableStreamIterator();
+
+/**
+ * @param {import('pdfjs-dist').PDFPageProxy} page
+ */
+export async function getPageTextContent(page) {
+  ensureSafariReadableStreamIterator();
+  try {
+    return await page.getTextContent();
+  } catch {
+    const reader = page.streamTextContent().getReader();
+    /** @type {unknown[]} */
+    const items = [];
+    /** @type {Record<string, unknown>} */
+    const styles = Object.create(null);
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value && typeof value === 'object' && 'styles' in value && value.styles) {
+          Object.assign(styles, value.styles);
+        }
+        if (value && typeof value === 'object' && Array.isArray(value.items)) {
+          items.push(...value.items);
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+    return { items, styles };
+  }
+}
+
+/**
  * pdf.js fetches fixed names (jbig2.wasm, openjpeg.wasm, …) under wasmUrl.
  * Vite `?url` hashing breaks that, so assets are copied to public/pdfjs/ by
  * scripts/prepare-pdfjs-assets.mjs.
@@ -47,6 +107,7 @@ function absoluteWorkerSrc(workerUrl) {
 }
 
 export function ensurePdfjsWorker() {
+  ensureSafariReadableStreamIterator();
   if (workerReady) return;
   GlobalWorkerOptions.workerSrc = absoluteWorkerSrc(pdfWorkerSrc);
   workerReady = true;
@@ -155,7 +216,7 @@ export async function searchPdfDocument(pdf, query) {
 
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
     const page = await pdf.getPage(pageNumber);
-    const textContent = await page.getTextContent();
+    const textContent = await getPageTextContent(page);
     const items = textContent.items;
 
     for (let itemIndex = 0; itemIndex < items.length; itemIndex += 1) {

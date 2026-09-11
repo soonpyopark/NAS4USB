@@ -6,6 +6,7 @@ These files differ from upstream on purpose. After syncing upstream into
 ```powershell
 Copy-Item vendor/wb4s-nas4usb-overlay/src/components/EditorView.tsx .cache/wb4s-src/src/components/EditorView.tsx -Force
 Copy-Item vendor/wb4s-nas4usb-overlay/src/components/Toolbar.tsx .cache/wb4s-src/src/components/Toolbar.tsx -Force
+Copy-Item vendor/wb4s-nas4usb-overlay/src/index.css .cache/wb4s-src/src/index.css -Force
 ```
 
 ## EditorView.tsx
@@ -21,3 +22,10 @@ Copy-Item vendor/wb4s-nas4usb-overlay/src/components/Toolbar.tsx .cache/wb4s-src
 ## Toolbar.tsx
 
 - Optional `backLabel` prop (default **← 갤러리**)
+
+## index.css
+
+- Scope the upstream `* / html / body / #root` reset under `html.wb4s-embed-mode`
+  (`:where()` so specificity stays the same as `*`). Vite never unloads this
+  stylesheet after the first `.wb4s` open; without scoping, 닫기 leaves the
+  explorer with zero padding and a locked body scroll.
