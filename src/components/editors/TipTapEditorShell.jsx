@@ -9,7 +9,11 @@ import { loadUserDisplayName } from '../../lib/userProfile.js';
 import { pickUserColor } from '../../lib/userColors.js';
 import { getTiptapFileStem } from '../../lib/tiptap/document.js';
 import { normalizeTiptapAssetUrls } from '../../lib/tiptap/assetUrls.js';
-import { seedTiptapRoomFromDisk, setTiptapDiskRevision } from '../../lib/tiptap/seedRoom.js';
+import {
+  seedTiptapRoomFromDisk,
+  setTiptapDiskRevision,
+  tiptapJsonFromYDoc,
+} from '../../lib/tiptap/seedRoom.js';
 import {
   packTiptapFileFromSidecar,
   parseTiptapFileBase64,
@@ -105,6 +109,8 @@ export default function TipTapEditorShell({
   const editorRef = useRef(/** @type {import('@tiptap/core').Editor | null} */ (null));
   const diskRevisionRef = useRef('');
   const closingRef = useRef(false);
+  const seededRef = useRef(false);
+  const [editorEpoch, setEditorEpoch] = useState(0);
 
   useEffect(() => {
     if (!workspace.ready || !doc) return undefined;
@@ -113,6 +119,7 @@ export default function TipTapEditorShell({
     setContentReady(false);
     setRoomReady(false);
     editorRef.current = null;
+    seededRef.current = false;
 
     async function bootstrap() {
       try {
@@ -165,14 +172,20 @@ export default function TipTapEditorShell({
   useEffect(() => {
     if (!doc || !contentReady || !initialContent) return;
     if (collaborationEnabled && !synced) {
-      setRoomReady(false);
+      // First connect still waits. After the room is seeded, keep the editor
+      // mounted — flipping roomReady off on every websocket resync destroyed
+      // live edits and re-seeded the file-open snapshot.
+      if (!seededRef.current) setRoomReady(false);
       return;
     }
 
-    if (collaborationEnabled) {
+    if (collaborationEnabled && !seededRef.current) {
       seedTiptapRoomFromDisk(doc, initialContent, {
         diskRevision: diskRevisionRef.current,
       });
+      seededRef.current = true;
+    } else if (!collaborationEnabled) {
+      seededRef.current = true;
     }
 
     setRoomReady(true);
@@ -180,22 +193,31 @@ export default function TipTapEditorShell({
 
   const handleEditorReady = useCallback((editor) => {
     editorRef.current = editor;
+    setEditorEpoch((value) => value + 1);
   }, []);
 
   const persistLive = useCallback(
-    async ({ archive = true } = {}) => {
+    async ({ archive = true, silent = false } = {}) => {
       if (shareReadOnly) return false;
-      if (!workspace.ready || !editorRef.current) return false;
-      if (typeof editorRef.current.flushHtmlSource === 'function') {
-        const flushed = await editorRef.current.flushHtmlSource();
+      if (!workspace.ready) return false;
+      const editor = editorRef.current;
+      if (editor && typeof editor.flushHtmlSource === 'function') {
+        const flushed = await editor.flushHtmlSource();
         if (flushed === false) {
           throw new Error('HTML을 적용하지 못했습니다.');
         }
       }
-      setSaving(true);
+      let documentJson = null;
+      try {
+        documentJson = editor?.getJSON?.() || null;
+      } catch {
+        documentJson = null;
+      }
+      if (!documentJson) documentJson = tiptapJsonFromYDoc(doc);
+      if (!documentJson) return false;
+      if (!silent) setSaving(true);
       try {
         const title = getTiptapFileStem(fileName);
-        const documentJson = editorRef.current.getJSON();
         const base64 = await packTiptapFileFromSidecar({
           title,
           exportedAt: new Date().toISOString(),
@@ -203,19 +225,14 @@ export default function TipTapEditorShell({
           tiptapRelativePath: relativePath,
         });
         await workspace.writeBinary(base64);
+        setInitialContent(documentJson);
         if (archive) {
           await workspace.commit();
           try {
             const statInfo = await window.nas4usb.fs.stat(relativePath);
             const nextDiskRevision = statInfo?.modifiedAt ?? '';
-            if (doc) {
-              setTiptapDiskRevision(doc, nextDiskRevision);
-              if (collaborationEnabled) {
-                seedTiptapRoomFromDisk(doc, documentJson, {
-                  diskRevision: nextDiskRevision,
-                });
-              }
-            }
+            diskRevisionRef.current = nextDiskRevision;
+            if (doc) setTiptapDiskRevision(doc, nextDiskRevision);
           } catch {
             // optional
           }
@@ -225,10 +242,10 @@ export default function TipTapEditorShell({
         setLoadError(err instanceof Error ? err.message : '편집 내용을 저장하지 못했습니다.');
         throw err;
       } finally {
-        setSaving(false);
+        if (!silent) setSaving(false);
       }
     },
-    [collaborationEnabled, doc, fileName, relativePath, shareReadOnly, workspace],
+    [doc, fileName, relativePath, shareReadOnly, workspace],
   );
 
   const handleSave = useCallback(async () => {
@@ -238,6 +255,27 @@ export default function TipTapEditorShell({
       // error already shown
     }
   }, [persistLive]);
+
+  useEffect(() => {
+    if (!roomReady || shareReadOnly) return undefined;
+    const editor = editorRef.current;
+    if (!editor) return undefined;
+
+    let timer = 0;
+    const schedule = () => {
+      if (closingRef.current) return;
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        void persistLive({ archive: false, silent: true }).catch(() => {});
+      }, 3000);
+    };
+
+    editor.on('update', schedule);
+    return () => {
+      editor.off('update', schedule);
+      window.clearTimeout(timer);
+    };
+  }, [editorEpoch, persistLive, roomReady, shareReadOnly]);
 
   const handleRestoreHistory = useCallback(
     async (base64) => {
@@ -579,7 +617,9 @@ export default function TipTapEditorShell({
   }, [fileName, relativePath, transferBusy]);
 
   const handleClose = useCallback(async () => {
-    const canFlush = Boolean(!shareReadOnly && editorRef.current && contentReady && roomReady);
+    const canFlush = Boolean(
+      !shareReadOnly && contentReady && (editorRef.current || doc),
+    );
     await persistAndCloseEditor({
       closingRef,
       persist: canFlush ? () => persistLive({ archive: false }) : undefined,
@@ -589,14 +629,13 @@ export default function TipTapEditorShell({
       closeWorkspace: () => workspace.close(),
       onClose,
     });
-  }, [contentReady, onClose, persistLive, roomReady, shareReadOnly, workspace]);
+  }, [contentReady, doc, onClose, persistLive, shareReadOnly, workspace]);
 
   const peerCount = useAwarenessPeerCount(provider);
   const lanEndpoints = getLanWsEndpoints(syncInfo, roomId).join(' · ');
   const isLoading = workspace.loading || !doc || !contentReady || initialContent == null;
   const waitingSync = collaborationEnabled && contentReady && !roomReady;
-  const syncReadOnly = collaborationEnabled && (!synced || waitingSync);
-  const readOnly = shareReadOnly || syncReadOnly;
+  const readOnly = shareReadOnly || waitingSync;
   const displayStatus = collaborationEnabled ? status : 'connected';
   const displaySynced = collaborationEnabled ? synced && roomReady : true;
 

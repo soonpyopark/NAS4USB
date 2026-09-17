@@ -179,3 +179,21 @@ export function setTiptapDiskRevision(ydoc, diskRevision) {
   if (!diskRevision) return;
   ydoc.getMap('meta').set(`${TIPTAP_FRAGMENT}:diskRevision`, diskRevision);
 }
+
+/**
+ * Read the live TipTap JSON from a Y.Doc without going through the editor view.
+ * Used when the view is unmounted but the CRDT still holds unsaved edits.
+ *
+ * @param {import('yjs').Doc | null | undefined} ydoc
+ * @returns {import('@tiptap/core').JSONContent | null}
+ */
+export function tiptapJsonFromYDoc(ydoc) {
+  if (!ydoc) return null;
+  const fragment = ydoc.getXmlFragment(TIPTAP_FRAGMENT);
+  if (fragment.length === 0) return null;
+  try {
+    return yXmlFragmentToProseMirrorRootNode(fragment, createSeedSchema()).toJSON();
+  } catch {
+    return null;
+  }
+}
