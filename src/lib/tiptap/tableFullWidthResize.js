@@ -1,7 +1,9 @@
+import { isChangeOrigin } from '@tiptap/extension-collaboration';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { columnResizingPluginKey, TableMap } from '@tiptap/pm/tables';
 import {
   CELL_MIN_WIDTH,
+  SKIP_FULL_WIDTH_ABSORB_META,
   readColumnWidths,
   redistributeFullWidthColumns,
   singleChangedColumnIndex,
@@ -40,7 +42,12 @@ function findTableElement(view, cellPos) {
  * @param {number} minWidth
  */
 function computeResizeWidths(table, $cell, nextWidth, minWidth) {
-  const map = TableMap.get(table);
+  let map;
+  try {
+    map = TableMap.get(table);
+  } catch {
+    return null;
+  }
   const start = $cell.start(-1);
   const col = map.colCount($cell.pos - start) + ($cell.nodeAfter?.attrs.colspan || 1) - 1;
   const current = readColumnWidths(table, map.width, minWidth);
@@ -98,7 +105,9 @@ function previewAbsorbedWidths(view, cellPos, nextWidth, minWidth) {
   const table = $cell.node(-1);
   if (!isTableNode(table) || !table.attrs.fullWidth) return;
 
-  const { next, total } = computeResizeWidths(table, $cell, nextWidth, minWidth);
+  const sizes = computeResizeWidths(table, $cell, nextWidth, minWidth);
+  if (!sizes) return;
+  const { next, total } = sizes;
   const dom = findTableElement(view, cellPos);
   if (!dom) return;
 
@@ -123,13 +132,21 @@ export function createFullWidthResizePlugin(cellMinWidth = CELL_MIN_WIDTH) {
       let frame = 0;
       const hint = createResizeHint();
       const onPointerMove = (event) => {
-        const pluginState = columnResizingPluginKey.getState(editorView.state);
-        if (!pluginState?.dragging || pluginState.activeHandle < 0) {
+        let pluginState;
+        let $cell;
+        let table;
+        try {
+          pluginState = columnResizingPluginKey.getState(editorView.state);
+          if (!pluginState?.dragging || pluginState.activeHandle < 0) {
+            hideResizeHint(hint);
+            return;
+          }
+          $cell = editorView.state.doc.resolve(pluginState.activeHandle);
+          table = $cell.node(-1);
+        } catch {
           hideResizeHint(hint);
           return;
         }
-        const $cell = editorView.state.doc.resolve(pluginState.activeHandle);
-        const table = $cell.node(-1);
         if (!isTableNode(table)) {
           hideResizeHint(hint);
           return;
@@ -142,10 +159,19 @@ export function createFullWidthResizePlugin(cellMinWidth = CELL_MIN_WIDTH) {
         if (frame) cancelAnimationFrame(frame);
         frame = requestAnimationFrame(() => {
           frame = 0;
-          if (table.attrs.fullWidth) {
-            previewAbsorbedWidths(editorView, pluginState.activeHandle, nextWidth, cellMinWidth);
+          try {
+            const sizes = computeResizeWidths(table, $cell, nextWidth, cellMinWidth);
+            if (!sizes) {
+              hideResizeHint(hint);
+              return;
+            }
+            if (table.attrs.fullWidth) {
+              previewAbsorbedWidths(editorView, pluginState.activeHandle, nextWidth, cellMinWidth);
+            }
+            showResizeHint(hint, point, sizes);
+          } catch {
+            hideResizeHint(hint);
           }
-          showResizeHint(hint, point, computeResizeWidths(table, $cell, nextWidth, cellMinWidth));
         });
       };
       const onPointerUp = () => {
@@ -170,6 +196,23 @@ export function createFullWidthResizePlugin(cellMinWidth = CELL_MIN_WIDTH) {
     },
     appendTransaction(transactions, oldState, newState) {
       if (!transactions.some((transaction) => transaction.docChanged)) return null;
+      // Programmatic 100% / equalize must not be treated as a column drag.
+      if (transactions.some((transaction) => transaction.getMeta(SKIP_FULL_WIDTH_ABSORB_META))) {
+        return null;
+      }
+      // One absorb per user gesture. Re-running on our own step ping-pongs 1px
+      // between neighbor columns until the editor hangs.
+      if (transactions.some((transaction) => transaction.getMeta(fullWidthResizeKey))) {
+        return null;
+      }
+      // Y.js echoes cell-width updates without our meta. Treating those as a
+      // one-column drag steals 1px from the neighbor forever and freezes the app.
+      if (transactions.some((transaction) => isChangeOrigin(transaction))) {
+        return null;
+      }
+      const drag =
+        columnResizingPluginKey.getState(newState) || columnResizingPluginKey.getState(oldState);
+      if (!drag?.dragging) return null;
 
       let mapped = (pos) => pos;
       for (const transaction of transactions) {
@@ -180,24 +223,31 @@ export function createFullWidthResizePlugin(cellMinWidth = CELL_MIN_WIDTH) {
       const tr = newState.tr;
       let changed = false;
 
-      oldState.doc.descendants((oldNode, oldPos) => {
-        if (!isTableNode(oldNode) || !oldNode.attrs.fullWidth) return;
-        const newPos = mapped(oldPos);
-        const newNode = newState.doc.nodeAt(newPos);
-        if (!newNode || !isTableNode(newNode) || !newNode.attrs.fullWidth) return;
+      try {
+        oldState.doc.descendants((oldNode, oldPos) => {
+          if (!isTableNode(oldNode) || !oldNode.attrs.fullWidth) return;
+          const newPos = mapped(oldPos);
+          if (newPos < 0 || newPos >= newState.doc.content.size) return;
+          const newNode = newState.doc.nodeAt(newPos);
+          if (!newNode || !isTableNode(newNode) || !newNode.attrs.fullWidth) return;
 
-        const colCount = tableColumnCount(newNode);
-        const before = readColumnWidths(oldNode, colCount, cellMinWidth);
-        const after = readColumnWidths(newNode, colCount, cellMinWidth);
-        const col = singleChangedColumnIndex(before, after);
-        if (col < 0) return;
+          const colCount = tableColumnCount(newNode);
+          if (colCount <= 0 || tableColumnCount(oldNode) !== colCount) return;
+          const before = readColumnWidths(oldNode, colCount, cellMinWidth);
+          const after = readColumnWidths(newNode, colCount, cellMinWidth);
+          const col = singleChangedColumnIndex(before, after);
+          if (col < 0) return;
 
-        const next = redistributeFullWidthColumns(before, col, after[col], cellMinWidth);
-        if (next.every((width, index) => width === after[index])) return;
-        if (writeTableColumnWidths(tr, newPos, newNode, next)) changed = true;
-      });
+          const next = redistributeFullWidthColumns(before, col, after[col], cellMinWidth);
+          if (next.every((width, index) => width === after[index])) return;
+          if (writeTableColumnWidths(tr, newPos, newNode, next)) changed = true;
+        });
+      } catch {
+        return null;
+      }
 
-      return changed ? tr : null;
+      if (!changed) return null;
+      return tr.setMeta(fullWidthResizeKey, { absorbed: true });
     },
   });
 }

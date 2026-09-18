@@ -44,7 +44,7 @@
     "@xmldom/xmldom": "^0.9.12",
     "autoprefixer": "^10.6.1",
     "concurrently": "^10.0.5",
-    "electron": "^44.4.1",
+    "electron": "^44.4.2",
     "electron-builder": "^26.15.3",
     "png-to-ico": "^3.0.2",
     "postcss": "^8.5.28",
@@ -127,7 +127,7 @@
     "react-dom": "^19.3.0",
     "sql.js": "^1.14.2",
     "tippy.js": "^6.3.7",
-    "video.js": "^8.24.0",
+    "video.js": "^8.24.1",
     "word-extractor": "^1.0.4",
     "ws": "^8.21.3",
     "xlsx": "^0.18.5",
@@ -141,7 +141,7 @@
     "@tiptap/pm": "$@tiptap/pm"
   },
   "allowScripts": {
-    "electron@44.4.1": true
+    "electron@44.4.2": true
   },
   "build": {
     "appId": "com.nas4usb.app",

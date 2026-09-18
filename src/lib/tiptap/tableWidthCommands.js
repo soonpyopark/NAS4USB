@@ -1,5 +1,8 @@
 export const CELL_MIN_WIDTH = 80;
 
+/** Skip neighbor-absorb in the full-width resize plugin (programmatic 100% / equalize). */
+export const SKIP_FULL_WIDTH_ABSORB_META = 'nas4usbSkipFullWidthAbsorb';
+
 /**
  * @param {import('@tiptap/pm/model').Node | null | undefined} node
  */
@@ -114,14 +117,20 @@ export function readColumnWidths(table, colCount, fallback = CELL_MIN_WIDTH) {
  * @param {number} tablePos
  */
 function measureWrapperWidth(editor, tablePos) {
+  const editorWidth = Math.max(editor.view.dom.clientWidth || 0, CELL_MIN_WIDTH * 2);
   const dom = editor.view.nodeDOM(tablePos);
   if (dom instanceof HTMLElement) {
     const wrapper = dom.classList.contains('tableWrapper') ? dom : dom.closest('.tableWrapper');
     if (wrapper instanceof HTMLElement && wrapper.clientWidth > 0) {
-      return wrapper.clientWidth;
+      const host = wrapper.parentElement;
+      const hostWidth =
+        host instanceof HTMLElement && host.clientWidth > 0 ? host.clientWidth : editorWidth;
+      // Overflowed tables can make the wrapper report the table's own width.
+      // Repeated 100% clicks would then inflate the table without bound.
+      return Math.max(CELL_MIN_WIDTH, Math.min(wrapper.clientWidth, hostWidth));
     }
   }
-  return Math.max(editor.view.dom.clientWidth || 0, CELL_MIN_WIDTH * 2);
+  return editorWidth;
 }
 
 /**
@@ -322,10 +331,15 @@ function applyColumnWidths(editor, widths, options) {
   if (!found || widths.length === 0) return false;
 
   const { tr } = editor.state;
+  tr.setMeta(SKIP_FULL_WIDTH_ABSORB_META, true);
   const changed = writeTableColumnWidths(tr, found.pos, found.node, widths, options);
   if (!changed) return true;
   editor.view.dispatch(tr);
   return true;
+}
+
+function editorIsUsable(editor) {
+  return Boolean(editor && !editor.isDestroyed && editor.view && !editor.view.isDestroyed);
 }
 
 /**
@@ -333,13 +347,19 @@ function applyColumnWidths(editor, widths, options) {
  * @param {import('@tiptap/core').Editor} editor
  */
 export function fitTableToFullWidth(editor) {
-  const found = findTableNearSelection(editor.state);
-  if (!found) return false;
-  const colCount = tableColumnCount(found.node);
-  if (colCount <= 0) return false;
-  const current = readColumnWidths(found.node, colCount);
-  const target = measureTableTargetWidth(editor, found.pos);
-  return applyColumnWidths(editor, scaleColumnWidths(current, target), { fullWidth: true });
+  if (!editorIsUsable(editor)) return false;
+  try {
+    const found = findTableNearSelection(editor.state);
+    if (!found) return false;
+    const colCount = tableColumnCount(found.node);
+    if (colCount <= 0) return false;
+    const current = readColumnWidths(found.node, colCount);
+    const target = measureTableTargetWidth(editor, found.pos);
+    return applyColumnWidths(editor, scaleColumnWidths(current, target), { fullWidth: true });
+  } catch (error) {
+    console.warn('[tiptap] fitTableToFullWidth failed', error);
+    return false;
+  }
 }
 
 /**
@@ -349,54 +369,61 @@ export function fitTableToFullWidth(editor) {
  * @param {import('@tiptap/core').Editor} editor
  */
 export function fitAllTablesToFullWidth(editor) {
-  const collected = collectDocumentTables(editor.state.doc);
-  if (collected.length === 0) return false;
+  if (!editorIsUsable(editor)) return false;
+  try {
+    const collected = collectDocumentTables(editor.state.doc);
+    if (collected.length === 0) return false;
 
-  collected.sort((left, right) => left.depth - right.depth || left.pos - right.pos);
+    collected.sort((left, right) => left.depth - right.depth || left.pos - right.pos);
 
-  const { tr } = editor.state;
-  /** @type {Map<number, number[]>} */
-  const fittedWidths = new Map();
-  let changed = false;
+    const { tr } = editor.state;
+    tr.setMeta(SKIP_FULL_WIDTH_ABSORB_META, true);
+    /** @type {Map<number, number[]>} */
+    const fittedWidths = new Map();
+    let changed = false;
 
-  for (const item of collected) {
-    const table = tr.doc.nodeAt(item.pos);
-    if (!isTableNode(table)) continue;
-    const colCount = tableColumnCount(table);
-    if (colCount <= 0) continue;
+    for (const item of collected) {
+      const table = tr.doc.nodeAt(item.pos);
+      if (!isTableNode(table)) continue;
+      const colCount = tableColumnCount(table);
+      if (colCount <= 0) continue;
 
-    const parent = parentCellAt(tr.doc, item.pos);
-    const parentTablePos = parent ? ancestorTablePos(tr.doc, parent.pos) : null;
-    const parentWidths = parentTablePos != null ? fittedWidths.get(parentTablePos) : null;
-    const parentTable = parentTablePos != null ? tr.doc.nodeAt(parentTablePos) : null;
+      const parent = parentCellAt(tr.doc, item.pos);
+      const parentTablePos = parent ? ancestorTablePos(tr.doc, parent.pos) : null;
+      const parentWidths = parentTablePos != null ? fittedWidths.get(parentTablePos) : null;
+      const parentTable = parentTablePos != null ? tr.doc.nodeAt(parentTablePos) : null;
 
-    let target = measureTableTargetWidth(editor, item.pos);
-    if (parent && parentTable && isTableNode(parentTable) && parentWidths) {
-      const col = columnIndexOfCell(parentTable, parentTablePos, parent.pos);
-      const span = Math.max(1, Number(parent.node.attrs.colspan) || 1);
-      if (col >= 0) {
-        const cellWidth = parentWidths
-          .slice(col, col + span)
-          .reduce((total, width) => total + width, 0);
-        if (cellWidth > 0) {
-          target = Math.max(
-            CELL_MIN_WIDTH,
-            Math.round(cellWidth - cellBoxInsets(editor, parent.pos, { includeBorder: true })),
-          );
+      let target = measureTableTargetWidth(editor, item.pos);
+      if (parent && parentTable && isTableNode(parentTable) && parentWidths) {
+        const col = columnIndexOfCell(parentTable, parentTablePos, parent.pos);
+        const span = Math.max(1, Number(parent.node.attrs.colspan) || 1);
+        if (col >= 0) {
+          const cellWidth = parentWidths
+            .slice(col, col + span)
+            .reduce((total, width) => total + width, 0);
+          if (cellWidth > 0) {
+            target = Math.max(
+              CELL_MIN_WIDTH,
+              Math.round(cellWidth - cellBoxInsets(editor, parent.pos, { includeBorder: true })),
+            );
+          }
         }
+      }
+
+      const widths = scaleColumnWidths(readColumnWidths(table, colCount), target);
+      fittedWidths.set(item.pos, widths);
+      if (writeTableColumnWidths(tr, item.pos, table, widths, { fullWidth: true })) {
+        changed = true;
       }
     }
 
-    const widths = scaleColumnWidths(readColumnWidths(table, colCount), target);
-    fittedWidths.set(item.pos, widths);
-    if (writeTableColumnWidths(tr, item.pos, table, widths, { fullWidth: true })) {
-      changed = true;
-    }
+    if (!changed) return true;
+    editor.view.dispatch(tr);
+    return true;
+  } catch (error) {
+    console.warn('[tiptap] fitAllTablesToFullWidth failed', error);
+    return false;
   }
-
-  if (!changed) return true;
-  editor.view.dispatch(tr);
-  return true;
 }
 
 /**
@@ -405,24 +432,30 @@ export function fitAllTablesToFullWidth(editor) {
  * @param {import('@tiptap/core').Editor} editor
  */
 export function equalizeTableColumns(editor) {
-  const found = findTableNearSelection(editor.state);
-  if (!found) return false;
-  const colCount = tableColumnCount(found.node);
-  if (colCount <= 0) return false;
-  const current = readColumnWidths(found.node, colCount);
-  const hasExplicit = found.node.firstChild
-    ? (() => {
-        let explicit = false;
-        found.node.firstChild.forEach((cell) => {
-          if (Array.isArray(cell.attrs.colwidth) && cell.attrs.colwidth.some((width) => Number(width) > 0)) {
-            explicit = true;
-          }
-        });
-        return explicit;
-      })()
-    : false;
-  const target = hasExplicit
-    ? current.reduce((total, width) => total + width, 0)
-    : measureWrapperWidth(editor, found.pos);
-  return applyColumnWidths(editor, equalColumnWidths(colCount, target));
+  if (!editorIsUsable(editor)) return false;
+  try {
+    const found = findTableNearSelection(editor.state);
+    if (!found) return false;
+    const colCount = tableColumnCount(found.node);
+    if (colCount <= 0) return false;
+    const current = readColumnWidths(found.node, colCount);
+    const hasExplicit = found.node.firstChild
+      ? (() => {
+          let explicit = false;
+          found.node.firstChild.forEach((cell) => {
+            if (Array.isArray(cell.attrs.colwidth) && cell.attrs.colwidth.some((width) => Number(width) > 0)) {
+              explicit = true;
+            }
+          });
+          return explicit;
+        })()
+      : false;
+    const target = hasExplicit
+      ? current.reduce((total, width) => total + width, 0)
+      : measureWrapperWidth(editor, found.pos);
+    return applyColumnWidths(editor, equalColumnWidths(colCount, target));
+  } catch (error) {
+    console.warn('[tiptap] equalizeTableColumns failed', error);
+    return false;
+  }
 }
