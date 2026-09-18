@@ -1,6 +1,102 @@
+import { mergeAttributes } from '@tiptap/core';
 import { Table, TableCell, TableHeader, TableRow } from '@tiptap/extension-table';
-import { columnResizing, tableEditing } from '@tiptap/pm/tables';
-import { createFullWidthResizePlugin } from './tableFullWidthResize.js';
+import { DecorationSet } from '@tiptap/pm/view';
+import { columnResizing, ResizeState, tableEditing } from '@tiptap/pm/tables';
+import { createFullWidthResizePlugin, safeColumnResizeMouseDown } from './tableFullWidthResize.js';
+import { createLastAutoColGroupSpec, Nas4usbTableView } from './tableView.js';
+
+/**
+ * TableMap.get / colCount throw on irregular tables. After 「표 너비 100%」
+ * those exceptions fire from hover decorations and freeze the renderer.
+ *
+ * @param {import('@tiptap/pm/state').Plugin} plugin
+ * @param {string} label
+ */
+function guardPluginViewProps(plugin, label) {
+  const origDecorations = plugin.props.decorations;
+  if (typeof origDecorations === 'function') {
+    plugin.props.decorations = function decorations(state) {
+      try {
+        return origDecorations.call(this, state);
+      } catch (error) {
+        console.warn(`[tiptap] ${label} decorations failed`, error);
+        return DecorationSet.empty;
+      }
+    };
+  }
+
+  const origEvents = plugin.props.handleDOMEvents;
+  if (origEvents) {
+    /** @type {typeof origEvents} */
+    const nextEvents = { ...origEvents };
+    for (const [name, handler] of Object.entries(origEvents)) {
+      if (typeof handler !== 'function') continue;
+      nextEvents[name] = (view, event) => {
+        try {
+          return handler(view, event);
+        } catch (error) {
+          console.warn(`[tiptap] ${label} ${name} failed`, error);
+          return false;
+        }
+      };
+    }
+    plugin.props.handleDOMEvents = nextEvents;
+  }
+
+  return plugin;
+}
+
+/**
+ * @param {import('@tiptap/pm/state').Plugin} plugin
+ * @param {number} cellMinWidth
+ */
+function guardColumnResizingPlugin(plugin, cellMinWidth) {
+  guardPluginViewProps(plugin, 'table resize');
+
+  const origApply = plugin.spec.state?.apply;
+  if (typeof origApply === 'function') {
+    plugin.spec.state.apply = function apply(tr, prev, oldState, newState) {
+      try {
+        return origApply.call(this, tr, prev, oldState, newState);
+      } catch (error) {
+        console.warn('[tiptap] table resize state failed', error);
+        return prev instanceof ResizeState ? prev : new ResizeState(-1, false);
+      }
+    };
+  }
+
+  const events = plugin.props.handleDOMEvents || {};
+  events.mousedown = (view, event) => {
+    try {
+      return safeColumnResizeMouseDown(view, event, cellMinWidth);
+    } catch (error) {
+      console.warn('[tiptap] table mousedown failed', error);
+      return false;
+    }
+  };
+  plugin.props.handleDOMEvents = events;
+
+  return plugin;
+}
+
+/**
+ * @param {import('@tiptap/pm/state').Plugin} plugin
+ */
+function guardTableEditingPlugin(plugin) {
+  guardPluginViewProps(plugin, 'table editing');
+  const origAppend = plugin.spec.appendTransaction;
+  if (typeof origAppend === 'function') {
+    plugin.spec.appendTransaction = function appendTransaction(...args) {
+      try {
+        return origAppend.apply(this, args);
+      } catch (error) {
+        console.warn('[tiptap] tableEditing appendTransaction failed', error);
+        return null;
+      }
+    };
+  }
+  return plugin;
+}
 
 function parseTableFullWidth(element) {
   const table =
@@ -93,24 +189,41 @@ export const TiptapTable = Table.extend({
       },
     };
   },
+  renderHTML({ node, HTMLAttributes }) {
+    const colgroup = createLastAutoColGroupSpec(node);
+    const table = [
+      'table',
+      mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, {
+        style: 'width: 100%; table-layout: fixed;',
+      }),
+      colgroup,
+      ['tbody', 0],
+    ];
+    return this.options.renderWrapper ? ['div', { class: 'tableWrapper' }, table] : table;
+  },
   addProseMirrorPlugins() {
     const isResizable = this.options.resizable;
     return [
       ...(isResizable
         ? [
-            columnResizing({
-              handleWidth: this.options.handleWidth,
-              cellMinWidth: this.options.cellMinWidth,
-              defaultCellMinWidth: this.options.cellMinWidth,
-              View: this.options.View,
-              lastColumnResizable: this.options.lastColumnResizable,
-            }),
+            guardColumnResizingPlugin(
+              columnResizing({
+                handleWidth: this.options.handleWidth,
+                cellMinWidth: this.options.cellMinWidth,
+                defaultCellMinWidth: this.options.cellMinWidth,
+                View: this.options.View,
+                lastColumnResizable: this.options.lastColumnResizable,
+              }),
+              this.options.cellMinWidth,
+            ),
             createFullWidthResizePlugin(this.options.cellMinWidth),
           ]
         : []),
-      tableEditing({
-        allowTableNodeSelection: this.options.allowTableNodeSelection,
-      }),
+      guardTableEditingPlugin(
+        tableEditing({
+          allowTableNodeSelection: this.options.allowTableNodeSelection,
+        }),
+      ),
     ];
   },
 });
@@ -124,6 +237,7 @@ export function createTiptapTableExtensions() {
       lastColumnResizable: true,
       cellMinWidth: 80,
       renderWrapper: true,
+      View: Nas4usbTableView,
       HTMLAttributes: { class: 'tiptap-table' },
     }),
     TiptapTableRow,

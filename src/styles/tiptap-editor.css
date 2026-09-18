@@ -26,7 +26,8 @@
   transform-origin: top center;
 }
 
-.tiptap-editor-shell .tiptap {
+.tiptap-editor-shell .tiptap,
+.tiptap-editor-shell .ProseMirror {
   /* A3 page width — aligns editing surface with print / PDF export */
   box-sizing: border-box;
   max-width: 297mm;
@@ -34,6 +35,7 @@
   margin: 0 auto;
   padding: 18mm 16mm 40mm;
   outline: none;
+  overflow-x: hidden;
   font-family: 'Malgun Gothic', '맑은 고딕', 'Apple SD Gothic Neo', sans-serif;
   font-size: 12pt;
   line-height: 1.6;
@@ -253,17 +255,20 @@
 }
 
 .tiptap-editor-shell .tableWrapper {
-  overflow-x: auto;
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100%;
   margin: 0.35rem 0;
-  scrollbar-gutter: stable;
+  scrollbar-gutter: auto;
 }
 
 .tiptap-editor-shell .tiptap table,
-.tiptap-editor-shell .tiptap-table {
+.tiptap-editor-shell .tiptap-table,
+.tiptap-editor-shell .ProseMirror table {
   border-collapse: collapse;
-  /* auto — min-width:100% re-scaled every column after a shrink */
-  width: auto;
-  min-width: 0;
+  width: 100% !important;
+  max-width: 100%;
+  min-width: 0 !important;
   margin: 0.35rem 0;
   table-layout: fixed;
 }
@@ -275,7 +280,7 @@
   border: 1px solid #d1d5db;
   padding: 0.4rem 0.6rem;
   vertical-align: top;
-  min-width: 80px;
+  min-width: 0;
   position: relative;
   box-sizing: border-box;
 }
@@ -296,9 +301,10 @@
    column ratios hold to about a percentage point. The node view writes that width
    inline, or an inline `min-width` of 80px × columns when a column is unsized. */
 .tiptap-editor-shell .tiptap[contenteditable='false'] table {
-  width: auto !important;
+  width: 100% !important;
   min-width: 0 !important;
   max-width: 100%;
+  table-layout: fixed;
 }
 
 /* 「표 너비 100%」 recorded the intent to fill the pane, so let those grow back
@@ -328,14 +334,21 @@
 /* Nested tables act as filled boxes inside a cell — keep them compact */
 .tiptap-editor-shell .tiptap td .tableWrapper,
 .tiptap-editor-shell .tiptap th .tableWrapper {
-  overflow-x: visible;
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100%;
   margin: 0.2rem 0;
 }
 
 .tiptap-editor-shell .tiptap td table,
-.tiptap-editor-shell .tiptap th table {
+.tiptap-editor-shell .tiptap th table,
+.tiptap-editor-shell .ProseMirror td table,
+.tiptap-editor-shell .ProseMirror th table {
+  width: 100% !important;
+  max-width: 100%;
+  min-width: 0 !important;
   margin: 0.2rem 0;
-  table-layout: auto;
+  table-layout: fixed;
 }
 
 .tiptap-editor-shell .tiptap td table td,
@@ -367,6 +380,11 @@
 }
 
 /* Column resize handles — visible only while editable */
+.tiptap-editor-shell .tiptap[contenteditable='true'] table[data-full-width='true'] td,
+.tiptap-editor-shell .tiptap[contenteditable='true'] table[data-full-width='true'] th {
+  min-width: 0;
+}
+
 .tiptap-editor-shell .tiptap[contenteditable='true'] .column-resize-handle {
   position: absolute;
   right: -2px;
@@ -1575,9 +1593,10 @@ html.touch-ui .tiptap-toolbar__select {
      reason it needs `width: auto` rather than `max-width` alone. */
   .tiptap-editor-shell .tiptap table,
   .tiptap-editor-shell .tiptap-table {
-    width: auto !important;
+    width: 100% !important;
     min-width: 0 !important;
     max-width: 100%;
+    table-layout: fixed;
   }
 
   .tiptap-editor-shell .tiptap table > tbody > tr > td,

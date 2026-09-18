@@ -1,15 +1,14 @@
-import { isChangeOrigin } from '@tiptap/extension-collaboration';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { columnResizingPluginKey, TableMap } from '@tiptap/pm/tables';
 import {
   CELL_MIN_WIDTH,
-  SKIP_FULL_WIDTH_ABSORB_META,
+  minWidthForBudget,
   readColumnWidths,
-  redistributeFullWidthColumns,
-  singleChangedColumnIndex,
-  tableColumnCount,
+  resizeColumnLeavingLastAuto,
+  tableWidthBudget,
   writeTableColumnWidths,
 } from './tableWidthCommands.js';
+import { previewColgroupWidths } from './tableView.js';
 
 const fullWidthResizeKey = new PluginKey('nas4usbFullWidthTableResize');
 const HINT_CLASS = 'tiptap-table-resize-hint';
@@ -23,44 +22,217 @@ function isTableNode(node) {
 
 /**
  * @param {import('@tiptap/pm/view').EditorView} view
- * @param {number} cellPos
+ * @param {number} tablePos
  * @returns {HTMLTableElement | null}
  */
-function findTableElement(view, cellPos) {
-  const $cell = view.state.doc.resolve(cellPos);
-  let dom = view.domAtPos($cell.start(-1)).node;
-  while (dom && dom.nodeName !== 'TABLE') {
-    dom = /** @type {Node | null} */ (dom.parentNode);
+function tableDomAt(view, tablePos) {
+  const nodeDom = view.nodeDOM(tablePos);
+  if (nodeDom instanceof HTMLTableElement) return nodeDom;
+  if (nodeDom instanceof HTMLElement) {
+    const direct = nodeDom.querySelector(':scope > table');
+    if (direct instanceof HTMLTableElement) return direct;
   }
-  return dom instanceof HTMLTableElement ? dom : null;
+  return null;
 }
 
 /**
- * @param {import('@tiptap/pm/model').Node} table
- * @param {import('@tiptap/pm/model').ResolvedPos} $cell
- * @param {number} nextWidth
- * @param {number} minWidth
+ * @param {import('@tiptap/pm/view').EditorView} view
+ * @param {number} cellPos
+ * @param {{ colspan?: number, colwidth?: number[] | null }} attrs
  */
-function computeResizeWidths(table, $cell, nextWidth, minWidth) {
-  let map;
+function currentColWidth(view, cellPos, attrs) {
+  const colspan = Math.max(1, Number(attrs.colspan) || 1);
+  const colwidth = Array.isArray(attrs.colwidth) ? attrs.colwidth : null;
+  const width = colwidth && colwidth[colwidth.length - 1];
+  if (width) return width;
+  const dom = view.domAtPos(cellPos);
+  const node = dom.node.childNodes[dom.offset];
+  let domWidth = node instanceof HTMLElement ? node.offsetWidth : 0;
+  let parts = colspan;
+  if (colwidth) {
+    for (let i = 0; i < colspan; i += 1) {
+      if (colwidth[i]) {
+        domWidth -= colwidth[i];
+        parts -= 1;
+      }
+    }
+  }
+  return parts > 0 ? domWidth / parts : CELL_MIN_WIDTH;
+}
+
+/**
+ * Innermost table around a cell — nested tables must not reuse the outer table.
+ * @param {import('@tiptap/pm/model').ResolvedPos} $pos
+ * @returns {{ node: import('@tiptap/pm/model').Node, pos: number, start: number } | null}
+ */
+function innermostTable($pos) {
+  for (let depth = $pos.depth; depth > 0; depth -= 1) {
+    const node = $pos.node(depth);
+    if (isTableNode(node)) {
+      return { node, pos: $pos.before(depth), start: $pos.start(depth) };
+    }
+  }
+  return null;
+}
+
+function computeResizeWidths(_table, $cell, nextWidth, minWidth, view) {
   try {
-    map = TableMap.get(table);
+    const found = innermostTable($cell);
+    if (!found) return null;
+    const table = found.node;
+    const map = TableMap.get(table);
+    const col = map.colCount($cell.pos - found.start) + ($cell.nodeAfter?.attrs.colspan || 1) - 1;
+    if (col < 0 || col >= map.width) return null;
+    const current = readColumnWidths(table, map.width, minWidth);
+    const budget = tableWidthBudget($cell.doc, found.pos, null, view);
+    const minUsed = minWidthForBudget(map.width, budget, minWidth);
+    const last = map.width - 1;
+    const targetCol = col === last && last > 0 ? last - 1 : col;
+    const targetWidth =
+      col === last && last > 0
+        ? budget - Math.max(minUsed, Math.round(nextWidth))
+        : nextWidth;
+    const next = resizeColumnLeavingLastAuto(current, targetCol, targetWidth, budget, minUsed);
+    const explicit = next
+      .slice(0, last)
+      .reduce((sum, width) => sum + (Number(width) > 0 ? Number(width) : 0), 0);
+    return {
+      table,
+      tablePos: found.pos,
+      col,
+      next,
+      colWidth:
+        col === last ? Math.max(minUsed, budget - explicit) : (next[col] ?? Math.round(nextWidth)),
+      total: budget,
+      lockFullWidth: true,
+    };
   } catch {
     return null;
   }
-  const start = $cell.start(-1);
-  const col = map.colCount($cell.pos - start) + ($cell.nodeAfter?.attrs.colspan || 1) - 1;
-  const current = readColumnWidths(table, map.width, minWidth);
-  const desired = Math.max(minWidth, Math.round(nextWidth));
-  const next = table.attrs.fullWidth
-    ? redistributeFullWidthColumns(current, col, desired, minWidth)
-    : current.map((width, index) => (index === col ? desired : width));
-  return {
-    col,
-    next,
-    colWidth: next[col] ?? desired,
-    total: next.reduce((sum, width) => sum + width, 0),
+}
+
+/**
+ * Live preview while dragging. Only the dragged column gets a px width; the
+ * last column stays unsized so `width: 100%` keeps the table on the editor.
+ *
+ * @param {import('@tiptap/pm/view').EditorView} view
+ * @param {number} cellPos
+ * @param {number} nextWidth
+ * @param {number} minWidth
+ */
+function previewColumnResize(view, cellPos, nextWidth, minWidth) {
+  const $cell = view.state.doc.resolve(cellPos);
+  const sizes = computeResizeWidths(null, $cell, nextWidth, minWidth, view);
+  if (!sizes) return;
+  const tableDom = tableDomAt(view, sizes.tablePos);
+  if (!tableDom) return;
+  previewColgroupWidths(tableDom, sizes.next);
+}
+
+/**
+ * Commit one resize in a single transaction. Neighbor absorb used to live in
+ * `appendTransaction` and ping-pong with `fixTables` until the renderer froze.
+ *
+ * @param {import('@tiptap/pm/view').EditorView} view
+ * @param {number} cellPos
+ * @param {number} nextWidth
+ * @param {number} minWidth
+ */
+function commitColumnResize(view, cellPos, nextWidth, minWidth) {
+  const tr = view.state.tr;
+  tr.setMeta(columnResizingPluginKey, { setDragging: null });
+  try {
+    const $cell = view.state.doc.resolve(cellPos);
+    const sizes = computeResizeWidths(null, $cell, nextWidth, minWidth, view);
+    if (sizes) {
+      writeTableColumnWidths(tr, sizes.tablePos, sizes.table, sizes.next, {
+        fullWidth: true,
+        lastColumnAuto: true,
+      });
+    }
+  } catch (error) {
+    console.warn('[tiptap] table resize commit failed', error);
+  }
+  view.dispatch(tr);
+}
+
+/**
+ * Stock `columnResizing` attaches raw window listeners whose `TableMap.get` /
+ * `colCount` throws after 「표 너비 100%」 and takes the Electron renderer down.
+ *
+ * @param {import('@tiptap/pm/view').EditorView} view
+ * @param {MouseEvent} event
+ * @param {number} cellMinWidth
+ */
+export function safeColumnResizeMouseDown(view, event, cellMinWidth) {
+  if (!view.editable || view.isDestroyed) return false;
+  const win = view.dom.ownerDocument.defaultView ?? window;
+  const pluginState = columnResizingPluginKey.getState(view.state);
+  if (!pluginState || pluginState.activeHandle < 0 || pluginState.dragging) return false;
+
+  const cellPos = pluginState.activeHandle;
+  const cell = view.state.doc.nodeAt(cellPos);
+  if (!cell) return false;
+
+  let startWidth;
+  try {
+    startWidth = currentColWidth(view, cellPos, cell.attrs);
+  } catch {
+    return false;
+  }
+
+  view.dispatch(
+    view.state.tr.setMeta(columnResizingPluginKey, {
+      setDragging: { startX: event.clientX, startWidth },
+    }),
+  );
+
+  const draggedWidth = (moveEvent) =>
+    Math.max(cellMinWidth, startWidth + (moveEvent.clientX - event.clientX));
+
+  const finish = (moveEvent) => {
+    win.removeEventListener('mouseup', finish);
+    win.removeEventListener('mousemove', move);
+    if (view.isDestroyed) return;
+    try {
+      const st = columnResizingPluginKey.getState(view.state);
+      if (!st?.dragging) return;
+      commitColumnResize(view, st.activeHandle, draggedWidth(moveEvent), cellMinWidth);
+    } catch (error) {
+      console.warn('[tiptap] table resize finish failed', error);
+      try {
+        view.dispatch(view.state.tr.setMeta(columnResizingPluginKey, { setDragging: null }));
+      } catch {
+        /* ignore */
+      }
+    }
   };
+
+  const move = (moveEvent) => {
+    if (!moveEvent.which) {
+      finish(moveEvent);
+      return;
+    }
+    if (view.isDestroyed) return;
+    try {
+      const st = columnResizingPluginKey.getState(view.state);
+      if (!st?.dragging) return;
+      previewColumnResize(view, st.activeHandle, draggedWidth(moveEvent), cellMinWidth);
+    } catch {
+      /* ignore — never let a map throw kill the renderer */
+    }
+  };
+
+  try {
+    previewColumnResize(view, cellPos, startWidth, cellMinWidth);
+  } catch {
+    /* ignore */
+  }
+
+  win.addEventListener('mouseup', finish);
+  win.addEventListener('mousemove', move);
+  event.preventDefault();
+  return true;
 }
 
 /**
@@ -95,34 +267,10 @@ function createResizeHint() {
 }
 
 /**
- * @param {import('@tiptap/pm/view').EditorView} view
- * @param {number} cellPos
- * @param {number} nextWidth
- * @param {number} minWidth
- */
-function previewAbsorbedWidths(view, cellPos, nextWidth, minWidth) {
-  const $cell = view.state.doc.resolve(cellPos);
-  const table = $cell.node(-1);
-  if (!isTableNode(table) || !table.attrs.fullWidth) return;
-
-  const sizes = computeResizeWidths(table, $cell, nextWidth, minWidth);
-  if (!sizes) return;
-  const { next, total } = sizes;
-  const dom = findTableElement(view, cellPos);
-  if (!dom) return;
-
-  const cols = dom.querySelectorAll('colgroup > col');
-  next.forEach((width, index) => {
-    const colEl = cols[index];
-    if (colEl instanceof HTMLElement) colEl.style.width = `${width}px`;
-  });
-  dom.style.width = `${total}px`;
-  dom.style.minWidth = '';
-}
-
-/**
- * After ProseMirror writes one column, keep a full-width table's total by
- * giving the leftover to the neighbor. Also paints that absorb while dragging.
+ * Drag hint only. Neighbor-absorb used to run in appendTransaction and
+ * ping-pong with prosemirror-tables `fixTables` (colwidth mismatch) until
+ * the renderer froze — especially after 「표 너비 100%」.
+ *
  * @param {number} [cellMinWidth]
  */
 export function createFullWidthResizePlugin(cellMinWidth = CELL_MIN_WIDTH) {
@@ -133,21 +281,13 @@ export function createFullWidthResizePlugin(cellMinWidth = CELL_MIN_WIDTH) {
       const hint = createResizeHint();
       const onPointerMove = (event) => {
         let pluginState;
-        let $cell;
-        let table;
         try {
           pluginState = columnResizingPluginKey.getState(editorView.state);
           if (!pluginState?.dragging || pluginState.activeHandle < 0) {
             hideResizeHint(hint);
             return;
           }
-          $cell = editorView.state.doc.resolve(pluginState.activeHandle);
-          table = $cell.node(-1);
         } catch {
-          hideResizeHint(hint);
-          return;
-        }
-        if (!isTableNode(table)) {
           hideResizeHint(hint);
           return;
         }
@@ -160,13 +300,11 @@ export function createFullWidthResizePlugin(cellMinWidth = CELL_MIN_WIDTH) {
         frame = requestAnimationFrame(() => {
           frame = 0;
           try {
-            const sizes = computeResizeWidths(table, $cell, nextWidth, cellMinWidth);
+            const $cell = editorView.state.doc.resolve(pluginState.activeHandle);
+            const sizes = computeResizeWidths(null, $cell, nextWidth, cellMinWidth, editorView);
             if (!sizes) {
               hideResizeHint(hint);
               return;
-            }
-            if (table.attrs.fullWidth) {
-              previewAbsorbedWidths(editorView, pluginState.activeHandle, nextWidth, cellMinWidth);
             }
             showResizeHint(hint, point, sizes);
           } catch {
@@ -193,61 +331,6 @@ export function createFullWidthResizePlugin(cellMinWidth = CELL_MIN_WIDTH) {
           hint.remove();
         },
       };
-    },
-    appendTransaction(transactions, oldState, newState) {
-      if (!transactions.some((transaction) => transaction.docChanged)) return null;
-      // Programmatic 100% / equalize must not be treated as a column drag.
-      if (transactions.some((transaction) => transaction.getMeta(SKIP_FULL_WIDTH_ABSORB_META))) {
-        return null;
-      }
-      // One absorb per user gesture. Re-running on our own step ping-pongs 1px
-      // between neighbor columns until the editor hangs.
-      if (transactions.some((transaction) => transaction.getMeta(fullWidthResizeKey))) {
-        return null;
-      }
-      // Y.js echoes cell-width updates without our meta. Treating those as a
-      // one-column drag steals 1px from the neighbor forever and freezes the app.
-      if (transactions.some((transaction) => isChangeOrigin(transaction))) {
-        return null;
-      }
-      const drag =
-        columnResizingPluginKey.getState(newState) || columnResizingPluginKey.getState(oldState);
-      if (!drag?.dragging) return null;
-
-      let mapped = (pos) => pos;
-      for (const transaction of transactions) {
-        const previous = mapped;
-        mapped = (pos) => transaction.mapping.map(previous(pos));
-      }
-
-      const tr = newState.tr;
-      let changed = false;
-
-      try {
-        oldState.doc.descendants((oldNode, oldPos) => {
-          if (!isTableNode(oldNode) || !oldNode.attrs.fullWidth) return;
-          const newPos = mapped(oldPos);
-          if (newPos < 0 || newPos >= newState.doc.content.size) return;
-          const newNode = newState.doc.nodeAt(newPos);
-          if (!newNode || !isTableNode(newNode) || !newNode.attrs.fullWidth) return;
-
-          const colCount = tableColumnCount(newNode);
-          if (colCount <= 0 || tableColumnCount(oldNode) !== colCount) return;
-          const before = readColumnWidths(oldNode, colCount, cellMinWidth);
-          const after = readColumnWidths(newNode, colCount, cellMinWidth);
-          const col = singleChangedColumnIndex(before, after);
-          if (col < 0) return;
-
-          const next = redistributeFullWidthColumns(before, col, after[col], cellMinWidth);
-          if (next.every((width, index) => width === after[index])) return;
-          if (writeTableColumnWidths(tr, newPos, newNode, next)) changed = true;
-        });
-      } catch {
-        return null;
-      }
-
-      if (!changed) return null;
-      return tr.setMeta(fullWidthResizeKey, { absorbed: true });
     },
   });
 }

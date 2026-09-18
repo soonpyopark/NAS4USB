@@ -1,0 +1,17 @@
+---
+description: TipTap table width rules — 100% CSS, last column auto, no horizontal scrollbar
+alwaysApply: true
+---
+
+# TipTap table editing rules (user-defined)
+
+Do not change these unless the user **explicitly** redefines table-width behavior.
+
+1. Every table (outermost and nested) is `width: 100%` + `table-layout: fixed`. Nested tables fill the parent cell. The editor (`.tiptap` / `.ProseMirror`) uses `overflow-x: hidden` so a table never grows a bottom scrollbar.
+2. Column-divider drag writes **px only on non-last columns**. The last column’s `colwidth` and `<col>` width stay **cleared** (`auto`) so the table remains `width: 100%`. Dragging the last column’s handle adjusts the previous column in reverse so the last column still grows/shrinks. Nested tables use their parent-cell wrapper width, never the editor body width.
+3. Explicit column px are capped so their sum plus one minimum last column never exceeds that table’s pane (editor for outermost, parent cell for nested).
+4. 「표 너비 100%」: outermost table around the caret — keep non-last column ratios, clear last `colwidth`, `fullWidth`. Does not rewrite nested tables.
+5. 「모든 표 너비 100%」: same for every table. Nested tables fill the parent column via CSS 100% (and last-column auto).
+6. 「열 너비 균등」: outermost table only. Non-last columns get `editorWidth / n` px; last column style is cleared.
+7. Never neighbor-absorb in `appendTransaction`. Never set the table’s inline `width` to a pixel sum. Never read an overflowing `.tableWrapper` as the 100% target.
+8. Column index uses `TableMap` (`width` / `colCount`). Never walk a later row with `col += colspan` only — a rowspan cell still occupies its column, and later rows skip it. That mismatch was writing 4th-column cells onto a merged 3rd column.
