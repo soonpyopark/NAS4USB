@@ -2,6 +2,7 @@ import { APP_BUILD_STAMP, APP_NAME, APP_VERSION } from '../shared/constants.js';
 import {
   RELEASES_LATEST_API,
   RELEASES_PAGE_URL,
+  filterAssetsForPlatform,
   maxBuildStamp,
   parseReleaseTag,
 } from '../shared/updateCheck.js';
@@ -53,7 +54,8 @@ export async function fetchLatestRelease(timeoutMs = 12_000) {
     const assetNames = Array.isArray(payload?.assets)
       ? payload.assets.map((item) => String(item?.name || ''))
       : [];
-    const latestBuildStamp = maxBuildStamp(assetNames);
+    const platformNames = filterAssetsForPlatform(assetNames);
+    const latestBuildStamp = maxBuildStamp(platformNames);
     const releaseUpdatedAt =
       String(payload?.updated_at || payload?.published_at || '').trim() || null;
     const htmlUrl = String(payload?.html_url || '').trim() || RELEASES_PAGE_URL;
@@ -66,6 +68,7 @@ export async function fetchLatestRelease(timeoutMs = 12_000) {
       latestBuildStamp,
       releaseUpdatedAt,
       releaseUrl: htmlUrl,
+      platformAssetsFound: platformNames.length > 0,
     };
   } catch (error) {
     const message =

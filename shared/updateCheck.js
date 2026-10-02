@@ -20,8 +20,49 @@ const BUILD_STAMP_RE = /(\d{6}_\d{6})/;
  *   releaseUrl?: string | null,
  *   error?: string | null,
  *   updateKind?: 'version' | 'build' | null,
+ *   platformAssetsFound?: boolean,
  * }} UpdateCheckResult
  */
+
+/**
+ * @param {string} [platform]
+ * @returns {'darwin' | 'win32' | ''}
+ */
+export function detectUpdatePlatform(platform) {
+  const raw = String(platform || '').trim();
+  if (raw === 'darwin' || raw === 'win32') return raw;
+  if (typeof process !== 'undefined' && (process.platform === 'darwin' || process.platform === 'win32')) {
+    return process.platform;
+  }
+  const hint =
+    typeof navigator !== 'undefined'
+      ? `${navigator.userAgentData?.platform || ''} ${navigator.platform || ''} ${navigator.userAgent || ''}`
+      : '';
+  if (/mac/i.test(hint)) return 'darwin';
+  if (/win/i.test(hint)) return 'win32';
+  return '';
+}
+
+/**
+ * Keep release assets that match this OS so a Windows republish does not
+ * look newer than the Mac build (Tiny PDF Editor does the same).
+ *
+ * @param {string[]} names
+ * @param {string} [platform]
+ */
+export function filterAssetsForPlatform(names, platform) {
+  const list = Array.isArray(names) ? names : [];
+  const plat = detectUpdatePlatform(platform);
+  if (plat === 'darwin') {
+    return list.filter((name) => /macos|\.dmg$/i.test(name));
+  }
+  if (plat === 'win32') {
+    return list.filter(
+      (name) => !/macos/i.test(name) && (/\.msi$/i.test(name) || /portable\.zip$/i.test(name)),
+    );
+  }
+  return list;
+}
 
 /**
  * @param {string} text
@@ -107,6 +148,9 @@ export function resolveUpdateKind(result) {
   const cmp = compareVersionTuples(versionTuple(result.latest), versionTuple(result.current));
   if (cmp > 0) return 'version';
   if (cmp < 0) return null;
+
+  // Same tag: only compare build stamps for this platform's packages.
+  if (result.platformAssetsFound === false) return null;
 
   const local = String(result.currentBuildStamp || '').trim();
   const remote = String(result.latestBuildStamp || '').trim();

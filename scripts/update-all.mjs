@@ -171,8 +171,9 @@ function isInstallableRegistrySpec(spec) {
  * Latest majors that break the packaged Electron broker.
  * y-websocket 3 dropped `./bin/utils` (ERR_PACKAGE_PATH_NOT_EXPORTED);
  * `@y/websocket-server` 0.1.2+ targets Yjs 14.
+ * katex 0.19 is outside @tiptap/extension-mathematics peer range (^0.16–^0.18).
  */
-const MAJOR_HOLD_PACKAGES = new Set(['y-websocket']);
+const MAJOR_HOLD_PACKAGES = new Set(['y-websocket', 'katex']);
 
 function collectDirectPackageNames(pkg) {
   /** @type {string[]} */

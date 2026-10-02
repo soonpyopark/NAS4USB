@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useUserProfile } from '../../hooks/useUserProfile.js';
 import { useAdminAuthContext } from '../../context/AdminAuthContext.jsx';
 import { useAppConfirm } from '../../hooks/useAppConfirm.jsx';
@@ -7,7 +7,7 @@ import { loadSyncHost, saveSyncHost } from '../../lib/syncHost.js';
 import { copyTextToClipboard } from '../../lib/shareLink.js';
 import { buildLanAccessClipboardText, getSyncServerUrl } from '../../sync/buildWsUrl.js';
 import { openExternalUrl } from '../../lib/openExternal.js';
-import { runUpdateCheck } from '../../lib/updateCheckUi.js';
+import { runStartupUpdateCheck, runUpdateCheck } from '../../lib/updateCheckUi.js';
 import { APP_VERSION, APP_NAME_LONG } from '../../../shared/constants.js';
 import AppLogo from '../common/AppLogo.jsx';
 import SplashOverlay from '../common/SplashOverlay.jsx';
@@ -19,12 +19,12 @@ const settingsIconBtnClass =
 const settingsIconBtnActiveClass =
   'inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-nas-accentBorder bg-nas-accentSoft text-nas-accent transition-colors';
 
-function HelpQuestionIcon() {
+function UpdateCheckIcon() {
   return (
     <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
       <path
         fill="currentColor"
-        d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"
+        d="M12 6V3L8 7l4 4V8c2.76 0 5 2.24 5 5a5 5 0 0 1-8.66 3.46l-1.42 1.42A7 7 0 0 0 19 13c0-3.87-3.13-7-7-7zm-5 .54A7 7 0 0 0 5 13c0 3.87 3.13 7 7 7v3l4-4-4-4v3c-2.76 0-5-2.24-5-5 0-1.16.4-2.23 1.07-3.08L7 8.54z"
       />
     </svg>
   );
@@ -160,15 +160,19 @@ export default function TopBar({
 }) {
   const userProfile = useUserProfile();
   const { isSuperAdmin } = useAdminAuthContext();
-  const { alert, confirm, dialog: updateDialog } = useAppConfirm();
+  const { alert, confirm, choose, dialog: updateDialog } = useAppConfirm();
   const [splashOpen, setSplashOpen] = useState(false);
   const [updateChecking, setUpdateChecking] = useState(false);
 
   const handleUpdateCheck = () => {
     if (updateChecking) return;
     setUpdateChecking(true);
-    void runUpdateCheck({ alert, confirm }).finally(() => setUpdateChecking(false));
+    void runUpdateCheck({ alert, confirm, choose }).finally(() => setUpdateChecking(false));
   };
+
+  useEffect(() => {
+    void runStartupUpdateCheck({ alert, confirm, choose });
+  }, [alert, confirm, choose]);
 
   const handleOpenLocalInBrowser = () => {
     const url = getSyncServerUrl(syncInfo);
@@ -246,7 +250,7 @@ export default function TopBar({
             disabled={updateChecking}
             onClick={handleUpdateCheck}
           >
-            <HelpQuestionIcon />
+            <UpdateCheckIcon />
           </button>
           <AdminLoginForm />
         </div>

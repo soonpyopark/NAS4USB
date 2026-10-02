@@ -100,33 +100,6 @@ export function IconPdfFitHeight() {
   );
 }
 
-export function IconPdfFitPage() {
-  return (
-    <Svg>
-      <rect x="5" y="3" width="14" height="18" rx="1.5" />
-      <path d="M9 8h6M9 12h6M9 16h4" />
-    </Svg>
-  );
-}
-
-export function IconPdfTwoPages() {
-  return (
-    <Svg>
-      <rect x="3" y="4" width="8" height="16" rx="1" />
-      <rect x="13" y="4" width="8" height="16" rx="1" />
-    </Svg>
-  );
-}
-
-export function IconPdfRotate() {
-  return (
-    <Svg>
-      <path d="M21 12a9 9 0 1 1-2.6-6.4" />
-      <path d="M21 3v6h-6" />
-    </Svg>
-  );
-}
-
 export function IconPdfPrint() {
   return (
     <Svg>

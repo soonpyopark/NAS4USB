@@ -24,6 +24,7 @@ import {
   sliceHasTiptapAssetUrls,
 } from '../../lib/tiptap/copyPasteAssets.js';
 import { collectClipboardImageFiles } from '../../lib/tiptap/pasteImages.js';
+import { sliceHasImageNodes, writeCopiedTiptapHtml } from '../../lib/tiptap/copyClipboardHtml.js';
 import { useSpellcheckEnabled } from '../../hooks/useSpellcheckEnabled.js';
 import { cleanupUnreferencedTiptapAssets } from '../../lib/tiptap/assetCleanup.js';
 import {
@@ -247,6 +248,29 @@ export default function TipTapEditorView({
         // treat that as a blank line after every paragraph.
         clipboardTextSerializer: (slice) => slice.content.textBetween(0, slice.content.size, '\n'),
         transformCopied: (slice) => rewriteCopiedSliceForClipboard(slice, relativePath),
+        handleDOMEvents: {
+          copy(view, event) {
+            if (!sliceHasImageNodes(view.state.selection.content())) return false;
+            event.preventDefault();
+            void writeCopiedTiptapHtml(view, relativePath, resolveFileUrl).catch((err) => {
+              console.warn('[tiptap] copy with images failed', err);
+            });
+            return true;
+          },
+          cut(view, event) {
+            if (readOnly) return false;
+            if (!sliceHasImageNodes(view.state.selection.content())) return false;
+            event.preventDefault();
+            void writeCopiedTiptapHtml(view, relativePath, resolveFileUrl)
+              .then(() => {
+                view.dispatch(view.state.tr.deleteSelection().scrollIntoView());
+              })
+              .catch((err) => {
+                console.warn('[tiptap] cut with images failed', err);
+              });
+            return true;
+          },
+        },
         handlePaste: (view, event, slice) => {
           if (readOnly) return false;
           const clipboard = event.clipboardData;

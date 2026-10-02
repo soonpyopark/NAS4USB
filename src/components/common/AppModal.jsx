@@ -254,6 +254,7 @@ export function AppChoiceDialog({
   onCancel,
 }) {
   const hasExtra = Boolean(extraLabel);
+  const hasSecondary = Boolean(secondaryLabel);
 
   return (
     <AppModal
@@ -274,7 +275,7 @@ export function AppChoiceDialog({
           {primaryLabel}
         </AppModalButton>
         {extraLabel ? <AppModalButton onClick={onExtra}>{extraLabel}</AppModalButton> : null}
-        <AppModalButton onClick={onSecondary}>{secondaryLabel}</AppModalButton>
+        {hasSecondary ? <AppModalButton onClick={onSecondary}>{secondaryLabel}</AppModalButton> : null}
         <AppModalButton onClick={onCancel}>{cancelLabel}</AppModalButton>
       </AppModalActions>
     </AppModal>

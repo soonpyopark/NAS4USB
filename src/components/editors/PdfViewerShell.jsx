@@ -54,18 +54,15 @@ import {
   IconPdfFabDockLeft,
   IconPdfFabDockRight,
   IconPdfFitHeight,
-  IconPdfFitPage,
   IconPdfFitWidth,
   IconPdfHighlight,
   IconPdfPrint,
-  IconPdfRotate,
   IconPdfSearch,
   IconPdfSelectText,
   IconPdfSearchClose,
   IconPdfThumbs,
   IconPdfTriangleDown,
   IconPdfTriangleUp,
-  IconPdfTwoPages,
   IconPdfZoomIn,
   IconPdfZoomOut,
 } from './pdf/PdfToolbarIcons.jsx';
@@ -146,7 +143,7 @@ function isAppleTouchDevice() {
 }
 
 /**
- * Chromium-like PDF.js viewer: zoom, page nav, rotate, print, markup Excel export, search.
+ * Chromium-like PDF.js viewer: zoom, page nav, print, markup Excel export, search.
  *
  * @param {{
  *   relativePath: string,
@@ -296,8 +293,8 @@ export default function PdfViewerShell({
   const [zoomMode, setZoomMode] = useState(/** @type {PdfZoomMode} */ ('fitWidth'));
   const [customScale, setCustomScale] = useState(1);
   const [displayScale, setDisplayScale] = useState(1);
-  const [rotation, setRotation] = useState(0);
-  const [twoPageView, setTwoPageView] = useState(false);
+  const rotation = 0;
+  const twoPageView = false;
   const [fabSide, setFabSide] = useState(/** @type {'left' | 'right'} */ (readPdfFabSide));
   const [selectMode, setSelectMode] = useState(readPdfSelectMode);
   const [wordsEpoch, setWordsEpoch] = useState(0);
@@ -1157,12 +1154,11 @@ export default function PdfViewerShell({
         }
 
         const view = sidecar?.view;
-        if (view?.zoomMode) setZoomMode(view.zoomMode);
+        if (view?.zoomMode && view.zoomMode !== 'fitPage') setZoomMode(view.zoomMode);
+        else if (view?.zoomMode === 'fitPage') setZoomMode('fitWidth');
         if (typeof view?.customScale === 'number' && view.customScale > 0) {
           setCustomScale(view.customScale);
         }
-        if (typeof view?.rotation === 'number') setRotation(view.rotation);
-        if (typeof view?.twoPageView === 'boolean') setTwoPageView(view.twoPageView);
         // Set current page before first layout so renderAllPages keepPage is correct.
         // Scroll jump still waits until shells exist (pendingRestorePageRef).
         const openPage = Number(openLocation?.page);
@@ -1541,10 +1537,6 @@ export default function PdfViewerShell({
 
   const setFitWidth = useCallback(() => setZoomMode('fitWidth'), []);
   const setFitHeight = useCallback(() => setZoomMode('fitHeight'), []);
-  const setFitPage = useCallback(() => setZoomMode('fitPage'), []);
-  const toggleTwoPageView = useCallback(() => {
-    setTwoPageView((prev) => !prev);
-  }, []);
   const toggleFabSide = useCallback(() => {
     setFabSide((prev) => {
       const next = prev === 'left' ? 'right' : 'left';
@@ -1564,9 +1556,6 @@ export default function PdfViewerShell({
   const resetZoom = useCallback(() => {
     setZoomMode('custom');
     setCustomScale(1);
-  }, []);
-  const rotateClockwise = useCallback(() => {
-    setRotation((prev) => (prev + 90) % 360);
   }, []);
 
   const clearAllLiveSelections = useCallback(() => {
@@ -3143,41 +3132,9 @@ export default function PdfViewerShell({
         >
           <IconPdfFitHeight />
         </button>
-        <button
-          type="button"
-          className={`pdf-tb-btn ${zoomMode === 'fitPage' ? 'pdf-tb-btn--active' : ''}`}
-          disabled={busy}
-          onClick={setFitPage}
-          title="페이지 맞춤"
-          aria-label="페이지 맞춤"
-          aria-pressed={zoomMode === 'fitPage'}
-        >
-          <IconPdfFitPage />
-        </button>
-        <button
-          type="button"
-          className={`pdf-tb-btn ${twoPageView ? 'pdf-tb-btn--active' : ''}`}
-          disabled={busy || pageCount < 2}
-          onClick={toggleTwoPageView}
-          title="두 페이지를 나란히 보기"
-          aria-label="두 페이지를 나란히 보기"
-          aria-pressed={twoPageView}
-        >
-          <IconPdfTwoPages />
-        </button>
 
         <span className="mx-1 h-4 w-px bg-slate-300" />
 
-        <button
-          type="button"
-          className="pdf-tb-btn"
-          disabled={busy}
-          onClick={rotateClockwise}
-          title="시계 방향 회전"
-          aria-label="시계 방향 회전"
-        >
-          <IconPdfRotate />
-        </button>
         <button
           type="button"
           className="pdf-tb-btn"
@@ -3623,11 +3580,12 @@ export default function PdfViewerShell({
         }
         .pdf-page-fab {
           position: absolute;
-          bottom: 30%;
+          top: 56%;
+          transform: translateY(-50%);
           z-index: 20;
           display: flex;
           flex-direction: column;
-          gap: 10px;
+          gap: 20px;
           pointer-events: none;
         }
         .pdf-page-fab--right {
