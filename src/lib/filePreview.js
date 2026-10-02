@@ -23,6 +23,51 @@ export function isAudioOrVideoEntry(entry) {
 }
 
 /**
+ * Selected text inside a preview root, including same-origin iframes.
+ * @param {Element | null | undefined} root
+ */
+export function selectedTextInPreview(root) {
+  if (!root) return '';
+
+  const fromWindow = (win) => {
+    try {
+      const selection = win?.getSelection?.();
+      if (!selection || selection.isCollapsed) return '';
+      return String(selection.toString() || '');
+    } catch {
+      return '';
+    }
+  };
+
+  const local = fromWindow(window);
+  if (local.trim()) {
+    const node = window.getSelection()?.anchorNode;
+    const el = node instanceof Element ? node : node?.parentElement;
+    if (el && root.contains(el)) return local;
+  }
+
+  for (const frame of root.querySelectorAll('iframe')) {
+    const text = fromWindow(frame.contentWindow);
+    if (text.trim()) return text;
+  }
+  return '';
+}
+
+/**
+ * Map a contextmenu event (possibly from an iframe) to the parent viewport.
+ * @param {MouseEvent} event
+ */
+export function contextMenuClientPoint(event) {
+  const view = event.view;
+  const frame = view && view !== window ? view.frameElement : null;
+  if (frame instanceof Element) {
+    const rect = frame.getBoundingClientRect();
+    return { x: event.clientX + rect.left, y: event.clientY + rect.top };
+  }
+  return { x: event.clientX, y: event.clientY };
+}
+
+/**
  * @param {{ isDirectory?: boolean, name?: string, relativePath?: string, extension?: string } | null | undefined} entry
  * @returns {FilePreviewKind | null}
  */

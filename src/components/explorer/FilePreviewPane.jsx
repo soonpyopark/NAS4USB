@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTouchUi } from '../../hooks/useTouchUi.js';
 import { getImageMimeType } from '../../lib/media/mediaTypes.js';
 import { buildMediaStreamUrl } from '../../lib/media/streamUrl.js';
@@ -6,7 +6,14 @@ import { entryExtensionOf, isSecFileName } from '../../lib/filePassword/secPaths
 import { readWorkspacePlainBase64 } from '../../lib/filePassword/io.js';
 import { decodeTextBase64 } from '../../lib/text/textIO.js';
 import { renderMarkdown } from '../../lib/text/markdown.js';
-import { getFilePreviewKind, isAudioOrVideoEntry } from '../../lib/filePreview.js';
+import {
+  contextMenuClientPoint,
+  getFilePreviewKind,
+  isAudioOrVideoEntry,
+  selectedTextInPreview,
+} from '../../lib/filePreview.js';
+import { copyTextToClipboard } from '../../lib/shareLink.js';
+import ContextMenu from './ContextMenu.jsx';
 import {
   folderPreviewCrumbs,
   folderPreviewParentPath,
@@ -129,6 +136,10 @@ export default function FilePreviewPane({
   const [folderLoading, setFolderLoading] = useState(false);
   const [folderError, setFolderError] = useState('');
   const markdownHighlightRef = useRef(/** @type {HTMLElement | null} */ (null));
+  const paneRef = useRef(/** @type {HTMLElement | null} */ (null));
+  const [copyMenu, setCopyMenu] = useState(
+    /** @type {{ x: number, y: number, text: string } | null} */ (null),
+  );
   const folderIndentInfo = useMemo(
     () => buildFileIndentInfo(folderEntries, fileLevelMap, fileCollapsedMap),
     [folderEntries, fileLevelMap, fileCollapsedMap],
@@ -308,6 +319,22 @@ export default function FilePreviewPane({
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
+  const handlePreviewContextMenu = useCallback((event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const text = selectedTextInPreview(paneRef.current);
+    if (!text.trim()) {
+      setCopyMenu(null);
+      return;
+    }
+    const point = contextMenuClientPoint(event);
+    setCopyMenu({ x: point.x, y: point.y, text });
+  }, []);
+
+  useEffect(() => {
+    if (!open) setCopyMenu(null);
+  }, [open, entry?.relativePath]);
+
   useEffect(() => {
     if (!open || touchUi) return undefined;
     const onPointerDown = (event) => {
@@ -328,7 +355,13 @@ export default function FilePreviewPane({
       className={`file-preview-overlay${open ? ' file-preview-overlay--open' : ''}`}
       aria-hidden={!open}
     >
-      <aside className="file-preview-pane" aria-label="미리보기" inert={open ? undefined : true}>
+      <aside
+        ref={paneRef}
+        className="file-preview-pane"
+        aria-label="미리보기"
+        inert={open ? undefined : true}
+        onContextMenu={handlePreviewContextMenu}
+      >
         <header className="file-preview-pane__header">
           <p className="file-preview-pane__title" title={titleName}>
             <span className="file-preview-pane__title-name">{titleName}</span>
@@ -535,6 +568,7 @@ export default function FilePreviewPane({
                 title={entry.name}
                 className="min-h-0 w-full flex-1 border-0 bg-white"
                 highlightQuery={highlightQuery}
+                onContextMenu={handlePreviewContextMenu}
               />
             </div>
           ) : kind === 'markdown' ? (
@@ -576,6 +610,22 @@ export default function FilePreviewPane({
           ) : null}
         </div>
       </aside>
+      {copyMenu ? (
+        <ContextMenu
+          x={copyMenu.x}
+          y={copyMenu.y}
+          items={[
+            {
+              id: 'copy-preview-text',
+              label: '본문 복사하기',
+              onClick: () => {
+                void copyTextToClipboard(copyMenu.text);
+              },
+            },
+          ]}
+          onClose={() => setCopyMenu(null)}
+        />
+      ) : null}
     </div>
   );
 }

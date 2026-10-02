@@ -12,6 +12,7 @@ import { injectNasScrollbarStyle } from '../../lib/ui/nasScrollbarStyle.js';
  *   title?: string,
  *   className?: string,
  *   highlightQuery?: string,
+ *   onContextMenu?: (event: MouseEvent) => void,
  * }} props
  */
 export default function HtmlPreviewFrame({
@@ -20,6 +21,7 @@ export default function HtmlPreviewFrame({
   title = 'HTML 미리보기',
   className = '',
   highlightQuery = '',
+  onContextMenu,
 }) {
   const srcDoc = useMemo(
     () => prepareHtmlPreviewDocument(html, relativePath),
@@ -53,8 +55,12 @@ export default function HtmlPreviewFrame({
 
     /** @type {Document | null} */
     let boundDoc = null;
+    const onPreviewContextMenu = (event) => {
+      onContextMenu?.(event);
+    };
     const unbind = () => {
       boundDoc?.removeEventListener('click', onPreviewClick, true);
+      boundDoc?.removeEventListener('contextmenu', onPreviewContextMenu);
       boundDoc = null;
     };
     const bind = () => {
@@ -64,6 +70,7 @@ export default function HtmlPreviewFrame({
       injectNasScrollbarStyle(doc);
       highlightTextInElement(doc.body || doc.documentElement, highlightQuery);
       doc.addEventListener('click', onPreviewClick, true);
+      if (onContextMenu) doc.addEventListener('contextmenu', onPreviewContextMenu);
       boundDoc = doc;
     };
 
@@ -73,7 +80,7 @@ export default function HtmlPreviewFrame({
       unbind();
       frame.removeEventListener('load', bind);
     };
-  }, [highlightQuery, srcDoc]);
+  }, [highlightQuery, onContextMenu, srcDoc]);
 
   return (
     <iframe

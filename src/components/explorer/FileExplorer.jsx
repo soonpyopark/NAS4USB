@@ -1774,7 +1774,11 @@ export default function FileExplorer({
       ref={containerRef}
       className="relative flex min-h-0 flex-1 flex-col gap-2"
       {...dropZoneProps}
-      onContextMenu={(event) => openContextMenu(event, null)}
+      onContextMenu={(event) => {
+        const target = event.target;
+        if (target instanceof Element && target.closest('.file-preview-pane')) return;
+        openContextMenu(event, null);
+      }}
     >
       {!isInTrashView && !isInFavoritesView && isFileDragOver && <FileDropOverlay />}
       <div className="flex h-8 shrink-0 flex-nowrap items-center gap-2 px-0.5">
