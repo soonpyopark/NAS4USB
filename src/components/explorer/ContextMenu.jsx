@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import FolderColorSwatches from './FolderColorSwatches.jsx';
 
 const VIEWPORT_PADDING = 8;
@@ -87,10 +88,12 @@ export default function ContextMenu({ x, y, items, onClose }) {
     };
   }, [onClose]);
 
-  return (
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <div
       ref={menuRef}
-      className="fixed z-50 min-w-[180px] rounded-lg border border-nas-border bg-white py-1 shadow-lg"
+      className="pointer-events-auto fixed z-50 min-w-[180px] rounded-lg border border-nas-border bg-white py-1 shadow-lg"
       style={{ left: position.left, top: position.top }}
       role="menu"
       onContextMenu={(event) => event.preventDefault()}
@@ -128,6 +131,7 @@ export default function ContextMenu({ x, y, items, onClose }) {
           </button>
         ),
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }

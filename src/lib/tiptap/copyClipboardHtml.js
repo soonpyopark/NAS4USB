@@ -78,18 +78,41 @@ export async function inlineClipboardImages(html, resolveFileUrl) {
 }
 
 /**
+ * Snapshot the current TipTap selection so a later menu click can copy it
+ * after the editor selection is gone.
+ *
+ * @param {import('@tiptap/pm/view').EditorView | null | undefined} view
+ * @param {string} sourceTiptapPath
+ * @returns {{ html: string, text: string } | null}
+ */
+export function snapshotCopiedTiptapSelection(view, sourceTiptapPath) {
+  if (!view?.state?.selection || view.state.selection.empty) return null;
+  const slice = rewriteCopiedSliceForClipboard(view.state.selection.content(), sourceTiptapPath);
+  const text = slice.content.textBetween(0, slice.content.size, '\n');
+  if (!text.trim() && !sliceHasImageNodes(slice)) return null;
+  let html = serializeCopiedSliceHtml(view, slice);
+  html = annotateHtmlWithAssetPaths(html, sourceTiptapPath);
+  return { html, text };
+}
+
+/**
  * @param {string} html
  * @param {string} text
  */
 async function writeHtmlClipboard(html, text) {
-  if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
-    await navigator.clipboard.write([
-      new ClipboardItem({
-        'text/html': new Blob([html], { type: 'text/html' }),
-        'text/plain': new Blob([text || ''], { type: 'text/plain' }),
-      }),
-    ]);
-    return;
+  try {
+    if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+      window.focus?.();
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/html': new Blob([html], { type: 'text/html' }),
+          'text/plain': new Blob([text || ''], { type: 'text/plain' }),
+        }),
+      ]);
+      return;
+    }
+  } catch {
+    // ClipboardItem write can fail when an iframe still holds focus.
   }
 
   const holder = document.createElement('div');
@@ -102,9 +125,19 @@ async function writeHtmlClipboard(html, text) {
   const selection = window.getSelection();
   selection?.removeAllRanges();
   selection?.addRange(range);
-  document.execCommand('copy');
+  const copied = document.execCommand('copy');
   selection?.removeAllRanges();
   holder.remove();
+  if (!copied) throw new Error('clipboard copy failed');
+}
+
+/**
+ * @param {{ html: string, text: string }} payload
+ * @param {(url: string) => Promise<string>} [resolveFileUrl]
+ */
+export async function writeCopiedTiptapClipboardPayload(payload, resolveFileUrl) {
+  const html = await inlineClipboardImages(payload.html, resolveFileUrl);
+  await writeHtmlClipboard(html, payload.text);
 }
 
 /**
@@ -115,10 +148,7 @@ async function writeHtmlClipboard(html, text) {
  * @param {(url: string) => Promise<string>} [resolveFileUrl]
  */
 export async function writeCopiedTiptapHtml(view, sourceTiptapPath, resolveFileUrl) {
-  const slice = rewriteCopiedSliceForClipboard(view.state.selection.content(), sourceTiptapPath);
-  const text = slice.content.textBetween(0, slice.content.size, '\n');
-  let html = serializeCopiedSliceHtml(view, slice);
-  html = annotateHtmlWithAssetPaths(html, sourceTiptapPath);
-  html = await inlineClipboardImages(html, resolveFileUrl);
-  await writeHtmlClipboard(html, text);
+  const payload = snapshotCopiedTiptapSelection(view, sourceTiptapPath);
+  if (!payload) return;
+  await writeCopiedTiptapClipboardPayload(payload, resolveFileUrl);
 }

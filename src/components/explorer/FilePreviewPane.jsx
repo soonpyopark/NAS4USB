@@ -13,6 +13,10 @@ import {
   selectedTextInPreview,
 } from '../../lib/filePreview.js';
 import { copyTextToClipboard } from '../../lib/shareLink.js';
+import {
+  snapshotCopiedTiptapSelection,
+  writeCopiedTiptapClipboardPayload,
+} from '../../lib/tiptap/copyClipboardHtml.js';
 import ContextMenu from './ContextMenu.jsx';
 import {
   folderPreviewCrumbs,
@@ -137,8 +141,11 @@ export default function FilePreviewPane({
   const [folderError, setFolderError] = useState('');
   const markdownHighlightRef = useRef(/** @type {HTMLElement | null} */ (null));
   const paneRef = useRef(/** @type {HTMLElement | null} */ (null));
+  const tiptapEditorRef = useRef(/** @type {import('@tiptap/core').Editor | null} */ (null));
+  const tiptapResolveFileUrlRef = useRef(tiptapResolveFileUrl);
+  tiptapResolveFileUrlRef.current = tiptapResolveFileUrl;
   const [copyMenu, setCopyMenu] = useState(
-    /** @type {{ x: number, y: number, text: string } | null} */ (null),
+    /** @type {{ x: number, y: number, text: string, html?: string } | null} */ (null),
   );
   const folderIndentInfo = useMemo(
     () => buildFileIndentInfo(folderEntries, fileLevelMap, fileCollapsedMap),
@@ -163,6 +170,7 @@ export default function FilePreviewPane({
     setTruncated(false);
     setTiptapContent(null);
     setTiptapResolveFileUrl(null);
+    tiptapEditorRef.current = null;
 
     if (!open || !entry || !kind || kind === 'folder' || !canView || locked) {
       return () => {
@@ -322,14 +330,22 @@ export default function FilePreviewPane({
   const handlePreviewContextMenu = useCallback((event) => {
     event.preventDefault();
     event.stopPropagation();
+    const point = contextMenuClientPoint(event);
+    const editor = tiptapEditorRef.current;
+    if (kind === 'tiptap' && editor && !editor.isDestroyed) {
+      const payload = snapshotCopiedTiptapSelection(editor.view, entry?.relativePath || '');
+      if (payload) {
+        setCopyMenu({ x: point.x, y: point.y, text: payload.text, html: payload.html });
+        return;
+      }
+    }
     const text = selectedTextInPreview(paneRef.current);
     if (!text.trim()) {
       setCopyMenu(null);
       return;
     }
-    const point = contextMenuClientPoint(event);
     setCopyMenu({ x: point.x, y: point.y, text });
-  }, []);
+  }, [entry?.relativePath, kind]);
 
   useEffect(() => {
     if (!open) setCopyMenu(null);
@@ -589,7 +605,9 @@ export default function FilePreviewPane({
                 readOnly
                 resolveFileUrl={tiptapResolveFileUrl}
                 highlightQuery={highlightQuery}
-                onReady={() => {}}
+                onReady={(editor) => {
+                  tiptapEditorRef.current = editor;
+                }}
                 openLinkedAsOverlay={false}
                 onOpenFile={(next) => {
                   onOpenFull?.({
@@ -619,6 +637,16 @@ export default function FilePreviewPane({
               id: 'copy-preview-text',
               label: '본문 복사하기',
               onClick: () => {
+                if (copyMenu.html) {
+                  void writeCopiedTiptapClipboardPayload(
+                    { html: copyMenu.html, text: copyMenu.text },
+                    tiptapResolveFileUrlRef.current || undefined,
+                  ).catch((err) => {
+                    console.warn('[preview] copy with formatting failed', err);
+                    void copyTextToClipboard(copyMenu.text);
+                  });
+                  return;
+                }
                 void copyTextToClipboard(copyMenu.text);
               },
             },

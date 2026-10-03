@@ -40,18 +40,28 @@ export function buildShareLinkUrl(token, syncInfo) {
  * @param {string} text
  */
 export async function copyTextToClipboard(text) {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
+  const value = String(text ?? '');
+  try {
+    if (navigator.clipboard?.writeText) {
+      window.focus?.();
+      await navigator.clipboard.writeText(value);
+      return;
+    }
+  } catch {
+    // Clipboard API can fail when an iframe still holds focus.
   }
 
   const textarea = document.createElement('textarea');
-  textarea.value = text;
+  textarea.value = value;
   textarea.setAttribute('readonly', '');
   textarea.style.position = 'fixed';
+  textarea.style.left = '0';
+  textarea.style.top = '0';
   textarea.style.opacity = '0';
   document.body.appendChild(textarea);
+  textarea.focus();
   textarea.select();
-  document.execCommand('copy');
+  const copied = document.execCommand('copy');
   document.body.removeChild(textarea);
+  if (!copied) throw new Error('clipboard copy failed');
 }
