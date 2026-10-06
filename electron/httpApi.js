@@ -86,6 +86,8 @@ import {
   getEntryCollapsedMap,
   setEntryCollapsed,
   setEntryCollapsedMany,
+  getIndexExcludeMap,
+  setIndexExclude,
   syncFolderColorsDelete,
   syncFolderColorsMoveTree,
 } from './folderColorsService.js';
@@ -135,6 +137,7 @@ import {
 import { getStreamContentType } from '../shared/mediaTypes.js';
 import { handleFsEventsRequest, notifyFsChanged, getFsRevisionPayload } from './fsNotifyService.js';
 import {
+  applyFolderIndexExclude,
   getPersonalDocIndexStatus,
   searchPersonalDocIndex,
   startPersonalDocIndex,
@@ -945,6 +948,30 @@ export async function handleHttpApiRequest(req, res) {
       }
       const result = await setEntryCollapsedMany(list, getPortableRoot());
       if (result.entries[0]?.relativePath) notifyFsChanged(result.entries[0].relativePath);
+      sendJson(res, 200, result);
+      return true;
+    }
+
+    if (method === 'GET' && url.pathname === '/api/folder-colors/index-exclude-map') {
+      const auth = getAccessAuth(req);
+      const perms = await getEffectiveAccessPermissions(auth, getPortableRoot());
+      if (!perms.view && !perms.write) {
+        sendJson(res, 200, {});
+        return true;
+      }
+      sendJson(res, 200, await getIndexExcludeMap(getPortableRoot()));
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/folder-colors/set-index-exclude') {
+      const body = await readJsonBody(req);
+      const auth = getAccessAuth(req);
+      const shareToken = getShareTokenFromQuery(url);
+      assertHomeSystemPathMutable(body.path, 'mutate');
+      await assertCanEditFile(body.path ?? '', auth, shareToken);
+      const result = await setIndexExclude(body.path, Boolean(body.indexExclude ?? body.excluded), getPortableRoot());
+      notifyFsChanged(body.path);
+      applyFolderIndexExclude(body.path);
       sendJson(res, 200, result);
       return true;
     }

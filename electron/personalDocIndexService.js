@@ -13,13 +13,16 @@ import {
   sanitizeLoginIdForHomeFolder,
 } from '../shared/memberHomes.js';
 import {
+  indexExcludeSourcePrefixes,
   isPersonalDocIndexFileName,
   isPersonalDocIndexSkipPath,
+  isUnderIndexExclude,
   PERSONAL_DOC_INDEX_DIR,
   PERSONAL_DOC_INDEX_FORMAT,
   PERSONAL_DOC_SEARCH_LIMIT,
   SHARE_DOC_INDEX_KEY,
 } from '../shared/personalDocIndex.js';
+import { getIndexExcludeMap } from './folderColorsService.js';
 import { PersonalDocIndexDatabase } from './personalDocIndex/database.js';
 import { compileQuery } from './personalDocIndex/query.js';
 import {
@@ -223,14 +226,19 @@ export async function searchPersonalDocIndex(auth, query) {
   const personalRows = personalDb.search(compiled.sql, compiled.params, limit);
   const shareRows = shareDb.search(compiled.sql, compiled.params, limit);
 
-  const [accessMap, permissions] = await Promise.all([
+  const [accessMap, permissions, excludeMap] = await Promise.all([
     getFileAccessMap(),
     getEffectiveAccessPermissions(auth),
+    getIndexExcludeMap(),
   ]);
   const elevated = Boolean(permissions?.write) || auth?.role === 'super_admin';
-  const personalHits = mapRows(personalRows, (sourcePath) => workspaceRelativeFromHome(loginId, sourcePath));
-  const shareHits = mapRows(shareRows, workspaceRelativeFromShare).filter((hit) =>
-    canViewFileEntry(hit.relativePath, accessMap, elevated),
+  const personalHits = mapRows(personalRows, (sourcePath) =>
+    workspaceRelativeFromHome(loginId, sourcePath),
+  ).filter((hit) => !isUnderIndexExclude(hit.relativePath, excludeMap));
+  const shareHits = mapRows(shareRows, workspaceRelativeFromShare).filter(
+    (hit) =>
+      canViewFileEntry(hit.relativePath, accessMap, elevated) &&
+      !isUnderIndexExclude(hit.relativePath, excludeMap),
   );
 
   const merged = [...personalHits, ...shareHits];
@@ -279,11 +287,18 @@ async function startScopeIndex(key, root, { reset = false } = {}) {
     // indexing empty folder is fine
   }
 
+  const excludeMap = await getIndexExcludeMap();
+  const excludePrefixes = indexExcludeSourcePrefixes(
+    excludeMap,
+    key === SHARE_DOC_INDEX_KEY ? SHARED_FOLDER : memberHomeRelativePath(key) || '',
+  );
+
   try {
     state.running = buildPersonalDocIndex({
       root,
       database,
       mode: reset || stale ? 'reset' : 'resume',
+      excludePrefixes,
       shouldCancel: () => state.cancel,
       onProgress: (progress) => {
         state.progress = progress;
@@ -344,6 +359,24 @@ function scheduleScopeRefresh(key, work) {
 }
 
 /**
+ * Cancel an in-flight index for this folder's scope, then refresh so exclude
+ * (or include) takes effect without waiting for the previous walk to finish.
+ * @param {string} relativePath
+ */
+export function applyFolderIndexExclude(relativePath) {
+  const normalized = String(relativePath ?? '').replace(/\\/g, '/');
+  if (!normalized) return;
+  if (isShareWorkspacePath(normalized)) {
+    getJobState(SHARE_DOC_INDEX_KEY).cancel = true;
+  }
+  if (isUnderHomesFolder(normalized)) {
+    const owner = getHomeOwnerFolderFromPath(normalized);
+    if (owner) getJobState(owner).cancel = true;
+  }
+  schedulePersonalDocIndexRefresh(normalized);
+}
+
+/**
  * @param {string | string[]} paths
  */
 export function schedulePersonalDocIndexRefresh(paths) {
@@ -381,6 +414,7 @@ async function refreshOwnerPaths(owner, relativePaths) {
   const state = getJobState(owner);
   if (state.running) return;
 
+  const excludeMap = await getIndexExcludeMap();
   const database = await openDatabaseByKey(owner);
   const root = homeAbsolute(owner);
   const homeRel = memberHomeRelativePath(owner);
@@ -396,9 +430,12 @@ async function refreshOwnerPaths(owner, relativePaths) {
       parts.splice(0, 2);
       rest = parts.join('/');
     }
-    if (isPersonalDocIndexSkipPath(rest)) {
+    if (isPersonalDocIndexSkipPath(rest) || isUnderIndexExclude(relativePath, excludeMap)) {
       if (rest) {
         database.deleteRecordsBySourcePrefix(rest);
+        database.save();
+      } else {
+        database.deleteRecordsBySourcePrefix('', { allowEmpty: true });
         database.save();
       }
       continue;
@@ -453,6 +490,7 @@ async function refreshSharePaths(relativePaths) {
   const state = getJobState(SHARE_DOC_INDEX_KEY);
   if (state.running) return;
 
+  const excludeMap = await getIndexExcludeMap();
   const database = await openDatabaseByKey(SHARE_DOC_INDEX_KEY);
   const root = shareAbsolute();
   let needResume = false;
@@ -465,9 +503,16 @@ async function refreshSharePaths(relativePaths) {
         : canonical.startsWith(`${SHARED_FOLDER}/`)
           ? canonical.slice(SHARED_FOLDER.length + 1)
           : '';
-    if (isPersonalDocIndexSkipPath(rest) || isPersonalDocIndexSkipPath(canonical)) {
+    if (
+      isPersonalDocIndexSkipPath(rest) ||
+      isPersonalDocIndexSkipPath(canonical) ||
+      isUnderIndexExclude(canonical, excludeMap)
+    ) {
       if (rest) {
         database.deleteRecordsBySourcePrefix(rest);
+        database.save();
+      } else {
+        database.deleteRecordsBySourcePrefix('', { allowEmpty: true });
         database.save();
       }
       continue;

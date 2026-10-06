@@ -8,6 +8,9 @@ export function useFolderColors() {
   const [fileCollapsedMap, setFileCollapsedMap] = useState(
     /** @type {Record<string, boolean>} */ ({}),
   );
+  const [indexExcludeMap, setIndexExcludeMap] = useState(
+    /** @type {Record<string, boolean>} */ ({}),
+  );
   const { generation } = useFsSync();
 
   const refreshFolderColorMap = useCallback(async () => {
@@ -16,6 +19,7 @@ export function useFolderColors() {
       setNameBoldMap({});
       setFileLevelMap({});
       setFileCollapsedMap({});
+      setIndexExcludeMap({});
       return;
     }
 
@@ -56,6 +60,17 @@ export function useFolderColors() {
         setFileCollapsedMap(collapsed && typeof collapsed === 'object' ? collapsed : {});
       } catch {
         setFileCollapsedMap({});
+      }
+    }
+
+    if (typeof window.nas4usb.folderColors.getIndexExcludeMap !== 'function') {
+      setIndexExcludeMap({});
+    } else {
+      try {
+        const excluded = await window.nas4usb.folderColors.getIndexExcludeMap();
+        setIndexExcludeMap(excluded && typeof excluded === 'object' ? excluded : {});
+      } catch {
+        setIndexExcludeMap({});
       }
     }
   }, []);
@@ -143,11 +158,26 @@ export function useFolderColors() {
     [refreshFolderColorMap],
   );
 
+  const setIndexExclude = useCallback(
+    async (relativePath, excluded) => {
+      if (!window.nas4usb?.folderColors?.setIndexExclude) {
+        throw new Error('색인생성 제외 API를 사용할 수 없습니다.');
+      }
+      await window.nas4usb.folderColors.setIndexExclude({
+        path: relativePath,
+        indexExclude: Boolean(excluded),
+      });
+      await refreshFolderColorMap();
+    },
+    [refreshFolderColorMap],
+  );
+
   return {
     folderColorMap,
     nameBoldMap,
     fileLevelMap,
     fileCollapsedMap,
+    indexExcludeMap,
     refreshFolderColorMap,
     setFolderColor,
     setNameBold,
@@ -155,5 +185,6 @@ export function useFolderColors() {
     setFileLevels,
     setFileCollapsed,
     setFileCollapsedMany,
+    setIndexExclude,
   };
 }

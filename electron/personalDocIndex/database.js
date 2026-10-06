@@ -220,9 +220,14 @@ export class PersonalDocIndexDatabase {
   /**
    * @param {string} prefix
    */
-  deleteRecordsBySourcePrefix(prefix) {
+  deleteRecordsBySourcePrefix(prefix, { allowEmpty = false } = {}) {
     const normalized = String(prefix ?? '').replace(/\\/g, '/').replace(/\/+$/, '');
-    if (!normalized) return;
+    if (!normalized) {
+      if (!allowEmpty) return;
+      this.#run('DELETE FROM document_index');
+      this.#run('DELETE FROM index_files');
+      return;
+    }
     const like = `${normalized.replace(/%/g, '\\%').replace(/_/g, '\\_')}/%`;
     this.#run("DELETE FROM document_index WHERE source_path = ? OR source_path LIKE ? ESCAPE '\\'", [
       normalized,

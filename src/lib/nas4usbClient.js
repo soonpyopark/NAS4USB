@@ -485,6 +485,15 @@ export function createHttpNas4usbClient() {
           method: 'POST',
           body: JSON.stringify({ entries }),
         }),
+      getIndexExcludeMap: () => apiFetch('/folder-colors/index-exclude-map'),
+      setIndexExclude: ({ path, indexExclude, excluded }) =>
+        apiFetch('/folder-colors/set-index-exclude', {
+          method: 'POST',
+          body: JSON.stringify({
+            path,
+            indexExclude: Boolean(indexExclude ?? excluded),
+          }),
+        }),
     },
 
     folderOrder: {

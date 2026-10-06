@@ -150,6 +150,8 @@ import {
   getEntryCollapsedMap,
   setEntryCollapsed,
   setEntryCollapsedMany,
+  getIndexExcludeMap,
+  setIndexExclude,
   syncFolderColorsDelete,
   syncFolderColorsMoveTree,
 } from './electron/folderColorsService.js';
@@ -190,6 +192,7 @@ import { closeComicArchive, openComicArchive } from './electron/comicArchive.js'
 import { syncTiptapAssetRename } from './electron/tiptapAssetService.js';
 import { notifyFsChanged } from './electron/fsNotifyService.js';
 import {
+  applyFolderIndexExclude,
   getPersonalDocIndexStatus,
   searchPersonalDocIndex,
   startPersonalDocIndex,
@@ -1669,6 +1672,28 @@ ipcMain.handle('folderColors:setCollapsedMany', async (event, { entries } = {}) 
   }
   const result = await setEntryCollapsedMany(list, getPortableRoot());
   if (result.entries[0]?.relativePath) notifyFsChanged(result.entries[0].relativePath);
+  return result;
+});
+
+ipcMain.handle('folderColors:getIndexExcludeMap', async (event) => {
+  const auth = getAccessAuthFromEvent(event);
+  const perms = await getEffectiveAccessPermissions(auth, getPortableRoot());
+  if (!perms.view && !perms.write) return {};
+  return getIndexExcludeMap(getPortableRoot());
+});
+
+ipcMain.handle('folderColors:setIndexExclude', async (event, { path: relativePath, indexExclude, excluded } = {}) => {
+  const auth = getAccessAuthFromEvent(event);
+  const shareToken = getShareTokenFromEvent(event);
+  assertHomeSystemPathMutable(relativePath, 'mutate');
+  await assertCanEditFile(relativePath, auth, shareToken);
+  const result = await setIndexExclude(
+    relativePath,
+    Boolean(indexExclude ?? excluded),
+    getPortableRoot(),
+  );
+  notifyFsChanged(relativePath);
+  applyFolderIndexExclude(relativePath);
   return result;
 });
 

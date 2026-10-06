@@ -18,6 +18,7 @@ import { useShareLinks } from '../../hooks/useShareLinks.js';
 import { useFileAccess } from '../../hooks/useFileAccess.js';
 import { useFavorites } from '../../hooks/useFavorites.js';
 import { useFolderColors } from '../../hooks/useFolderColors.js';
+import { indexExcludeState } from '../../../shared/personalDocIndex.js';
 import { useFolderOrder } from '../../hooks/useFolderOrder.js';
 import { useTrash } from '../../hooks/useTrash.js';
 import { useFileDropZone } from '../../hooks/useFileDropZone.js';
@@ -123,8 +124,15 @@ export default function Sidebar({
     setFavorite,
     isFavorite,
   } = useFavorites();
-  const { folderColorMap, nameBoldMap, refreshFolderColorMap, setFolderColor, setNameBold } =
-    useFolderColors();
+  const {
+    folderColorMap,
+    nameBoldMap,
+    indexExcludeMap,
+    refreshFolderColorMap,
+    setFolderColor,
+    setNameBold,
+    setIndexExclude,
+  } = useFolderColors();
   const { folderOrderMap, refreshFolderOrderMap, setFolderOrder } = useFolderOrder();
   const { openLogin } = useLoginDialog();
   const { effectivePermissions } = useGuestPermissions();
@@ -731,6 +739,15 @@ export default function Sidebar({
     }
   };
 
+  const handleSetIndexExclude = async (entry, excluded) => {
+    if (!entry?.isDirectory) return;
+    try {
+      await setIndexExclude(entry.relativePath, excluded);
+    } catch (err) {
+      nativeAlert(err instanceof Error ? err.message : '색인생성 제외를 바꾸지 못했습니다.');
+    }
+  };
+
   const handleShareLinkRevoke = async () => {
     if (!shareLinkDialog?.entry) return;
     await revokeShareLinkForEntry({ entry: shareLinkDialog.entry, refreshShareMap });
@@ -1166,6 +1183,20 @@ export default function Sidebar({
             isSuperAdmin,
           )}
           onChangeNameBold={(bold) => handleSetNameBold(propertiesEntry, bold)}
+          indexExclude={
+            indexExcludeState(propertiesEntry.relativePath, indexExcludeMap).self
+          }
+          indexExcludeInherited={
+            indexExcludeState(propertiesEntry.relativePath, indexExcludeMap).inherited
+          }
+          canChangeIndexExclude={canWriteAtPath(
+            propertiesEntry.relativePath,
+            adminId,
+            isAdminLoggedIn,
+            globalWrite,
+            isSuperAdmin,
+          )}
+          onChangeIndexExclude={(excluded) => handleSetIndexExclude(propertiesEntry, excluded)}
           onClose={() => {
             setPropertiesEntry(null);
             setPropertiesStat(null);

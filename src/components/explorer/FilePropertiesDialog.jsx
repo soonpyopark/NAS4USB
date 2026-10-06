@@ -47,6 +47,10 @@ function formatDate(iso) {
  *   nameBold?: boolean,
  *   canChangeNameBold?: boolean,
  *   onChangeNameBold?: (checked: boolean) => void,
+ *   indexExclude?: boolean,
+ *   indexExcludeInherited?: boolean,
+ *   canChangeIndexExclude?: boolean,
+ *   onChangeIndexExclude?: (checked: boolean) => void,
  *   onClose: () => void,
  * }} props
  */
@@ -68,6 +72,10 @@ export default function FilePropertiesDialog({
   nameBold = false,
   canChangeNameBold = false,
   onChangeNameBold,
+  indexExclude = false,
+  indexExcludeInherited = false,
+  canChangeIndexExclude = false,
+  onChangeIndexExclude,
   onClose,
 }) {
   const externalFolders = useExternalFolders();
@@ -222,6 +230,26 @@ export default function FilePropertiesDialog({
                 {canEditAccessOptions
                   ? '즐겨찾기한 폴더는 왼쪽 아래 폴더 즐겨찾기에서 바로 열 수 있습니다.'
                   : '즐겨찾기는 총괄관리자만 변경할 수 있습니다.'}
+              </p>
+              <label
+                className={`modal-access-option${
+                  canChangeIndexExclude && !indexExcludeInherited ? '' : ' modal-access-option--readonly'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={Boolean(indexExclude) || Boolean(indexExcludeInherited)}
+                  disabled={accessSaving || !canChangeIndexExclude || indexExcludeInherited}
+                  onChange={(event) => onChangeIndexExclude?.(event.target.checked)}
+                />
+                <span>색인생성 제외</span>
+              </label>
+              <p className="modal-access-hint">
+                {indexExcludeInherited
+                  ? '상위 폴더에서 이미 색인생성 제외되어 있습니다.'
+                  : canChangeIndexExclude
+                    ? '이 폴더와 하위 항목은 본문 색인에 넣지 않습니다. 이미 만든 색인은 바로 지웁니다.'
+                    : '색인생성 제외는 쓰기 권한이 있을 때 변경할 수 있습니다.'}
               </p>
               <div>
                 <div className="mb-2 text-sm text-slate-700">폴더 색</div>

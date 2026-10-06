@@ -21,6 +21,7 @@ const FOLDER_COLORS_FILE = '.nas4usb-folder-colors.json';
  *   bold: Record<string, true>,
  *   levels: Record<string, number>,
  *   collapsed: Record<string, true>,
+ *   indexExclude: Record<string, true>,
  * }} FolderColorsStore
  */
 
@@ -39,12 +40,13 @@ async function loadStore(portableRoot) {
         bold: normalizeBoldMap(parsed.bold),
         levels: normalizeFileLevelMap(parsed.levels),
         collapsed: normalizeFileCollapsedMap(parsed.collapsed),
+        indexExclude: normalizeFlagMap(parsed.indexExclude),
       };
     }
   } catch {
     // fall through
   }
-  return { colors: {}, bold: {}, levels: {}, collapsed: {} };
+  return { colors: {}, bold: {}, levels: {}, collapsed: {}, indexExclude: {} };
 }
 
 /**
@@ -52,13 +54,21 @@ async function loadStore(portableRoot) {
  * @returns {Record<string, true>}
  */
 function normalizeBoldMap(raw) {
+  return normalizeFlagMap(raw);
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {Record<string, true>}
+ */
+function normalizeFlagMap(raw) {
   /** @type {Record<string, true>} */
-  const bold = {};
-  if (!raw || typeof raw !== 'object') return bold;
+  const flags = {};
+  if (!raw || typeof raw !== 'object') return flags;
   for (const [key, value] of Object.entries(raw)) {
-    if (value) bold[String(key).replace(/\\/g, '/')] = true;
+    if (value) flags[String(key).replace(/\\/g, '/')] = true;
   }
-  return bold;
+  return flags;
 }
 
 /**
@@ -75,7 +85,12 @@ async function saveStore(portableRoot, store) {
     store?.bold && typeof store.bold === 'object' && !Array.isArray(store.bold) ? store.bold : {};
   const levels = normalizeFileLevelMap(store?.levels);
   const collapsed = normalizeFileCollapsedMap(store?.collapsed);
-  await fs.writeFile(filePath, JSON.stringify({ colors, bold, levels, collapsed }, null, 2), 'utf8');
+  const indexExclude = normalizeFlagMap(store?.indexExclude);
+  await fs.writeFile(
+    filePath,
+    JSON.stringify({ colors, bold, levels, collapsed, indexExclude }, null, 2),
+    'utf8',
+  );
 }
 
 /**
@@ -108,6 +123,39 @@ export async function getEntryLevelMap(portableRoot = getPortableRoot()) {
 export async function getEntryCollapsedMap(portableRoot = getPortableRoot()) {
   const store = await loadStore(portableRoot);
   return store.collapsed;
+}
+
+/**
+ * @param {string} [portableRoot]
+ */
+export async function getIndexExcludeMap(portableRoot = getPortableRoot()) {
+  const store = await loadStore(portableRoot);
+  return store.indexExclude;
+}
+
+/**
+ * Exclude this folder and its descendants from the personal/share document index.
+ * @param {string} relativePath
+ * @param {boolean} excluded
+ * @param {string} [portableRoot]
+ */
+export async function setIndexExclude(relativePath, excluded, portableRoot = getPortableRoot()) {
+  const normalizedPath = String(relativePath ?? '').replace(/\\/g, '/');
+  if (!normalizedPath || normalizedPath === '.') {
+    throw new Error('폴더 경로가 올바르지 않습니다.');
+  }
+
+  const stat = await fsService.statPath(normalizedPath);
+  if (!stat.isDirectory) {
+    throw new Error('폴더에만 색인생성 제외를 지정할 수 있습니다.');
+  }
+
+  const store = await loadStore(portableRoot);
+  if (excluded) store.indexExclude[normalizedPath] = true;
+  else delete store.indexExclude[normalizedPath];
+
+  await saveStore(portableRoot, store);
+  return { relativePath: normalizedPath, indexExclude: Boolean(excluded) };
 }
 
 /**
@@ -326,12 +374,22 @@ export async function syncFolderColorsMoveTree(
   const bold = remapPathKeyedRecord(store.bold, fromPath, toPath);
   const levels = remapPathKeyedRecord(store.levels, fromPath, toPath);
   const collapsed = remapPathKeyedRecord(store.collapsed, fromPath, toPath);
-  if (!colors.changed && !bold.changed && !levels.changed && !collapsed.changed) return;
+  const indexExclude = remapPathKeyedRecord(store.indexExclude, fromPath, toPath);
+  if (
+    !colors.changed &&
+    !bold.changed &&
+    !levels.changed &&
+    !collapsed.changed &&
+    !indexExclude.changed
+  ) {
+    return;
+  }
 
   store.colors = colors.next;
   store.bold = bold.next;
   store.levels = levels.next;
   store.collapsed = collapsed.next;
+  store.indexExclude = indexExclude.next;
   await saveStore(portableRoot, store);
 }
 
@@ -346,7 +404,8 @@ export async function syncFolderColorsDelete(relativePath, portableRoot = getPor
   const boldChanged = deletePathKeyedRecord(store.bold, normalizedPath);
   const levelsChanged = deletePathKeyedRecord(store.levels, normalizedPath);
   const collapsedChanged = deletePathKeyedRecord(store.collapsed, normalizedPath);
-  if (colorsChanged || boldChanged || levelsChanged || collapsedChanged) {
+  const indexExcludeChanged = deletePathKeyedRecord(store.indexExclude, normalizedPath);
+  if (colorsChanged || boldChanged || levelsChanged || collapsedChanged || indexExcludeChanged) {
     await saveStore(portableRoot, store);
   }
 }

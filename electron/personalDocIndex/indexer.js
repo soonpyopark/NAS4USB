@@ -4,6 +4,7 @@ import {
   PERSONAL_DOC_ALL_EXTENSIONS,
   PERSONAL_DOC_MAX_FILE_BYTES,
   isPersonalDocIndexSkipDir,
+  isUnderSourcePrefix,
   personalDocTypeForName,
 } from '../../shared/personalDocIndex.js';
 import { parseExcel } from './parsers/excel.js';
@@ -32,12 +33,16 @@ const PARSERS = {
 
 /**
  * @param {string} root
+ * @param {{ excludePrefixes?: string[] }} [options]
  * @returns {Promise<{ files: string[], folderCount: number }>}
  */
-export async function collectPersonalDocFiles(root) {
+export async function collectPersonalDocFiles(root, { excludePrefixes = [] } = {}) {
   const files = [];
   let folderCount = 0;
   const allowed = new Set(PERSONAL_DOC_ALL_EXTENSIONS.map((ext) => ext.toLowerCase()));
+  if (isUnderSourcePrefix('', excludePrefixes)) {
+    return { files, folderCount };
+  }
 
   async function walk(dir) {
     let names;
@@ -59,12 +64,14 @@ export async function collectPersonalDocFiles(root) {
         continue;
       }
       if (stats.isDirectory()) {
+        if (isUnderSourcePrefix(toSourcePath(root, fullPath), excludePrefixes)) continue;
         folderCount += 1;
         await walk(fullPath);
         await yieldEventLoop();
         continue;
       }
       if (!allowed.has(path.extname(name).toLowerCase())) continue;
+      if (isUnderSourcePrefix(toSourcePath(root, fullPath), excludePrefixes)) continue;
       files.push(fullPath);
     }
   }
@@ -190,6 +197,7 @@ export async function reindexOneFile(filePath, root, database) {
  *   mode?: 'resume' | 'reset',
  *   onProgress?: (payload: Record<string, unknown>) => void,
  *   shouldCancel?: () => boolean,
+ *   excludePrefixes?: string[],
  * }} options
  */
 export async function buildPersonalDocIndex({
@@ -198,8 +206,12 @@ export async function buildPersonalDocIndex({
   mode = 'resume',
   onProgress,
   shouldCancel,
+  excludePrefixes = [],
 }) {
-  const { files, folderCount } = await collectPersonalDocFiles(root);
+  for (const prefix of excludePrefixes) {
+    database.deleteRecordsBySourcePrefix(prefix, { allowEmpty: prefix === '' });
+  }
+  const { files, folderCount } = await collectPersonalDocFiles(root, { excludePrefixes });
   const totalFiles = files.length;
   console.log(`[doc-index] ${root} · ${totalFiles} files · ${folderCount} folders (${mode})`);
   const startedAt = new Date().toISOString();

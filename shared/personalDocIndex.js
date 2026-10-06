@@ -85,3 +85,81 @@ export function isPersonalDocIndexSkipPath(relativePath) {
   return parts.some((part) => isPersonalDocIndexSkipDir(part));
 }
 
+/**
+ * @param {string} [relativePath]
+ */
+function normalizeIndexPath(relativePath) {
+  return String(relativePath ?? '')
+    .replace(/\\/g, '/')
+    .replace(/^\/+|\/+$/g, '');
+}
+
+/**
+ * True when this workspace path or an ancestor is marked 색인생성 제외.
+ * @param {string} [relativePath]
+ * @param {Record<string, unknown> | null | undefined} excludeMap
+ */
+export function isUnderIndexExclude(relativePath, excludeMap) {
+  if (!excludeMap || typeof excludeMap !== 'object') return false;
+  const parts = normalizeIndexPath(relativePath).split('/').filter(Boolean);
+  let acc = '';
+  for (const part of parts) {
+    acc = acc ? `${acc}/${part}` : part;
+    if (excludeMap[acc]) return true;
+  }
+  return false;
+}
+
+/**
+ * @param {string} [relativePath]
+ * @param {Record<string, unknown> | null | undefined} excludeMap
+ */
+export function indexExcludeState(relativePath, excludeMap) {
+  const normalized = normalizeIndexPath(relativePath);
+  const self = Boolean(excludeMap?.[normalized]);
+  const parent = normalized.includes('/') ? normalized.slice(0, normalized.lastIndexOf('/')) : '';
+  const inherited = Boolean(parent) && isUnderIndexExclude(parent, excludeMap);
+  return { excluded: self || inherited, inherited, self };
+}
+
+/**
+ * Workspace-relative exclude keys as source-path prefixes under one index root.
+ * `''` means the entire root is excluded.
+ *
+ * @param {Record<string, unknown> | null | undefined} excludeMap
+ * @param {string} rootWorkspacePath
+ */
+export function indexExcludeSourcePrefixes(excludeMap, rootWorkspacePath) {
+  const root = normalizeIndexPath(rootWorkspacePath);
+  /** @type {string[]} */
+  const prefixes = [];
+  if (!root || !excludeMap || typeof excludeMap !== 'object') return prefixes;
+  for (const [key, value] of Object.entries(excludeMap)) {
+    if (!value) continue;
+    const workspacePath = normalizeIndexPath(key);
+    if (!workspacePath) continue;
+    if (workspacePath === root) {
+      prefixes.push('');
+      continue;
+    }
+    if (workspacePath.startsWith(`${root}/`)) {
+      prefixes.push(workspacePath.slice(root.length + 1));
+    }
+  }
+  return prefixes;
+}
+
+/**
+ * @param {string} [sourcePath]
+ * @param {string[] | null | undefined} prefixes
+ */
+export function isUnderSourcePrefix(sourcePath, prefixes) {
+  if (!prefixes?.length) return false;
+  const rel = normalizeIndexPath(sourcePath);
+  for (const prefix of prefixes) {
+    if (prefix === '') return true;
+    if (rel === prefix || rel.startsWith(`${prefix}/`)) return true;
+  }
+  return false;
+}
+

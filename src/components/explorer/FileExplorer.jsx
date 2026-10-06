@@ -21,6 +21,7 @@ import { useShareLinks } from '../../hooks/useShareLinks.js';
 import { useFileAccess } from '../../hooks/useFileAccess.js';
 import { useFavorites } from '../../hooks/useFavorites.js';
 import { useFolderColors } from '../../hooks/useFolderColors.js';
+import { indexExcludeState } from '../../../shared/personalDocIndex.js';
 import { useExternalFolders } from '../../hooks/useExternalFolders.js';
 import { useFolderOrder } from '../../hooks/useFolderOrder.js';
 import {
@@ -214,9 +215,11 @@ export default function FileExplorer({
     nameBoldMap,
     fileLevelMap,
     fileCollapsedMap,
+    indexExcludeMap,
     refreshFolderColorMap,
     setFolderColor,
     setNameBold,
+    setIndexExclude,
     setFileLevels,
     setFileCollapsed,
     setFileCollapsedMany,
@@ -1476,6 +1479,15 @@ export default function FileExplorer({
     }
   };
 
+  const handleSetIndexExclude = async (entry, excluded) => {
+    if (!entry?.isDirectory) return;
+    try {
+      await setIndexExclude(entry.relativePath, excluded);
+    } catch (err) {
+      nativeAlert(err instanceof Error ? err.message : '색인생성 제외를 바꾸지 못했습니다.');
+    }
+  };
+
   const canUseFileIndent =
     canWrite && !isInTrashView && !isInFavoritesView && typeof setFileLevels === 'function';
 
@@ -2120,6 +2132,20 @@ export default function FileExplorer({
             isSuperAdmin,
           )}
           onChangeNameBold={(bold) => handleSetNameBold(propertiesEntry, bold)}
+          indexExclude={
+            indexExcludeState(propertiesEntry.relativePath, indexExcludeMap).self
+          }
+          indexExcludeInherited={
+            indexExcludeState(propertiesEntry.relativePath, indexExcludeMap).inherited
+          }
+          canChangeIndexExclude={canWriteAtPath(
+            propertiesEntry.relativePath,
+            adminId,
+            isAdminLoggedIn,
+            globalWrite,
+            isSuperAdmin,
+          )}
+          onChangeIndexExclude={(excluded) => handleSetIndexExclude(propertiesEntry, excluded)}
           onClose={() => {
             setPropertiesEntry(null);
             setPropertiesStat(null);

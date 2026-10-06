@@ -126,6 +126,12 @@ contextBridge.exposeInMainWorld('nas4usb', {
       ipcRenderer.invoke('folderColors:setCollapsed', { path, collapsed }),
     setCollapsedMany: ({ entries }) =>
       ipcRenderer.invoke('folderColors:setCollapsedMany', { entries }),
+    getIndexExcludeMap: () => ipcRenderer.invoke('folderColors:getIndexExcludeMap'),
+    setIndexExclude: ({ path, indexExclude, excluded }) =>
+      ipcRenderer.invoke('folderColors:setIndexExclude', {
+        path,
+        indexExclude: Boolean(indexExclude ?? excluded),
+      }),
   },
 
   folderOrder: {
