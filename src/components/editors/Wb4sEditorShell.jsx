@@ -7,6 +7,7 @@ import {
   normalizeWb4sDocument,
   titleToWb4sFileName,
   utf8ToBase64,
+  wb4sDocumentWithFileName,
   wb4sDocumentWithTitle,
 } from '../../wb4s/document.js';
 import { loadUserDisplayName } from '../../lib/userProfile.js';
@@ -64,8 +65,9 @@ export default function Wb4sEditorShell({
         const base64 = await workspace.readBinary();
         if (cancelled) return;
         const text = base64 ? base64ToUtf8(base64) : createEmptyFallback(fileNameRef.current);
-        documentJsonRef.current = normalizeWb4sDocument(text);
-        lastCommittedJsonRef.current = documentJsonRef.current;
+        const normalized = wb4sDocumentWithFileName(text, fileNameRef.current);
+        documentJsonRef.current = normalized;
+        lastCommittedJsonRef.current = normalized;
         setContentReady(true);
       } catch (err) {
         if (!cancelled) {
@@ -193,6 +195,7 @@ export default function Wb4sEditorShell({
           >
             <Wb4sEditorView
               relativePath={relativePath}
+              fileName={fileName}
               documentJson={documentJsonRef.current}
               syncServerUrl={syncInfo ? getSyncServerUrl(syncInfo) : ''}
               userName={userName}

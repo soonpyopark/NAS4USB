@@ -168,6 +168,7 @@ export default function FileExplorer({
   currentPath,
   onNavigate,
   onOpenFile,
+  onEntryRenamed,
   syncInfo,
   isEditorOpen = false,
   compactMode = false,
@@ -1024,6 +1025,12 @@ export default function FileExplorer({
     if (currentPath === renameEntry.relativePath || currentPath.startsWith(`${renameEntry.relativePath}/`)) {
       onNavigate(normalized);
     }
+
+    onEntryRenamed?.({
+      relativePath: normalized,
+      name: nextName,
+      previousPath: renameEntry.relativePath,
+    });
 
     setRenameEntry(null);
     clearSelection();

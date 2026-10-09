@@ -94,7 +94,30 @@ export function normalizeWb4sDocument(text) {
  * @param {string} fileName
  */
 export function getWb4sFileStem(fileName) {
-  return String(fileName).replace(/\.wb4s$/i, '');
+  return String(fileName ?? '').replace(/\.wb4s$/i, '').trim() || '제목 없음';
+}
+
+/**
+ * @param {string} json
+ */
+export function getWb4sDocumentTitle(json) {
+  try {
+    const parsed = JSON.parse(normalizeWb4sDocument(json));
+    return String(parsed?.title ?? '').trim() || '제목 없음';
+  } catch {
+    return '제목 없음';
+  }
+}
+
+/**
+ * Keep the document title aligned with the NAS file stem.
+ * @param {string} json
+ * @param {string} fileName
+ */
+export function wb4sDocumentWithFileName(json, fileName) {
+  const stem = getWb4sFileStem(fileName);
+  if (getWb4sDocumentTitle(json) === stem) return normalizeWb4sDocument(json);
+  return wb4sDocumentWithTitle(json, stem);
 }
 
 /**

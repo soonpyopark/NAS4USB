@@ -50,6 +50,8 @@ interface EditorViewProps {
   shareToken?: string;
   shareLinkMode?: boolean;
   embedMode?: EditorEmbedMode;
+  /** NAS4USB host file stem. Updates the left title when the explorer renames the file. */
+  hostFileTitle?: string;
   onBack: () => void;
 }
 
@@ -107,6 +109,7 @@ export function EditorView({
   shareToken,
   shareLinkMode = false,
   embedMode,
+  hostFileTitle,
   onBack,
 }: EditorViewProps) {
   const isEmbed = Boolean(embedMode);
@@ -202,6 +205,13 @@ export function EditorView({
     setLoading(false);
     setError(null);
   }, [embedMode]);
+
+  useEffect(() => {
+    if (!embedMode || editingTitle) return;
+    const next = String(hostFileTitle ?? '').trim();
+    if (!next) return;
+    setTitle((current) => (current === next ? current : next));
+  }, [embedMode, editingTitle, hostFileTitle]);
 
   useEffect(() => {
     if (isEmbed) return undefined;

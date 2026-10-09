@@ -39,6 +39,7 @@ import { getFileViewerType, getFileViewerTypeFromName } from './lib/fileViewerTy
 import { verifySecPassword } from './lib/filePassword/actions.js';
 import { forgetFilePassword, moveFilePassword } from './lib/filePassword/session.js';
 import { innerExtensionOf, isSecFileName } from './lib/filePassword/secPaths.js';
+import { syncWb4sDocumentTitleFromFileName } from './wb4s/syncHostTitle.js';
 
 /**
  * @param {{
@@ -268,6 +269,22 @@ function Nas4usbDesktop({
     [navigate],
   );
 
+  const handleExplorerRenamed = useCallback(
+    (entry) => {
+      if (
+        openEditor &&
+        entry?.relativePath &&
+        (openEditor.relativePath === entry.previousPath ||
+          openEditor.relativePath === entry.relativePath)
+      ) {
+        onEditorRenamed(entry);
+        return;
+      }
+      void syncWb4sDocumentTitleFromFileName(entry?.relativePath, entry?.name);
+    },
+    [onEditorRenamed, openEditor],
+  );
+
   const handleOpenSettings = useCallback(() => {
     if (!isSuperAdmin) {
       void nativeAlert('환경설정은 총괄관리자만 이용할 수 있습니다.');
@@ -291,11 +308,13 @@ function Nas4usbDesktop({
         onNavigate={handleNavigate}
         onOpenSettings={handleOpenSettings}
         onOpenFile={onOpenFile}
+        onEntryRenamed={handleExplorerRenamed}
       >
         <FileExplorer
           currentPath={currentPath}
           onNavigate={handleNavigate}
           onOpenFile={onOpenFile}
+          onEntryRenamed={handleExplorerRenamed}
           syncInfo={syncInfo}
           isEditorOpen={Boolean(openEditor)}
         />

@@ -406,7 +406,7 @@ export default function FilePreviewPane({
                 className="nas-btn-ghost file-preview-pane__btn"
                 onClick={() => onOpenFull(entry)}
               >
-                {entry.isDirectory ? '폴더 열기' : '열기'}
+                {entry.isDirectory ? '폴더 열기' : '열기(편집)'}
               </button>
             ) : null}
             {touchUi ? null : (
@@ -444,7 +444,7 @@ export default function FilePreviewPane({
             <p className="file-preview-pane__empty">이 항목을 열람할 권한이 없습니다.</p>
           ) : locked ? (
             <p className="file-preview-pane__empty">
-              비밀번호가 설정된 파일입니다. 내용을 보려면 [열기]를 누르세요.
+              비밀번호가 설정된 파일입니다. 내용을 보려면 [열기(편집)]를 누르세요.
             </p>
           ) : !kind ? (
             <p className="file-preview-pane__empty">이 형식은 아직 미리볼 수 없습니다.</p>

@@ -7,6 +7,7 @@ import '@wb4s-engine/App.css';
 import {
   getWb4sByDept,
   getWb4sCollabRoomId,
+  getWb4sFileStem,
   getWb4sWhiteboardId,
 } from './document.js';
 
@@ -15,6 +16,7 @@ import {
  *
  * @param {{
  *   relativePath: string,
+ *   fileName?: string,
  *   documentJson: string,
  *   syncServerUrl: string,
  *   userName: string,
@@ -31,6 +33,7 @@ import {
  */
 export default function Wb4sEditorView({
   relativePath,
+  fileName,
   documentJson,
   syncServerUrl,
   userName,
@@ -80,6 +83,7 @@ export default function Wb4sEditorView({
           whiteboardId={whiteboardId}
           byDept={byDept}
           embedMode={embedMode}
+          hostFileTitle={getWb4sFileStem(fileName)}
           onBack={() => {}}
         />
       </div>

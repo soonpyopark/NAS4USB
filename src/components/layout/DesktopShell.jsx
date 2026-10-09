@@ -30,6 +30,7 @@ export default function DesktopShell({
   onNavigate,
   onOpenSettings,
   onOpenFile,
+  onEntryRenamed,
 }) {
   const layoutRef = useRef(null);
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
@@ -186,6 +187,7 @@ export default function DesktopShell({
             syncInfo={syncInfo}
             onNavigate={handleNavigate}
             onOpenFile={handleOpenFile}
+            onEntryRenamed={onEntryRenamed}
           />
         </div>
 

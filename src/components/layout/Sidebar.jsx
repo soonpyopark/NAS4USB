@@ -102,6 +102,7 @@ export default function Sidebar({
   mainView = 'explorer',
   onNavigate,
   onOpenFile,
+  onEntryRenamed,
   syncInfo,
 }) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -452,6 +453,12 @@ export default function Sidebar({
     if (currentPath === target.relativePath || currentPath.startsWith(`${target.relativePath}/`)) {
       onNavigate(normalized);
     }
+
+    onEntryRenamed?.({
+      relativePath: normalized,
+      name: nextName,
+      previousPath: target.relativePath,
+    });
   };
 
   const handleDelete = async (entry) => {

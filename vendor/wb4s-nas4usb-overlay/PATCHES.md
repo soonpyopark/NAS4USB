@@ -15,6 +15,7 @@ Copy-Item vendor/wb4s-nas4usb-overlay/src/index.css .cache/wb4s-src/src/index.cs
 - `showBackButton` when `onClose` is provided
 - `handleBack` → calls `onClose` in embed mode
 - `commitTitle` → `onRenameTitle` in embed mode
+- `hostFileTitle` keeps the left title in sync when NAS4USB renames the `.wb4s` file
 - `hideShare={false}` in embed (show **작성 내용 저장** for Yjs share)
 - `exportDocument({ includeThumbnail })` — skip thumbnail on close save (host performance)
 - Toolbar `backLabel` **← 닫기** in embed

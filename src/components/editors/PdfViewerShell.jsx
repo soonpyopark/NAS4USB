@@ -3171,7 +3171,7 @@ export default function PdfViewerShell({
         </button>
         <button
           type="button"
-          className={`pdf-tb-btn ml-auto ${fabSide === 'left' ? 'pdf-tb-btn--active' : ''}`}
+          className={`pdf-tb-btn ${fabSide === 'left' ? 'pdf-tb-btn--active' : ''}`}
           disabled={busy}
           onClick={toggleFabSide}
           title={
