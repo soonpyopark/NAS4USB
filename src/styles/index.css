@@ -7,17 +7,17 @@
   /*
    * Accent theme defaults (설정 → 일반 → 테마 색상 overwrites these at runtime).
    * Values are `r g b` channels so Tailwind's `/opacity` modifiers keep working.
-   * Derived from #3b82f6 by shared/theme.js — regenerate there, not by hand.
+   * Derived from #57534e by shared/theme.js — regenerate there, not by hand.
    */
   :root {
-    --nas-accent: 59 130 246;
-    --nas-accent-hover: 48 107 202;
-    --nas-accent-soft: 235 243 254;
-    --nas-accent-soft-hover: 220 233 253;
-    --nas-accent-border: 186 211 252;
-    --nas-accent-text: 32 72 135;
-    --nas-sidebar: 21 38 71;
-    --nas-sidebar-hover: 52 75 111;
+    --nas-accent: 87 83 78;
+    --nas-accent-hover: 71 68 64;
+    --nas-accent-soft: 238 238 237;
+    --nas-accent-soft-hover: 225 224 223;
+    --nas-accent-border: 196 195 193;
+    --nas-accent-text: 48 46 43;
+    --nas-sidebar: 25 31 47;
+    --nas-sidebar-hover: 57 68 84;
   }
 
   html,
@@ -1347,39 +1347,26 @@
   min-height: 16rem;
   flex: 1;
   background: #000;
-}
-
-.nas4usb-videojs-host,
-.nas4usb-videojs-host .video-js,
-.nas4usb-videojs-host .vjs-tech {
   touch-action: manipulation;
 }
 
-.nas4usb-videojs-host .video-js {
+.nas4usb-videojs-host .nas4usb-vjs10-player,
+.nas4usb-videojs-host .nas4usb-vjs10-skin {
+  display: flex;
   width: 100%;
   height: 100%;
-  font-size: 12px;
+  min-height: 0;
+  min-width: 0;
+  flex: 1;
 }
 
-.nas4usb-videojs-host .vjs-control-bar {
-  background: linear-gradient(transparent, rgba(0, 0, 0, 0.72));
+.nas4usb-videojs-host .nas4usb-vjs10-skin {
+  --media-scale-unit: 0.85;
 }
 
-.nas4usb-videojs-host .vjs-progress-control,
-.nas4usb-videojs-host .vjs-slider {
-  touch-action: none;
-}
-
-.nas4usb-videojs-host--ios .vjs-tech {
+.nas4usb-videojs-host--ios media-gesture-layer,
+.nas4usb-videojs-host--ios [data-media-gesture] {
   pointer-events: none;
-}
-
-.nas4usb-videojs-host--ios .vjs-control-bar,
-.nas4usb-videojs-host--ios .vjs-big-play-button,
-.nas4usb-videojs-host--ios .vjs-modal-dialog,
-.nas4usb-videojs-host--ios .vjs-menu {
-  pointer-events: auto;
-  z-index: 3;
 }
 
 /* In-app print / Save as PDF: unclip the editor and paginate the full document. */

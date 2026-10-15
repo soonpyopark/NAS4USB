@@ -4,11 +4,12 @@
  * only ever reference the `nas-*` Tailwind tokens.
  */
 
-/** Matches the original hard-coded `nas.accent`, so an unset theme looks unchanged. */
-export const DEFAULT_ACCENT_COLOR = '#3b82f6';
+/** Default accent for unset settings and fresh portable builds. */
+export const DEFAULT_ACCENT_COLOR = '#57534e';
 
 /** Preset swatches offered in 설정 → 일반 → 테마 색상. */
 export const ACCENT_COLOR_PRESETS = [
+  '#57534e',
   '#3b82f6',
   '#2563eb',
   '#1d4ed8',
@@ -29,7 +30,6 @@ export const ACCENT_COLOR_PRESETS = [
   '#7c3aed',
   '#4f46e5',
   '#475569',
-  '#57534e',
   '#795548',
 ];
 

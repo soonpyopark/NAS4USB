@@ -215,7 +215,7 @@ function OpenEditorLayer({
         extension={openEditor.extension ?? 'pdf'}
         onClose={onClose}
         allowClose={allowClose}
-        fullscreen={fullscreen}
+        fullscreen
         highlightQuery={openEditor.highlightQuery || ''}
         openLocation={openEditor.openLocation}
       />

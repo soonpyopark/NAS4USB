@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import 'video.js/dist/video-js.css';
+import '@videojs/react/video/skin.css';
+import { I18nProvider, loadLocale } from '@videojs/react/i18n';
+import { Video, VideoPlayer, VideoSkin } from '@videojs/react/video';
+import { HlsJsVideo } from '@videojs/react/media/hlsjs-video';
 import { AppModalButton } from '../common/AppModal.jsx';
 import ViewerModal from './ViewerModal.jsx';
 import { useMediaStream } from '../../hooks/useMediaStream.js';
 import { useVideoSeriesQueue } from '../../hooks/useVideoSeriesQueue.js';
-import { attachHlsPlayback } from '../../lib/media/hlsPlayer.js';
 import { isIosWebKit } from '../../lib/media/iosPlayback.js';
 import { getVideoMimeType } from '../../lib/media/mediaTypes.js';
 import { loadSiblingSubtitleTracks, shiftWebVttCues, vttToTrackUrl } from '../../lib/media/subtitles.js';
@@ -13,9 +15,14 @@ import {
   refreshShowingSubtitles,
   replaceRemoteSubtitles,
 } from '../../lib/media/videoJsSubtitles.js';
-import { mountVideoJsPlayer } from '../../lib/media/videoJsPlayer.js';
+import {
+  FFMPEG_HLS_JS_CONFIG,
+  patchTimelineClockOnMedia,
+} from '../../lib/media/videoJsPlayer.js';
 
 const PLAY_NEXT_STORAGE_KEY = 'nas4usb.videoPlayer.playNextInSeries';
+
+void loadLocale('ko').catch(() => {});
 
 function loadPlayNextPreference() {
   try {
@@ -47,14 +54,14 @@ export default function VideoPlayerShell({
   onOpenSibling,
 }) {
   const mimeType = getVideoMimeType(extension);
-  const hostRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   const videoRef = useRef(/** @type {HTMLVideoElement | null} */ (null));
-  const playerRef = useRef(/** @type {import('video.js').VideoJsPlayer | null} */ (null));
+  const mediaCleanupRef = useRef(/** @type {(() => void) | null} */ (null));
   const durationRef = useRef(/** @type {number | null} */ (null));
   const startSecondsRef = useRef(0);
   const seekToRef = useRef(/** @type {(seconds: number) => unknown} */ (() => {}));
   const handleEndedRef = useRef(() => {});
   const subtitleChoiceRef = useRef(/** @type {string | null} */ (null));
+  const ios = isIosWebKit();
   const {
     streamUrl,
     loadError,
@@ -88,6 +95,10 @@ export default function VideoPlayerShell({
   durationRef.current = durationSeconds;
   startSecondsRef.current = startSeconds;
   seekToRef.current = seekTo;
+
+  const useHlsJs = playerKind === 'hls' && !ios;
+  const mediaSrcType =
+    playerKind === 'hls' ? 'application/vnd.apple.mpegurl' : mimeType;
 
   const togglePlayNext = useCallback((event) => {
     const enabled = event.target.checked;
@@ -175,108 +186,111 @@ export default function VideoPlayerShell({
     };
   }, [subtitleSources, startSeconds]);
 
+  const attachMedia = useCallback(
+    (/** @type {HTMLVideoElement} */ video) => {
+      setStalled(false);
+      const onWaiting = () => setStalled(true);
+      const onPlaying = () => setStalled(false);
+      const onEnded = () => handleEndedRef.current();
+      const onSeeked = () => refreshShowingSubtitles(video);
+      let trackChangeTimer = 0;
+      const onTrackChange = () => {
+        window.clearTimeout(trackChangeTimer);
+        trackChangeTimer = window.setTimeout(() => {
+          const label = readShowingSubtitleLabel(video);
+          if (label != null) subtitleChoiceRef.current = label;
+        }, 300);
+      };
+      const onReady = () => {
+        setLoading(false);
+        setPreparing(false);
+        try {
+          video.dispatchEvent(new Event('durationchange'));
+        } catch {
+          // ignore
+        }
+      };
+      const onFatal = () => {
+        setLoadError('호환 변환 영상을 재생할 수 없습니다.');
+        setLoading(false);
+        setPreparing(false);
+      };
+
+      video.addEventListener('loadedmetadata', mediaHandlers.onLoadedMetadata);
+      video.addEventListener('canplay', mediaHandlers.onCanPlay);
+      video.addEventListener('progress', mediaHandlers.onProgress);
+      video.addEventListener('error', mediaHandlers.onError);
+      video.addEventListener('waiting', onWaiting);
+      video.addEventListener('playing', onPlaying);
+      video.addEventListener('ended', onEnded);
+      video.addEventListener('seeked', onSeeked);
+      video.textTracks?.addEventListener('change', onTrackChange);
+      if (playerKind === 'hls') {
+        video.addEventListener('loadedmetadata', onReady);
+        video.addEventListener('error', onFatal);
+      }
+
+      const unpatch = patchTimelineClockOnMedia(
+        video,
+        { durationRef, startSecondsRef, seekToRef },
+        { nativeSeek: ios },
+      );
+
+      return () => {
+        unpatch();
+        video.removeEventListener('loadedmetadata', mediaHandlers.onLoadedMetadata);
+        video.removeEventListener('canplay', mediaHandlers.onCanPlay);
+        video.removeEventListener('progress', mediaHandlers.onProgress);
+        video.removeEventListener('error', mediaHandlers.onError);
+        video.removeEventListener('waiting', onWaiting);
+        video.removeEventListener('playing', onPlaying);
+        video.removeEventListener('ended', onEnded);
+        video.removeEventListener('seeked', onSeeked);
+        video.textTracks?.removeEventListener('change', onTrackChange);
+        if (playerKind === 'hls') {
+          video.removeEventListener('loadedmetadata', onReady);
+          video.removeEventListener('error', onFatal);
+        }
+        window.clearTimeout(trackChangeTimer);
+      };
+    },
+    [ios, mediaHandlers, playerKind, setLoadError, setLoading, setPreparing],
+  );
+
+  const setMediaRef = useCallback(
+    (/** @type {HTMLVideoElement | null} */ node) => {
+      mediaCleanupRef.current?.();
+      mediaCleanupRef.current = null;
+      videoRef.current = node;
+      if (node) {
+        mediaCleanupRef.current = attachMedia(node);
+      }
+    },
+    [attachMedia],
+  );
+
+  useEffect(
+    () => () => {
+      mediaCleanupRef.current?.();
+      mediaCleanupRef.current = null;
+    },
+    [],
+  );
+
   useEffect(() => {
-    const host = hostRef.current;
-    if (!host || !streamUrl) return undefined;
-
-    const mounted = mountVideoJsPlayer(host, {
-      durationRef,
-      startSecondsRef,
-      seekToRef,
-    });
-    videoRef.current = mounted.video;
-    playerRef.current = mounted.player;
-    setStalled(false);
-
-    const video = mounted.video;
-    const onWaiting = () => setStalled(true);
-    const onPlaying = () => setStalled(false);
-    video.addEventListener('loadedmetadata', mediaHandlers.onLoadedMetadata);
-    video.addEventListener('canplay', mediaHandlers.onCanPlay);
-    video.addEventListener('progress', mediaHandlers.onProgress);
-    video.addEventListener('error', mediaHandlers.onError);
-    video.addEventListener('waiting', onWaiting);
-    video.addEventListener('playing', onPlaying);
-    const onEnded = () => handleEndedRef.current();
-    const onSeeked = () => refreshShowingSubtitles(mounted.player);
-    let trackChangeTimer = 0;
-    const onTrackChange = () => {
-      window.clearTimeout(trackChangeTimer);
-      trackChangeTimer = window.setTimeout(() => {
-        const label = readShowingSubtitleLabel(mounted.player);
-        if (label != null) subtitleChoiceRef.current = label;
-      }, 300);
-    };
-    video.addEventListener('ended', onEnded);
-    video.addEventListener('seeked', onSeeked);
-    mounted.player.textTracks()?.addEventListener('change', onTrackChange);
-
-    if (playerKind !== 'hls') {
-      mounted.player.src({ src: streamUrl, type: mimeType });
+    const video = videoRef.current;
+    if (!video) return;
+    try {
+      video.dispatchEvent(new Event('durationchange'));
+    } catch {
+      // ignore
     }
-
-    const detachHls =
-      playerKind === 'hls'
-        ? isIosWebKit()
-          ? (() => {
-              mounted.player.src({ src: streamUrl, type: 'application/vnd.apple.mpegurl' });
-              const onReady = () => {
-                setLoading(false);
-                setPreparing(false);
-                mounted.player.trigger('durationchange');
-              };
-              const onError = () => {
-                setLoadError('호환 변환 영상을 재생할 수 없습니다.');
-                setLoading(false);
-                setPreparing(false);
-              };
-              video.addEventListener('loadedmetadata', onReady);
-              video.addEventListener('error', onError);
-              return () => {
-                video.removeEventListener('loadedmetadata', onReady);
-                video.removeEventListener('error', onError);
-              };
-            })()
-          : attachHlsPlayback(video, streamUrl, {
-              onReady: () => {
-                setLoading(false);
-                setPreparing(false);
-                mounted.player.trigger('durationchange');
-              },
-              onFatalError: () => {
-                setLoadError('호환 변환 영상을 재생할 수 없습니다.');
-                setLoading(false);
-                setPreparing(false);
-              },
-            })
-        : undefined;
-
-    return () => {
-      detachHls?.();
-      video.removeEventListener('loadedmetadata', mediaHandlers.onLoadedMetadata);
-      video.removeEventListener('canplay', mediaHandlers.onCanPlay);
-      video.removeEventListener('progress', mediaHandlers.onProgress);
-      video.removeEventListener('error', mediaHandlers.onError);
-      video.removeEventListener('waiting', onWaiting);
-      video.removeEventListener('playing', onPlaying);
-      video.removeEventListener('ended', onEnded);
-      video.removeEventListener('seeked', onSeeked);
-      window.clearTimeout(trackChangeTimer);
-      mounted.player.textTracks()?.removeEventListener('change', onTrackChange);
-      mounted.dispose();
-      videoRef.current = null;
-      playerRef.current = null;
-    };
-  }, [mimeType, playerKind, relativePath, streamUrl]);
-
-  useEffect(() => {
-    playerRef.current?.trigger('durationchange');
   }, [durationSeconds, startSeconds]);
 
   useEffect(() => {
-    const player = playerRef.current;
-    if (!player) return undefined;
-    replaceRemoteSubtitles(player, subtitleTracks, subtitleChoiceRef.current);
+    const video = videoRef.current;
+    if (!video) return undefined;
+    replaceRemoteSubtitles(video, subtitleTracks, subtitleChoiceRef.current);
     return undefined;
   }, [subtitleTracks, streamUrl]);
 
@@ -316,6 +330,16 @@ export default function VideoPlayerShell({
     </>
   ) : null;
 
+  const mediaProps = {
+    ref: setMediaRef,
+    src: streamUrl || undefined,
+    playsInline: true,
+    preload: 'auto',
+    crossOrigin: ios ? undefined : 'anonymous',
+    disablePictureInPicture: ios,
+    autoPlay: !ios,
+  };
+
   return (
     <ViewerModal
       title={fileName}
@@ -332,8 +356,23 @@ export default function VideoPlayerShell({
       )}
 
       <div className="flex min-h-0 flex-1 flex-col bg-black">
-        <div className="nas4usb-videojs-host min-h-0 flex-1">
-          {streamUrl ? <div ref={hostRef} className="h-full w-full" /> : null}
+        <div className={`nas4usb-videojs-host min-h-0 flex-1${ios ? ' nas4usb-videojs-host--ios' : ''}`}>
+          {streamUrl ? (
+            <I18nProvider locale="ko">
+              <VideoPlayer className="nas4usb-vjs10-player">
+                <VideoSkin className="nas4usb-vjs10-skin">
+                  {useHlsJs ? (
+                    <HlsJsVideo
+                      {...mediaProps}
+                      engine={{ hlsJs: FFMPEG_HLS_JS_CONFIG }}
+                    />
+                  ) : (
+                    <Video {...mediaProps} type={mediaSrcType} />
+                  )}
+                </VideoSkin>
+              </VideoPlayer>
+            </I18nProvider>
+          ) : null}
         </div>
       </div>
     </ViewerModal>

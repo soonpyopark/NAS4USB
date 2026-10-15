@@ -221,7 +221,7 @@ export default function PdfViewerShell({
   extension = 'pdf',
   onClose,
   allowClose = true,
-  fullscreen = false,
+  fullscreen = true,
   raised = false,
   highlightQuery = '',
   openLocation = null,

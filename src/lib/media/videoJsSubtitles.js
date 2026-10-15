@@ -1,16 +1,15 @@
 /**
- * Video.js remote text tracks: keep the chosen subtitle showing after
- * remounts, HLS reloads, and progress-bar seeks.
+ * Native text tracks on the media element (Video.js 10).
+ * Keep the chosen subtitle showing after remounts, HLS reloads, and seeks.
  */
 
 /**
- * @param {import('video.js').VideoJsPlayer | null | undefined} player
+ * @param {HTMLMediaElement | null | undefined} media
  * @returns {TextTrack[]}
  */
-export function listSubtitleTracks(player) {
-  if (!player) return [];
-  const tracks = player.textTracks?.();
-  if (!tracks) return [];
+export function listSubtitleTracks(media) {
+  if (!media?.textTracks) return [];
+  const tracks = media.textTracks;
   /** @type {TextTrack[]} */
   const list = [];
   for (let i = 0; i < tracks.length; i += 1) {
@@ -21,22 +20,22 @@ export function listSubtitleTracks(player) {
 }
 
 /**
- * @param {import('video.js').VideoJsPlayer | null | undefined} player
+ * @param {HTMLMediaElement | null | undefined} media
  * @returns {string | null} showing label, '' if user turned subtitles off, null if none yet
  */
-export function readShowingSubtitleLabel(player) {
-  const tracks = listSubtitleTracks(player);
+export function readShowingSubtitleLabel(media) {
+  const tracks = listSubtitleTracks(media);
   if (tracks.length === 0) return null;
   const showing = tracks.find((track) => track.mode === 'showing');
   return showing ? showing.label || 'on' : '';
 }
 
 /**
- * @param {import('video.js').VideoJsPlayer | null | undefined} player
+ * @param {HTMLMediaElement | null | undefined} media
  * @param {string | null | undefined} preferredLabel
  */
-export function applyShowingSubtitle(player, preferredLabel) {
-  const tracks = listSubtitleTracks(player);
+export function applyShowingSubtitle(media, preferredLabel) {
+  const tracks = listSubtitleTracks(media);
   if (tracks.length === 0) return;
   if (preferredLabel === '') {
     for (const track of tracks) track.mode = 'disabled';
@@ -53,15 +52,15 @@ export function applyShowingSubtitle(player, preferredLabel) {
 
 /**
  * Chromium often keeps the last cue (or none) after a seek until mode flips.
- * @param {import('video.js').VideoJsPlayer | null | undefined} player
+ * @param {HTMLMediaElement | null | undefined} media
  */
-export function refreshShowingSubtitles(player) {
-  const tracks = listSubtitleTracks(player);
+export function refreshShowingSubtitles(media) {
+  const tracks = listSubtitleTracks(media);
   const showing = tracks.filter((track) => track.mode === 'showing');
   if (showing.length === 0) return;
   for (const track of showing) track.mode = 'hidden';
   window.requestAnimationFrame(() => {
-    if (!player || player.isDisposed?.()) return;
+    if (!media || !media.isConnected) return;
     for (const track of showing) {
       if (track.mode === 'disabled') continue;
       track.mode = 'showing';
@@ -70,40 +69,31 @@ export function refreshShowingSubtitles(player) {
 }
 
 /**
- * @param {import('video.js').VideoJsPlayer} player
+ * Replace `<track>` children on the media element.
+ * @param {HTMLMediaElement} media
  * @param {Array<{ src: string, label: string }>} tracks
  * @param {string | null | undefined} preferredLabel
  */
-export function replaceRemoteSubtitles(player, tracks, preferredLabel) {
-  const existing = player.remoteTextTracks?.();
-  if (existing) {
-    for (let i = existing.length - 1; i >= 0; i -= 1) {
-      player.removeRemoteTextTrack(existing[i]);
-    }
+export function replaceRemoteSubtitles(media, tracks, preferredLabel) {
+  const existing = media.querySelectorAll('track[data-nas4usb-sub="1"]');
+  for (const node of existing) node.remove();
+
+  for (let index = 0; index < tracks.length; index += 1) {
+    const track = tracks[index];
+    const el = document.createElement('track');
+    el.kind = 'subtitles';
+    el.src = track.src;
+    el.srclang = 'ko';
+    el.label = track.label;
+    el.dataset.nas4usbSub = '1';
+    const shouldDefault =
+      preferredLabel == null ? index === 0 : track.label === preferredLabel;
+    if (shouldDefault) el.default = true;
+    media.appendChild(el);
   }
 
-  const handles = tracks.map((track, index) =>
-    player.addRemoteTextTrack(
-      {
-        kind: 'subtitles',
-        src: track.src,
-        srclang: 'ko',
-        label: track.label,
-        default: preferredLabel == null ? index === 0 : track.label === preferredLabel,
-      },
-      false,
-    ),
-  );
-
-  const show = () => applyShowingSubtitle(player, preferredLabel);
+  const show = () => applyShowingSubtitle(media, preferredLabel);
   show();
   window.setTimeout(show, 80);
   window.setTimeout(show, 400);
-
-  for (const handle of handles) {
-    const el = handle?.track || handle;
-    if (!el || typeof el.addEventListener !== 'function') continue;
-    el.addEventListener('load', show);
-    el.addEventListener('loadeddata', show);
-  }
 }
