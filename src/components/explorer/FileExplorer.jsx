@@ -164,6 +164,49 @@ function SidebarExpandIcon() {
   );
 }
 
+/** Collapse file-pane chrome (search / index / menus) so only the list remains. */
+function ChromeCollapseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M3 10h18" stroke="currentColor" strokeWidth="1.8" />
+      <path
+        d="M8.75 15.25 12 12l3.25 3.25"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function ChromeExpandIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M3 10h18" stroke="currentColor" strokeWidth="1.8" />
+      <path
+        d="M8.75 12.75 12 16l3.25-3.25"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+const FILE_CHROME_COLLAPSED_KEY = 'nas4usb.fileChromeCollapsed';
+
+function readFileChromeCollapsed() {
+  try {
+    return window.localStorage.getItem(FILE_CHROME_COLLAPSED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 export default function FileExplorer({
   currentPath,
   onNavigate,
@@ -266,8 +309,20 @@ export default function FileExplorer({
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewEntry, setPreviewEntry] = useState(/** @type {import('../../types/nas4usb.d.ts').FsEntry | null} */ (null));
   const [previewAnchorPath, setPreviewAnchorPath] = useState(/** @type {string | null} */ (null));
+  const [chromeCollapsed, setChromeCollapsed] = useState(readFileChromeCollapsed);
   const touchUi = useTouchUi();
   const externalFolders = useExternalFolders();
+  const canToggleChrome = !compactMode && typeof onToggleSidebar === 'function';
+  const fileChromeCollapsed = canToggleChrome && chromeCollapsed;
+
+  const setFileChromeCollapsed = (next) => {
+    setChromeCollapsed(next);
+    try {
+      window.localStorage.setItem(FILE_CHROME_COLLAPSED_KEY, next ? '1' : '0');
+    } catch {
+      // ignore
+    }
+  };
 
   const uploadInputRef = useRef(null);
   const onenoteInputRef = useRef(null);
@@ -1791,7 +1846,7 @@ export default function FileExplorer({
   return (
     <div
       ref={containerRef}
-      className="relative flex min-h-0 flex-1 flex-col gap-2"
+      className={`relative flex min-h-0 flex-1 flex-col ${compactMode ? 'gap-1' : 'gap-2'}`}
       {...dropZoneProps}
       onContextMenu={(event) => {
         const target = event.target;
@@ -1813,50 +1868,73 @@ export default function FileExplorer({
             {sidebarCollapsed ? <SidebarExpandIcon /> : <SidebarCollapseIcon />}
           </button>
         ) : null}
-        <input
-          type="search"
-          value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
-          placeholder={
-            searchContents
-              ? isAdminLoggedIn
-                ? '본문·개인·공유폴더 색인 검색…'
-                : '본문 검색…'
-              : '현재 폴더에서 이름 검색…'
-          }
-          className="ml-auto h-8 w-[220px] shrink-0 rounded-md border border-nas-border bg-white px-3 text-[10pt] outline-none focus:border-nas-accent focus:ring-1 focus:ring-nas-accent"
-        />
-        <label
-          className="flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap text-[10pt] text-nas-muted"
-          title={
-            isAdminLoggedIn
-              ? '개인·공유폴더 Excel·한글·Word·슬라이드·PDF·TipTap·텍스트는 색인에서, 현재 폴더의 다른 문서는 바로 읽습니다. 왼쪽 검색은 이름만 찾습니다.'
-              : '현재 폴더의 문서 내용까지 검색합니다 (txt·md·tiptap·hwpx·docx·xlsx·pdf 등). 외부폴더는 본문 검색에서 제외됩니다.'
-          }
-        >
-          <input
-            type="checkbox"
-            checked={searchContents}
-            onChange={(event) => setSearchContents(event.target.checked)}
-            className="h-3.5 w-3.5 cursor-pointer accent-nas-accent"
-          />
-          본문 검색
-        </label>
-        <label
-          className="flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap text-[10pt] text-nas-muted"
-          title="주요 파일만 보여 줍니다. 폴더는 그대로 둡니다."
-        >
-          <input
-            type="checkbox"
-            checked={starOnly}
-            onChange={(event) => setStarOnly(event.target.checked)}
-            className="h-3.5 w-3.5 cursor-pointer accent-nas-accent"
-          />
-          주요 파일
-        </label>
+        {canToggleChrome ? (
+          <button
+            type="button"
+            className="sidebar-toggle-btn"
+            title={fileChromeCollapsed ? '검색·메뉴 펼치기' : '검색·메뉴 접기 (목록만)'}
+            aria-label={fileChromeCollapsed ? '검색·메뉴 펼치기' : '검색·메뉴 접기 (목록만)'}
+            aria-pressed={!fileChromeCollapsed}
+            onClick={() => setFileChromeCollapsed(!fileChromeCollapsed)}
+          >
+            {fileChromeCollapsed ? <ChromeExpandIcon /> : <ChromeCollapseIcon />}
+          </button>
+        ) : null}
+        {fileChromeCollapsed ? (
+          <span
+            className="min-w-0 flex-1 truncate text-[10pt] text-nas-muted"
+            title={currentPath === '.' ? '루트' : currentPath}
+          >
+            {currentPath === '.' ? '루트' : currentPath}
+          </span>
+        ) : (
+          <>
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder={
+                searchContents
+                  ? isAdminLoggedIn
+                    ? '본문·개인·공유폴더 색인 검색…'
+                    : '본문 검색…'
+                  : '현재 폴더에서 이름 검색…'
+              }
+              className="ml-auto h-8 w-[220px] shrink-0 rounded-md border border-nas-border bg-white px-3 text-[10pt] outline-none focus:border-nas-accent focus:ring-1 focus:ring-nas-accent"
+            />
+            <label
+              className="flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap text-[10pt] text-nas-muted"
+              title={
+                isAdminLoggedIn
+                  ? '개인·공유폴더 Excel·한글·Word·슬라이드·PDF·TipTap·텍스트는 색인에서, 현재 폴더의 다른 문서는 바로 읽습니다. 왼쪽 검색은 이름만 찾습니다.'
+                  : '현재 폴더의 문서 내용까지 검색합니다 (txt·md·tiptap·hwpx·docx·xlsx·pdf 등). 외부폴더는 본문 검색에서 제외됩니다.'
+              }
+            >
+              <input
+                type="checkbox"
+                checked={searchContents}
+                onChange={(event) => setSearchContents(event.target.checked)}
+                className="h-3.5 w-3.5 cursor-pointer accent-nas-accent"
+              />
+              본문 검색
+            </label>
+            <label
+              className="flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap text-[10pt] text-nas-muted"
+              title="주요 파일만 보여 줍니다. 폴더는 그대로 둡니다."
+            >
+              <input
+                type="checkbox"
+                checked={starOnly}
+                onChange={(event) => setStarOnly(event.target.checked)}
+                className="h-3.5 w-3.5 cursor-pointer accent-nas-accent"
+              />
+              주요 파일
+            </label>
+          </>
+        )}
       </div>
 
-      {usePersonalIndex && (
+      {!fileChromeCollapsed && usePersonalIndex && (
         <PersonalDocIndexBar
           variant="light"
           status={docSearch.status}
@@ -1866,7 +1944,7 @@ export default function FileExplorer({
         />
       )}
 
-      {searchContents && searchQuery.trim() && (
+      {!fileChromeCollapsed && searchContents && searchQuery.trim() && (
         <div className="shrink-0 rounded-md border border-nas-accentBorder bg-nas-accentSoft px-4 py-1.5 text-xs text-nas-accentText">
           {usePersonalIndex
             ? [
@@ -1889,105 +1967,103 @@ export default function FileExplorer({
           transfer ? 'pointer-events-none opacity-90' : ''
         }`}
       >
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-nas-border px-4 py-3">
-          {compactMode && typeof onShowFolders === 'function' ? (
-            <button
-              type="button"
-              className={`inline-flex ${touchUi ? 'h-11' : 'h-8'} shrink-0 items-center gap-1 rounded-md border border-nas-border bg-white px-2.5 text-[10pt] text-nas-text hover:bg-nas-sidebarHover`}
-              onClick={onShowFolders}
-              title="폴더 목록으로"
-              aria-label="폴더 목록으로"
+        {!fileChromeCollapsed ? (
+          <>
+            <div
+              className={`flex flex-wrap items-center border-b border-nas-border ${
+                compactMode
+                  ? 'gap-x-2 gap-y-1.5 px-3 py-1.5'
+                  : 'gap-x-3 gap-y-2 px-4 py-3'
+              }`}
             >
-              <span aria-hidden="true">←</span>
-              폴더
-            </button>
-          ) : null}
-          <div className="min-w-0 flex-1">
-            <Breadcrumb currentPath={currentPath} onNavigate={onNavigate} />
-          </div>
-          {!loading && !showViewAccessDenied ? (
-            <p
-              className="ml-auto shrink-0 tabular-nums text-[10pt] text-nas-muted"
-              title="이 폴더 바로 아래의 폴더·파일 수"
-            >
-              {`폴더 ${folderCounts.folders.toLocaleString('ko-KR')}개 · 파일 ${folderCounts.files.toLocaleString('ko-KR')}개`}
-              {(searchQuery.trim() || starOnly) && visibleEntries.length !== folderCounts.total
-                ? ` · 표시 ${visibleEntries.length.toLocaleString('ko-KR')}`
-                : ''}
-            </p>
-          ) : null}
-        </div>
-      <FileExplorerToolbar
-        hasSelection={selectedEntries.length > 0}
-        canRename={
-          selectedEntries.length === 1 &&
-          !isProtectedSharedSystemPath(selectedEntries[0].relativePath) &&
-          !isHomesContainerPath(selectedEntries[0].relativePath) &&
-          !isMemberHomeRootPath(selectedEntries[0].relativePath) &&
-          !isExternalFolderContainerPath(selectedEntries[0].relativePath) &&
-          !isExternalMountRootPath(selectedEntries[0].relativePath)
-        }
-        hasClipboard={hasClipboard}
-        isInTrashView={isInTrashView}
-        isInFavoritesView={isInFavoritesView}
-        onNavigateUp={handleNavigateUp}
-        onRefresh={refreshAll}
-        onCreateFolder={handleCreateFolder}
-        onCreateFile={handleCreateFile}
-        onUploadClick={handleUploadClick}
-        onDownloadClick={() => handleDownload()}
-        canDownload={downloadableEntries.length > 0}
-        onCopy={() => handleCopy()}
-        onCut={() => handleCut()}
-        onMove={() => handleMove()}
-        onPaste={() => handlePaste(currentPath)}
-        onDelete={() => handleDelete()}
-        onPermanentDelete={() => handlePermanentDelete()}
-        onRestore={() => handleRestore()}
-        onEmptyTrash={handleEmptyTrash}
-        onRename={() => handleRename()}
-        onDuplicate={() => handleDuplicate()}
-        onSelectAll={selectAll}
-        onClearSelection={clearSelection}
-        onProperties={() => handleShowProperties()}
-        canShowProperties={selectedEntries.length === 1}
-        onImportOnenote={
-          isExternalFolderPath(currentPath) ? undefined : handleImportOnenoteClick
-        }
-        importingOnenote={importingOnenote}
-        onClearExternalCaches={
-          canClearOrphanCaches(currentPath, isSuperAdmin) &&
-          (isExternalFolderPath(currentPath) || canWrite)
-            ? handleClearExternalCaches
-            : undefined
-        }
-        clearingExternalCaches={clearingExternalCaches}
-        onClearFolderBackups={
-          canClearFolderBackups(currentPath) ? handleClearFolderBackups : undefined
-        }
-        clearingFolderBackups={clearingFolderBackups}
-        isAdminLoggedIn={isAdminLoggedIn}
-        canWrite={canWrite}
-        canEmptyTrash={globalWrite}
-        showTrashDelete={
-          selectedEntries.length === 0 ||
-          !selectedEntries.every((entry) => isExternalContentPath(entry.relativePath))
-        }
-      />
+              <div className="min-w-0 flex-1">
+                <Breadcrumb currentPath={currentPath} onNavigate={onNavigate} />
+              </div>
+              {!loading && !showViewAccessDenied ? (
+                <p
+                  className="ml-auto shrink-0 tabular-nums text-[10pt] text-nas-muted"
+                  title="이 폴더 바로 아래의 폴더·파일 수"
+                >
+                  {`폴더 ${folderCounts.folders.toLocaleString('ko-KR')}개 · 파일 ${folderCounts.files.toLocaleString('ko-KR')}개`}
+                  {(searchQuery.trim() || starOnly) && visibleEntries.length !== folderCounts.total
+                    ? ` · 표시 ${visibleEntries.length.toLocaleString('ko-KR')}`
+                    : ''}
+                </p>
+              ) : null}
+            </div>
+            <FileExplorerToolbar
+              hasSelection={selectedEntries.length > 0}
+              canRename={
+                selectedEntries.length === 1 &&
+                !isProtectedSharedSystemPath(selectedEntries[0].relativePath) &&
+                !isHomesContainerPath(selectedEntries[0].relativePath) &&
+                !isMemberHomeRootPath(selectedEntries[0].relativePath) &&
+                !isExternalFolderContainerPath(selectedEntries[0].relativePath) &&
+                !isExternalMountRootPath(selectedEntries[0].relativePath)
+              }
+              hasClipboard={hasClipboard}
+              isInTrashView={isInTrashView}
+              isInFavoritesView={isInFavoritesView}
+              onNavigateUp={handleNavigateUp}
+              onRefresh={refreshAll}
+              onCreateFolder={handleCreateFolder}
+              onCreateFile={handleCreateFile}
+              onUploadClick={handleUploadClick}
+              onDownloadClick={() => handleDownload()}
+              canDownload={downloadableEntries.length > 0}
+              onCopy={() => handleCopy()}
+              onCut={() => handleCut()}
+              onMove={() => handleMove()}
+              onPaste={() => handlePaste(currentPath)}
+              onDelete={() => handleDelete()}
+              onPermanentDelete={() => handlePermanentDelete()}
+              onRestore={() => handleRestore()}
+              onEmptyTrash={handleEmptyTrash}
+              onRename={() => handleRename()}
+              onDuplicate={() => handleDuplicate()}
+              onSelectAll={selectAll}
+              onClearSelection={clearSelection}
+              onProperties={() => handleShowProperties()}
+              canShowProperties={selectedEntries.length === 1}
+              onImportOnenote={
+                isExternalFolderPath(currentPath) ? undefined : handleImportOnenoteClick
+              }
+              importingOnenote={importingOnenote}
+              onClearExternalCaches={
+                canClearOrphanCaches(currentPath, isSuperAdmin) &&
+                (isExternalFolderPath(currentPath) || canWrite)
+                  ? handleClearExternalCaches
+                  : undefined
+              }
+              clearingExternalCaches={clearingExternalCaches}
+              onClearFolderBackups={
+                canClearFolderBackups(currentPath) ? handleClearFolderBackups : undefined
+              }
+              clearingFolderBackups={clearingFolderBackups}
+              isAdminLoggedIn={isAdminLoggedIn}
+              canWrite={canWrite}
+              canEmptyTrash={globalWrite}
+              showTrashDelete={
+                selectedEntries.length === 0 ||
+                !selectedEntries.every((entry) => isExternalContentPath(entry.relativePath))
+              }
+            />
 
-      {isInTrashView && (
-        <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
-          휴지통 · 항목을 복원하거나 삭제(영구)할 수 있습니다. 파일은 복원 후 열어 주세요.
-        </div>
-      )}
+            {isInTrashView && (
+              <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
+                휴지통 · 항목을 복원하거나 삭제(영구)할 수 있습니다. 파일은 복원 후 열어 주세요.
+              </div>
+            )}
 
-      {isInFavoritesView && (
-        <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
-          {favoritesView === 'folders'
-            ? '폴더 즐겨찾기 · 등록한 폴더로 바로 이동할 수 있습니다. 로그인 후 위로/아래 또는 드래그로 순서를 바꿀 수 있습니다.'
-            : '파일 즐겨찾기 · 등록한 문서를 한곳에서 열어볼 수 있습니다. 로그인 후 위로/아래 또는 드래그로 순서를 바꿀 수 있습니다.'}
-        </div>
-      )}
+            {isInFavoritesView && (
+              <div className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
+                {favoritesView === 'folders'
+                  ? '폴더 즐겨찾기 · 등록한 폴더로 바로 이동할 수 있습니다. 로그인 후 위로/아래 또는 드래그로 순서를 바꿀 수 있습니다.'
+                  : '파일 즐겨찾기 · 등록한 문서를 한곳에서 열어볼 수 있습니다. 로그인 후 위로/아래 또는 드래그로 순서를 바꿀 수 있습니다.'}
+              </div>
+            )}
+          </>
+        ) : null}
 
       <input ref={uploadInputRef} type="file" multiple hidden onChange={handleUploadInput} />
       <input

@@ -110,18 +110,20 @@
 
       const mode = params.get('mode');
       const version = params.get('version');
+      const build = params.get('build');
       const author = params.get('author');
-      if (mode === 'about') {
-        const metaEl = document.getElementById('about-meta');
-        if (metaEl) {
-          const parts = [];
-          if (version) parts.push('v' + version);
-          if (author) parts.push(author);
-          if (parts.length > 0) {
-            metaEl.textContent = parts.join(' · ');
-            metaEl.hidden = false;
-          }
+      const metaEl = document.getElementById('about-meta');
+      if (metaEl) {
+        const parts = [];
+        if (version) parts.push('v' + version);
+        if (build) parts.push('빌드 ' + build);
+        if (author) parts.push(author);
+        if (parts.length > 0) {
+          metaEl.textContent = parts.join(' · ');
+          metaEl.hidden = false;
         }
+      }
+      if (mode === 'about') {
         document.body.title = '클릭하면 닫힙니다';
         document.body.addEventListener('click', (event) => {
           if (event.target.closest('#blog-url')) return;

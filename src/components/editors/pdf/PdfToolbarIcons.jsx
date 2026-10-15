@@ -172,3 +172,25 @@ export function IconPdfFabDockRight() {
     </Svg>
   );
 }
+
+/** Hide title + toolbar (enter immersive reading). */
+export function IconPdfChromeHide() {
+  return (
+    <Svg>
+      <rect x="4" y="5" width="16" height="14" rx="1.5" />
+      <path d="M4 10h16" />
+      <path d="M9 14l3-3 3 3" />
+    </Svg>
+  );
+}
+
+/** Show title + toolbar again. */
+export function IconPdfChromeShow() {
+  return (
+    <Svg>
+      <rect x="4" y="5" width="16" height="14" rx="1.5" />
+      <path d="M4 10h16" />
+      <path d="M9 17l3 3 3-3" />
+    </Svg>
+  );
+}

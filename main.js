@@ -3,7 +3,14 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell, Tray } f
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { APP_BLOG_URL, APP_NAME, APP_VERSION, FAVORITES_FOLDER } from './shared/constants.js';
+import {
+  APP_BLOG_URL,
+  APP_BUILD_STAMP,
+  APP_NAME,
+  APP_VERSION,
+  FAVORITES_FOLDER,
+  formatAppBuildStamp,
+} from './shared/constants.js';
 import { resolveUniqueName } from './shared/uniqueName.js';
 import {
   RELEASES_PAGE_URL,
@@ -306,7 +313,7 @@ function showSplashWindow(mode) {
 
   splashWindow = new BrowserWindow({
     width: 400,
-    height: mode === 'about' ? 130 : 110,
+    height: 130,
     frame: false,
     alwaysOnTop: mode === 'loading',
     skipTaskbar: mode === 'loading',
@@ -328,6 +335,7 @@ function showSplashWindow(mode) {
       title: APP_NAME,
       blog: APP_BLOG_URL,
       version: APP_VERSION,
+      build: formatAppBuildStamp(APP_BUILD_STAMP),
     },
   });
 

@@ -50,6 +50,8 @@ import { downloadPdfMarkupsXlsx } from '../../lib/pdf/exportPdfMarkupsXlsx.js';
 import {
   IconPdfChevronLeft,
   IconPdfChevronRight,
+  IconPdfChromeHide,
+  IconPdfChromeShow,
   IconPdfExportExcel,
   IconPdfFabDockLeft,
   IconPdfFabDockRight,
@@ -86,6 +88,7 @@ const PAGE_ROOT_MARGIN = '1400px 0px';
 const PDF_SIDE_RAIL_WIDTH_PX = 220;
 const PDF_FAB_SIDE_KEY = 'nas4usb.pdfPageFabSide';
 const PDF_SELECT_MODE_KEY = 'nas4usb.pdfSelectMode';
+const PDF_CHROME_VISIBLE_KEY = 'nas4usb.pdfChromeVisible';
 
 /**
  * @returns {'left' | 'right'}
@@ -104,6 +107,28 @@ function readPdfFabSide() {
 function writePdfFabSide(side) {
   try {
     window.localStorage.setItem(PDF_FAB_SIDE_KEY, side);
+  } catch {
+    // ignore quota / private mode
+  }
+}
+
+/**
+ * @returns {boolean}
+ */
+function readPdfChromeVisible() {
+  try {
+    return window.localStorage.getItem(PDF_CHROME_VISIBLE_KEY) !== '0';
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * @param {boolean} visible
+ */
+function writePdfChromeVisible(visible) {
+  try {
+    window.localStorage.setItem(PDF_CHROME_VISIBLE_KEY, visible ? '1' : '0');
   } catch {
     // ignore quota / private mode
   }
@@ -296,6 +321,7 @@ export default function PdfViewerShell({
   const rotation = 0;
   const twoPageView = false;
   const [fabSide, setFabSide] = useState(/** @type {'left' | 'right'} */ (readPdfFabSide));
+  const [chromeVisible, setChromeVisible] = useState(readPdfChromeVisible);
   const [selectMode, setSelectMode] = useState(readPdfSelectMode);
   const [wordsEpoch, setWordsEpoch] = useState(0);
   const [iosHud, setIosHud] = useState(
@@ -1544,6 +1570,23 @@ export default function PdfViewerShell({
       return next;
     });
   }, []);
+
+  const setPdfChromeVisible = useCallback((visible) => {
+    setChromeVisible(visible);
+    writePdfChromeVisible(visible);
+  }, []);
+
+  const toggleChromeVisible = useCallback(() => {
+    setChromeVisible((prev) => {
+      const next = !prev;
+      writePdfChromeVisible(next);
+      if (!next) {
+        setShowSearchBar(false);
+        setSidePanel(null);
+      }
+      return next;
+    });
+  }, []);
   const toggleSelectMode = useCallback(() => {
     setSelectMode((prev) => {
       const next = !prev;
@@ -2722,12 +2765,13 @@ export default function PdfViewerShell({
   }, [relativePath, savingToFile]);
 
   const openSearchBar = useCallback(() => {
+    setPdfChromeVisible(true);
     setShowSearchBar(true);
     window.requestAnimationFrame(() => {
       searchInputRef.current?.focus();
       searchInputRef.current?.select();
     });
-  }, []);
+  }, [setPdfChromeVisible]);
 
   const closeSearchBar = useCallback(() => {
     setShowSearchBar(false);
@@ -2764,6 +2808,12 @@ export default function PdfViewerShell({
       if (event.key === 'Escape' && showSearchBar) {
         event.preventDefault();
         closeSearchBar();
+        return;
+      }
+
+      if (event.key === 'Escape' && !chromeVisible) {
+        event.preventDefault();
+        setPdfChromeVisible(true);
         return;
       }
 
@@ -2834,6 +2884,7 @@ export default function PdfViewerShell({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [
     canSaveToFile,
+    chromeVisible,
     closeSearchBar,
     copyActiveMarkupText,
     currentPage,
@@ -2844,6 +2895,7 @@ export default function PdfViewerShell({
     openSearchBar,
     removeMarkup,
     resetZoom,
+    setPdfChromeVisible,
     showSearchBar,
     handleFabNavigate,
     zoomBy,
@@ -2921,6 +2973,7 @@ export default function PdfViewerShell({
       allowClose={allowClose}
       fullscreen={fullscreen}
       raised={raised}
+      hideHeader={!chromeVisible}
       actions={
         <AppModalButton
           className="modal-btn--icon"
@@ -2987,6 +3040,7 @@ export default function PdfViewerShell({
         </AppModalActions>
       </AppModal>
 
+      {chromeVisible ? (
       <div className="pdf-viewer-toolbar flex flex-wrap items-center gap-0.5 border-b border-slate-200 bg-slate-50 px-2 py-1">
         <button
           type="button"
@@ -3189,8 +3243,9 @@ export default function PdfViewerShell({
           {fabSide === 'left' ? <IconPdfFabDockLeft /> : <IconPdfFabDockRight />}
         </button>
       </div>
+      ) : null}
 
-      {saveMessage ? (
+      {chromeVisible && saveMessage ? (
         <div
           className={`border-b px-3 py-1.5 text-xs ${
             saveMessage.includes('실패') || saveMessage.includes('못')
@@ -3201,7 +3256,7 @@ export default function PdfViewerShell({
           {saveMessage}
         </div>
       ) : null}
-      {showSearchBar ? (
+      {chromeVisible && showSearchBar ? (
         <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-3 py-2">
           <label className="sr-only" htmlFor="pdf-search-input">
             PDF 텍스트 검색
@@ -3386,6 +3441,22 @@ export default function PdfViewerShell({
               role="group"
               aria-label={zoomMode === 'fitWidth' ? '화면 스크롤' : '페이지 이동'}
             >
+              <button
+                type="button"
+                className={`pdf-page-fab__btn${!chromeVisible ? ' pdf-page-fab__btn--active' : ''}`}
+                onClick={toggleChromeVisible}
+                title={
+                  chromeVisible
+                    ? '제목·메뉴 숨기기'
+                    : '제목·메뉴 보이기 (Esc)'
+                }
+                aria-label={
+                  chromeVisible ? '제목·메뉴 숨기기' : '제목·메뉴 보이기'
+                }
+                aria-pressed={!chromeVisible}
+              >
+                {chromeVisible ? <IconPdfChromeHide /> : <IconPdfChromeShow />}
+              </button>
               <button
                 type="button"
                 className="pdf-page-fab__btn"
@@ -3614,6 +3685,11 @@ export default function PdfViewerShell({
         .pdf-page-fab__btn:hover:not(:disabled) {
           background: rgba(255, 255, 255, 0.7);
           color: rgba(15, 23, 42, 0.92);
+        }
+        .pdf-page-fab__btn--active {
+          background: rgba(224, 242, 254, 0.95);
+          color: #0369a1;
+          border-color: rgba(3, 105, 161, 0.35);
         }
         .pdf-page-fab__btn:disabled {
           opacity: 0.35;

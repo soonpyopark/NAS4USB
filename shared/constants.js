@@ -12,7 +12,19 @@ export const APP_VERSION = '1.1.0';
  * Refreshed by `build:release` / `build:msi` / `build:dist:exe` for update checks
  * when the GitHub tag version is unchanged (same-version republish).
  */
-export const APP_BUILD_STAMP = '261015_135941';
+export const APP_BUILD_STAMP = '261015_190527';
+
+/**
+ * Human-readable build time from {@link APP_BUILD_STAMP} (`YYYY-MM-DD HH:MM:SS`).
+ * @param {string} [stamp]
+ * @returns {string}
+ */
+export function formatAppBuildStamp(stamp = APP_BUILD_STAMP) {
+  const match = /^(\d{2})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})$/.exec(String(stamp ?? '').trim());
+  if (!match) return String(stamp ?? '').trim();
+  const year = 2000 + Number(match[1]);
+  return `${year}-${match[2]}-${match[3]} ${match[4]}:${match[5]}:${match[6]}`;
+}
 
 /** Application display name. */
 export const APP_NAME = 'NAS4USB';

@@ -11,6 +11,7 @@ export default function ViewerModal({
   allowClose = true,
   fullscreen = false,
   raised = false,
+  hideHeader = false,
   children,
 }) {
   return (
@@ -21,27 +22,29 @@ export default function ViewerModal({
       raised={raised}
       onClose={allowClose ? onClose : undefined}
     >
-      <header className="modal-editor-header">
-        <div className="min-w-0 flex-1">
-          <p className="flex min-w-0 items-baseline text-sm font-semibold text-[#323130]">
-            <span className="truncate">{title}</span>
-            {titleSuffix ? (
-              <span className="ml-1 shrink-0 font-normal text-[#605e5c]">{titleSuffix}</span>
-            ) : null}
-          </p>
-          {readOnly && <p className="truncate text-xs font-bold text-red-600">읽기전용</p>}
-          {subtitle && <p className="truncate text-xs text-[#605e5c]">{subtitle}</p>}
-        </div>
+      {hideHeader ? null : (
+        <header className="modal-editor-header">
+          <div className="min-w-0 flex-1">
+            <p className="flex min-w-0 items-baseline text-sm font-semibold text-[#323130]">
+              <span className="truncate">{title}</span>
+              {titleSuffix ? (
+                <span className="ml-1 shrink-0 font-normal text-[#605e5c]">{titleSuffix}</span>
+              ) : null}
+            </p>
+            {readOnly && <p className="truncate text-xs font-bold text-red-600">읽기전용</p>}
+            {subtitle && <p className="truncate text-xs text-[#605e5c]">{subtitle}</p>}
+          </div>
 
-        <AppModalActions className="!mb-0 shrink-0">
-          {actions}
-          {allowClose && (
-            <AppModalButton className="modal-btn--icon" title="닫기" aria-label="닫기" onClick={onClose}>
-              <IconClose />
-            </AppModalButton>
-          )}
-        </AppModalActions>
-      </header>
+          <AppModalActions className="!mb-0 shrink-0">
+            {actions}
+            {allowClose && (
+              <AppModalButton className="modal-btn--icon" title="닫기" aria-label="닫기" onClick={onClose}>
+                <IconClose />
+              </AppModalButton>
+            )}
+          </AppModalActions>
+        </header>
+      )}
 
       <div className="modal-editor-body">{children}</div>
     </AppModal>

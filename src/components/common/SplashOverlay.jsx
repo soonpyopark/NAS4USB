@@ -1,13 +1,16 @@
 import {
   APP_BLOG_URL,
+  APP_BUILD_STAMP,
   APP_ICON_URL,
   APP_NAME,
   APP_VERSION,
+  formatAppBuildStamp,
 } from '../../../shared/constants.js';
 import { useBackdropDismiss } from '../../hooks/useBackdropDismiss.js';
 import { openExternalUrl } from '../../lib/openExternal.js';
 
 const iconSrc = `${import.meta.env.BASE_URL}${APP_ICON_URL.replace(/^\//, '')}`;
+const buildLabel = formatAppBuildStamp(APP_BUILD_STAMP);
 
 export default function SplashOverlay({ open, onClose }) {
   const dismiss = useBackdropDismiss(onClose, {
@@ -33,6 +36,9 @@ export default function SplashOverlay({ open, onClose }) {
             {APP_NAME}{' '}
             <span className="splash-overlay__version">v{APP_VERSION}</span>
           </h2>
+          {buildLabel ? (
+            <p className="splash-overlay__meta">빌드 {buildLabel}</p>
+          ) : null}
           <a
             className="splash-overlay__url"
             href={APP_BLOG_URL}
