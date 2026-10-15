@@ -395,6 +395,8 @@ export default function PdfViewerShell({
   /** Page to restore after first layout (from sidecar). */
   const pendingRestorePageRef = useRef(/** @type {number | null} */ (null));
   const viewerSaveTimerRef = useRef(/** @type {ReturnType<typeof setTimeout> | null} */ (null));
+  /** Last observed mouse-wheel step (px); FAB up/down mirrors this. */
+  const wheelStepPxRef = useRef(100);
   const zoomModeRef = useRef(zoomMode);
   const customScaleRef = useRef(customScale);
   const twoPageViewRef = useRef(twoPageView);
@@ -1157,6 +1159,9 @@ export default function PdfViewerShell({
       setCurrentPage(1);
       setPageInput('1');
       setDocReady(false);
+      // Always open on fit-width so the toolbar matches first paint (ignore prior doc / sidecar zoom).
+      setZoomMode('fitWidth');
+      setCustomScale(1);
       clearSearch();
       setMarkups([]);
       setMarkupScanPending(false);
@@ -1180,11 +1185,6 @@ export default function PdfViewerShell({
         }
 
         const view = sidecar?.view;
-        if (view?.zoomMode && view.zoomMode !== 'fitPage') setZoomMode(view.zoomMode);
-        else if (view?.zoomMode === 'fitPage') setZoomMode('fitWidth');
-        if (typeof view?.customScale === 'number' && view.customScale > 0) {
-          setCustomScale(view.customScale);
-        }
         // Set current page before first layout so renderAllPages keepPage is correct.
         // Scroll jump still waits until shells exist (pendingRestorePageRef).
         const openPage = Number(openLocation?.page);
@@ -1447,7 +1447,7 @@ export default function PdfViewerShell({
     });
   }, []);
 
-  // Track current page from scroll.
+  // Track current page from scroll; learn wheel step for FAB nudges.
   useEffect(() => {
     const scroller = scrollRef.current;
     if (!scroller || !pageCount) return undefined;
@@ -1485,9 +1485,24 @@ export default function PdfViewerShell({
       });
     };
 
+    const onWheel = (event) => {
+      let dy = Math.abs(event.deltaY);
+      if (!(dy > 0)) return;
+      if (event.deltaMode === 1) dy *= 16;
+      else if (event.deltaMode === 2) dy = scroller.clientHeight;
+      const maxStep = Math.max(80, Math.round(scroller.clientHeight * 0.9));
+      const next = Math.min(maxStep, Math.max(40, Math.round(dy)));
+      // Prefer recent notches; keep a little history so trackpad bursts don't dominate.
+      wheelStepPxRef.current = Math.round(wheelStepPxRef.current * 0.35 + next * 0.65);
+    };
+
     updateScrollEdges();
     scroller.addEventListener('scroll', onScroll, { passive: true });
-    return () => scroller.removeEventListener('scroll', onScroll);
+    scroller.addEventListener('wheel', onWheel, { passive: true });
+    return () => {
+      scroller.removeEventListener('scroll', onScroll);
+      scroller.removeEventListener('wheel', onWheel);
+    };
   }, [pageCount, rendering, twoPageView, updateScrollEdges]);
 
   // Resize refreshes fit modes only.
@@ -1536,18 +1551,20 @@ export default function PdfViewerShell({
     [pageCount, updateScrollEdges],
   );
 
-  /** Fit-width: nudge viewport; fit-height/page: jump pages. */
+  /** Fit-width: nudge like a mouse-wheel notch; fit-height/page: jump pages. */
   const handleFabNavigate = useCallback(
     (direction) => {
       if (zoomModeRef.current === 'fitWidth') {
         const scroller = scrollRef.current;
         if (!scroller) return;
-        const step = Math.max(140, Math.round(scroller.clientHeight * 0.45));
+        const fallback = Math.max(80, Math.min(120, Math.round(scroller.clientHeight * 0.12)));
+        const learned = wheelStepPxRef.current;
+        const step = Math.max(40, Math.round(learned > 0 ? learned : fallback));
         scroller.scrollBy({
           top: direction === 'up' ? -step : step,
-          behavior: 'smooth',
+          behavior: 'auto',
         });
-        window.setTimeout(() => updateScrollEdges(), 320);
+        updateScrollEdges();
         return;
       }
       goToPage(currentPageRef.current + (direction === 'up' ? -1 : 1));
