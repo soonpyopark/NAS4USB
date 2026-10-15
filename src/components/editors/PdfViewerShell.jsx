@@ -3668,7 +3668,7 @@ export default function PdfViewerShell({
         }
         .pdf-page-fab {
           position: absolute;
-          top: 56%;
+          top: 40%;
           transform: translateY(-50%);
           z-index: 20;
           display: flex;
