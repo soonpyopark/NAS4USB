@@ -1119,7 +1119,7 @@
 }
 
 .modal-properties {
-  margin: 0 0 1.5rem;
+  margin: 0;
   font-size: 0.875rem;
 }
 
@@ -1141,7 +1141,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.625rem;
-  margin: 0 0 1.25rem;
+  margin: 1rem 0 1.25rem;
   padding-top: 1rem;
   border-top: 1px solid #edebe9;
 }
@@ -1171,6 +1171,12 @@
 
 .modal-access-option--readonly {
   cursor: default;
+}
+
+.modal-access-option--ruled {
+  margin-top: 0.35rem;
+  padding-top: 1rem;
+  border-top: 1px solid #edebe9;
 }
 
 .modal-access-hint {

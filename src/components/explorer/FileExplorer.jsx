@@ -260,10 +260,12 @@ export default function FileExplorer({
     fileLevelMap,
     fileCollapsedMap,
     indexExcludeMap,
+    backupExcludeMap,
     refreshFolderColorMap,
     setFolderColor,
     setNameBold,
     setIndexExclude,
+    setBackupExclude,
     setFileLevels,
     setFileCollapsed,
     setFileCollapsedMany,
@@ -1550,6 +1552,15 @@ export default function FileExplorer({
     }
   };
 
+  const handleSetBackupExclude = async (entry, excluded) => {
+    if (!entry?.isDirectory) return;
+    try {
+      await setBackupExclude(entry.relativePath, excluded);
+    } catch (err) {
+      nativeAlert(err instanceof Error ? err.message : '자동백업 제외를 바꾸지 못했습니다.');
+    }
+  };
+
   const canUseFileIndent =
     canWrite && !isInTrashView && !isInFavoritesView && typeof setFileLevels === 'function';
 
@@ -2226,6 +2237,20 @@ export default function FileExplorer({
             isSuperAdmin,
           )}
           onChangeIndexExclude={(excluded) => handleSetIndexExclude(propertiesEntry, excluded)}
+          backupExclude={
+            indexExcludeState(propertiesEntry.relativePath, backupExcludeMap).self
+          }
+          backupExcludeInherited={
+            indexExcludeState(propertiesEntry.relativePath, backupExcludeMap).inherited
+          }
+          canChangeBackupExclude={canWriteAtPath(
+            propertiesEntry.relativePath,
+            adminId,
+            isAdminLoggedIn,
+            globalWrite,
+            isSuperAdmin,
+          )}
+          onChangeBackupExclude={(excluded) => handleSetBackupExclude(propertiesEntry, excluded)}
           onClose={() => {
             setPropertiesEntry(null);
             setPropertiesStat(null);

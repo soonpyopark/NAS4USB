@@ -22,6 +22,7 @@ const FOLDER_COLORS_FILE = '.nas4usb-folder-colors.json';
  *   levels: Record<string, number>,
  *   collapsed: Record<string, true>,
  *   indexExclude: Record<string, true>,
+ *   backupExclude: Record<string, true>,
  * }} FolderColorsStore
  */
 
@@ -41,12 +42,13 @@ async function loadStore(portableRoot) {
         levels: normalizeFileLevelMap(parsed.levels),
         collapsed: normalizeFileCollapsedMap(parsed.collapsed),
         indexExclude: normalizeFlagMap(parsed.indexExclude),
+        backupExclude: normalizeFlagMap(parsed.backupExclude),
       };
     }
   } catch {
     // fall through
   }
-  return { colors: {}, bold: {}, levels: {}, collapsed: {}, indexExclude: {} };
+  return { colors: {}, bold: {}, levels: {}, collapsed: {}, indexExclude: {}, backupExclude: {} };
 }
 
 /**
@@ -86,9 +88,10 @@ async function saveStore(portableRoot, store) {
   const levels = normalizeFileLevelMap(store?.levels);
   const collapsed = normalizeFileCollapsedMap(store?.collapsed);
   const indexExclude = normalizeFlagMap(store?.indexExclude);
+  const backupExclude = normalizeFlagMap(store?.backupExclude);
   await fs.writeFile(
     filePath,
-    JSON.stringify({ colors, bold, levels, collapsed, indexExclude }, null, 2),
+    JSON.stringify({ colors, bold, levels, collapsed, indexExclude, backupExclude }, null, 2),
     'utf8',
   );
 }
@@ -134,6 +137,14 @@ export async function getIndexExcludeMap(portableRoot = getPortableRoot()) {
 }
 
 /**
+ * @param {string} [portableRoot]
+ */
+export async function getBackupExcludeMap(portableRoot = getPortableRoot()) {
+  const store = await loadStore(portableRoot);
+  return store.backupExclude;
+}
+
+/**
  * Exclude this folder and its descendants from the personal/share document index.
  * @param {string} relativePath
  * @param {boolean} excluded
@@ -156,6 +167,31 @@ export async function setIndexExclude(relativePath, excluded, portableRoot = get
 
   await saveStore(portableRoot, store);
   return { relativePath: normalizedPath, indexExclude: Boolean(excluded) };
+}
+
+/**
+ * Exclude this folder and its descendants from workspace auto/manual zip backups.
+ * @param {string} relativePath
+ * @param {boolean} excluded
+ * @param {string} [portableRoot]
+ */
+export async function setBackupExclude(relativePath, excluded, portableRoot = getPortableRoot()) {
+  const normalizedPath = String(relativePath ?? '').replace(/\\/g, '/');
+  if (!normalizedPath || normalizedPath === '.') {
+    throw new Error('폴더 경로가 올바르지 않습니다.');
+  }
+
+  const stat = await fsService.statPath(normalizedPath);
+  if (!stat.isDirectory) {
+    throw new Error('폴더에만 자동백업 제외를 지정할 수 있습니다.');
+  }
+
+  const store = await loadStore(portableRoot);
+  if (excluded) store.backupExclude[normalizedPath] = true;
+  else delete store.backupExclude[normalizedPath];
+
+  await saveStore(portableRoot, store);
+  return { relativePath: normalizedPath, backupExclude: Boolean(excluded) };
 }
 
 /**
@@ -375,12 +411,14 @@ export async function syncFolderColorsMoveTree(
   const levels = remapPathKeyedRecord(store.levels, fromPath, toPath);
   const collapsed = remapPathKeyedRecord(store.collapsed, fromPath, toPath);
   const indexExclude = remapPathKeyedRecord(store.indexExclude, fromPath, toPath);
+  const backupExclude = remapPathKeyedRecord(store.backupExclude, fromPath, toPath);
   if (
     !colors.changed &&
     !bold.changed &&
     !levels.changed &&
     !collapsed.changed &&
-    !indexExclude.changed
+    !indexExclude.changed &&
+    !backupExclude.changed
   ) {
     return;
   }
@@ -390,6 +428,7 @@ export async function syncFolderColorsMoveTree(
   store.levels = levels.next;
   store.collapsed = collapsed.next;
   store.indexExclude = indexExclude.next;
+  store.backupExclude = backupExclude.next;
   await saveStore(portableRoot, store);
 }
 
@@ -405,7 +444,15 @@ export async function syncFolderColorsDelete(relativePath, portableRoot = getPor
   const levelsChanged = deletePathKeyedRecord(store.levels, normalizedPath);
   const collapsedChanged = deletePathKeyedRecord(store.collapsed, normalizedPath);
   const indexExcludeChanged = deletePathKeyedRecord(store.indexExclude, normalizedPath);
-  if (colorsChanged || boldChanged || levelsChanged || collapsedChanged || indexExcludeChanged) {
+  const backupExcludeChanged = deletePathKeyedRecord(store.backupExclude, normalizedPath);
+  if (
+    colorsChanged ||
+    boldChanged ||
+    levelsChanged ||
+    collapsedChanged ||
+    indexExcludeChanged ||
+    backupExcludeChanged
+  ) {
     await saveStore(portableRoot, store);
   }
 }

@@ -88,6 +88,8 @@ import {
   setEntryCollapsedMany,
   getIndexExcludeMap,
   setIndexExclude,
+  getBackupExcludeMap,
+  setBackupExclude,
   syncFolderColorsDelete,
   syncFolderColorsMoveTree,
 } from './folderColorsService.js';
@@ -972,6 +974,33 @@ export async function handleHttpApiRequest(req, res) {
       const result = await setIndexExclude(body.path, Boolean(body.indexExclude ?? body.excluded), getPortableRoot());
       notifyFsChanged(body.path);
       applyFolderIndexExclude(body.path);
+      sendJson(res, 200, result);
+      return true;
+    }
+
+    if (method === 'GET' && url.pathname === '/api/folder-colors/backup-exclude-map') {
+      const auth = getAccessAuth(req);
+      const perms = await getEffectiveAccessPermissions(auth, getPortableRoot());
+      if (!perms.view && !perms.write) {
+        sendJson(res, 200, {});
+        return true;
+      }
+      sendJson(res, 200, await getBackupExcludeMap(getPortableRoot()));
+      return true;
+    }
+
+    if (method === 'POST' && url.pathname === '/api/folder-colors/set-backup-exclude') {
+      const body = await readJsonBody(req);
+      const auth = getAccessAuth(req);
+      const shareToken = getShareTokenFromQuery(url);
+      assertHomeSystemPathMutable(body.path, 'mutate');
+      await assertCanEditFile(body.path ?? '', auth, shareToken);
+      const result = await setBackupExclude(
+        body.path,
+        Boolean(body.backupExclude ?? body.excluded),
+        getPortableRoot(),
+      );
+      notifyFsChanged(body.path);
       sendJson(res, 200, result);
       return true;
     }

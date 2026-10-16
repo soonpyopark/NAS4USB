@@ -159,6 +159,8 @@ import {
   setEntryCollapsedMany,
   getIndexExcludeMap,
   setIndexExclude,
+  getBackupExcludeMap,
+  setBackupExclude,
   syncFolderColorsDelete,
   syncFolderColorsMoveTree,
 } from './electron/folderColorsService.js';
@@ -1702,6 +1704,27 @@ ipcMain.handle('folderColors:setIndexExclude', async (event, { path: relativePat
   );
   notifyFsChanged(relativePath);
   applyFolderIndexExclude(relativePath);
+  return result;
+});
+
+ipcMain.handle('folderColors:getBackupExcludeMap', async (event) => {
+  const auth = getAccessAuthFromEvent(event);
+  const perms = await getEffectiveAccessPermissions(auth, getPortableRoot());
+  if (!perms.view && !perms.write) return {};
+  return getBackupExcludeMap(getPortableRoot());
+});
+
+ipcMain.handle('folderColors:setBackupExclude', async (event, { path: relativePath, backupExclude, excluded } = {}) => {
+  const auth = getAccessAuthFromEvent(event);
+  const shareToken = getShareTokenFromEvent(event);
+  assertHomeSystemPathMutable(relativePath, 'mutate');
+  await assertCanEditFile(relativePath, auth, shareToken);
+  const result = await setBackupExclude(
+    relativePath,
+    Boolean(backupExclude ?? excluded),
+    getPortableRoot(),
+  );
+  notifyFsChanged(relativePath);
   return result;
 });
 

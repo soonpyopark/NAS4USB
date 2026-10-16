@@ -1,8 +1,9 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { getDataRoot, getHomesRoot, getPortableRoot } from './appContext.js';
+import { getDataRoot, getHomesRoot, getPortableRoot, resolvePortablePath } from './appContext.js';
 import { getAppSettings, updateAppSettings } from './settingsService.js';
+import { getBackupExcludeMap } from './folderColorsService.js';
 import { sevenZipMin } from './sevenZip.js';
 import { repairExtractedNameTree, repairZipEntryName } from './zipNameEncoding.js';
 import { SHARED_FOLDER } from '../shared/constants.js';
@@ -145,10 +146,54 @@ async function pruneDayBackups(dayDir, maxPerDay) {
 }
 
 /**
+ * @param {string} sourceAbs
+ * @param {Record<string, true>} excludeMap
+ */
+function isBackupSourceFullyExcluded(sourceAbs, excludeMap) {
+  const sourceResolved = path.resolve(sourceAbs);
+  for (const [workspacePath, on] of Object.entries(excludeMap || {})) {
+    if (!on) continue;
+    try {
+      if (path.resolve(resolvePortablePath(workspacePath)) === sourceResolved) return true;
+    } catch {
+      // skip virtual / invalid paths
+    }
+  }
+  return false;
+}
+
+/**
+ * 7-Zip `-xr!` patterns for folders under `sourceAbs` marked backup-excluded.
+ * @param {string} sourceAbs
+ * @param {Record<string, true>} excludeMap
+ * @returns {string[]}
+ */
+function backupExcludeArgsForSource(sourceAbs, excludeMap) {
+  const sourceResolved = path.resolve(sourceAbs);
+  /** @type {string[]} */
+  const args = [];
+  for (const [workspacePath, on] of Object.entries(excludeMap || {})) {
+    if (!on) continue;
+    let absolute;
+    try {
+      absolute = path.resolve(resolvePortablePath(workspacePath));
+    } catch {
+      continue;
+    }
+    if (absolute === sourceResolved) continue;
+    const relative = path.relative(sourceResolved, absolute);
+    if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) continue;
+    args.push(`-xr!${relative.replace(/\\/g, '/')}`);
+  }
+  return args;
+}
+
+/**
  * @param {string} destZip
  * @param {string} sourceAbs
+ * @param {Record<string, true>} [excludeMap]
  */
-async function zipBackupSource(destZip, sourceAbs) {
+async function zipBackupSource(destZip, sourceAbs, excludeMap = {}) {
   await sevenZipMin.cmd([
     'a',
     '-tzip',
@@ -156,6 +201,7 @@ async function zipBackupSource(destZip, sourceAbs) {
     '-mcu=on',
     '-x!.nas4usb',
     '-x!*/.nas4usb',
+    ...backupExcludeArgsForSource(sourceAbs, excludeMap),
     destZip,
     sourceAbs,
   ]);
@@ -226,7 +272,11 @@ export async function runWorkspaceBackup(trigger = 'manual') {
       });
     }
   }
-  if (jobs.length === 0) {
+  const backupExcludeMap = await getBackupExcludeMap(getPortableRoot());
+  const runnableJobs = jobs.filter(
+    (job) => !isBackupSourceFullyExcluded(job.sourceAbs, backupExcludeMap),
+  );
+  if (runnableJobs.length === 0) {
     throw new Error('백업할 share/private 폴더가 없습니다.');
   }
 
@@ -238,9 +288,9 @@ export async function runWorkspaceBackup(trigger = 'manual') {
   try {
     /** @type {Array<{ fileName: string, filePath: string, bytes: number }>} */
     const files = [];
-    for (const job of jobs) {
+    for (const job of runnableJobs) {
       const destZip = path.join(dayDir, job.fileName);
-      await zipBackupSource(destZip, job.sourceAbs);
+      await zipBackupSource(destZip, job.sourceAbs, backupExcludeMap);
       created.push(destZip);
       const stat = await fs.stat(destZip);
       files.push({

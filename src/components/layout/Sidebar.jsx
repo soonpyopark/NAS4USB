@@ -129,10 +129,12 @@ export default function Sidebar({
     folderColorMap,
     nameBoldMap,
     indexExcludeMap,
+    backupExcludeMap,
     refreshFolderColorMap,
     setFolderColor,
     setNameBold,
     setIndexExclude,
+    setBackupExclude,
   } = useFolderColors();
   const { folderOrderMap, refreshFolderOrderMap, setFolderOrder } = useFolderOrder();
   const { openLogin } = useLoginDialog();
@@ -755,6 +757,15 @@ export default function Sidebar({
     }
   };
 
+  const handleSetBackupExclude = async (entry, excluded) => {
+    if (!entry?.isDirectory) return;
+    try {
+      await setBackupExclude(entry.relativePath, excluded);
+    } catch (err) {
+      nativeAlert(err instanceof Error ? err.message : '자동백업 제외를 바꾸지 못했습니다.');
+    }
+  };
+
   const handleShareLinkRevoke = async () => {
     if (!shareLinkDialog?.entry) return;
     await revokeShareLinkForEntry({ entry: shareLinkDialog.entry, refreshShareMap });
@@ -1204,6 +1215,20 @@ export default function Sidebar({
             isSuperAdmin,
           )}
           onChangeIndexExclude={(excluded) => handleSetIndexExclude(propertiesEntry, excluded)}
+          backupExclude={
+            indexExcludeState(propertiesEntry.relativePath, backupExcludeMap).self
+          }
+          backupExcludeInherited={
+            indexExcludeState(propertiesEntry.relativePath, backupExcludeMap).inherited
+          }
+          canChangeBackupExclude={canWriteAtPath(
+            propertiesEntry.relativePath,
+            adminId,
+            isAdminLoggedIn,
+            globalWrite,
+            isSuperAdmin,
+          )}
+          onChangeBackupExclude={(excluded) => handleSetBackupExclude(propertiesEntry, excluded)}
           onClose={() => {
             setPropertiesEntry(null);
             setPropertiesStat(null);

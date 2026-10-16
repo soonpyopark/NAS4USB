@@ -51,6 +51,10 @@ function formatDate(iso) {
  *   indexExcludeInherited?: boolean,
  *   canChangeIndexExclude?: boolean,
  *   onChangeIndexExclude?: (checked: boolean) => void,
+ *   backupExclude?: boolean,
+ *   backupExcludeInherited?: boolean,
+ *   canChangeBackupExclude?: boolean,
+ *   onChangeBackupExclude?: (checked: boolean) => void,
  *   onClose: () => void,
  * }} props
  */
@@ -76,6 +80,10 @@ export default function FilePropertiesDialog({
   indexExcludeInherited = false,
   canChangeIndexExclude = false,
   onChangeIndexExclude,
+  backupExclude = false,
+  backupExcludeInherited = false,
+  canChangeBackupExclude = false,
+  onChangeBackupExclude,
   onClose,
 }) {
   const externalFolders = useExternalFolders();
@@ -145,23 +153,6 @@ export default function FilePropertiesDialog({
             </div>
           </dl>
 
-          <div className="modal-access-options">
-            <label className={`modal-access-option${canChangeNameBold ? '' : ' modal-access-option--readonly'}`}>
-              <input
-                type="checkbox"
-                checked={Boolean(nameBold)}
-                disabled={accessSaving || !canChangeNameBold}
-                onChange={(event) => onChangeNameBold?.(event.target.checked)}
-              />
-              <span>주요 파일</span>
-            </label>
-            <p className="modal-access-hint">
-              {canChangeNameBold
-                ? '이 폴더에서 주요 파일로 표시합니다. 목록에서 별 아이콘과 굵은 이름으로 구분됩니다.'
-                : '주요 파일 표시는 쓰기 권한이 있을 때 변경할 수 있습니다.'}
-            </p>
-          </div>
-
           {showAccessOptions && resolvedFileStatus && (
             <div className="modal-access-options">
               <label className={`modal-access-option${canEditAccessOptions ? '' : ' modal-access-option--readonly'}`}>
@@ -200,6 +191,19 @@ export default function FilePropertiesDialog({
                 />
                 <span>공유(편집 가능)</span>
               </label>
+              <label
+                className={`modal-access-option modal-access-option--ruled${
+                  canChangeNameBold ? '' : ' modal-access-option--readonly'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={Boolean(nameBold)}
+                  disabled={accessSaving || !canChangeNameBold}
+                  onChange={(event) => onChangeNameBold?.(event.target.checked)}
+                />
+                <span>주요 파일 지정</span>
+              </label>
               <label className={`modal-access-option${canEditAccessOptions ? '' : ' modal-access-option--readonly'}`}>
                 <input
                   type="checkbox"
@@ -216,42 +220,59 @@ export default function FilePropertiesDialog({
           )}
 
           {showFolderFavorite && (
-            <div className="modal-access-options">
-              <label className={`modal-access-option${canEditAccessOptions ? '' : ' modal-access-option--readonly'}`}>
-                <input
-                  type="checkbox"
-                  checked={Boolean(isFavorite)}
-                  disabled={accessSaving || !canEditAccessOptions}
-                  onChange={(event) => onChangeFavorite?.(event.target.checked)}
-                />
-                <span>즐겨찾기 추가</span>
-              </label>
-              <p className="modal-access-hint">
-                {canEditAccessOptions
-                  ? '즐겨찾기한 폴더는 왼쪽 아래 폴더 즐겨찾기에서 바로 열 수 있습니다.'
-                  : '즐겨찾기는 총괄관리자만 변경할 수 있습니다.'}
-              </p>
-              <label
-                className={`modal-access-option${
-                  canChangeIndexExclude && !indexExcludeInherited ? '' : ' modal-access-option--readonly'
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={Boolean(indexExclude) || Boolean(indexExcludeInherited)}
-                  disabled={accessSaving || !canChangeIndexExclude || indexExcludeInherited}
-                  onChange={(event) => onChangeIndexExclude?.(event.target.checked)}
-                />
-                <span>색인생성 제외</span>
-              </label>
-              <p className="modal-access-hint">
-                {indexExcludeInherited
-                  ? '상위 폴더에서 이미 색인생성 제외되어 있습니다.'
-                  : canChangeIndexExclude
-                    ? '이 폴더와 하위 항목은 본문 색인에 넣지 않습니다. 이미 만든 색인은 바로 지웁니다.'
-                    : '색인생성 제외는 쓰기 권한이 있을 때 변경할 수 있습니다.'}
-              </p>
-              <div>
+            <>
+              <div className="modal-access-options">
+                <label className={`modal-access-option${canChangeNameBold ? '' : ' modal-access-option--readonly'}`}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(nameBold)}
+                    disabled={accessSaving || !canChangeNameBold}
+                    onChange={(event) => onChangeNameBold?.(event.target.checked)}
+                  />
+                  <span>주요 폴더 지정</span>
+                </label>
+                <label className={`modal-access-option${canEditAccessOptions ? '' : ' modal-access-option--readonly'}`}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(isFavorite)}
+                    disabled={accessSaving || !canEditAccessOptions}
+                    onChange={(event) => onChangeFavorite?.(event.target.checked)}
+                  />
+                  <span>즐겨찾기 추가</span>
+                </label>
+                <label
+                  className={`modal-access-option${
+                    canChangeIndexExclude && !indexExcludeInherited ? '' : ' modal-access-option--readonly'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={Boolean(indexExclude) || Boolean(indexExcludeInherited)}
+                    disabled={accessSaving || !canChangeIndexExclude || indexExcludeInherited}
+                    onChange={(event) => onChangeIndexExclude?.(event.target.checked)}
+                  />
+                  <span>색인생성 제외</span>
+                </label>
+                <label
+                  className={`modal-access-option${
+                    canChangeBackupExclude && !backupExcludeInherited ? '' : ' modal-access-option--readonly'
+                  }`}
+                  title={
+                    backupExcludeInherited
+                      ? '상위 폴더에서 이미 자동백업 제외되어 있습니다.'
+                      : undefined
+                  }
+                >
+                  <input
+                    type="checkbox"
+                    checked={Boolean(backupExclude) || Boolean(backupExcludeInherited)}
+                    disabled={accessSaving || !canChangeBackupExclude || backupExcludeInherited}
+                    onChange={(event) => onChangeBackupExclude?.(event.target.checked)}
+                  />
+                  <span>자동백업 제외</span>
+                </label>
+              </div>
+              <div className="modal-access-options">
                 <div className="mb-2 text-sm text-slate-700">폴더 색</div>
                 <FolderColorSwatches
                   value={folderColor}
@@ -264,7 +285,7 @@ export default function FilePropertiesDialog({
                     : '폴더 색은 쓰기 권한이 있을 때 변경할 수 있습니다.'}
                 </p>
               </div>
-            </div>
+            </>
           )}
 
           <AppModalActions>

@@ -11,6 +11,9 @@ export function useFolderColors() {
   const [indexExcludeMap, setIndexExcludeMap] = useState(
     /** @type {Record<string, boolean>} */ ({}),
   );
+  const [backupExcludeMap, setBackupExcludeMap] = useState(
+    /** @type {Record<string, boolean>} */ ({}),
+  );
   const { generation } = useFsSync();
 
   const refreshFolderColorMap = useCallback(async () => {
@@ -20,6 +23,7 @@ export function useFolderColors() {
       setFileLevelMap({});
       setFileCollapsedMap({});
       setIndexExcludeMap({});
+      setBackupExcludeMap({});
       return;
     }
 
@@ -71,6 +75,17 @@ export function useFolderColors() {
         setIndexExcludeMap(excluded && typeof excluded === 'object' ? excluded : {});
       } catch {
         setIndexExcludeMap({});
+      }
+    }
+
+    if (typeof window.nas4usb.folderColors.getBackupExcludeMap !== 'function') {
+      setBackupExcludeMap({});
+    } else {
+      try {
+        const excluded = await window.nas4usb.folderColors.getBackupExcludeMap();
+        setBackupExcludeMap(excluded && typeof excluded === 'object' ? excluded : {});
+      } catch {
+        setBackupExcludeMap({});
       }
     }
   }, []);
@@ -172,12 +187,27 @@ export function useFolderColors() {
     [refreshFolderColorMap],
   );
 
+  const setBackupExclude = useCallback(
+    async (relativePath, excluded) => {
+      if (!window.nas4usb?.folderColors?.setBackupExclude) {
+        throw new Error('자동백업 제외 API를 사용할 수 없습니다.');
+      }
+      await window.nas4usb.folderColors.setBackupExclude({
+        path: relativePath,
+        backupExclude: Boolean(excluded),
+      });
+      await refreshFolderColorMap();
+    },
+    [refreshFolderColorMap],
+  );
+
   return {
     folderColorMap,
     nameBoldMap,
     fileLevelMap,
     fileCollapsedMap,
     indexExcludeMap,
+    backupExcludeMap,
     refreshFolderColorMap,
     setFolderColor,
     setNameBold,
@@ -186,5 +216,6 @@ export function useFolderColors() {
     setFileCollapsed,
     setFileCollapsedMany,
     setIndexExclude,
+    setBackupExclude,
   };
 }

@@ -132,6 +132,12 @@ contextBridge.exposeInMainWorld('nas4usb', {
         path,
         indexExclude: Boolean(indexExclude ?? excluded),
       }),
+    getBackupExcludeMap: () => ipcRenderer.invoke('folderColors:getBackupExcludeMap'),
+    setBackupExclude: ({ path, backupExclude, excluded }) =>
+      ipcRenderer.invoke('folderColors:setBackupExclude', {
+        path,
+        backupExclude: Boolean(backupExclude ?? excluded),
+      }),
   },
 
   folderOrder: {
