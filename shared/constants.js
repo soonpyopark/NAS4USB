@@ -12,7 +12,7 @@ export const APP_VERSION = '1.1.0';
  * Refreshed by `build:release` / `build:msi` / `build:dist:exe` for update checks
  * when the GitHub tag version is unchanged (same-version republish).
  */
-export const APP_BUILD_STAMP = '261016_165657';
+export const APP_BUILD_STAMP = '261016_200911';
 
 /**
  * Human-readable build time from {@link APP_BUILD_STAMP} (`YYYY-MM-DD HH:MM:SS`).

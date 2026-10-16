@@ -146,6 +146,8 @@ async function pruneDayBackups(dayDir, maxPerDay) {
 }
 
 /**
+ * True when this backup job root is itself excluded, or sits under an excluded ancestor
+ * (e.g. marking `개인폴더` must skip every `private/<user>` zip).
  * @param {string} sourceAbs
  * @param {Record<string, true>} excludeMap
  */
@@ -153,25 +155,31 @@ function isBackupSourceFullyExcluded(sourceAbs, excludeMap) {
   const sourceResolved = path.resolve(sourceAbs);
   for (const [workspacePath, on] of Object.entries(excludeMap || {})) {
     if (!on) continue;
+    let excludedAbs;
     try {
-      if (path.resolve(resolvePortablePath(workspacePath)) === sourceResolved) return true;
+      excludedAbs = path.resolve(resolvePortablePath(workspacePath));
     } catch {
-      // skip virtual / invalid paths
+      continue;
     }
+    if (excludedAbs === sourceResolved) return true;
+    // Ancestor exclude: 개인폴더 → private/ covers private/admin, etc.
+    if (isEqualOrInside(sourceResolved, excludedAbs)) return true;
   }
   return false;
 }
 
 /**
  * 7-Zip `-xr!` patterns for folders under `sourceAbs` marked backup-excluded.
+ * Emits several masks because 7za stores either `상대경로/...` or `소스폴더명/상대경로/...`.
  * @param {string} sourceAbs
  * @param {Record<string, true>} excludeMap
  * @returns {string[]}
  */
 function backupExcludeArgsForSource(sourceAbs, excludeMap) {
   const sourceResolved = path.resolve(sourceAbs);
-  /** @type {string[]} */
-  const args = [];
+  const sourceBase = path.basename(sourceResolved);
+  /** @type {Set<string>} */
+  const masks = new Set();
   for (const [workspacePath, on] of Object.entries(excludeMap || {})) {
     if (!on) continue;
     let absolute;
@@ -181,11 +189,17 @@ function backupExcludeArgsForSource(sourceAbs, excludeMap) {
       continue;
     }
     if (absolute === sourceResolved) continue;
-    const relative = path.relative(sourceResolved, absolute);
+    if (isEqualOrInside(sourceResolved, absolute)) continue;
+    const relative = path.relative(sourceResolved, absolute).replace(/\\/g, '/');
     if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) continue;
-    args.push(`-xr!${relative.replace(/\\/g, '/')}`);
+    masks.add(relative);
+    masks.add(`${relative}/*`);
+    if (sourceBase) {
+      masks.add(`${sourceBase}/${relative}`);
+      masks.add(`${sourceBase}/${relative}/*`);
+    }
   }
-  return args;
+  return [...masks].map((mask) => `-xr!${mask}`);
 }
 
 /**
