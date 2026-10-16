@@ -149,7 +149,8 @@ export default function Wb4sEditorShell({
 
     try {
       if (!shareReadOnly) {
-        await retryAsync(() => saveToHost(undefined, { includeThumbnail: false }), retryOptions);
+        // Persist thumbnail so explorer preview can show the board without loading the full editor.
+        await retryAsync(() => saveToHost(undefined, { includeThumbnail: true }), retryOptions);
       }
     } catch (err) {
       closingRef.current = false;

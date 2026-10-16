@@ -29,6 +29,7 @@ import { useFolderOrder } from '../../hooks/useFolderOrder.js';
 import { labelForExternalMountPath } from '../../../shared/externalFolders.js';
 import { resolveComicFirstPage } from '../../lib/comicReader/firstPage.js';
 import { resolvePdfFirstPage } from '../../lib/pdf/firstPage.js';
+import { resolveWb4sPreview } from '../../lib/wb4s/previewWb4s.js';
 import FileIcon from './FileIcon.jsx';
 import HtmlPreviewFrame from '../editors/HtmlPreviewFrame.jsx';
 import { highlightPlainTextToHtml, highlightTextInElement } from '../../lib/searchHighlight.js';
@@ -133,6 +134,12 @@ export default function FilePreviewPane({
   const [truncated, setTruncated] = useState(false);
   const [tiptapContent, setTiptapContent] = useState(null);
   const [tiptapResolveFileUrl, setTiptapResolveFileUrl] = useState(null);
+  const [wb4sMeta, setWb4sMeta] = useState(
+    /** @type {import('../../lib/wb4s/previewWb4s.js').Wb4sPreviewMeta | null} */ (null),
+  );
+  const [wb4sSource, setWb4sSource] = useState(
+    /** @type {'stored' | 'generated' | 'meta' | ''} */ (''),
+  );
   const [folderEntries, setFolderEntries] = useState(
     /** @type {import('../../types/nas4usb.d.ts').FsEntry[]} */ ([]),
   );
@@ -170,6 +177,8 @@ export default function FilePreviewPane({
     setTruncated(false);
     setTiptapContent(null);
     setTiptapResolveFileUrl(null);
+    setWb4sMeta(null);
+    setWb4sSource('');
     tiptapEditorRef.current = null;
 
     if (!open || !entry || !kind || kind === 'folder' || !canView || locked) {
@@ -253,6 +262,14 @@ export default function FilePreviewPane({
             setImageUrl(first.url);
             setPageCount(first.pageCount);
             if (!first.url) setError('표시할 페이지가 없습니다.');
+          }
+        } else if (kind === 'wb4s') {
+          const plain = await readWorkspacePlainBase64(entry.relativePath);
+          const preview = await resolveWb4sPreview(decodeTextBase64(plain));
+          if (!cancelled) {
+            setImageUrl(preview.imageUrl);
+            setWb4sMeta(preview.meta);
+            setWb4sSource(preview.source);
           }
         }
         if (!cancelled) setLoading(false);
@@ -567,6 +584,49 @@ export default function FilePreviewPane({
               ) : null}
               {(kind === 'comic' || kind === 'pdf') && pageCount > 0 ? (
                 <p className="file-preview-pane__caption">첫 페이지 · 모두 {pageCount}페이지</p>
+              ) : null}
+            </div>
+          ) : kind === 'wb4s' ? (
+            <div className="file-preview-pane__media">
+              <p className="file-preview-pane__caption" title={entry.name}>
+                {entry.name} ({formatByteSize(entry.size)})
+              </p>
+              {imageUrl ? (
+                <img
+                  src={imageUrl}
+                  alt={wb4sMeta?.title || entry.name}
+                  className="file-preview-pane__image file-preview-pane__image--wb4s"
+                />
+              ) : (
+                <div className="file-preview-pane__wb4s-meta">
+                  <p className="file-preview-pane__wb4s-title">{wb4sMeta?.title || '제목 없음'}</p>
+                  <p className="file-preview-pane__caption">
+                    획 {(wb4sMeta?.pathCount ?? 0).toLocaleString('ko-KR')} · 이미지{' '}
+                    {(wb4sMeta?.imageCount ?? 0).toLocaleString('ko-KR')} · 텍스트{' '}
+                    {(wb4sMeta?.textCount ?? 0).toLocaleString('ko-KR')} · 표{' '}
+                    {(wb4sMeta?.tableCount ?? 0).toLocaleString('ko-KR')}
+                  </p>
+                  <p className="file-preview-pane__caption">
+                    {(wb4sMeta?.pathCount ?? 0) +
+                      (wb4sMeta?.imageCount ?? 0) +
+                      (wb4sMeta?.textCount ?? 0) +
+                      (wb4sMeta?.tableCount ?? 0) ===
+                    0
+                      ? '빈 화이트보드입니다. 전체 화면으로 열어 작성하세요.'
+                      : '미리보기 이미지를 만들지 못했습니다. 전체 화면으로 열어 확인하세요.'}
+                  </p>
+                </div>
+              )}
+              {imageUrl && wb4sMeta ? (
+                <p className="file-preview-pane__caption">
+                  {wb4sMeta.title}
+                  {' · '}
+                  획 {wb4sMeta.pathCount.toLocaleString('ko-KR')} · 이미지{' '}
+                  {wb4sMeta.imageCount.toLocaleString('ko-KR')} · 텍스트{' '}
+                  {wb4sMeta.textCount.toLocaleString('ko-KR')} · 표{' '}
+                  {wb4sMeta.tableCount.toLocaleString('ko-KR')}
+                  {wb4sSource === 'generated' ? ' · 미리보기 생성' : ''}
+                </p>
               ) : null}
             </div>
           ) : kind === 'text' ? (

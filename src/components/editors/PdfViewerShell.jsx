@@ -1559,7 +1559,9 @@ export default function PdfViewerShell({
         if (!scroller) return;
         const fallback = Math.max(80, Math.min(120, Math.round(scroller.clientHeight * 0.12)));
         const learned = wheelStepPxRef.current;
-        const step = Math.max(40, Math.round(learned > 0 ? learned : fallback));
+        const notch = Math.max(40, Math.round(learned > 0 ? learned : fallback));
+        // One FAB click ≈ three mouse-wheel notches.
+        const step = notch * 3;
         scroller.scrollBy({
           top: direction === 'up' ? -step : step,
           behavior: 'auto',

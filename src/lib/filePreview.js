@@ -9,7 +9,7 @@ import {
   isVideoExtension,
 } from './media/mediaTypes.js';
 
-/** @typedef {'folder' | 'image' | 'text' | 'markdown' | 'html' | 'tiptap' | 'comic' | 'pdf'} FilePreviewKind */
+/** @typedef {'folder' | 'image' | 'text' | 'markdown' | 'html' | 'tiptap' | 'comic' | 'pdf' | 'wb4s'} FilePreviewKind */
 
 /**
  * Video/audio play in the dedicated player, not the explorer preview pane.
@@ -85,6 +85,7 @@ export function getFilePreviewKind(entry) {
   }
   if (isPdfExtension(ext)) return 'pdf';
   if (isArchiveExtension(ext)) return 'comic';
+  if (ext === 'wb4s') return 'wb4s';
   return null;
 }
 

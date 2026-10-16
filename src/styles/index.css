@@ -218,6 +218,32 @@
     box-shadow: 0 1px 6px rgba(15, 23, 42, 0.08);
   }
 
+  .file-preview-pane__image--wb4s {
+    width: min(100%, 480px);
+    border: 1px solid #e2e8f0;
+    border-radius: 0.5rem;
+  }
+
+  .file-preview-pane__wb4s-meta {
+    display: flex;
+    width: min(100%, 22rem);
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 0.75rem;
+    background: #f8fafc;
+    padding: 1.25rem 1rem;
+    text-align: center;
+  }
+
+  .file-preview-pane__wb4s-title {
+    margin: 0;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: #334155;
+  }
+
   .file-preview-pane__caption {
     margin: 0.75rem 0 0;
     font-size: 0.75rem;
