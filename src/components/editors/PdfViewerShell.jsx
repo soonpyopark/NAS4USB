@@ -1700,8 +1700,8 @@ export default function PdfViewerShell({
   const openMarksContextMenu = useCallback(
     (event, entry) => {
       if (!entry) return;
-      event.preventDefault();
-      event.stopPropagation();
+      event.preventDefault?.();
+      event.stopPropagation?.();
       setSelectionMenu(null);
       setActiveMarkupId(entry.id);
       setSidePanel('marks');
@@ -1721,6 +1721,65 @@ export default function PdfViewerShell({
 
   const openMarksContextMenuRef = useRef(openMarksContextMenu);
   openMarksContextMenuRef.current = openMarksContextMenu;
+
+  /** iOS long-press on mark rows: native text selection steals contextmenu — use a timer instead. */
+  const marksListLongPressRef = useRef(
+    /** @type {{ timer: ReturnType<typeof setTimeout>, clientX: number, clientY: number, fired: boolean } | null} */ (
+      null
+    ),
+  );
+  const suppressMarkClickRef = useRef(false);
+
+  const clearMarksListLongPress = useCallback(() => {
+    const state = marksListLongPressRef.current;
+    if (state?.timer) clearTimeout(state.timer);
+    marksListLongPressRef.current = null;
+  }, []);
+
+  const onMarkItemPointerDown = useCallback(
+    (event, entry) => {
+      if (event.pointerType === 'mouse') return;
+      clearMarksListLongPress();
+      const clientX = event.clientX;
+      const clientY = event.clientY;
+      marksListLongPressRef.current = {
+        clientX,
+        clientY,
+        fired: false,
+        timer: setTimeout(() => {
+          const state = marksListLongPressRef.current;
+          if (!state) return;
+          state.fired = true;
+          suppressMarkClickRef.current = true;
+          window.getSelection()?.removeAllRanges();
+          openMarksContextMenu({ clientX, clientY, preventDefault() {}, stopPropagation() {} }, entry);
+        }, 480),
+      };
+    },
+    [clearMarksListLongPress, openMarksContextMenu],
+  );
+
+  const onMarkItemPointerMove = useCallback(
+    (event) => {
+      const state = marksListLongPressRef.current;
+      if (!state || state.fired) return;
+      const dx = event.clientX - state.clientX;
+      const dy = event.clientY - state.clientY;
+      if (dx * dx + dy * dy > 100) clearMarksListLongPress();
+    },
+    [clearMarksListLongPress],
+  );
+
+  const onMarkItemPointerEnd = useCallback(() => {
+    const fired = Boolean(marksListLongPressRef.current?.fired);
+    clearMarksListLongPress();
+    if (fired) {
+      // Keep suppress until click (or clear shortly if click never comes).
+      window.setTimeout(() => {
+        suppressMarkClickRef.current = false;
+      }, 400);
+    }
+  }, [clearMarksListLongPress]);
 
   const removeMarkup = useCallback(
     (id) => {
@@ -1805,17 +1864,29 @@ export default function PdfViewerShell({
     repaintMarkupLayers();
   }, [markups, activeMarkupId, repaintMarkupLayers]);
 
-  // PC/Android: Pointer Events. iPad: native Touch Events + preventDefault (Safari cancels pointers).
+  // PC: click=word / drag=range. Android: long-press or double-tap → handles.
+  // iPad: select-mode ON + double-tap → handles. Safari uses Touch Events (pointers cancel).
   useEffect(() => {
     const scroller = scrollRef.current;
     if (!scroller || !docReady) return undefined;
 
     const appleTouch = isAppleTouchDevice();
     const TOUCH_SCROLL_SLOP_PX = 12;
+    const LONG_PRESS_MS = 450;
     const DOUBLE_TAP_MS = appleTouch ? 560 : 420;
     const DOUBLE_TAP_SLOP_PX = appleTouch ? 64 : 40;
+    /** @type {ReturnType<typeof setTimeout> | null} */
+    let longPressTimer = null;
+
+    const clearLongPress = () => {
+      if (longPressTimer != null) {
+        clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+    };
 
     const clearSelectionDrag = () => {
+      clearLongPress();
       selectionDragRef.current = null;
     };
 
@@ -1927,6 +1998,22 @@ export default function PdfViewerShell({
       return activateWord(pageNumber, wordIdx);
     };
 
+    /** Android (non-Apple touch): long-press selects the word under the finger. */
+    const armLongPress = (pageNumber, clientX, clientY) => {
+      if (appleTouch) return;
+      clearLongPress();
+      longPressTimer = setTimeout(() => {
+        longPressTimer = null;
+        const drag = selectionDragRef.current;
+        if (!drag || drag.touchPhase !== 'pending') return;
+        clearSelectionDrag();
+        lastTapRef.current = null;
+        if (openWordAtClient(pageNumber, clientX, clientY)) {
+          setIosHud({ words: pageWordsRefs.current.get(pageNumber)?.length || 0, last: '롱프레스 선택' });
+        }
+      }, LONG_PRESS_MS);
+    };
+
     const pageWrapFromPoint = (clientX, clientY, fallbackTarget) => {
       const fromTarget =
         fallbackTarget instanceof Element ? fallbackTarget.closest('[data-pdf-page]') : null;
@@ -2023,7 +2110,7 @@ export default function PdfViewerShell({
       if (menu?.showHandles && menu.pageNumber === pageNumber && menu.rects?.length) {
         const fromDom = target.closest('[data-pdf-sel-handle]');
         const domRole = fromDom?.getAttribute('data-pdf-sel-handle');
-        const handleHitRadius = (isTouch ? 36 : 16) / Math.max(0.35, scale);
+        const handleHitRadius = (isTouch ? 40 : 22) / Math.max(0.35, scale);
         const handleRole =
           domRole === 'start' || domRole === 'end'
             ? domRole
@@ -2074,12 +2161,15 @@ export default function PdfViewerShell({
         startClientY: event.clientY,
       };
 
-      if (isTouch && !selectMode) {
+      // Touch: scroll until long-press / double-tap; range only via handles afterward.
+      if (isTouch) {
         drag.touchPhase = 'pending';
         selectionDragRef.current = drag;
+        armLongPress(pageNumber, event.clientX, event.clientY);
         return;
       }
 
+      // Mouse / pen: drag immediately selects a range; click finishes as a word.
       selectionDragRef.current = drag;
       event.preventDefault();
     };
@@ -2181,9 +2271,12 @@ export default function PdfViewerShell({
       const pageNumber = drag.pageNumber;
       const moved = drag.moved;
       const anchor = drag.anchor;
+      const pointerType = drag.pointerType || '';
+      const mouseLike = pointerType !== 'touch' && pointerType !== 'ios-touch';
       clearSelectionDrag();
 
-      if (!moved && !wasHandle && selectMode) {
+      // PC click: one word + handles (drag path uses moved === true below).
+      if (!moved && !wasHandle && mouseLike) {
         lastTapRef.current = null;
         if (openWordAtClient(pageNumber, event.clientX, event.clientY)) return;
         if (pendingMarkupId) {
@@ -2283,7 +2376,7 @@ export default function PdfViewerShell({
         const fromDom =
           target instanceof Element ? target.closest('[data-pdf-sel-handle]') : null;
         const domRole = fromDom?.getAttribute('data-pdf-sel-handle');
-        const handleHitRadius = 36 / Math.max(0.35, scale);
+        const handleHitRadius = 40 / Math.max(0.35, scale);
         const handleRole =
           domRole === 'start' || domRole === 'end'
             ? domRole
@@ -2354,9 +2447,12 @@ export default function PdfViewerShell({
         pointerType: 'touch',
         startClientX: pos.clientX,
         startClientY: pos.clientY,
+        touchPhase: 'pending',
       };
 
-      if (!lockScroll) {
+      // Select-mode locks scroll; entry is double-tap (or word target), range via handles.
+      if (lockScroll && event.cancelable) event.preventDefault();
+      else {
         const last = lastTapRef.current;
         const dx = last ? pos.clientX - last.x : 0;
         const dy = last ? pos.clientY - last.y : 0;
@@ -2366,12 +2462,7 @@ export default function PdfViewerShell({
           Date.now() - last.time <= DOUBLE_TAP_MS &&
           dx * dx + dy * dy <= DOUBLE_TAP_SLOP_PX * DOUBLE_TAP_SLOP_PX;
         if (maybeDouble && event.cancelable) event.preventDefault();
-        drag.touchPhase = 'pending';
-        selectionDragRef.current = drag;
-        return;
       }
-
-      event.preventDefault();
       selectionDragRef.current = drag;
     };
 
@@ -2536,7 +2627,7 @@ export default function PdfViewerShell({
         prev.last.includes('중') ||
         prev.last.includes('없음')
       ) {
-        last = '단어를 탭하세요';
+        last = '단어를 두 번 탭하세요';
       } else {
         last = prev.last;
       }
@@ -3091,7 +3182,9 @@ export default function PdfViewerShell({
           title={
             selectMode
               ? '선택 모드 끄기 (스크롤)'
-              : '텍스트 선택 모드 (단어 탭)'
+              : isAppleTouchDevice()
+                ? '텍스트 선택 모드 (켠 뒤 단어 두 번 탭)'
+                : '텍스트 선택 모드 (태블릿에서는 선택 모드 없이 롱프레스·더블탭)'
           }
           aria-label={selectMode ? '선택 모드 끄기' : '텍스트 선택 모드'}
           aria-pressed={selectMode}
@@ -3411,8 +3504,18 @@ export default function PdfViewerShell({
                           type="button"
                           data-markup-id={entry.id}
                           className={`pdf-mark-item w-full text-left ${active ? 'pdf-mark-item--active' : ''}`}
-                          onClick={() => selectMarkupEntry(entry)}
+                          onClick={() => {
+                            if (suppressMarkClickRef.current) {
+                              suppressMarkClickRef.current = false;
+                              return;
+                            }
+                            selectMarkupEntry(entry);
+                          }}
                           onContextMenu={(event) => openMarksContextMenu(event, entry)}
+                          onPointerDown={(event) => onMarkItemPointerDown(event, entry)}
+                          onPointerMove={onMarkItemPointerMove}
+                          onPointerUp={onMarkItemPointerEnd}
+                          onPointerCancel={onMarkItemPointerEnd}
                         >
                           <span
                             className="pdf-mark-swatch"
@@ -3834,43 +3937,52 @@ export default function PdfViewerShell({
           -webkit-tap-highlight-color: rgba(51, 153, 255, 0.2);
           cursor: pointer;
         }
+        /* Inverted matchstick: stem up into the line, round head below — same on both ends. */
         .pdf-sel-handle {
           position: absolute;
           z-index: 7;
-          width: 28px;
-          height: 28px;
-          margin-left: -14px;
-          margin-top: -14px;
-          border-radius: 50%;
-          background: #3380ff;
-          border: 2px solid #fff;
-          box-shadow: 0 1px 4px rgba(15, 23, 42, 0.35);
+          width: 44px;
+          height: 44px;
+          margin-left: -22px;
+          margin-top: -2px;
+          border-radius: 0;
+          background: transparent;
+          border: none;
+          box-shadow: none;
           pointer-events: auto;
           touch-action: none;
           box-sizing: border-box;
           cursor: grab;
         }
-        .pdf-sel-handle--start {
-          cursor: grab;
-        }
+        .pdf-sel-handle--start,
         .pdf-sel-handle--end {
           cursor: grab;
+        }
+        .pdf-sel-handle::before {
+          content: '';
+          position: absolute;
+          left: 50%;
+          top: 16px;
+          width: 18px;
+          height: 18px;
+          margin-left: -9px;
+          border-radius: 50%;
+          background: #3380ff;
+          border: 2px solid #fff;
+          box-shadow: 0 1px 4px rgba(15, 23, 42, 0.35);
+          pointer-events: none;
+          box-sizing: border-box;
         }
         .pdf-sel-handle::after {
           content: '';
           position: absolute;
           left: 50%;
+          top: 0;
           width: 2px;
-          height: 16px;
+          height: 18px;
           margin-left: -1px;
           background: #3380ff;
           pointer-events: none;
-        }
-        .pdf-sel-handle--start::after {
-          top: 26px;
-        }
-        .pdf-sel-handle--end::after {
-          bottom: 26px;
         }
         .pdf-search-hit {
           position: absolute;
@@ -4030,6 +4142,16 @@ export default function PdfViewerShell({
           border-radius: 6px;
           border: 1px solid #e2e8f0;
           background: #fff;
+          -webkit-user-select: none;
+          user-select: none;
+          -webkit-touch-callout: none;
+          touch-action: manipulation;
+        }
+        .pdf-mark-item,
+        .pdf-mark-item * {
+          -webkit-user-select: none;
+          user-select: none;
+          -webkit-touch-callout: none;
         }
         html.touch-ui .pdf-mark-item {
           padding: 10px 8px;

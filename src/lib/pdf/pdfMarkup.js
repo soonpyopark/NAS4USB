@@ -548,9 +548,10 @@ export function selectionHandlePoints(rects) {
   if (!Array.isArray(rects) || !rects.length) return null;
   const first = rects[0];
   const last = rects[rects.length - 1];
+  // Anchor at the baseline of the line so inverted-matchstick handles hang below.
   return {
-    start: { x: first.left, y: first.top + first.height / 2 },
-    end: { x: last.left + last.width, y: last.top + last.height / 2 },
+    start: { x: first.left, y: first.top + first.height },
+    end: { x: last.left + last.width, y: last.top + last.height },
   };
 }
 
