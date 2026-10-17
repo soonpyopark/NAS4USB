@@ -41,9 +41,7 @@ export function applyShowingSubtitle(media, preferredLabel) {
     for (const track of tracks) track.mode = 'disabled';
     return;
   }
-  const match = preferredLabel
-    ? tracks.find((track) => track.label === preferredLabel)
-    : null;
+  const match = preferredLabel ? tracks.find((track) => track.label === preferredLabel) : null;
   const show = match || tracks[0];
   for (const track of tracks) {
     track.mode = track === show ? 'showing' : 'disabled';
@@ -86,8 +84,7 @@ export function replaceRemoteSubtitles(media, tracks, preferredLabel) {
     el.srclang = 'ko';
     el.label = track.label;
     el.dataset.nas4usbSub = '1';
-    const shouldDefault =
-      preferredLabel == null ? index === 0 : track.label === preferredLabel;
+    const shouldDefault = preferredLabel == null ? index === 0 : track.label === preferredLabel;
     if (shouldDefault) el.default = true;
     media.appendChild(el);
   }

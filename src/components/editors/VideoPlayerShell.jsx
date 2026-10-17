@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import '@videojs/react/video/skin.css';
 import { I18nProvider, loadLocale } from '@videojs/react/i18n';
-import { Video, VideoPlayer, VideoSkin } from '@videojs/react/video';
+import { Video, VideoPlayer } from '@videojs/react/video';
 import { HlsJsVideo } from '@videojs/react/media/hlsjs-video';
 import { AppModalButton } from '../common/AppModal.jsx';
 import ViewerModal from './ViewerModal.jsx';
+import Nas4usbClassicVideoSkin from './Nas4usbClassicVideoSkin.jsx';
 import { useMediaStream } from '../../hooks/useMediaStream.js';
 import { useVideoSeriesQueue } from '../../hooks/useVideoSeriesQueue.js';
 import { isIosWebKit } from '../../lib/media/iosPlayback.js';
@@ -17,6 +17,7 @@ import {
 } from '../../lib/media/videoJsSubtitles.js';
 import {
   FFMPEG_HLS_JS_CONFIG,
+  attemptMediaAutoplay,
   patchTimelineClockOnMedia,
 } from '../../lib/media/videoJsPlayer.js';
 
@@ -55,7 +56,9 @@ export default function VideoPlayerShell({
 }) {
   const mimeType = getVideoMimeType(extension);
   const videoRef = useRef(/** @type {HTMLVideoElement | null} */ (null));
+  const hostRef = useRef(/** @type {HTMLDivElement | null} */ (null));
   const mediaCleanupRef = useRef(/** @type {(() => void) | null} */ (null));
+  const mutedForAutoplay = useRef(false);
   const durationRef = useRef(/** @type {number | null} */ (null));
   const startSecondsRef = useRef(0);
   const seekToRef = useRef(/** @type {(seconds: number) => unknown} */ (() => {}));
@@ -97,8 +100,7 @@ export default function VideoPlayerShell({
   seekToRef.current = seekTo;
 
   const useHlsJs = playerKind === 'hls' && !ios;
-  const mediaSrcType =
-    playerKind === 'hls' ? 'application/vnd.apple.mpegurl' : mimeType;
+  const mediaSrcType = playerKind === 'hls' ? 'application/vnd.apple.mpegurl' : mimeType;
 
   const togglePlayNext = useCallback((event) => {
     const enabled = event.target.checked;
@@ -189,6 +191,7 @@ export default function VideoPlayerShell({
   const attachMedia = useCallback(
     (/** @type {HTMLVideoElement} */ video) => {
       setStalled(false);
+      mutedForAutoplay.current = false;
       const onWaiting = () => setStalled(true);
       const onPlaying = () => setStalled(false);
       const onEnded = () => handleEndedRef.current();
@@ -215,7 +218,12 @@ export default function VideoPlayerShell({
         setLoading(false);
         setPreparing(false);
       };
+      const kickAutoplay = () => {
+        attemptMediaAutoplay(video, hostRef.current, mutedForAutoplay);
+      };
 
+      video.setAttribute('playsinline', '');
+      video.setAttribute('webkit-playsinline', '');
       video.addEventListener('loadedmetadata', mediaHandlers.onLoadedMetadata);
       video.addEventListener('canplay', mediaHandlers.onCanPlay);
       video.addEventListener('progress', mediaHandlers.onProgress);
@@ -224,6 +232,8 @@ export default function VideoPlayerShell({
       video.addEventListener('playing', onPlaying);
       video.addEventListener('ended', onEnded);
       video.addEventListener('seeked', onSeeked);
+      video.addEventListener('loadedmetadata', kickAutoplay);
+      video.addEventListener('canplay', kickAutoplay);
       video.textTracks?.addEventListener('change', onTrackChange);
       if (playerKind === 'hls') {
         video.addEventListener('loadedmetadata', onReady);
@@ -246,6 +256,8 @@ export default function VideoPlayerShell({
         video.removeEventListener('playing', onPlaying);
         video.removeEventListener('ended', onEnded);
         video.removeEventListener('seeked', onSeeked);
+        video.removeEventListener('loadedmetadata', kickAutoplay);
+        video.removeEventListener('canplay', kickAutoplay);
         video.textTracks?.removeEventListener('change', onTrackChange);
         if (playerKind === 'hls') {
           video.removeEventListener('loadedmetadata', onReady);
@@ -337,7 +349,6 @@ export default function VideoPlayerShell({
     preload: 'auto',
     crossOrigin: ios ? undefined : 'anonymous',
     disablePictureInPicture: ios,
-    autoPlay: !ios,
   };
 
   return (
@@ -356,20 +367,20 @@ export default function VideoPlayerShell({
       )}
 
       <div className="flex min-h-0 flex-1 flex-col bg-black">
-        <div className={`nas4usb-videojs-host min-h-0 flex-1${ios ? ' nas4usb-videojs-host--ios' : ''}`}>
+        <div
+          ref={hostRef}
+          className={`nas4usb-videojs-host min-h-0 flex-1${ios ? ' nas4usb-videojs-host--ios' : ''}`}
+        >
           {streamUrl ? (
             <I18nProvider locale="ko">
               <VideoPlayer className="nas4usb-vjs10-player">
-                <VideoSkin className="nas4usb-vjs10-skin">
+                <Nas4usbClassicVideoSkin className="nas4usb-vjs10-skin" ios={ios}>
                   {useHlsJs ? (
-                    <HlsJsVideo
-                      {...mediaProps}
-                      engine={{ hlsJs: FFMPEG_HLS_JS_CONFIG }}
-                    />
+                    <HlsJsVideo {...mediaProps} engine={{ hlsJs: FFMPEG_HLS_JS_CONFIG }} />
                   ) : (
                     <Video {...mediaProps} type={mediaSrcType} />
                   )}
-                </VideoSkin>
+                </Nas4usbClassicVideoSkin>
               </VideoPlayer>
             </I18nProvider>
           ) : null}
