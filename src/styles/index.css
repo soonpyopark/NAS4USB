@@ -1481,9 +1481,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 2rem;
-  height: 1.85rem;
-  padding: 0 0.35rem;
+  min-width: 1.65rem;
+  height: 1.75rem;
+  padding: 0 0.2rem;
   border: 0;
   border-radius: 2px;
   background: transparent;
@@ -1497,10 +1497,54 @@
   background: rgba(255, 255, 255, 0.14);
 }
 
-.nas4usb-classic-seek-label {
+.nas4usb-classic-seek {
+  min-width: 1.55rem;
+  width: 1.55rem;
+  padding: 0;
+}
+
+.nas4usb-classic-seek-glyph {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  line-height: 0;
+}
+
+.nas4usb-classic-seek-icon {
+  display: block;
+  width: 1.05rem;
+  height: 1.05rem;
+  grid-area: 1 / 1;
+}
+
+.nas4usb-classic-seek-icon--back {
+  transform: scaleX(-1);
+}
+
+.nas4usb-classic-seek-num {
+  grid-area: 1 / 1;
+  position: relative;
+  z-index: 1;
+  margin-top: 0.12rem;
+  font-size: 0.55rem;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.04em;
+  line-height: 1;
+  color: #fff;
+  pointer-events: none;
+}
+
+.nas4usb-classic-volume-btn {
+  min-width: 1.65rem;
+}
+
+.nas4usb-classic-volume-icon {
+  display: block;
+  width: 1.05rem;
+  height: 1.05rem;
 }
 
 .nas4usb-classic-time {
@@ -1526,10 +1570,23 @@
 .nas4usb-classic-progress {
   position: relative;
   flex: 1 1 auto;
-  height: 1.1rem;
+  align-items: center;
+  display: flex;
+  height: 1.25rem;
+  min-width: 4rem;
   margin: 0 0.35rem;
   touch-action: none;
   cursor: pointer;
+}
+
+.nas4usb-classic-progress-chapters {
+  position: absolute;
+  inset: 0;
+}
+
+.nas4usb-classic-progress-chapter {
+  position: absolute;
+  inset: 0;
 }
 
 .nas4usb-classic-progress-track {
@@ -1546,46 +1603,71 @@
 
 .nas4usb-classic-progress-buffer {
   position: absolute;
-  inset: 0 auto 0 0;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--media-slider-buffer, 0%);
   background: rgba(255, 255, 255, 0.4);
 }
 
 .nas4usb-classic-progress-fill {
   position: absolute;
-  inset: 0 auto 0 0;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--media-slider-fill, 0%);
   background: #f97316;
+}
+
+.nas4usb-classic-progress[data-dragging] .nas4usb-classic-progress-fill {
+  width: var(--media-slider-pointer, var(--media-slider-fill, 0%));
 }
 
 .nas4usb-classic-progress-thumb {
   position: absolute;
   top: 50%;
+  left: var(--media-slider-fill, 0%);
   width: 0.7rem;
   height: 0.7rem;
   border-radius: 50%;
   background: #fff;
   transform: translate(-50%, -50%);
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+  z-index: 1;
+}
+
+.nas4usb-classic-progress[data-dragging] .nas4usb-classic-progress-thumb {
+  left: var(--media-slider-pointer, var(--media-slider-fill, 0%));
 }
 
 .nas4usb-classic-volume-popup {
   z-index: 6;
+  width: 2.25rem;
+  height: 6.5rem;
   padding: 0.55rem 0.4rem;
   border-radius: 4px;
   background: rgba(28, 28, 28, 0.94);
 }
 
 .nas4usb-classic-volume-slider {
-  height: 5.5rem;
-  width: 1.1rem;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+  cursor: pointer;
 }
 
 .nas4usb-classic-volume-track {
-  position: relative;
+  position: absolute;
+  bottom: 0;
+  left: 50%;
   width: 0.28rem;
   height: 100%;
-  margin: 0 auto;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.28);
+  overflow: hidden;
+  transform: translateX(-50%);
 }
 
 .nas4usb-classic-volume-fill {
@@ -1593,17 +1675,21 @@
   left: 0;
   right: 0;
   bottom: 0;
+  height: var(--media-slider-fill, 0%);
   background: #f97316;
+  border-radius: 999px;
 }
 
 .nas4usb-classic-volume-thumb {
   position: absolute;
   left: 50%;
+  bottom: var(--media-slider-fill, 0%);
   width: 0.65rem;
   height: 0.65rem;
   border-radius: 50%;
   background: #fff;
   transform: translate(-50%, 50%);
+  z-index: 1;
 }
 
 .nas4usb-classic-buffering {

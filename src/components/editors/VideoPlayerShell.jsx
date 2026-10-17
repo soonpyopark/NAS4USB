@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import '@videojs/react/video/compat-skin.css';
 import { I18nProvider, loadLocale } from '@videojs/react/i18n';
 import { Video, VideoPlayer } from '@videojs/react/video';
 import { HlsJsVideo } from '@videojs/react/media/hlsjs-video';

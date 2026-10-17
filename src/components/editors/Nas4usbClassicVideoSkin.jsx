@@ -15,23 +15,40 @@ import {
   VolumePopover,
   VolumeSlider,
 } from '@videojs/react';
+import { SeekIcon, VolumeHighIcon, VolumeLowIcon, VolumeOffIcon } from '@videojs/react/icons';
 import Nas4usbVideoGestures from './Nas4usbVideoGestures.jsx';
 
 /**
- * @param {{
- *   children: import('react').ReactNode,
- *   className?: string,
- *   ios?: boolean,
- * }} props
+ * Compact seek control: curved arrow icon with a small seconds badge.
+ * @param {{ seconds: number }} props
  */
-function SeekLabel({ seconds }) {
+function ClassicSeekGlyph({ seconds }) {
   const abs = Math.abs(seconds);
-  const sign = seconds < 0 ? '−' : '+';
+  const backward = seconds < 0;
   return (
-    <span className="nas4usb-classic-seek-label">
-      {sign}
-      {abs}
+    <span className="nas4usb-classic-seek-glyph" data-direction={backward ? 'backward' : 'forward'}>
+      <SeekIcon
+        className={`nas4usb-classic-seek-icon${backward ? ' nas4usb-classic-seek-icon--back' : ''}`}
+      />
+      <span className="nas4usb-classic-seek-num">{abs}</span>
     </span>
+  );
+}
+
+/**
+ * @param {{ seconds: number, title: string }} props
+ */
+function ClassicSeekButton({ seconds, title }) {
+  return (
+    <SeekButton
+      seconds={seconds}
+      className="nas4usb-classic-btn nas4usb-classic-seek"
+      render={(props) => (
+        <button {...props} type="button" className="nas4usb-classic-btn nas4usb-classic-seek" title={title}>
+          <ClassicSeekGlyph seconds={seconds} />
+        </button>
+      )}
+    />
   );
 }
 
@@ -47,7 +64,7 @@ function SeekLabel({ seconds }) {
 export default function Nas4usbClassicVideoSkin({ children, className = '', ios = false }) {
   return (
     <Container
-      className={`nas4usb-classic-skin media-container ${className}`.trim()}
+      className={`nas4usb-classic-skin media-skin media-container media-video ${className}`.trim()}
       data-theme="compat"
       data-preset="video"
     >
@@ -85,67 +102,49 @@ export default function Nas4usbClassicVideoSkin({ children, className = '', ios 
                   </button>
                 )}
               />
-              <SeekButton
-                seconds={-5}
-                className="nas4usb-classic-btn nas4usb-classic-seek"
-                render={(props) => (
-                  <button {...props} type="button" className="nas4usb-classic-btn nas4usb-classic-seek" title="5초 뒤로">
-                    <SeekLabel seconds={-5} />
-                  </button>
-                )}
-              />
-              <SeekButton
-                seconds={5}
-                className="nas4usb-classic-btn nas4usb-classic-seek"
-                render={(props) => (
-                  <button {...props} type="button" className="nas4usb-classic-btn nas4usb-classic-seek" title="5초 앞으로">
-                    <SeekLabel seconds={5} />
-                  </button>
-                )}
-              />
-              <SeekButton
-                seconds={-10}
-                className="nas4usb-classic-btn nas4usb-classic-seek"
-                render={(props) => (
-                  <button {...props} type="button" className="nas4usb-classic-btn nas4usb-classic-seek" title="10초 뒤로">
-                    <SeekLabel seconds={-10} />
-                  </button>
-                )}
-              />
-              <SeekButton
-                seconds={10}
-                className="nas4usb-classic-btn nas4usb-classic-seek"
-                render={(props) => (
-                  <button {...props} type="button" className="nas4usb-classic-btn nas4usb-classic-seek" title="10초 앞으로">
-                    <SeekLabel seconds={10} />
-                  </button>
-                )}
-              />
+              <ClassicSeekButton seconds={-5} title="5초 뒤로" />
+              <ClassicSeekButton seconds={5} title="5초 앞으로" />
+              <ClassicSeekButton seconds={-10} title="10초 뒤로" />
+              <ClassicSeekButton seconds={10} title="10초 앞으로" />
 
               <VolumePopover.Root openOnHover delay={120} closeDelay={80} side="top">
                 <VolumePopover.Trigger
                   render={
                     <MuteButton
-                      className="nas4usb-classic-btn"
-                      render={(props, state) => (
-                        <button
-                          {...props}
-                          type="button"
-                          className="nas4usb-classic-btn"
-                          title={state.muted || state.volume === 0 ? '음소거 해제' : '음소거'}
-                        >
-                          {state.muted || state.volume === 0 ? '🔇' : state.volume < 0.5 ? '🔉' : '🔊'}
-                        </button>
-                      )}
+                      className="nas4usb-classic-btn nas4usb-classic-volume-btn"
+                      render={(props, state) => {
+                        const muted = state.muted || state.volume === 0;
+                        const low = !muted && state.volume < 0.5;
+                        return (
+                          <button
+                            {...props}
+                            type="button"
+                            className="nas4usb-classic-btn nas4usb-classic-volume-btn"
+                            title={muted ? '음소거 해제' : '음소거'}
+                          >
+                            {muted ? (
+                              <VolumeOffIcon className="nas4usb-classic-volume-icon" />
+                            ) : low ? (
+                              <VolumeLowIcon className="nas4usb-classic-volume-icon" />
+                            ) : (
+                              <VolumeHighIcon className="nas4usb-classic-volume-icon" />
+                            )}
+                          </button>
+                        );
+                      }}
                     />
                   }
                 />
                 <VolumePopover.Popup className="nas4usb-classic-volume-popup nas4usb-classic-menu" data-nas4usb-chrome="1">
-                  <VolumeSlider.Root className="nas4usb-classic-volume-slider" orientation="vertical" thumbAlignment="edge">
-                    <VolumeSlider.Track className="nas4usb-classic-volume-track">
-                      <VolumeSlider.Fill className="nas4usb-classic-volume-fill" />
+                  <VolumeSlider.Root
+                    className="nas4usb-classic-volume-slider media-volume-slider"
+                    orientation="vertical"
+                    thumbAlignment="edge"
+                  >
+                    <VolumeSlider.Track className="nas4usb-classic-volume-track media-volume-slider-track">
+                      <VolumeSlider.Fill className="nas4usb-classic-volume-fill media-volume-slider-fill" />
                     </VolumeSlider.Track>
-                    <VolumeSlider.Thumb className="nas4usb-classic-volume-thumb" />
+                    <VolumeSlider.Thumb className="nas4usb-classic-volume-thumb media-volume-slider-thumb" />
                   </VolumeSlider.Root>
                 </VolumePopover.Popup>
               </VolumePopover.Root>
@@ -157,12 +156,19 @@ export default function Nas4usbClassicVideoSkin({ children, className = '', ios 
               </Time.Group>
             </Controls.Group>
 
-            <TimeSlider.Root className="nas4usb-classic-progress">
-              <TimeSlider.Track className="nas4usb-classic-progress-track">
-                <TimeSlider.Buffer className="nas4usb-classic-progress-buffer" />
-                <TimeSlider.Fill className="nas4usb-classic-progress-fill" />
-              </TimeSlider.Track>
-              <TimeSlider.Thumb className="nas4usb-classic-progress-thumb" />
+            <TimeSlider.Root className="nas4usb-classic-progress media-time-slider" thumbAlignment="edge">
+              <TimeSlider.Chapters
+                className="nas4usb-classic-progress-chapters media-time-slider-chapters"
+                renderChapter={(props) => (
+                  <div className="nas4usb-classic-progress-chapter media-time-slider-chapter" {...props}>
+                    <TimeSlider.Track className="nas4usb-classic-progress-track media-time-slider-track">
+                      <TimeSlider.Buffer className="nas4usb-classic-progress-buffer media-time-slider-buffer" />
+                      <TimeSlider.Fill className="nas4usb-classic-progress-fill media-time-slider-fill" />
+                    </TimeSlider.Track>
+                  </div>
+                )}
+              />
+              <TimeSlider.Thumb className="nas4usb-classic-progress-thumb media-time-slider-thumb" />
             </TimeSlider.Root>
 
             <Controls.Group className="nas4usb-classic-group nas4usb-classic-group--end">

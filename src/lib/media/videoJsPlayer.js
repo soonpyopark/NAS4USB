@@ -31,6 +31,28 @@ export const UI_CHROME_SELECTOR =
   '.nas4usb-classic-bar, .nas4usb-classic-menu, .nas4usb-classic-big-play, [data-nas4usb-chrome="1"]';
 
 /**
+ * Read/write the browser's real media clock, bypassing {@link patchTimelineClockOnMedia}.
+ * @param {HTMLMediaElement} media
+ * @returns {number}
+ */
+export function readNativeMediaDuration(media) {
+  const durationDesc = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'duration');
+  const value = durationDesc?.get?.call(media);
+  return Number.isFinite(value) ? Number(value) : Number.NaN;
+}
+
+/**
+ * @param {HTMLMediaElement} media
+ * @param {number} localSeconds
+ */
+export function setNativeMediaCurrentTime(media, localSeconds) {
+  const currentTimeDesc = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'currentTime');
+  const next = Number(localSeconds);
+  if (!currentTimeDesc?.set || !Number.isFinite(next)) return;
+  currentTimeDesc.set.call(media, Math.max(0, next));
+}
+
+/**
  * Patch media timeline so the control bar shows absolute file time while
  * FFmpeg preview plays a shifted segment.
  *
@@ -78,10 +100,23 @@ export function patchTimelineClockOnMedia(media, clock, options = {}) {
         Number(clock.startSecondsRef.current) > 0.5 ? Number(clock.startSecondsRef.current) : 0;
       const next = Number(value);
       if (!Number.isFinite(next)) return;
-      const current = origin + (Number(currentTimeDesc.get.call(this)) || 0);
+      const nativeNow = Number(currentTimeDesc.get.call(this)) || 0;
+      const current = origin + nativeNow;
       if (!acceptSeeks || Math.abs(next - current) < 0.35) return;
-      if (options.nativeSeek) {
-        currentTimeDesc.set.call(this, Math.max(0, next - origin));
+
+      const local = Math.max(0, next - origin);
+      // Prototype getter — not the patched absolute duration.
+      const rawDuration = Number(durationDesc.get.call(this));
+      const inNativeRange =
+        options.nativeSeek ||
+        !Number.isFinite(rawDuration) ||
+        rawDuration <= 0 ||
+        local <= rawDuration + 0.75;
+
+      if (inNativeRange) {
+        // Must use the prototype setter. Assigning media.currentTime here re-enters
+        // this trap and never moves the playhead (breaks Video.js 10 TimeSlider).
+        currentTimeDesc.set.call(this, local);
         return;
       }
       void clock.seekToRef.current?.(next);

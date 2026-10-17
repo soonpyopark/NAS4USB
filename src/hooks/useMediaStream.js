@@ -3,6 +3,10 @@ import { base64ToBytes } from '../lib/bytes.js';
 import { unwrapWorkspaceBase64 } from '../lib/filePassword/io.js';
 import { isSecFileName } from '../lib/filePassword/secPaths.js';
 import { buildMediaStreamUrl, getMediaBufferedPercent } from '../lib/media/streamUrl.js';
+import {
+  readNativeMediaDuration,
+  setNativeMediaCurrentTime,
+} from '../lib/media/videoJsPlayer.js';
 import { getShareTokenFromUrl } from '../lib/shareAccess.js';
 import { getStoredAdminToken } from '../lib/nas4usbClient.js';
 
@@ -341,8 +345,9 @@ export function useMediaStream(relativePath, options = {}) {
       const origin = startSeconds > 0.5 ? startSeconds : 0;
       let localReady = Math.max(0, Number(availableSeconds) || 0);
       if (media instanceof HTMLMediaElement) {
-        if (Number.isFinite(media.duration) && media.duration > 0) {
-          localReady = Math.max(localReady, media.duration);
+        const rawDuration = readNativeMediaDuration(media);
+        if (Number.isFinite(rawDuration) && rawDuration > 0) {
+          localReady = Math.max(localReady, rawDuration);
         }
         if (media.buffered.length > 0) {
           localReady = Math.max(localReady, media.buffered.end(media.buffered.length - 1));
@@ -358,7 +363,8 @@ export function useMediaStream(relativePath, options = {}) {
         clamped >= origin - 0.25 &&
         clamped <= convertedEnd
       ) {
-        media.currentTime = Math.max(0, clamped - origin);
+        // Bypass the absolute-time patch so we write the segment-local clock once.
+        setNativeMediaCurrentTime(media, Math.max(0, clamped - origin));
         return;
       }
 
