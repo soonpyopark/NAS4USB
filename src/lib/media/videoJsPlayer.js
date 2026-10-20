@@ -28,7 +28,7 @@ export const CLICK_DELAY_MS = 280;
 export const DOUBLE_TAP_MS = 320;
 export const DOUBLE_TAP_PX = 48;
 export const UI_CHROME_SELECTOR =
-  '.nas4usb-classic-bar, .nas4usb-classic-menu, .nas4usb-classic-big-play, [data-nas4usb-chrome="1"]';
+  '.nas4usb-classic-bar, .nas4usb-classic-progress-row, .nas4usb-classic-menu, .nas4usb-classic-big-play, [data-nas4usb-chrome="1"]';
 
 /**
  * Read/write the browser's real media clock, bypassing {@link patchTimelineClockOnMedia}.

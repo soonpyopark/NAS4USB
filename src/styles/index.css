@@ -1452,18 +1452,45 @@
   pointer-events: none;
 }
 
+.nas4usb-classic-chrome {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  pointer-events: auto;
+  color: #fff;
+  font-size: 12px;
+  font-family: system-ui, -apple-system, sans-serif;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.78));
+  transition: background 0.2s ease;
+}
+
+.nas4usb-classic-progress-row {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  padding: 0.35rem 0 0.15rem;
+  box-sizing: border-box;
+}
+
 .nas4usb-classic-bar {
   display: flex;
   align-items: center;
   gap: 0.15rem;
   width: 100%;
   min-height: 2.25rem;
-  padding: 0.2rem 0.35rem 0.35rem;
-  pointer-events: auto;
-  background: linear-gradient(transparent, rgba(0, 0, 0, 0.78));
-  color: #fff;
-  font-size: 12px;
-  font-family: system-ui, -apple-system, sans-serif;
+  padding: 0.05rem 0.35rem 0.35rem;
+  box-sizing: border-box;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease,
+    max-height 0.2s ease,
+    padding 0.2s ease,
+    min-height 0.2s ease;
+}
+
+.nas4usb-classic-bar-spacer {
+  flex: 1 1 auto;
+  min-width: 0.5rem;
 }
 
 .nas4usb-classic-group {
@@ -1474,7 +1501,67 @@
 }
 
 .nas4usb-classic-group--end {
-  margin-left: 0.15rem;
+  margin-left: 0;
+}
+
+/* Controls idle: hide buttons, keep a thin full-width progress rail at the bottom. */
+.nas4usb-classic-controls:not([data-visible]) .nas4usb-classic-chrome {
+  background: transparent;
+}
+
+.nas4usb-classic-controls:not([data-visible]) .nas4usb-classic-backdrop {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.nas4usb-classic-controls:not([data-visible]) .nas4usb-classic-bar {
+  opacity: 0;
+  pointer-events: none;
+  max-height: 0;
+  min-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  overflow: hidden;
+  transform: translateY(0.35rem);
+}
+
+.nas4usb-classic-controls:not([data-visible]) .nas4usb-classic-progress-row {
+  padding: 0;
+}
+
+.nas4usb-classic-controls:not([data-visible]) .nas4usb-classic-progress {
+  height: 0.55rem;
+  margin: 0;
+}
+
+.nas4usb-classic-controls:not([data-visible]) .nas4usb-classic-progress-track {
+  top: auto;
+  bottom: 0;
+  height: 0.18rem;
+  transform: none;
+  border-radius: 0;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.nas4usb-classic-controls:not([data-visible]) .nas4usb-classic-progress-thumb {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.nas4usb-classic-controls:not([data-visible]) .nas4usb-classic-progress:hover,
+.nas4usb-classic-controls:not([data-visible]) .nas4usb-classic-progress[data-dragging] {
+  height: 0.85rem;
+}
+
+.nas4usb-classic-controls:not([data-visible]) .nas4usb-classic-progress:hover .nas4usb-classic-progress-track,
+.nas4usb-classic-controls:not([data-visible]) .nas4usb-classic-progress[data-dragging] .nas4usb-classic-progress-track {
+  height: 0.28rem;
+}
+
+.nas4usb-classic-controls:not([data-visible]) .nas4usb-classic-progress:hover .nas4usb-classic-progress-thumb,
+.nas4usb-classic-controls:not([data-visible]) .nas4usb-classic-progress[data-dragging] .nas4usb-classic-progress-thumb {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .nas4usb-classic-btn {
@@ -1569,12 +1656,12 @@
 
 .nas4usb-classic-progress {
   position: relative;
-  flex: 1 1 auto;
-  align-items: center;
   display: flex;
-  height: 1.25rem;
-  min-width: 4rem;
-  margin: 0 0.35rem;
+  align-items: center;
+  width: 100%;
+  height: 1.15rem;
+  min-width: 0;
+  margin: 0;
   touch-action: none;
   cursor: pointer;
 }
@@ -1705,6 +1792,7 @@
 }
 
 .nas4usb-videojs-host--ios .nas4usb-classic-bar,
+.nas4usb-videojs-host--ios .nas4usb-classic-progress-row,
 .nas4usb-videojs-host--ios .nas4usb-classic-big-play,
 .nas4usb-videojs-host--ios .nas4usb-classic-menu {
   pointer-events: auto;

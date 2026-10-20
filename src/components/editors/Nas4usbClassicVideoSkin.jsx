@@ -92,127 +92,134 @@ export default function Nas4usbClassicVideoSkin({ children, className = '', ios 
       <Controls.Root>
         <Controls.Backdrop className="nas4usb-classic-backdrop" />
         <Controls.Content className="nas4usb-classic-controls" data-nas4usb-chrome="1">
-          <div className="nas4usb-classic-bar" data-nas4usb-chrome="1">
-            <Controls.Group className="nas4usb-classic-group nas4usb-classic-group--start">
-              <PlayButton
-                className="nas4usb-classic-btn"
-                render={(props, state) => (
-                  <button {...props} type="button" className="nas4usb-classic-btn" title={state.paused ? '재생' : '일시정지'}>
-                    {state.paused ? '▶' : '❚❚'}
-                  </button>
-                )}
-              />
-              <ClassicSeekButton seconds={-5} title="5초 뒤로" />
-              <ClassicSeekButton seconds={5} title="5초 앞으로" />
-              <ClassicSeekButton seconds={-10} title="10초 뒤로" />
-              <ClassicSeekButton seconds={10} title="10초 앞으로" />
-
-              <VolumePopover.Root openOnHover delay={120} closeDelay={80} side="top">
-                <VolumePopover.Trigger
-                  render={
-                    <MuteButton
-                      className="nas4usb-classic-btn nas4usb-classic-volume-btn"
-                      render={(props, state) => {
-                        const muted = state.muted || state.volume === 0;
-                        const low = !muted && state.volume < 0.5;
-                        return (
-                          <button
-                            {...props}
-                            type="button"
-                            className="nas4usb-classic-btn nas4usb-classic-volume-btn"
-                            title={muted ? '음소거 해제' : '음소거'}
-                          >
-                            {muted ? (
-                              <VolumeOffIcon className="nas4usb-classic-volume-icon" />
-                            ) : low ? (
-                              <VolumeLowIcon className="nas4usb-classic-volume-icon" />
-                            ) : (
-                              <VolumeHighIcon className="nas4usb-classic-volume-icon" />
-                            )}
-                          </button>
-                        );
-                      }}
-                    />
-                  }
+          <div className="nas4usb-classic-chrome" data-nas4usb-chrome="1">
+            {/* Full-width seek above buttons; stays as a thin bottom rail when chrome hides. */}
+            <div className="nas4usb-classic-progress-row" data-nas4usb-chrome="1">
+              <TimeSlider.Root className="nas4usb-classic-progress media-time-slider" thumbAlignment="edge">
+                <TimeSlider.Chapters
+                  className="nas4usb-classic-progress-chapters media-time-slider-chapters"
+                  renderChapter={(props) => (
+                    <div className="nas4usb-classic-progress-chapter media-time-slider-chapter" {...props}>
+                      <TimeSlider.Track className="nas4usb-classic-progress-track media-time-slider-track">
+                        <TimeSlider.Buffer className="nas4usb-classic-progress-buffer media-time-slider-buffer" />
+                        <TimeSlider.Fill className="nas4usb-classic-progress-fill media-time-slider-fill" />
+                      </TimeSlider.Track>
+                    </div>
+                  )}
                 />
-                <VolumePopover.Popup className="nas4usb-classic-volume-popup nas4usb-classic-menu" data-nas4usb-chrome="1">
-                  <VolumeSlider.Root
-                    className="nas4usb-classic-volume-slider media-volume-slider"
-                    orientation="vertical"
-                    thumbAlignment="edge"
-                  >
-                    <VolumeSlider.Track className="nas4usb-classic-volume-track media-volume-slider-track">
-                      <VolumeSlider.Fill className="nas4usb-classic-volume-fill media-volume-slider-fill" />
-                    </VolumeSlider.Track>
-                    <VolumeSlider.Thumb className="nas4usb-classic-volume-thumb media-volume-slider-thumb" />
-                  </VolumeSlider.Root>
-                </VolumePopover.Popup>
-              </VolumePopover.Root>
+                <TimeSlider.Thumb className="nas4usb-classic-progress-thumb media-time-slider-thumb" />
+              </TimeSlider.Root>
+            </div>
 
-              <Time.Group className="nas4usb-classic-time">
-                <Time.Value type="current" className="nas4usb-classic-time-value" />
-                <Time.Separator className="nas4usb-classic-time-sep" />
-                <Time.Value type="duration" className="nas4usb-classic-time-value" />
-              </Time.Group>
-            </Controls.Group>
-
-            <TimeSlider.Root className="nas4usb-classic-progress media-time-slider" thumbAlignment="edge">
-              <TimeSlider.Chapters
-                className="nas4usb-classic-progress-chapters media-time-slider-chapters"
-                renderChapter={(props) => (
-                  <div className="nas4usb-classic-progress-chapter media-time-slider-chapter" {...props}>
-                    <TimeSlider.Track className="nas4usb-classic-progress-track media-time-slider-track">
-                      <TimeSlider.Buffer className="nas4usb-classic-progress-buffer media-time-slider-buffer" />
-                      <TimeSlider.Fill className="nas4usb-classic-progress-fill media-time-slider-fill" />
-                    </TimeSlider.Track>
-                  </div>
-                )}
-              />
-              <TimeSlider.Thumb className="nas4usb-classic-progress-thumb media-time-slider-thumb" />
-            </TimeSlider.Root>
-
-            <Controls.Group className="nas4usb-classic-group nas4usb-classic-group--end">
-              <Time.Value type="remaining" className="nas4usb-classic-time-value nas4usb-classic-remaining" negativeSign="−" />
-              <PlaybackRateButton
-                className="nas4usb-classic-btn"
-                render={(props, state) => (
-                  <button {...props} type="button" className="nas4usb-classic-btn" title="재생 속도">
-                    {Number(state.rate || 1).toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1')}x
-                  </button>
-                )}
-              />
-              <CaptionsButton
-                className="nas4usb-classic-btn"
-                render={(props) => (
-                  <button {...props} type="button" className="nas4usb-classic-btn" title="자막">
-                    CC
-                  </button>
-                )}
-              />
-              {!ios ? (
-                <PiPButton
+            <div className="nas4usb-classic-bar" data-nas4usb-chrome="1">
+              <Controls.Group className="nas4usb-classic-group nas4usb-classic-group--start">
+                <PlayButton
                   className="nas4usb-classic-btn"
-                  render={(props) => (
-                    <button {...props} type="button" className="nas4usb-classic-btn" title="화면 속 화면">
-                      PiP
+                  render={(props, state) => (
+                    <button {...props} type="button" className="nas4usb-classic-btn" title={state.paused ? '재생' : '일시정지'}>
+                      {state.paused ? '▶' : '❚❚'}
                     </button>
                   )}
                 />
-              ) : null}
-              <FullscreenButton
-                className="nas4usb-classic-btn"
-                render={(props, state) => (
-                  <button
-                    {...props}
-                    type="button"
+                <ClassicSeekButton seconds={-5} title="5초 뒤로" />
+                <ClassicSeekButton seconds={5} title="5초 앞으로" />
+                <ClassicSeekButton seconds={-10} title="10초 뒤로" />
+                <ClassicSeekButton seconds={10} title="10초 앞으로" />
+
+                <VolumePopover.Root openOnHover delay={120} closeDelay={80} side="top">
+                  <VolumePopover.Trigger
+                    render={
+                      <MuteButton
+                        className="nas4usb-classic-btn nas4usb-classic-volume-btn"
+                        render={(props, state) => {
+                          const muted = state.muted || state.volume === 0;
+                          const low = !muted && state.volume < 0.5;
+                          return (
+                            <button
+                              {...props}
+                              type="button"
+                              className="nas4usb-classic-btn nas4usb-classic-volume-btn"
+                              title={muted ? '음소거 해제' : '음소거'}
+                            >
+                              {muted ? (
+                                <VolumeOffIcon className="nas4usb-classic-volume-icon" />
+                              ) : low ? (
+                                <VolumeLowIcon className="nas4usb-classic-volume-icon" />
+                              ) : (
+                                <VolumeHighIcon className="nas4usb-classic-volume-icon" />
+                              )}
+                            </button>
+                          );
+                        }}
+                      />
+                    }
+                  />
+                  <VolumePopover.Popup className="nas4usb-classic-volume-popup nas4usb-classic-menu" data-nas4usb-chrome="1">
+                    <VolumeSlider.Root
+                      className="nas4usb-classic-volume-slider media-volume-slider"
+                      orientation="vertical"
+                      thumbAlignment="edge"
+                    >
+                      <VolumeSlider.Track className="nas4usb-classic-volume-track media-volume-slider-track">
+                        <VolumeSlider.Fill className="nas4usb-classic-volume-fill media-volume-slider-fill" />
+                      </VolumeSlider.Track>
+                      <VolumeSlider.Thumb className="nas4usb-classic-volume-thumb media-volume-slider-thumb" />
+                    </VolumeSlider.Root>
+                  </VolumePopover.Popup>
+                </VolumePopover.Root>
+
+                <Time.Group className="nas4usb-classic-time">
+                  <Time.Value type="current" className="nas4usb-classic-time-value" />
+                  <Time.Separator className="nas4usb-classic-time-sep" />
+                  <Time.Value type="duration" className="nas4usb-classic-time-value" />
+                </Time.Group>
+              </Controls.Group>
+
+              <div className="nas4usb-classic-bar-spacer" />
+
+              <Controls.Group className="nas4usb-classic-group nas4usb-classic-group--end">
+                <Time.Value type="remaining" className="nas4usb-classic-time-value nas4usb-classic-remaining" negativeSign="−" />
+                <PlaybackRateButton
+                  className="nas4usb-classic-btn"
+                  render={(props, state) => (
+                    <button {...props} type="button" className="nas4usb-classic-btn" title="재생 속도">
+                      {Number(state.rate || 1).toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1')}x
+                    </button>
+                  )}
+                />
+                <CaptionsButton
+                  className="nas4usb-classic-btn"
+                  render={(props) => (
+                    <button {...props} type="button" className="nas4usb-classic-btn" title="자막">
+                      CC
+                    </button>
+                  )}
+                />
+                {!ios ? (
+                  <PiPButton
                     className="nas4usb-classic-btn"
-                    title={state.isFullscreen ? '전체화면 종료' : '전체화면'}
-                  >
-                    {state.isFullscreen ? '🮕' : '⛶'}
-                  </button>
-                )}
-              />
-            </Controls.Group>
+                    render={(props) => (
+                      <button {...props} type="button" className="nas4usb-classic-btn" title="화면 속 화면">
+                        PiP
+                      </button>
+                    )}
+                  />
+                ) : null}
+                <FullscreenButton
+                  className="nas4usb-classic-btn"
+                  render={(props, state) => (
+                    <button
+                      {...props}
+                      type="button"
+                      className="nas4usb-classic-btn"
+                      title={state.isFullscreen ? '전체화면 종료' : '전체화면'}
+                    >
+                      {state.isFullscreen ? '🮕' : '⛶'}
+                    </button>
+                  )}
+                />
+              </Controls.Group>
+            </div>
           </div>
         </Controls.Content>
       </Controls.Root>
