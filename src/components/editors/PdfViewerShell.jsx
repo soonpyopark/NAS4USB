@@ -1860,6 +1860,13 @@ export default function PdfViewerShell({
     setSelectionMenu(null);
   }, [clearAllLiveSelections, copyActiveMarkupText]);
 
+  const dismissSelection = useCallback(() => {
+    clearAllLiveSelections();
+    selectionDragRef.current = null;
+    window.getSelection()?.removeAllRanges();
+    setSelectionMenu(null);
+  }, [clearAllLiveSelections]);
+
   useEffect(() => {
     repaintMarkupLayers();
   }, [markups, activeMarkupId, repaintMarkupLayers]);
@@ -3619,8 +3626,8 @@ export default function PdfViewerShell({
                     window.innerWidth - 320,
                   ),
                   top: Math.min(
-                    Math.max(8, selectionMenu.clientY - 168),
-                    window.innerHeight - 190,
+                    Math.max(8, selectionMenu.clientY - 208),
+                    window.innerHeight - 230,
                   ),
                 }}
                 role="menu"
@@ -3691,6 +3698,13 @@ export default function PdfViewerShell({
                   onClick={() => void copySelectionText()}
                 >
                   복사
+                </button>
+                <button
+                  type="button"
+                  className="pdf-selection-menu__action pdf-selection-menu__action--full"
+                  onClick={dismissSelection}
+                >
+                  해제
                 </button>
               </div>,
               document.body,
@@ -3937,14 +3951,16 @@ export default function PdfViewerShell({
           -webkit-tap-highlight-color: rgba(51, 153, 255, 0.2);
           cursor: pointer;
         }
-        /* Inverted matchstick: stem up into the line, round head below — same on both ends. */
+        /* Matchstick: stem = blue box height; head below the box on both ends. */
         .pdf-sel-handle {
+          --pdf-sel-stem: 18px;
+          --pdf-sel-head: 18px;
           position: absolute;
           z-index: 7;
           width: 44px;
-          height: 44px;
+          height: calc(var(--pdf-sel-head) + var(--pdf-sel-stem));
           margin-left: -22px;
-          margin-top: -2px;
+          margin-top: 0;
           border-radius: 0;
           background: transparent;
           border: none;
@@ -3962,10 +3978,10 @@ export default function PdfViewerShell({
           content: '';
           position: absolute;
           left: 50%;
-          top: 16px;
-          width: 18px;
-          height: 18px;
-          margin-left: -9px;
+          top: var(--pdf-sel-stem);
+          width: var(--pdf-sel-head);
+          height: var(--pdf-sel-head);
+          margin-left: calc(var(--pdf-sel-head) / -2);
           border-radius: 50%;
           background: #3380ff;
           border: 2px solid #fff;
@@ -3979,7 +3995,7 @@ export default function PdfViewerShell({
           left: 50%;
           top: 0;
           width: 2px;
-          height: 18px;
+          height: var(--pdf-sel-stem);
           margin-left: -1px;
           background: #3380ff;
           pointer-events: none;

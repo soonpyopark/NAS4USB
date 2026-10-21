@@ -404,6 +404,18 @@ export default function TipTapEditorView({
     editor.setEditable(!readOnly && !htmlMode);
   }, [editor, htmlMode, readOnly]);
 
+  // Shell autosave reads this flag; entering HTML mode also clears any pending silent save.
+  useEffect(() => {
+    if (!editor) return undefined;
+    editor.isHtmlSourceMode = htmlMode;
+    if (htmlMode && typeof editor.clearSilentPersistTimer === 'function') {
+      editor.clearSilentPersistTimer();
+    }
+    return () => {
+      if (editor.isHtmlSourceMode) editor.isHtmlSourceMode = false;
+    };
+  }, [editor, htmlMode]);
+
   const openHtmlMode = useCallback(() => {
     if (!editor || readOnly) return;
     const next = annotateHtmlWithAssetPaths(formatTiptapHtml(editor.getHTML()), relativePath);

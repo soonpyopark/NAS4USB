@@ -542,16 +542,30 @@ export function getTextBlockSelectionByIndices(words, indexA, indexB) {
 /**
  * Handle anchors for an active selection (scale-1 page coords).
  * @param {Array<{ left: number, top: number, width: number, height: number }>} rects
- * @returns {{ start: { x: number, y: number }, end: { x: number, y: number } } | null}
+ * @returns {{
+ *   start: { x: number, y: number, lineTop: number, height: number },
+ *   end: { x: number, y: number, lineTop: number, height: number },
+ * } | null}
  */
 export function selectionHandlePoints(rects) {
   if (!Array.isArray(rects) || !rects.length) return null;
   const first = rects[0];
   const last = rects[rects.length - 1];
-  // Anchor at the baseline of the line so inverted-matchstick handles hang below.
+  // Visual stem matches the blue selection box height; head sits below the box.
+  // `y` stays near the line center for word/range hit tests while dragging.
   return {
-    start: { x: first.left, y: first.top + first.height },
-    end: { x: last.left + last.width, y: last.top + last.height },
+    start: {
+      x: first.left,
+      y: first.top + first.height / 2,
+      lineTop: first.top,
+      height: Math.max(4, first.height),
+    },
+    end: {
+      x: last.left + last.width,
+      y: last.top + last.height / 2,
+      lineTop: last.top,
+      height: Math.max(4, last.height),
+    },
   };
 }
 
@@ -570,8 +584,14 @@ export function hitTestSelectionHandle(point, rects, hitRadius = 18) {
     const dy = a.y - b.y;
     return dx * dx + dy * dy;
   };
-  const startDist = dist2(point, handles.start);
-  const endDist = dist2(point, handles.end);
+  /** Nearest distance to the knob (below the box) or the stem mid. */
+  const nearest = (handle) => {
+    const head = { x: handle.x, y: handle.lineTop + handle.height + 9 };
+    const mid = { x: handle.x, y: handle.lineTop + handle.height / 2 };
+    return Math.min(dist2(point, head), dist2(point, mid));
+  };
+  const startDist = nearest(handles.start);
+  const endDist = nearest(handles.end);
   if (startDist <= r2 && startDist <= endDist) return 'start';
   if (endDist <= r2) return 'end';
   return null;
@@ -957,16 +977,22 @@ export function paintSelectionHandles(layer, rects, cssScale) {
   const handles = selectionHandlePoints(rects);
   if (!handles) return;
   const scale = Math.max(0.01, cssScale || 1);
+  const headPx = 18;
 
   for (const [role, point] of [
     ['start', handles.start],
     ['end', handles.end],
   ]) {
+    const stemPx = Math.max(8, point.height * scale);
     const el = document.createElement('div');
     el.dataset.pdfSelHandle = role;
     el.className = `pdf-sel-handle pdf-sel-handle--${role}`;
+    // Anchor at the top of the blue selection box; stem fills that box height.
     el.style.left = `${point.x * scale}px`;
-    el.style.top = `${point.y * scale}px`;
+    el.style.top = `${point.lineTop * scale}px`;
+    el.style.setProperty('--pdf-sel-stem', `${stemPx}px`);
+    el.style.setProperty('--pdf-sel-head', `${headPx}px`);
+    el.style.height = `${headPx + stemPx}px`;
     layer.appendChild(el);
   }
 }

@@ -201,6 +201,9 @@ export default function TipTapEditorShell({
       if (shareReadOnly) return false;
       if (!workspace.ready) return false;
       const editor = editorRef.current;
+      // HTML source mode is a draft surface — silent autosave must not flush/close it.
+      // Explicit save (⌘S) / close still call flushHtmlSource below.
+      if (silent && editor?.isHtmlSourceMode) return false;
       if (editor && typeof editor.flushHtmlSource === 'function') {
         const flushed = await editor.flushHtmlSource();
         if (flushed === false) {
@@ -262,10 +265,20 @@ export default function TipTapEditorShell({
     if (!editor) return undefined;
 
     let timer = 0;
-    const schedule = () => {
-      if (closingRef.current) return;
+    const clearSilentPersistTimer = () => {
       window.clearTimeout(timer);
+      timer = 0;
+    };
+    editor.clearSilentPersistTimer = clearSilentPersistTimer;
+
+    const schedule = () => {
+      if (closingRef.current || editor.isHtmlSourceMode) {
+        clearSilentPersistTimer();
+        return;
+      }
+      clearSilentPersistTimer();
       timer = window.setTimeout(() => {
+        if (closingRef.current || editor.isHtmlSourceMode) return;
         void persistLive({ archive: false, silent: true }).catch(() => {});
       }, 3000);
     };
@@ -273,7 +286,10 @@ export default function TipTapEditorShell({
     editor.on('update', schedule);
     return () => {
       editor.off('update', schedule);
-      window.clearTimeout(timer);
+      clearSilentPersistTimer();
+      if (editor.clearSilentPersistTimer === clearSilentPersistTimer) {
+        delete editor.clearSilentPersistTimer;
+      }
     };
   }, [editorEpoch, persistLive, roomReady, shareReadOnly]);
 
