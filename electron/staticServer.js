@@ -26,6 +26,22 @@ const MIME_TYPES = {
 };
 
 /**
+ * HTML must revalidate so clients pick up new hashed asset names after rebuild.
+ * Fingerprinted Vite chunks under `assets/` can be cached forever.
+ * Unhashed public files (icons, etc.) revalidate like HTML.
+ *
+ * @param {string} relativePosix path relative to dist root, `/`-separated
+ * @param {string} ext lowercase extension including dot
+ */
+function cacheControlFor(relativePosix, ext) {
+  if (ext === '.html') return 'no-cache';
+  if (relativePosix === 'assets' || relativePosix.startsWith('assets/') || relativePosix.includes('/assets/')) {
+    return 'public, max-age=31536000, immutable';
+  }
+  return 'no-cache';
+}
+
+/**
  * @param {import('node:http').IncomingMessage} req
  * @param {import('node:http').ServerResponse} res
  * @param {string} distRoot
@@ -70,7 +86,8 @@ export async function serveStaticDist(req, res, distRoot) {
       '.webp',
     ]);
     if (requestPath.startsWith('rhwp-studio/') || noSpaFallback.has(ext)) {
-      res.writeHead(404);
+      // Avoid sticky 404s when a rebuild renames hashed chunks mid-session.
+      res.writeHead(404, { 'Cache-Control': 'no-store' });
       res.end('Not found');
       return true;
     }
@@ -86,11 +103,15 @@ export async function serveStaticDist(req, res, distRoot) {
   try {
     const content = await fs.readFile(filePath);
     const ext = path.extname(filePath).toLowerCase();
-    res.writeHead(200, { 'Content-Type': MIME_TYPES[ext] ?? 'application/octet-stream' });
+    const relativePosix = path.relative(distRoot, filePath).split(path.sep).join('/');
+    res.writeHead(200, {
+      'Content-Type': MIME_TYPES[ext] ?? 'application/octet-stream',
+      'Cache-Control': cacheControlFor(relativePosix, ext),
+    });
     res.end(content);
     return true;
   } catch {
-    res.writeHead(404);
+    res.writeHead(404, { 'Cache-Control': 'no-store' });
     res.end('Not found');
     return true;
   }

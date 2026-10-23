@@ -4,7 +4,7 @@
 
 # NAS4USB
 
-USB(또는 단일 폴더)만으로 **오프라인 LAN NAS**와 **실시간 공동 편집**을 제공하는 Windows/macOS Electron 앱입니다. (v1.0.9)
+USB(또는 단일 폴더)만으로 **오프라인 LAN NAS**와 **실시간 공동 편집**을 제공하는 Windows/macOS Electron 앱입니다. (v1.1.0)
 
 - **Electron + Vite + React** — 로컬 파일 탐색기 UI
 - **Y.js** — HWPX·XLSX·화이트보드·TipTap 실시간 동기화 (기본 포트 `3009`)
@@ -14,6 +14,26 @@ USB(또는 단일 폴더)만으로 **오프라인 LAN NAS**와 **실시간 공�
 - **동영상 미리보기** — Video.js 플레이어 · FFmpeg HLS 호환 변환(변환하며 재생) · 전체 길이 시크 · 옆 파일 자막
 
 > **용도:** USB 이동·교실/회의실 LAN 협업. 인터넷 없이 동작하도록 설계되었습니다.
+
+## 화면
+
+스크린샷은 [`docs/screenshots/`](docs/screenshots/)에 둡니다. Windows 실행 화면은 추후 같은 폴더에 추가할 예정입니다.
+
+### macOS 실행 화면
+
+Electron 앱으로 실행한 탐색기입니다.
+
+![NAS4USB macOS 실행 화면](docs/screenshots/macos-app.png)
+
+### 웹 접속 화면
+
+호스트가 LAN에서 서버를 켠 뒤, 같은 네트워크의 브라우저에서 `https://<호스트IP>:<포트>`로 접속한 모습입니다.
+
+![NAS4USB 웹 접속 화면](docs/screenshots/web-browser.png)
+
+### Windows 실행 화면
+
+*(준비 중 — `docs/screenshots/windows-app.png`)*
 
 ---
 
