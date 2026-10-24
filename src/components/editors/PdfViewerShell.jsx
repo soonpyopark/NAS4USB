@@ -397,8 +397,6 @@ export default function PdfViewerShell({
   /** Page to restore after first layout (from sidecar). */
   const pendingRestorePageRef = useRef(/** @type {number | null} */ (null));
   const viewerSaveTimerRef = useRef(/** @type {ReturnType<typeof setTimeout> | null} */ (null));
-  /** Last observed mouse-wheel step (px); FAB up/down mirrors this. */
-  const wheelStepPxRef = useRef(100);
   const zoomModeRef = useRef(zoomMode);
   const customScaleRef = useRef(customScale);
   const twoPageViewRef = useRef(twoPageView);
@@ -1449,7 +1447,7 @@ export default function PdfViewerShell({
     });
   }, []);
 
-  // Track current page from scroll; learn wheel step for FAB nudges.
+  // Track current page from scroll.
   useEffect(() => {
     const scroller = scrollRef.current;
     if (!scroller || !pageCount) return undefined;
@@ -1487,23 +1485,10 @@ export default function PdfViewerShell({
       });
     };
 
-    const onWheel = (event) => {
-      let dy = Math.abs(event.deltaY);
-      if (!(dy > 0)) return;
-      if (event.deltaMode === 1) dy *= 16;
-      else if (event.deltaMode === 2) dy = scroller.clientHeight;
-      const maxStep = Math.max(80, Math.round(scroller.clientHeight * 0.9));
-      const next = Math.min(maxStep, Math.max(40, Math.round(dy)));
-      // Prefer recent notches; keep a little history so trackpad bursts don't dominate.
-      wheelStepPxRef.current = Math.round(wheelStepPxRef.current * 0.35 + next * 0.65);
-    };
-
     updateScrollEdges();
     scroller.addEventListener('scroll', onScroll, { passive: true });
-    scroller.addEventListener('wheel', onWheel, { passive: true });
     return () => {
       scroller.removeEventListener('scroll', onScroll);
-      scroller.removeEventListener('wheel', onWheel);
     };
   }, [pageCount, rendering, twoPageView, updateScrollEdges]);
 
@@ -1553,27 +1538,19 @@ export default function PdfViewerShell({
     [pageCount, updateScrollEdges],
   );
 
-  /** Fit-width: nudge like a mouse-wheel notch; fit-height/page: jump pages. */
+  /** Any zoom mode: move by 1/3 of the visible pane height. */
   const handleFabNavigate = useCallback(
     (direction) => {
-      if (zoomModeRef.current === 'fitWidth') {
-        const scroller = scrollRef.current;
-        if (!scroller) return;
-        const fallback = Math.max(80, Math.min(120, Math.round(scroller.clientHeight * 0.12)));
-        const learned = wheelStepPxRef.current;
-        const notch = Math.max(40, Math.round(learned > 0 ? learned : fallback));
-        // One FAB click ≈ three mouse-wheel notches.
-        const step = notch * 3;
-        scroller.scrollBy({
-          top: direction === 'up' ? -step : step,
-          behavior: 'auto',
-        });
-        updateScrollEdges();
-        return;
-      }
-      goToPage(currentPageRef.current + (direction === 'up' ? -1 : 1));
+      const scroller = scrollRef.current;
+      if (!scroller) return;
+      const step = Math.max(48, Math.round(scroller.clientHeight / 3));
+      scroller.scrollBy({
+        top: direction === 'up' ? -step : step,
+        behavior: 'auto',
+      });
+      updateScrollEdges();
     },
-    [goToPage, updateScrollEdges],
+    [updateScrollEdges],
   );
 
   const zoomBy = useCallback((direction) => {
@@ -3053,18 +3030,21 @@ export default function PdfViewerShell({
         }
       }
 
-      if (event.key === 'PageDown') {
+      // Same step as FAB: ±1/3 of visible pane height.
+      if (
+        event.key === 'PageDown' ||
+        event.key === 'ArrowDown' ||
+        event.key === 'ArrowRight'
+      ) {
         event.preventDefault();
         handleFabNavigate('down');
-      } else if (event.key === 'PageUp') {
+      } else if (
+        event.key === 'PageUp' ||
+        event.key === 'ArrowUp' ||
+        event.key === 'ArrowLeft'
+      ) {
         event.preventDefault();
         handleFabNavigate('up');
-      } else if (event.key === 'ArrowRight') {
-        event.preventDefault();
-        goToPage(currentPage + 1);
-      } else if (event.key === 'ArrowLeft') {
-        event.preventDefault();
-        goToPage(currentPage - 1);
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -3074,10 +3054,8 @@ export default function PdfViewerShell({
     chromeVisible,
     closeSearchBar,
     copyActiveMarkupText,
-    currentPage,
     goNextMatch,
     goPrevMatch,
-    goToPage,
     handleSaveToFile,
     openSearchBar,
     removeMarkup,
@@ -3274,13 +3252,10 @@ export default function PdfViewerShell({
         <button
           type="button"
           className="pdf-tb-btn"
-          disabled={
-            busy ||
-            (zoomMode === 'fitWidth' ? scrollEdges.atTop : currentPage <= 1)
-          }
+          disabled={busy || scrollEdges.atTop}
           onClick={() => handleFabNavigate('up')}
-          title={zoomMode === 'fitWidth' ? '위로 스크롤' : '이전 페이지'}
-          aria-label={zoomMode === 'fitWidth' ? '위로 스크롤' : '이전 페이지'}
+          title="위로 스크롤 (화면 높이의 1/3)"
+          aria-label="위로 스크롤"
         >
           <IconPdfChevronLeft />
         </button>
@@ -3310,13 +3285,10 @@ export default function PdfViewerShell({
         <button
           type="button"
           className="pdf-tb-btn"
-          disabled={
-            busy ||
-            (zoomMode === 'fitWidth' ? scrollEdges.atBottom : currentPage >= pageCount)
-          }
+          disabled={busy || scrollEdges.atBottom}
           onClick={() => handleFabNavigate('down')}
-          title={zoomMode === 'fitWidth' ? '아래로 스크롤' : '다음 페이지'}
-          aria-label={zoomMode === 'fitWidth' ? '아래로 스크롤' : '다음 페이지'}
+          title="아래로 스크롤 (화면 높이의 1/3)"
+          aria-label="아래로 스크롤"
         >
           <IconPdfChevronRight />
         </button>
@@ -3648,7 +3620,7 @@ export default function PdfViewerShell({
             <div
               className={`pdf-page-fab pdf-page-fab--${fabSide}`}
               role="group"
-              aria-label={zoomMode === 'fitWidth' ? '화면 스크롤' : '페이지 이동'}
+              aria-label="화면 스크롤"
             >
               <button
                 type="button"
@@ -3669,26 +3641,20 @@ export default function PdfViewerShell({
               <button
                 type="button"
                 className="pdf-page-fab__btn"
-                disabled={
-                  busy ||
-                  (zoomMode === 'fitWidth' ? scrollEdges.atTop : currentPage <= 1)
-                }
+                disabled={busy || scrollEdges.atTop}
                 onClick={() => handleFabNavigate('up')}
-                title={zoomMode === 'fitWidth' ? '위로 스크롤' : '이전 페이지'}
-                aria-label={zoomMode === 'fitWidth' ? '위로 스크롤' : '이전 페이지'}
+                title="위로 스크롤 (화면 높이의 1/3)"
+                aria-label="위로 스크롤"
               >
                 <IconPdfTriangleUp />
               </button>
               <button
                 type="button"
                 className="pdf-page-fab__btn"
-                disabled={
-                  busy ||
-                  (zoomMode === 'fitWidth' ? scrollEdges.atBottom : currentPage >= pageCount)
-                }
+                disabled={busy || scrollEdges.atBottom}
                 onClick={() => handleFabNavigate('down')}
-                title={zoomMode === 'fitWidth' ? '아래로 스크롤' : '다음 페이지'}
-                aria-label={zoomMode === 'fitWidth' ? '아래로 스크롤' : '다음 페이지'}
+                title="아래로 스크롤 (화면 높이의 1/3)"
+                aria-label="아래로 스크롤"
               >
                 <IconPdfTriangleDown />
               </button>
