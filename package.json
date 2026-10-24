@@ -45,7 +45,7 @@
     "autoprefixer": "^10.6.1",
     "concurrently": "^10.0.6",
     "electron": "^45.0.0",
-    "electron-builder": "^26.15.3",
+    "electron-builder": "^26.18.0",
     "png-to-ico": "^3.0.2",
     "postcss": "^8.5.31",
     "rcedit": "^5.0.2",

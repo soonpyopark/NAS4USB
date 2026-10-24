@@ -43,6 +43,7 @@ import {
   pdfUnderlinePresetColor,
   pointInSelectionRects,
   selectionHandlePoints,
+  tokenRangeContaining,
   wordIndexAtPoint,
 } from '../../lib/pdf/pdfMarkup.js';
 import { loadPdfViewerSidecar, writePdfViewerSidecar } from '../../lib/pdf/pdfViewerSidecar.js';
@@ -255,6 +256,7 @@ export default function PdfViewerShell({
   const [documentEpoch, setDocumentEpoch] = useState(0);
   const [savingToFile, setSavingToFile] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
+  const saveMessageTimerRef = useRef(0);
   const streamUrl = usePlaintextObjectUrl(relativePath, mimeType, documentEpoch);
   const absoluteStreamUrl = useMemo(() => {
     try {
@@ -1620,6 +1622,43 @@ export default function PdfViewerShell({
     setCustomScale(1);
   }, []);
 
+  const clearSaveMessage = useCallback(() => {
+    if (saveMessageTimerRef.current) {
+      window.clearTimeout(saveMessageTimerRef.current);
+      saveMessageTimerRef.current = 0;
+    }
+    setSaveMessage('');
+  }, []);
+
+  /** Success ~5s, errors ~8s; ✕ also dismisses. */
+  const showSaveMessage = useCallback(
+    (message, { error = false } = {}) => {
+      const text = String(message || '').trim();
+      if (!text) {
+        clearSaveMessage();
+        return;
+      }
+      if (saveMessageTimerRef.current) {
+        window.clearTimeout(saveMessageTimerRef.current);
+        saveMessageTimerRef.current = 0;
+      }
+      setSaveMessage(text);
+      const ms = error ? 8000 : 5000;
+      saveMessageTimerRef.current = window.setTimeout(() => {
+        saveMessageTimerRef.current = 0;
+        setSaveMessage('');
+      }, ms);
+    },
+    [clearSaveMessage],
+  );
+
+  useEffect(
+    () => () => {
+      if (saveMessageTimerRef.current) window.clearTimeout(saveMessageTimerRef.current);
+    },
+    [],
+  );
+
   const clearAllLiveSelections = useCallback(() => {
     for (const layer of selectionLayerRefs.current.values()) {
       clearLiveSelectionLayer(layer);
@@ -1803,12 +1842,12 @@ export default function PdfViewerShell({
       }
       setMarkups((prev) => prev.filter((entry) => entry.id !== id));
       setActiveMarkupId((prev) => (prev === id ? '' : prev));
-      setSaveMessage('');
+      clearSaveMessage();
       clearAllLiveSelections();
       setSelectionMenu(null);
       setMarksContextMenu(null);
     },
-    [clearAllLiveSelections],
+    [clearAllLiveSelections, clearSaveMessage],
   );
 
   const copyActiveMarkupText = useCallback(async () => {
@@ -1817,10 +1856,34 @@ export default function PdfViewerShell({
     const text = fromMenu || active?.text?.trim() || '';
     if (!text) return false;
     try {
+      // Write plain + matching HTML so TipTap does not keep stale rich HTML
+      // from a previous copy (Notes only reads text/plain, so it still worked).
+      const escaped = text
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+      const html = `<meta charset="utf-8">${escaped
+        .split(/\r?\n/)
+        .map((line) => `<p>${line || '<br>'}</p>`)
+        .join('')}`;
+      if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'text/plain': new Blob([text], { type: 'text/plain' }),
+            'text/html': new Blob([html], { type: 'text/html' }),
+          }),
+        ]);
+        return true;
+      }
       await navigator.clipboard.writeText(text);
       return true;
     } catch {
-      return false;
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch {
+        return false;
+      }
     }
   }, []);
 
@@ -1842,14 +1905,14 @@ export default function PdfViewerShell({
       setMarkups((prev) => [...prev, entry]);
       setActiveMarkupId(id);
       if (!touchUi) setSidePanel('marks');
-      setSaveMessage('');
+      clearSaveMessage();
       clearAllLiveSelections();
       selectionDragRef.current = null;
       window.getSelection()?.removeAllRanges();
       setSelectionMenu(null);
       window.setTimeout(() => showMarkupSelection(entry), 50);
     },
-    [clearAllLiveSelections, showMarkupSelection, touchUi],
+    [clearAllLiveSelections, clearSaveMessage, showMarkupSelection, touchUi],
   );
 
   const copySelectionText = useCallback(async () => {
@@ -1968,11 +2031,17 @@ export default function PdfViewerShell({
         return false;
       }
       const menu = selectionMenuRef.current;
-      let from = wordIndex;
-      const to = wordIndex;
+      let [from, to] = tokenRangeContaining(words, wordIndex);
       if (menu?.showHandles && menu.pageNumber === pageNumber) {
         const startIdx = wordIndexAtPoint(words, menu.start);
         if (startIdx >= 0) from = startIdx;
+        // Extending an existing selection: end at the tapped token's far edge.
+        [, to] = tokenRangeContaining(words, wordIndex);
+        if (from > to) {
+          const tmp = from;
+          from = to;
+          to = tmp;
+        }
       }
       const picked = getTextBlockSelectionByIndices(words, from, to);
       if (!picked?.text?.trim()) {
@@ -2655,20 +2724,19 @@ export default function PdfViewerShell({
   const handleExportMarkups = useCallback(() => {
     const entries = markupsRef.current;
     if (!entries.length) {
-      setSaveMessage('내보낼 형광펜·밑줄이 없습니다.');
-      window.setTimeout(() => setSaveMessage(''), 2500);
+      showSaveMessage('내보낼 형광펜·밑줄이 없습니다.');
       return;
     }
     try {
       downloadPdfMarkupsXlsx(entries, fileName || 'document.pdf');
-      setSaveMessage(`형광펜 ${entries.length}건을 엑셀로 내보냈습니다.`);
-      window.setTimeout(() => setSaveMessage(''), 2500);
+      showSaveMessage(`형광펜 ${entries.length}건을 엑셀로 내보냈습니다.`);
     } catch (err) {
-      setSaveMessage(
+      showSaveMessage(
         err instanceof Error ? `형광펜 내보내기 실패: ${err.message}` : '형광펜 내보내기에 실패했습니다.',
+        { error: true },
       );
     }
-  }, [fileName]);
+  }, [fileName, showSaveMessage]);
 
   const handlePrint = useCallback(() => {
     const frame = document.createElement('iframe');
@@ -2803,7 +2871,7 @@ export default function PdfViewerShell({
     if (!pending.length && !pendingRemove.length) return;
 
     setSavingToFile(true);
-    setSaveMessage('');
+    clearSaveMessage();
     skipViewerSaveRef.current = true;
 
     try {
@@ -2870,16 +2938,18 @@ export default function PdfViewerShell({
         marksComplete: true,
       });
 
-      setSaveMessage('원본 PDF에 저장했습니다.');
+      showSaveMessage('원본 PDF에 저장했습니다.');
       skipViewerSaveRef.current = false;
     } catch (err) {
       console.warn('[pdf] save to file failed:', err);
-      setSaveMessage(err instanceof Error ? err.message : '원본 저장에 실패했습니다.');
+      showSaveMessage(err instanceof Error ? err.message : '원본 저장에 실패했습니다.', {
+        error: true,
+      });
       skipViewerSaveRef.current = false;
     } finally {
       setSavingToFile(false);
     }
-  }, [relativePath, savingToFile]);
+  }, [clearSaveMessage, relativePath, savingToFile, showSaveMessage]);
 
   const openSearchBar = useCallback(() => {
     setPdfChromeVisible(true);
@@ -3366,13 +3436,23 @@ export default function PdfViewerShell({
 
       {chromeVisible && saveMessage ? (
         <div
-          className={`border-b px-3 py-1.5 text-xs ${
+          className={`flex items-center gap-2 border-b px-3 py-1.5 text-xs ${
             saveMessage.includes('실패') || saveMessage.includes('못')
               ? 'border-red-200 bg-red-50 text-red-700'
               : 'border-emerald-200 bg-emerald-50 text-emerald-800'
           }`}
+          role="status"
         >
-          {saveMessage}
+          <span className="min-w-0 flex-1">{saveMessage}</span>
+          <button
+            type="button"
+            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-current opacity-70 hover:bg-black/5 hover:opacity-100"
+            title="알림 닫기"
+            aria-label="알림 닫기"
+            onClick={clearSaveMessage}
+          >
+            ×
+          </button>
         </div>
       ) : null}
       {chromeVisible && showSearchBar ? (

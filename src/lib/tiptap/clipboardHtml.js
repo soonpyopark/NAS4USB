@@ -1,4 +1,5 @@
 import { DOMParser as SchemaDOMParser } from '@tiptap/pm/model';
+import { ySyncPluginKey } from '@tiptap/y-tiptap';
 import { rematerializePastedTiptapAssets } from './copyPasteAssets.js';
 import { materializePastedImages, promoteVmlImages } from './pasteImages.js';
 
@@ -28,7 +29,7 @@ export function extractClipboardHtmlFragment(html) {
 /**
  * @param {string} html
  */
-function visibleTextFromHtml(html) {
+export function visibleTextFromHtml(html) {
   return String(html ?? '')
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
@@ -38,6 +39,139 @@ function visibleTextFromHtml(html) {
     .replace(/&#160;/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+/**
+ * OS / `writeText` copies often leave stale `text/html` while plain is fresh
+ * (PDF viewer → TipTap). Prefer plain when HTML text is empty or unrelated.
+ *
+ * @param {DataTransfer | null | undefined} clipboard
+ */
+export function clipboardShouldPreferPlainText(clipboard) {
+  if (!clipboard) return false;
+  const plain = String(clipboard.getData?.('text/plain') || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!plain) return false;
+
+  const html = String(clipboard.getData?.('text/html') || '');
+  if (!html.trim()) return false;
+
+  // Real TipTap / Office rich HTML should keep the HTML path.
+  if (/data-pm-slice|data-nas-asset-path|microsoft|onenote|mso-/i.test(html)) {
+    const visible = visibleTextFromHtml(extractClipboardHtmlFragment(html));
+    return !visible;
+  }
+
+  const visible = visibleTextFromHtml(extractClipboardHtmlFragment(html));
+  if (!visible) return true;
+
+  const sampleLen = Math.min(48, plain.length, visible.length);
+  if (sampleLen < 8) return false;
+  const plainHead = plain.slice(0, sampleLen);
+  const htmlHead = visible.slice(0, sampleLen);
+  return !plain.includes(htmlHead) && !visible.includes(plainHead);
+}
+
+/**
+ * PDF / OS plain copies: matching (or missing) HTML without rich structure.
+ * TipTap should paste as plain text so Collaboration position-tracking does not
+ * choke on a structural HTML replace while Yjs is slightly out of sync.
+ *
+ * @param {DataTransfer | null | undefined} clipboard
+ */
+export function clipboardIsSimplePlainPaste(clipboard) {
+  if (!clipboard) return false;
+  const plain = String(clipboard.getData?.('text/plain') || '');
+  if (!plain.trim()) return false;
+
+  const html = String(clipboard.getData?.('text/html') || '');
+  if (!html.trim()) return true;
+  if (/data-pm-slice|data-nas-asset-path|microsoft|onenote|mso-/i.test(html)) return false;
+  if (/<(ul|ol|li|h[1-6]|table|blockquote|pre|code|img)\b/i.test(html)) return false;
+
+  const visible = visibleTextFromHtml(extractClipboardHtmlFragment(html));
+  if (!visible) return true;
+  const normPlain = plain.replace(/\s+/g, ' ').trim();
+  return visible === normPlain || normPlain.includes(visible) || visible.includes(normPlain);
+}
+
+/**
+ * @param {unknown} err
+ */
+function isPositionTrackingError(err) {
+  return /Position tracking requires synchronized/i.test(
+    err instanceof Error ? err.message : String(err || ''),
+  );
+}
+
+/**
+ * Push the current ProseMirror doc into Yjs so position migration can run again.
+ * @param {import('@tiptap/pm/view').EditorView} view
+ */
+function resyncYjsFromProseMirror(view) {
+  const binding = ySyncPluginKey.getState(view.state)?.binding;
+  if (!binding || typeof binding._prosemirrorChanged !== 'function') return false;
+  try {
+    binding._prosemirrorChanged(view.state.doc, null);
+    return true;
+  } catch (err) {
+    console.warn('[tiptap] Yjs resync failed', err);
+    return false;
+  }
+}
+
+/**
+ * Dispatch a local edit; if Yjs position tracking is desynced, rewrite Y from PM and retry.
+ *
+ * @param {import('@tiptap/pm/view').EditorView} view
+ * @param {(state: import('@tiptap/pm/state').EditorState) => import('@tiptap/pm/state').Transaction} buildTr
+ */
+export function dispatchCollabSafe(view, buildTr) {
+  const run = () => {
+    view.dispatch(buildTr(view.state));
+  };
+  try {
+    run();
+    return true;
+  } catch (err) {
+    if (!isPositionTrackingError(err)) throw err;
+    console.warn('[tiptap] collab position desync on edit; resyncing Yjs', err);
+    resyncYjsFromProseMirror(view);
+    try {
+      run();
+      return true;
+    } catch (retryErr) {
+      if (isPositionTrackingError(retryErr)) {
+        console.warn('[tiptap] collab edit still desynced after resync', retryErr);
+        return false;
+      }
+      throw retryErr;
+    }
+  }
+}
+
+/**
+ * Insert plain clipboard text as paragraphs (PDF / Notes-style copies).
+ *
+ * @param {import('@tiptap/pm/view').EditorView} view
+ * @param {string} text
+ */
+export function insertPlainTextIntoView(view, text) {
+  const raw = String(text ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  if (!raw.trim()) return false;
+
+  const dom = document.createElement('div');
+  for (const line of raw.split('\n')) {
+    const p = document.createElement('p');
+    if (line) p.textContent = line;
+    else p.appendChild(document.createElement('br'));
+    dom.appendChild(p);
+  }
+
+  const parser = SchemaDOMParser.fromSchema(view.state.schema);
+  const slice = parser.parseSlice(dom, { preserveWhitespace: false });
+  return dispatchCollabSafe(view, (state) => state.tr.replaceSelection(slice).scrollIntoView());
 }
 
 /**
@@ -437,6 +571,5 @@ export async function insertHtmlIntoView(view, html, options = {}) {
   template.innerHTML = cleaned;
   const parser = SchemaDOMParser.fromSchema(view.state.schema);
   const slice = parser.parseSlice(template.content, { preserveWhitespace: false });
-  view.dispatch(view.state.tr.replaceSelection(slice).scrollIntoView());
-  return true;
+  return dispatchCollabSafe(view, (state) => state.tr.replaceSelection(slice).scrollIntoView());
 }

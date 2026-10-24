@@ -11,6 +11,7 @@ import { getPageTextContent } from './pdfjs.js';
  *   blockNo: number,
  *   lineNo: number,
  *   wordNo: number,
+ *   gapBefore?: boolean,
  * }} PdfWord
  *
  * @typedef {{
@@ -158,6 +159,101 @@ function sortKeyGte(a, b) {
   return sortKeyCmp(a, b) >= 0;
 }
 
+/** @type {Intl.Segmenter | null | undefined} */
+let graphemeSegmenter;
+
+/**
+ * Split into user-perceived characters (Hangul jamo clusters, emoji, etc.).
+ * @param {string} text
+ * @returns {string[]}
+ */
+export function segmentGraphemes(text) {
+  const raw = String(text || '');
+  if (!raw) return [];
+  try {
+    if (graphemeSegmenter === undefined) {
+      graphemeSegmenter =
+        typeof Intl !== 'undefined' && typeof Intl.Segmenter === 'function'
+          ? new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+          : null;
+    }
+    if (graphemeSegmenter) {
+      return [...graphemeSegmenter.segment(raw)].map((part) => part.segment);
+    }
+  } catch {
+    graphemeSegmenter = null;
+  }
+  return [...raw];
+}
+
+/**
+ * Relative widths for graphemes in a run (scaled to `runWidth` by the caller).
+ * Uses canvas measureText when available so proportional Hangul is closer than
+ * raw code-unit counts.
+ *
+ * @param {string[]} graphemes
+ * @param {number} fontHeight
+ * @returns {number[]}
+ */
+function graphemeWidthWeights(graphemes, fontHeight) {
+  const n = graphemes.length;
+  if (n <= 0) return [];
+  if (n === 1) return [1];
+  const height = Math.max(8, fontHeight || 12);
+  try {
+    if (typeof document !== 'undefined') {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.font = `${height}px sans-serif`;
+        const weights = graphemes.map((g) => Math.max(0.05, ctx.measureText(g).width || g.length));
+        const sum = weights.reduce((a, b) => a + b, 0);
+        if (sum > 0) return weights;
+      }
+    }
+  } catch {
+    // fall through
+  }
+  return graphemes.map((g) => Math.max(1, g.length));
+}
+
+/**
+ * Emit grapheme boxes for one non-space text run.
+ *
+ * @param {string} raw
+ * @param {number} x0Run
+ * @param {number} y0
+ * @param {number} y1
+ * @param {number} runWidth
+ * @param {boolean} gapBeforeFirst
+ * @returns {Array<Omit<PdfWord, 'blockNo' | 'lineNo' | 'wordNo'>>}
+ */
+function graphemeBoxesForRun(raw, x0Run, y0, y1, runWidth, gapBeforeFirst) {
+  const graphemes = segmentGraphemes(raw);
+  if (!graphemes.length) return [];
+  const fontHeight = Math.max(1, y1 - y0);
+  const weights = graphemeWidthWeights(graphemes, fontHeight);
+  const weightSum = weights.reduce((a, b) => a + b, 0) || 1;
+  const totalW = Math.max(graphemes.length * 0.5, runWidth);
+  /** @type {Array<Omit<PdfWord, 'blockNo' | 'lineNo' | 'wordNo'>>} */
+  const boxes = [];
+  let x = x0Run;
+  for (let i = 0; i < graphemes.length; i += 1) {
+    const w = (weights[i] / weightSum) * totalW;
+    const width = Math.max(0.5, w);
+    boxes.push({
+      x0: x,
+      y0,
+      x1: x + width,
+      y1,
+      text: graphemes[i],
+      gapBefore: i === 0 ? Boolean(gapBeforeFirst) : false,
+    });
+    x += width;
+  }
+  return boxes;
+}
+
 /**
  * @param {PdfWord[]} words
  * @returns {PdfWord[]}
@@ -215,8 +311,9 @@ function reassignLineNumbers(words) {
 }
 
 /**
- * Extract word boxes from a pdf.js page (scale-1 viewport coords).
- * Mirrors MuPDF get_text("words") as closely as TextContent allows.
+ * Extract grapheme boxes from a pdf.js page (scale-1 viewport coords).
+ * Whitespace-separated runs become `gapBefore` boundaries; each run is split
+ * into graphemes so drag selection can start/end on a character like a browser.
  *
  * @param {import('pdfjs-dist').PDFPageProxy} page
  * @param {number} [rotation]
@@ -225,9 +322,8 @@ function reassignLineNumbers(words) {
 export async function extractPageWords(page, rotation = 0) {
   const viewport = page.getViewport({ scale: 1, rotation });
   const textContent = await getPageTextContent(page);
-  /** @type {PdfWord[]} */
-  const words = [];
-  let wordNo = 0;
+  /** @type {Array<Omit<PdfWord, 'blockNo' | 'lineNo' | 'wordNo'>>} */
+  const rawWords = [];
 
   // item.width is already in PDF user space (same units as item.transform translation).
   // Scale only by the viewport — never by the font matrix inside item.transform (that double-counts).
@@ -249,6 +345,7 @@ export async function extractPageWords(page, rotation = 0) {
     const y0 = y1 - fontHeight;
 
     let offset = 0;
+    let gapBeforeNext = false;
     const pieces = raw.split(/(\s+)/);
     for (const piece of pieces) {
       if (!piece) continue;
@@ -256,28 +353,30 @@ export async function extractPageWords(page, rotation = 0) {
       const pieceWidth = (piece.length / Math.max(1, raw.length)) * runWidth;
       const x0 = x0Run + (offset / Math.max(1, raw.length)) * runWidth;
       offset += piece.length;
-      if (isSpace) continue;
+      if (isSpace) {
+        gapBeforeNext = true;
+        continue;
+      }
 
-      words.push({
-        x0,
-        y0,
-        x1: x0 + Math.max(1, pieceWidth),
-        y1,
-        text: piece,
-        blockNo: 0,
-        lineNo: 0,
-        wordNo,
-      });
-      wordNo += 1;
+      const boxes = graphemeBoxesForRun(piece, x0, y0, y1, Math.max(1, pieceWidth), gapBeforeNext);
+      gapBeforeNext = false;
+      for (const box of boxes) rawWords.push(box);
     }
   }
 
-  return reassignLineNumbers(words);
+  /** @type {PdfWord[]} */
+  const withIds = rawWords.map((word, wordNo) => ({
+    ...word,
+    blockNo: 0,
+    lineNo: 0,
+    wordNo,
+  }));
+  return reassignLineNumbers(withIds);
 }
 
 /**
- * Prefer the text line under the pointer, then snap past line ends to first/last word.
- * Fixes selections that stop before the visual end of a line.
+ * Prefer the text line under the pointer, then pick the nearest grapheme by
+ * edge distance (not box center) so starts/ends land on the intended character.
  *
  * @param {PdfWord[]} words
  * @param {{ x: number, y: number }} point
@@ -343,10 +442,10 @@ export function wordIndexAtPoint(words, point) {
   const last = lineIndices[lineIndices.length - 1];
   const firstWord = words[first];
   const lastWord = words[last];
-  const endPad = Math.max(3, (lastWord.x1 - lastWord.x0) * 0.5);
-  const startPad = Math.max(3, (firstWord.x1 - firstWord.x0) * 0.35);
+  // Small pads only — large pads used to yank the caret to the first/last token.
+  const endPad = Math.max(1.5, (lastWord.x1 - lastWord.x0) * 0.2);
+  const startPad = Math.max(1.5, (firstWord.x1 - firstWord.x0) * 0.2);
 
-  // Past / near the visual end or start of the line → snap to edge word.
   if (point.x <= firstWord.x0 + startPad) return first;
   if (point.x >= lastWord.x1 - endPad) return last;
 
@@ -354,23 +453,46 @@ export function wordIndexAtPoint(words, point) {
   let bestDist = Infinity;
   for (const index of lineIndices) {
     const word = words[index];
-    const cx = (word.x0 + word.x1) / 2;
-    // Prefer containment along X within the line band.
     if (point.x >= word.x0 && point.x <= word.x1) {
-      const dist = Math.abs(cx - point.x);
-      if (dist < bestDist) {
-        bestDist = dist;
-        best = index;
-      }
-      continue;
+      // Inside X band: nearer edge decides (left half → this glyph, right → stays this glyph).
+      return index;
     }
-    const dist = Math.abs(cx - point.x);
+    const dist =
+      point.x < word.x0 ? word.x0 - point.x : point.x - word.x1;
     if (dist < bestDist) {
       bestDist = dist;
       best = index;
     }
   }
   return best;
+}
+
+/**
+ * Expand a grapheme index to the surrounding whitespace-delimited token
+ * (for tap / long-press “word” select on touch).
+ *
+ * @param {PdfWord[]} words
+ * @param {number} index
+ * @returns {[number, number]}
+ */
+export function tokenRangeContaining(words, index) {
+  if (!words.length || index < 0 || index >= words.length) return [index, index];
+  const line = wordLineId(words[index]);
+  let from = index;
+  let to = index;
+  while (from > 0) {
+    const prev = words[from - 1];
+    if (!lineIdEqual(wordLineId(prev), line)) break;
+    if (words[from].gapBefore) break;
+    from -= 1;
+  }
+  while (to + 1 < words.length) {
+    const next = words[to + 1];
+    if (!lineIdEqual(wordLineId(next), line)) break;
+    if (next.gapBefore) break;
+    to += 1;
+  }
+  return [from, to];
 }
 
 /**
@@ -423,30 +545,30 @@ export function selectionTextFromWords(words) {
   const ordered = [...words].sort((a, b) => sortKeyCmp(wordSortKey(a), wordSortKey(b)));
   /** @type {string[]} */
   const lines = [];
-  /** @type {string[]} */
-  let parts = [];
+  let lineText = '';
   /** @type {[number, number] | null} */
   let currentLine = null;
 
   for (const word of ordered) {
     const line = wordLineId(word);
     if (!currentLine || !lineIdEqual(line, currentLine)) {
-      if (parts.length) lines.push(parts.join(' '));
-      parts = [word.text];
+      if (lineText) lines.push(lineText);
+      lineText = word.text || '';
       currentLine = line;
     } else {
-      parts.push(word.text);
+      if (word.gapBefore) lineText += ' ';
+      lineText += word.text || '';
     }
   }
-  if (parts.length) lines.push(parts.join(' '));
+  if (lineText) lines.push(lineText);
 
   /** @type {string[]} */
   const result = [];
-  for (const lineText of lines) {
+  for (const text of lines) {
     if (result.length && result[result.length - 1].trimEnd().endsWith('.')) {
       result.push(' ');
     }
-    result.push(lineText);
+    result.push(text);
   }
   return result.join('');
 }
@@ -673,33 +795,106 @@ export function extractWordsFromTextLayer(textLayerEl, pageWrap, cssScale = 1) {
   );
   if (!spans.length) return [];
 
-  /** @type {PdfWord[]} */
-  const words = [];
-  let wordNo = 0;
-
-  for (const span of spans) {
-    const rect = span.getBoundingClientRect();
-    const left = ((rect.left - pageRect.left) / pageRect.width) * baseW;
-    const top = ((rect.top - pageRect.top) / pageRect.height) * baseH;
-    const width = (rect.width / pageRect.width) * baseW;
-    const height = (rect.height / pageRect.height) * baseH;
-    const raw = String(span.textContent || '').replace(/\s+/g, ' ').trim();
-    if (!raw || width < 0.5 || height < 0.5) continue;
-
-    words.push({
+  const toPage = (clientRect) => {
+    const left = ((clientRect.left - pageRect.left) / pageRect.width) * baseW;
+    const top = ((clientRect.top - pageRect.top) / pageRect.height) * baseH;
+    const width = (clientRect.width / pageRect.width) * baseW;
+    const height = (clientRect.height / pageRect.height) * baseH;
+    return {
       x0: left,
       y0: top,
-      x1: left + Math.max(1, width),
-      y1: top + Math.max(1, height),
-      text: raw,
-      blockNo: 0,
-      lineNo: 0,
-      wordNo,
-    });
-    wordNo += 1;
+      x1: left + Math.max(0.5, width),
+      y1: top + Math.max(0.5, height),
+    };
+  };
+
+  /** @type {Array<Omit<PdfWord, 'blockNo' | 'lineNo' | 'wordNo'>>} */
+  const rawWords = [];
+
+  for (const span of spans) {
+    const textNode = [...span.childNodes].find(
+      (node) => node.nodeType === Node.TEXT_NODE && String(node.textContent || '').length,
+    );
+    const full = String(textNode?.textContent ?? span.textContent ?? '');
+    if (!full.trim()) continue;
+
+    const spanBox = toPage(span.getBoundingClientRect());
+    if (spanBox.x1 - spanBox.x0 < 0.5 || spanBox.y1 - spanBox.y0 < 0.5) continue;
+
+    let gapBeforeNext = /^\s/.test(full);
+    let offset = 0;
+    const pieces = full.split(/(\s+)/);
+    for (const piece of pieces) {
+      if (!piece) continue;
+      if (/^\s+$/.test(piece)) {
+        gapBeforeNext = true;
+        offset += piece.length;
+        continue;
+      }
+
+      const graphemes = segmentGraphemes(piece);
+      if (!graphemes.length) {
+        offset += piece.length;
+        continue;
+      }
+
+      /** @type {Array<{ x0: number, y0: number, x1: number, y1: number } | null>} */
+      const glyphBoxes = [];
+      if (textNode && typeof document !== 'undefined') {
+        const range = document.createRange();
+        for (let i = 0; i < graphemes.length; i += 1) {
+          const start = offset;
+          const end = offset + graphemes[i].length;
+          try {
+            range.setStart(textNode, start);
+            range.setEnd(textNode, end);
+            const rects = [...range.getClientRects()].filter((r) => r.width >= 0.5 && r.height >= 0.5);
+            glyphBoxes.push(rects.length ? toPage(rects[0]) : null);
+          } catch {
+            glyphBoxes.push(null);
+          }
+          offset = end;
+        }
+      } else {
+        offset += piece.length;
+        for (let i = 0; i < graphemes.length; i += 1) glyphBoxes.push(null);
+      }
+
+      const missing = glyphBoxes.some((box) => !box);
+      if (missing) {
+        const pieceWidth = spanBox.x1 - spanBox.x0;
+        const approx = graphemeBoxesForRun(
+          piece,
+          spanBox.x0,
+          spanBox.y0,
+          spanBox.y1,
+          Math.max(1, pieceWidth * (piece.length / Math.max(1, full.trim().length))),
+          gapBeforeNext,
+        );
+        for (const box of approx) rawWords.push(box);
+      } else {
+        for (let i = 0; i < graphemes.length; i += 1) {
+          const box = glyphBoxes[i];
+          if (!box) continue;
+          rawWords.push({
+            ...box,
+            text: graphemes[i],
+            gapBefore: i === 0 ? gapBeforeNext : false,
+          });
+        }
+      }
+      gapBeforeNext = false;
+    }
   }
 
-  return reassignLineNumbers(words);
+  /** @type {PdfWord[]} */
+  const withIds = rawWords.map((word, wordNo) => ({
+    ...word,
+    blockNo: 0,
+    lineNo: 0,
+    wordNo,
+  }));
+  return reassignLineNumbers(withIds);
 }
 
 /**
@@ -1008,19 +1203,43 @@ export function paintIosWordTargets(layer, words, cssScale) {
   if (!Array.isArray(words) || !words.length) return;
   const scale = Math.max(0.01, cssScale || 1);
   const minCss = 36;
+
+  // Coalesce graphemes into whitespace tokens so we do not flood the DOM.
+  /** @type {Array<{ from: number, to: number, x0: number, y0: number, x1: number, y1: number, text: string }>} */
+  const tokens = [];
   for (let index = 0; index < words.length; index += 1) {
-    const word = words[index];
-    const rawW = Math.max(4, (word.x1 - word.x0) * scale);
-    const rawH = Math.max(4, (word.y1 - word.y0) * scale);
+    const [from, to] = tokenRangeContaining(words, index);
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    let text = '';
+    for (let i = from; i <= to; i += 1) {
+      const word = words[i];
+      x0 = Math.min(x0, word.x0);
+      y0 = Math.min(y0, word.y0);
+      x1 = Math.max(x1, word.x1);
+      y1 = Math.max(y1, word.y1);
+      if (i > from && word.gapBefore) text += ' ';
+      text += word.text || '';
+    }
+    tokens.push({ from, to, x0, y0, x1, y1, text });
+    index = to;
+  }
+
+  for (const token of tokens) {
+    const rawW = Math.max(4, (token.x1 - token.x0) * scale);
+    const rawH = Math.max(4, (token.y1 - token.y0) * scale);
     const width = Math.max(minCss, rawW);
     const height = Math.max(minCss, rawH);
-    const cx = ((word.x0 + word.x1) / 2) * scale;
-    const cy = ((word.y0 + word.y1) / 2) * scale;
+    const cx = ((token.x0 + token.x1) / 2) * scale;
+    const cy = ((token.y0 + token.y1) / 2) * scale;
     const el = document.createElement('button');
     el.type = 'button';
-    el.dataset.pdfWord = String(index);
+    // Mid-token grapheme index — activateWord expands to the full token.
+    el.dataset.pdfWord = String(Math.floor((token.from + token.to) / 2));
     el.className = 'pdf-ios-word';
-    el.setAttribute('aria-label', word.text || '단어');
+    el.setAttribute('aria-label', token.text || '단어');
     el.style.left = `${cx - width / 2}px`;
     el.style.top = `${cy - height / 2}px`;
     el.style.width = `${width}px`;

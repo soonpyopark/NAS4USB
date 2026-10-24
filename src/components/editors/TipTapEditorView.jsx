@@ -15,7 +15,13 @@ import {
   insertTiptapMediaAtView,
   pickTiptapMediaFile,
 } from '../../lib/tiptap/insertMedia.js';
-import { clipboardHasEditableHtml, insertHtmlIntoView } from '../../lib/tiptap/clipboardHtml.js';
+import {
+  clipboardHasEditableHtml,
+  clipboardIsSimplePlainPaste,
+  clipboardShouldPreferPlainText,
+  insertHtmlIntoView,
+  insertPlainTextIntoView,
+} from '../../lib/tiptap/clipboardHtml.js';
 import {
   annotateHtmlWithAssetPaths,
   clipboardHasTiptapAssets,
@@ -301,15 +307,50 @@ export default function TipTapEditorView({
           const assetHtml = clipboardHasTiptapAssets(clipboard);
           const assetSlice = sliceHasTiptapAssetUrls(slice);
 
+          // PDF / Notes-style plain copies: avoid Collaboration "Position tracking
+          // requires synchronized editor text" on structural HTML replaces.
+          if (
+            pastedText &&
+            (clipboardShouldPreferPlainText(clipboard) || clipboardIsSimplePlainPaste(clipboard))
+          ) {
+            event.preventDefault();
+            const ok = insertPlainTextIntoView(
+              view,
+              clipboard.getData('text/plain') || pastedText,
+            );
+            if (!ok) {
+              window.alert('붙여넣기에 실패했습니다. 문서를 닫았다가 다시 연 뒤 시도해 주세요.');
+            }
+            return true;
+          }
+
           const insertPastedHtml = () => {
             event.preventDefault();
             insertHtmlIntoView(view, html, {
               files: collectClipboardImageFiles(clipboard),
               uploadFile,
               destTiptapPath: relativePath,
-            }).catch((err) => {
-              window.alert(err instanceof Error ? err.message : '붙여넣기에 실패했습니다.');
-            });
+            })
+              .then((ok) => {
+                if (ok === false) {
+                  const plain = clipboard.getData('text/plain') || '';
+                  if (plain.trim() && insertPlainTextIntoView(view, plain)) return;
+                  window.alert('붙여넣기에 실패했습니다. 문서를 닫았다가 다시 연 뒤 시도해 주세요.');
+                }
+              })
+              .catch((err) => {
+                const plain = clipboard.getData('text/plain') || '';
+                if (
+                  /Position tracking requires synchronized/i.test(
+                    err instanceof Error ? err.message : String(err || ''),
+                  ) &&
+                  plain.trim() &&
+                  insertPlainTextIntoView(view, plain)
+                ) {
+                  return;
+                }
+                window.alert(err instanceof Error ? err.message : '붙여넣기에 실패했습니다.');
+              });
             return true;
           };
 

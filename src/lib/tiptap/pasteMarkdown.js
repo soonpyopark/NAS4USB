@@ -38,6 +38,36 @@ function isProseMirrorHtml(html) {
 }
 
 /**
+ * macOS / Chromium wrap plain copies in meta+span/div. That is not Markdown.
+ * @param {string} html
+ * @param {string} text
+ */
+function isOsPlainTextHtmlWrapper(html, text) {
+  const raw = String(html || '');
+  if (!raw.trim()) return false;
+  if (/data-pm-slice|data-nas-asset-path|microsoft|onenote|mso-/i.test(raw)) return false;
+
+  const lowered = raw.toLowerCase();
+  if (/<(ul|ol|li|h[1-6]|table|blockquote|pre|code)\b/.test(lowered)) return false;
+
+  const plain = String(text || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!plain) return false;
+
+  const visible = String(raw)
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!visible) return false;
+
+  return plain === visible || plain.includes(visible) || visible.includes(plain);
+}
+
+/**
  * Prefer native HTML paste when the HTML is clearly semantic rich content
  * and the plain text does not look like Markdown source.
  * @param {string} html
@@ -45,6 +75,8 @@ function isProseMirrorHtml(html) {
  */
 function shouldPreferNativeHtml(html, text) {
   if (!html || isProseMirrorHtml(html)) return true;
+  // PDF / Notes plain copies: don't treat "1. …" lines as Markdown lists.
+  if (isOsPlainTextHtmlWrapper(html, text)) return true;
   if (!looksLikeMarkdown(text)) return true;
 
   // VS Code / browsers often attach a thin HTML wrapper around Markdown copies.
