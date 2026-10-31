@@ -154,6 +154,23 @@ export function moveFolderOrderName(names, name, delta, kindByName) {
 }
 
 /**
+ * Move `name` to the first/last slot among same-kind peers (folders vs files).
+ * @param {string[]} names
+ * @param {string} name
+ * @param {'start' | 'end'} edge
+ * @param {Map<string, 'dir' | 'file'>} kindByName
+ */
+export function moveFolderOrderNameToEdge(names, name, edge, kindByName) {
+  const delta = edge === 'start' ? -1 : 1;
+  let current = names;
+  for (;;) {
+    const next = moveFolderOrderName(current, name, delta, kindByName);
+    if (next.every((item, index) => item === current[index])) return current;
+    current = next;
+  }
+}
+
+/**
  * @param {import('../types/nas4usb.d.ts').FsEntry[]} entries
  * @param {string[] | null | undefined} savedNames
  * @param {string} name
@@ -169,6 +186,32 @@ export function canMoveFolderOrder(
 ) {
   const names = materializeFolderOrder(entries, savedNames, getKey, options);
   const next = moveFolderOrderName(names, name, delta, folderOrderKindByName(entries, getKey));
+  return next.some((item, index) => item !== names[index]);
+}
+
+/**
+ * @param {import('../types/nas4usb.d.ts').FsEntry[]} entries
+ * @param {string[] | null | undefined} savedNames
+ * @param {string} name
+ * @param {'start' | 'end'} edge
+ * @param {(entry: import('../types/nas4usb.d.ts').FsEntry) => string} [getKey]
+ * @param {FolderOrderOptions} [options]
+ */
+export function canMoveFolderOrderToEdge(
+  entries,
+  savedNames,
+  name,
+  edge,
+  getKey = folderOrderKey,
+  options,
+) {
+  const names = materializeFolderOrder(entries, savedNames, getKey, options);
+  const next = moveFolderOrderNameToEdge(
+    names,
+    name,
+    edge,
+    folderOrderKindByName(entries, getKey),
+  );
   return next.some((item, index) => item !== names[index]);
 }
 

@@ -51,6 +51,7 @@ import {
 } from '../../lib/explorerListSort.js';
 import {
   canMoveFolderOrder,
+  canMoveFolderOrderToEdge,
   favoriteOrderKey,
   folderOrderKindByName,
   folderOrderKey,
@@ -58,6 +59,7 @@ import {
   folderOrderNamesAfterRenames,
   materializeFolderOrder,
   moveFolderOrderName,
+  moveFolderOrderNameToEdge,
   placeFolderOrderNames,
 } from '../../lib/folderOrder.js';
 import {
@@ -544,6 +546,24 @@ export default function FileExplorer({
       names,
       orderKeyOf(entry),
       delta,
+      folderOrderKindByName(entries, orderKeyOf),
+    );
+    if (next.every((name, index) => name === names[index])) return;
+    try {
+      await persistOrder(next, entry.isDirectory ? 'folder' : 'file');
+    } catch (err) {
+      nativeAlert(err instanceof Error ? err.message : '순서를 바꾸지 못했습니다.');
+    }
+  };
+
+  const handleMoveOrderToEdge = async (entry, edge) => {
+    if (!canReorder) return;
+    if (!entry || isOrderLocked(entry.relativePath)) return;
+    const names = materializeFolderOrder(entries, currentOrderNames, orderKeyOf, orderOptions);
+    const next = moveFolderOrderNameToEdge(
+      names,
+      orderKeyOf(entry),
+      edge,
       folderOrderKindByName(entries, orderKeyOf),
     );
     if (next.every((name, index) => name === names[index])) return;
@@ -2121,6 +2141,19 @@ export default function FileExplorer({
           sortField={listSort.field}
           sortDirection={listSort.direction}
           onSort={handleListSort}
+          canMoveOrderTop={
+            canReorder &&
+            selectedEntries.length === 1 &&
+            !isOrderLocked(selectedEntries[0].relativePath) &&
+            canMoveFolderOrderToEdge(
+              entries,
+              currentOrderNames,
+              orderKeyOf(selectedEntries[0]),
+              'start',
+              orderKeyOf,
+              orderOptions,
+            )
+          }
           canMoveOrderUp={
             canReorder &&
             selectedEntries.length === 1 &&
@@ -2147,8 +2180,23 @@ export default function FileExplorer({
               orderOptions,
             )
           }
+          canMoveOrderBottom={
+            canReorder &&
+            selectedEntries.length === 1 &&
+            !isOrderLocked(selectedEntries[0].relativePath) &&
+            canMoveFolderOrderToEdge(
+              entries,
+              currentOrderNames,
+              orderKeyOf(selectedEntries[0]),
+              'end',
+              orderKeyOf,
+              orderOptions,
+            )
+          }
+          onMoveOrderTop={() => handleMoveOrderToEdge(selectedEntries[0], 'start')}
           onMoveOrderUp={() => handleMoveOrderFor(selectedEntries[0], -1)}
           onMoveOrderDown={() => handleMoveOrderFor(selectedEntries[0], 1)}
+          onMoveOrderBottom={() => handleMoveOrderToEdge(selectedEntries[0], 'end')}
           canIndent={canUseFileIndent}
           canIndentUp={Boolean(
             selectedEntries.length === 1 &&

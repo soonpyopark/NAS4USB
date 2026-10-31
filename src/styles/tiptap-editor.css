@@ -46,6 +46,18 @@
   outline: none;
 }
 
+/* Absolute placeholder — float:left on empty headings can leave a caret that
+   looks focused but does not accept the next keystrokes after slash→제목. */
+.tiptap-editor-shell .tiptap p.is-empty,
+.tiptap-editor-shell .tiptap h1.is-empty,
+.tiptap-editor-shell .tiptap h2.is-empty,
+.tiptap-editor-shell .tiptap h3.is-empty,
+.tiptap-editor-shell .tiptap h4.is-empty,
+.tiptap-editor-shell .tiptap h5.is-empty,
+.tiptap-editor-shell .tiptap h6.is-empty {
+  position: relative;
+}
+
 .tiptap-editor-shell .tiptap p.is-empty::before,
 .tiptap-editor-shell .tiptap h1.is-empty::before,
 .tiptap-editor-shell .tiptap h2.is-empty::before,
@@ -54,10 +66,21 @@
 .tiptap-editor-shell .tiptap h5.is-empty::before,
 .tiptap-editor-shell .tiptap h6.is-empty::before {
   content: attr(data-placeholder);
-  float: left;
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
   color: #9ca3af;
   pointer-events: none;
   height: 0;
+  float: none;
+}
+
+.tiptap-editor-shell .tiptap p.is-empty[style*='text-align: center']::before,
+.tiptap-editor-shell .tiptap h1.is-empty[style*='text-align: center']::before,
+.tiptap-editor-shell .tiptap h2.is-empty[style*='text-align: center']::before,
+.tiptap-editor-shell .tiptap h3.is-empty[style*='text-align: center']::before {
+  text-align: center;
 }
 
 .tiptap-editor-shell .tiptap h1 {
@@ -913,9 +936,12 @@ html.touch-ui .tiptap-toolbar__select {
   top: calc(100% + 6px);
   left: 0;
   z-index: 80;
-  min-width: 220px;
-  max-width: 260px;
-  padding: 8px;
+  /* 8×32px chips + 7×8px gaps + 10px×2 padding */
+  width: max-content;
+  min-width: 340px;
+  max-width: none;
+  box-sizing: border-box;
+  padding: 10px;
   background: #fff;
   border: 1px solid #e5e7eb;
   border-radius: 10px;
@@ -931,8 +957,8 @@ html.touch-ui .tiptap-toolbar__select {
 
 .tiptap-swatch__grid {
   display: grid;
-  grid-template-columns: repeat(8, 22px);
-  gap: 6px;
+  grid-template-columns: repeat(8, 32px);
+  gap: 8px;
 }
 
 .tiptap-swatch__chip--custom {
@@ -948,14 +974,17 @@ html.touch-ui .tiptap-toolbar__select {
 }
 
 .tiptap-swatch__chip {
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  border-radius: 8px;
   border: 1px solid rgba(15, 23, 42, 0.12);
   padding: 0;
   cursor: pointer;
   position: relative;
   background: #fff;
+  touch-action: manipulation;
 }
 
 .tiptap-swatch__chip:hover {
@@ -973,7 +1002,7 @@ html.touch-ui .tiptap-toolbar__select {
 
 .tiptap-swatch__none-slash {
   position: absolute;
-  inset: 4px;
+  inset: 6px;
   background: linear-gradient(
     135deg,
     transparent 46%,
@@ -981,7 +1010,7 @@ html.touch-ui .tiptap-toolbar__select {
     #ef4444 54%,
     transparent 54%
   );
-  border-radius: 2px;
+  border-radius: 3px;
 }
 
 .tiptap-swatch__hex-row {

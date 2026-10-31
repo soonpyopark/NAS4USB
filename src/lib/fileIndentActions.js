@@ -44,3 +44,4 @@ export async function applyFileIndentDelta({ entries, entry, delta, levelMap, se
   await setFileLevels(planned.map((item) => ({ path: item.path, level: item.level })));
   return true;
 }
+

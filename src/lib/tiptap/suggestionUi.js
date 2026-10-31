@@ -12,9 +12,29 @@ export function createSuggestionRenderer(options = {}) {
   return () => {
     let component;
     let popup;
+    /** @type {import('@tiptap/core').Editor | null} */
+    let editor = null;
+
+    const restoreEditorFocus = () => {
+      const ed = editor;
+      if (!ed || ed.isDestroyed) return;
+      const focus = () => {
+        if (ed.isDestroyed) return;
+        try {
+          ed.view.focus();
+        } catch {
+          /* ignore */
+        }
+        if (!ed.view.hasFocus()) ed.commands.focus();
+      };
+      // Tippy destroy can steal focus; restore after it is gone.
+      queueMicrotask(focus);
+      requestAnimationFrame(focus);
+    };
 
     return {
       onStart: (props) => {
+        editor = props.editor;
         component = new ReactRenderer(SlashCommandList, {
           props,
           editor: props.editor,
@@ -36,6 +56,7 @@ export function createSuggestionRenderer(options = {}) {
       },
 
       onUpdate(props) {
+        editor = props.editor;
         component?.updateProps(props);
         if (!props.clientRect) return;
         popup?.[0]?.setProps({
@@ -54,6 +75,9 @@ export function createSuggestionRenderer(options = {}) {
       onExit() {
         popup?.[0]?.destroy();
         component?.destroy();
+        popup = undefined;
+        component = undefined;
+        restoreEditorFocus();
       },
     };
   };

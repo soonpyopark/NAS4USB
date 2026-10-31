@@ -36,6 +36,8 @@ const SlashCommandList = forwardRef(function SlashCommandList({ items, command }
         return true;
       }
       if (event.key === 'Enter') {
+        event.preventDefault();
+        event.stopPropagation();
         const item = items[selectedIndex];
         if (item) command(item);
         return true;
@@ -81,7 +83,13 @@ const SlashCommandList = forwardRef(function SlashCommandList({ items, command }
               }}
               type="button"
               className={`tiptap-slash-menu__item${index === selectedIndex ? ' is-selected' : ''}`}
-              onClick={() => command(item)}
+              // Run on mousedown (with preventDefault) so the editor keeps
+              // focus and tippy does not tear down before the command runs.
+              onMouseDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                command(item);
+              }}
             >
               <span className="tiptap-slash-menu__icon" aria-hidden="true">
                 {item.icon || '•'}

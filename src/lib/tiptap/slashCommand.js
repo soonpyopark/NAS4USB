@@ -1,6 +1,11 @@
 import { Extension } from '@tiptap/core';
+import { TextSelection } from '@tiptap/pm/state';
 import Suggestion from '@tiptap/suggestion';
+import { dispatchCollabSafe } from './clipboardHtml.js';
 import { createSuggestionRenderer } from './suggestionUi.js';
+
+/** Keeps UniqueID from treating the block as empty (ID shuffle breaks next keystroke). */
+const SLASH_CARET_ZWSP = '\u200b';
 
 /**
  * Notion / tiptap.dev style "/" slash command menu.
@@ -54,11 +59,127 @@ export function createSlashCommandExtension(options = {}) {
 }
 
 /**
+ * Put a TextSelection inside the nearest textblock so the next keystroke
+ * inserts into that block (empty headings after slash were ending up with a
+ * non-text caret / lost focus).
+ * @param {import('@tiptap/core').Editor} editor
+ */
+function ensureTextblockCaret(editor) {
+  if (editor.isDestroyed) return;
+  const { state, view } = editor;
+  const sel = state.selection;
+  if (sel instanceof TextSelection && sel.$from.parent.isTextblock) {
+    view.focus();
+    return;
+  }
+  const $from = sel.$from;
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    if (!$from.node(depth).isTextblock) continue;
+    const pos = $from.start(depth);
+    try {
+      const next = TextSelection.create(state.doc, pos);
+      view.dispatch(state.tr.setSelection(next));
+    } catch {
+      editor.commands.setTextSelection(pos);
+    }
+    break;
+  }
+  view.focus();
+}
+
+/**
+ * After a slash command, ensure the caret is in a textblock and the editor
+ * can accept the next keystroke (tippy teardown can steal focus).
+ * @param {import('@tiptap/core').Editor} editor
+ */
+function restoreSlashCaret(editor) {
+  ensureTextblockCaret(editor);
+  queueMicrotask(() => ensureTextblockCaret(editor));
+  requestAnimationFrame(() => ensureTextblockCaret(editor));
+}
+
+/**
+ * If the current textblock is empty, insert a ZWSP and place a collapsed caret
+ * after it so:
+ * - UniqueID does not reshuffle ids on empty nodes (breaks typing / IME)
+ * - the next keystroke inserts normally (no void-node / empty-heading stall)
+ * - BubbleMenu does not open (a ZWSP range selection looks like text selected)
+ * @param {import('@tiptap/pm/state').Transaction} tr
+ */
+function primeEmptyTextblock(tr) {
+  const { $from } = tr.selection;
+  if (!$from.parent.isTextblock || $from.parent.content.size > 0) {
+    tr.setStoredMarks([]);
+    return tr;
+  }
+  const start = $from.start();
+  tr.insertText(SLASH_CARET_ZWSP, start);
+  tr.setSelection(TextSelection.create(tr.doc, start + SLASH_CARET_ZWSP.length));
+  tr.setStoredMarks([]);
+  return tr;
+}
+
+/**
+ * Replace the textblock that contains `/query` with a primed paragraph/heading
+ * in one collab-safe transaction (avoids empty-node UniqueID + Yjs desync).
  * @param {import('@tiptap/core').Editor} editor
  * @param {{ from: number, to: number }} range
+ * @param {string} typeName
+ * @param {Record<string, unknown>} [attrs]
  */
-function clearSlash(editor, range) {
-  return editor.chain().focus().deleteRange(range);
+function runSlashTextblock(editor, range, typeName, attrs = {}) {
+  const type = editor.schema.nodes[typeName];
+  if (!type) return false;
+
+  const ok = dispatchCollabSafe(editor.view, (state) => {
+    const max = state.doc.content.size;
+    const fromPos = Math.max(0, Math.min(range.from, max));
+    const $from = state.doc.resolve(fromPos);
+    let depth = $from.depth;
+    while (depth > 0 && !$from.node(depth).isTextblock) depth -= 1;
+
+    if (depth <= 0) {
+      return primeEmptyTextblock(state.tr.deleteRange(range.from, range.to)).scrollIntoView();
+    }
+
+    const block = $from.node(depth);
+    const blockFrom = $from.before(depth);
+    const blockTo = $from.after(depth);
+    /** @type {Record<string, unknown>} */
+    const nextAttrs = { ...attrs };
+    for (const key of ['id', 'indent', 'textAlign']) {
+      if (nextAttrs[key] === undefined && block.attrs[key] != null) {
+        nextAttrs[key] = block.attrs[key];
+      }
+    }
+    const node = type.create(nextAttrs, state.schema.text(SLASH_CARET_ZWSP));
+    let tr = state.tr.replaceWith(blockFrom, blockTo, node);
+    // Collapsed caret after ZWSP — selecting the ZWSP opens the text BubbleMenu.
+    const caret = blockFrom + 1 + SLASH_CARET_ZWSP.length;
+    tr = tr.setSelection(TextSelection.create(tr.doc, caret));
+    return tr.setStoredMarks([]).scrollIntoView();
+  });
+
+  restoreSlashCaret(editor);
+  return ok;
+}
+
+/**
+ * Remove `/query`, apply the block command in one transaction, prime empty
+ * textblocks, then restore a typeable caret.
+ * @param {import('@tiptap/core').Editor} editor
+ * @param {{ from: number, to: number }} range
+ * @param {(chain: ReturnType<import('@tiptap/core').Editor['chain']>) => ReturnType<import('@tiptap/core').Editor['chain']>} apply
+ */
+function runSlashBlock(editor, range, apply) {
+  const ok = apply(editor.chain().focus().deleteRange(range))
+    .command(({ tr }) => {
+      primeEmptyTextblock(tr);
+      return true;
+    })
+    .run();
+  restoreSlashCaret(editor);
+  return ok;
 }
 
 /**
@@ -88,7 +209,7 @@ function buildSlashItems(options, editor) {
       keywords: ['paragraph', 'text', '텍스트', '본문', 'p'],
       icon: 'T',
       command: ({ editor: ed, range }) => {
-        clearSlash(ed, range).setParagraph().run();
+        runSlashTextblock(ed, range, 'paragraph');
       },
     },
     {
@@ -98,7 +219,7 @@ function buildSlashItems(options, editor) {
       keywords: ['h1', 'heading', '제목', 'heading1'],
       icon: 'H1',
       command: ({ editor: ed, range }) => {
-        clearSlash(ed, range).setHeading({ level: 1 }).run();
+        runSlashTextblock(ed, range, 'heading', { level: 1 });
       },
     },
     {
@@ -108,7 +229,7 @@ function buildSlashItems(options, editor) {
       keywords: ['h2', 'heading', '제목', 'heading2'],
       icon: 'H2',
       command: ({ editor: ed, range }) => {
-        clearSlash(ed, range).setHeading({ level: 2 }).run();
+        runSlashTextblock(ed, range, 'heading', { level: 2 });
       },
     },
     {
@@ -118,7 +239,7 @@ function buildSlashItems(options, editor) {
       keywords: ['h3', 'heading', '제목', 'heading3'],
       icon: 'H3',
       command: ({ editor: ed, range }) => {
-        clearSlash(ed, range).setHeading({ level: 3 }).run();
+        runSlashTextblock(ed, range, 'heading', { level: 3 });
       },
     },
     {
@@ -128,7 +249,7 @@ function buildSlashItems(options, editor) {
       keywords: ['h4', 'heading', '제목'],
       icon: 'H4',
       command: ({ editor: ed, range }) => {
-        clearSlash(ed, range).setHeading({ level: 4 }).run();
+        runSlashTextblock(ed, range, 'heading', { level: 4 });
       },
     },
     {
@@ -138,7 +259,7 @@ function buildSlashItems(options, editor) {
       keywords: ['h5', 'heading', '제목'],
       icon: 'H5',
       command: ({ editor: ed, range }) => {
-        clearSlash(ed, range).setHeading({ level: 5 }).run();
+        runSlashTextblock(ed, range, 'heading', { level: 5 });
       },
     },
     {
@@ -148,7 +269,7 @@ function buildSlashItems(options, editor) {
       keywords: ['h6', 'heading', '제목'],
       icon: 'H6',
       command: ({ editor: ed, range }) => {
-        clearSlash(ed, range).setHeading({ level: 6 }).run();
+        runSlashTextblock(ed, range, 'heading', { level: 6 });
       },
     },
     {
@@ -158,7 +279,7 @@ function buildSlashItems(options, editor) {
       keywords: ['indent', '들여쓰기', 'tab', 'margin'],
       icon: '→',
       command: ({ editor: ed, range }) => {
-        clearSlash(ed, range).indent().run();
+        runSlashBlock(ed, range, (chain) => chain.indent());
       },
     },
     {
@@ -168,7 +289,7 @@ function buildSlashItems(options, editor) {
       keywords: ['outdent', '내어쓰기', 'unindent', 'shift-tab'],
       icon: '←',
       command: ({ editor: ed, range }) => {
-        clearSlash(ed, range).outdent().run();
+        runSlashBlock(ed, range, (chain) => chain.outdent());
       },
     },
     {
@@ -178,7 +299,7 @@ function buildSlashItems(options, editor) {
       keywords: ['bullet', 'list', '목록', 'ul', 'unordered'],
       icon: '•',
       command: ({ editor: ed, range }) => {
-        clearSlash(ed, range).toggleBulletList().run();
+        runSlashBlock(ed, range, (chain) => chain.toggleBulletList());
       },
     },
     {
@@ -188,7 +309,7 @@ function buildSlashItems(options, editor) {
       keywords: ['ordered', 'number', '목록', 'ol', 'numbered'],
       icon: '1.',
       command: ({ editor: ed, range }) => {
-        clearSlash(ed, range).toggleOrderedList().run();
+        runSlashBlock(ed, range, (chain) => chain.toggleOrderedList());
       },
     },
     {
@@ -198,7 +319,7 @@ function buildSlashItems(options, editor) {
       keywords: ['todo', 'task', '체크', 'checkbox', 'tasklist'],
       icon: '☑',
       command: ({ editor: ed, range }) => {
-        clearSlash(ed, range).toggleTaskList().run();
+        runSlashBlock(ed, range, (chain) => chain.toggleTaskList());
       },
     },
     {
@@ -208,7 +329,7 @@ function buildSlashItems(options, editor) {
       keywords: ['quote', 'blockquote', '인용'],
       icon: '❝',
       command: ({ editor: ed, range }) => {
-        clearSlash(ed, range).toggleBlockquote().run();
+        runSlashBlock(ed, range, (chain) => chain.toggleBlockquote());
       },
     },
     {
@@ -218,7 +339,7 @@ function buildSlashItems(options, editor) {
       keywords: ['quote', 'pullquote', '인용', '강조', '성경', 'verse'],
       icon: '“',
       command: ({ editor: ed, range }) => {
-        clearSlash(ed, range).togglePullQuote().run();
+        runSlashBlock(ed, range, (chain) => chain.togglePullQuote());
       },
     },
     {
@@ -228,7 +349,7 @@ function buildSlashItems(options, editor) {
       keywords: ['code', '코드', 'pre', 'codeblock'],
       icon: '</>',
       command: ({ editor: ed, range }) => {
-        clearSlash(ed, range).toggleCodeBlock().run();
+        runSlashBlock(ed, range, (chain) => chain.toggleCodeBlock());
       },
     },
     {
@@ -238,7 +359,7 @@ function buildSlashItems(options, editor) {
       keywords: ['hr', 'divider', '구분', '선', 'horizontal'],
       icon: '—',
       command: ({ editor: ed, range }) => {
-        clearSlash(ed, range).setHorizontalRule().run();
+        runSlashBlock(ed, range, (chain) => chain.setHorizontalRule());
       },
     },
     {
@@ -248,7 +369,7 @@ function buildSlashItems(options, editor) {
       keywords: ['details', 'toggle', '토글', '접기', 'summary'],
       icon: '▸',
       command: ({ editor: ed, range }) => {
-        clearSlash(ed, range).setDetails().run();
+        runSlashBlock(ed, range, (chain) => chain.setDetails());
       },
     },
     {
@@ -258,7 +379,7 @@ function buildSlashItems(options, editor) {
       keywords: ['image', 'img', '이미지', '사진', 'picture', 'photo'],
       icon: '🖼',
       command: ({ editor: ed, range }) => {
-        clearSlash(ed, range).run();
+        runSlashBlock(ed, range, (chain) => chain);
         options.onUploadImage?.();
       },
     },
@@ -269,7 +390,7 @@ function buildSlashItems(options, editor) {
       keywords: ['youtube', '유튜브', 'yt', 'embed', '영상'],
       icon: '▶',
       command: ({ editor: ed, range }) => {
-        clearSlash(ed, range).run();
+        runSlashBlock(ed, range, (chain) => chain);
         const src = window.prompt('YouTube URL', 'https://www.youtube.com/watch?v=');
         if (!src) return;
         ed.chain().focus().setYoutubeVideo({ src }).run();
@@ -282,7 +403,7 @@ function buildSlashItems(options, editor) {
       keywords: ['math', 'latex', '수식', 'katex', 'formula', 'inline'],
       icon: '∑',
       command: ({ editor: ed, range }) => {
-        clearSlash(ed, range).run();
+        runSlashBlock(ed, range, (chain) => chain);
         const latex = window.prompt('인라인 수식 (LaTeX)', 'E = mc^2');
         if (latex == null || !String(latex).trim()) return;
         ed.chain().focus().insertInlineMath({ latex: String(latex).trim() }).run();
@@ -295,7 +416,7 @@ function buildSlashItems(options, editor) {
       keywords: ['math', 'latex', '수식', 'katex', 'formula', 'block', 'equation'],
       icon: '∑',
       command: ({ editor: ed, range }) => {
-        clearSlash(ed, range).run();
+        runSlashBlock(ed, range, (chain) => chain);
         const latex = window.prompt('블록 수식 (LaTeX)', '\\int_0^1 x^2\\,dx');
         if (latex == null || !String(latex).trim()) return;
         ed.chain().focus().insertBlockMath({ latex: String(latex).trim() }).run();
@@ -308,7 +429,7 @@ function buildSlashItems(options, editor) {
       keywords: ['toc', '목차', 'contents', 'outline'],
       icon: '☰',
       command: ({ editor: ed, range }) => {
-        clearSlash(ed, range).run();
+        runSlashBlock(ed, range, (chain) => chain);
         const toc = ed.storage.tableOfContents?.content ?? [];
         if (toc.length === 0) {
           window.alert('문서에 제목이 없습니다. 제목을 먼저 추가하세요.');
@@ -333,7 +454,7 @@ function buildSlashItems(options, editor) {
       keywords: ['video', '영상', '동영상', 'mp4', 'movie'],
       icon: '▶',
       command: ({ editor: ed, range }) => {
-        clearSlash(ed, range).run();
+        runSlashBlock(ed, range, (chain) => chain);
         options.onUploadVideo?.();
       },
     },
@@ -344,7 +465,7 @@ function buildSlashItems(options, editor) {
       keywords: ['audio', '오디오', '음악', 'mp3', 'wav', 'sound'],
       icon: '♪',
       command: ({ editor: ed, range }) => {
-        clearSlash(ed, range).run();
+        runSlashBlock(ed, range, (chain) => chain);
         options.onUploadAudio?.();
       },
     },
@@ -355,7 +476,7 @@ function buildSlashItems(options, editor) {
       keywords: ['file', '파일', '첨부', 'attachment', 'pdf', 'zip'],
       icon: '📎',
       command: ({ editor: ed, range }) => {
-        clearSlash(ed, range).run();
+        runSlashBlock(ed, range, (chain) => chain);
         options.onUploadFile?.();
       },
     },
@@ -366,7 +487,9 @@ function buildSlashItems(options, editor) {
       keywords: ['table', '표', 'grid'],
       icon: '▦',
       command: ({ editor: ed, range }) => {
-        clearSlash(ed, range).insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+        runSlashBlock(ed, range, (chain) =>
+          chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true }),
+        );
       },
     },
     {
@@ -376,7 +499,9 @@ function buildSlashItems(options, editor) {
       keywords: ['table', '표', 'large'],
       icon: '▦',
       command: ({ editor: ed, range }) => {
-        clearSlash(ed, range).insertTable({ rows: 5, cols: 5, withHeaderRow: true }).run();
+        runSlashBlock(ed, range, (chain) =>
+          chain.insertTable({ rows: 5, cols: 5, withHeaderRow: true }),
+        );
       },
     },
     {
@@ -386,7 +511,7 @@ function buildSlashItems(options, editor) {
       keywords: ['mention', '멘션', 'at', '@', 'user'],
       icon: '@',
       command: ({ editor: ed, range }) => {
-        clearSlash(ed, range).insertContent('@').run();
+        runSlashBlock(ed, range, (chain) => chain.insertContent('@'));
       },
     },
     {
@@ -396,7 +521,7 @@ function buildSlashItems(options, editor) {
       keywords: ['emoji', '이모지', 'smile', '이모티콘'],
       icon: '☺',
       command: ({ editor: ed, range }) => {
-        clearSlash(ed, range).run();
+        runSlashBlock(ed, range, (chain) => chain);
         if (options.onOpenEmojiPicker) options.onOpenEmojiPicker();
         else ed.chain().focus().insertContent(':').run();
       },
@@ -408,7 +533,7 @@ function buildSlashItems(options, editor) {
       keywords: ['inline', 'code', '인라인'],
       icon: '`',
       command: ({ editor: ed, range }) => {
-        clearSlash(ed, range).toggleCode().run();
+        runSlashBlock(ed, range, (chain) => chain.toggleCode());
       },
     },
     {
@@ -418,7 +543,7 @@ function buildSlashItems(options, editor) {
       keywords: ['highlight', 'marker', '형광', '강조'],
       icon: '🖍',
       command: ({ editor: ed, range }) => {
-        clearSlash(ed, range).toggleHighlight().run();
+        runSlashBlock(ed, range, (chain) => chain.toggleHighlight());
       },
     },
   ];
@@ -432,7 +557,7 @@ function buildSlashItems(options, editor) {
         keywords: ['table', 'column', '열'],
         icon: '⊞',
         command: ({ editor: ed, range }) => {
-          clearSlash(ed, range).addColumnAfter().run();
+          runSlashBlock(ed, range, (chain) => chain.addColumnAfter());
         },
       },
       {
@@ -442,7 +567,7 @@ function buildSlashItems(options, editor) {
         keywords: ['table', 'row', '행'],
         icon: '⊞',
         command: ({ editor: ed, range }) => {
-          clearSlash(ed, range).addRowAfter().run();
+          runSlashBlock(ed, range, (chain) => chain.addRowAfter());
         },
       },
       {
@@ -452,7 +577,7 @@ function buildSlashItems(options, editor) {
         keywords: ['table', 'merge', '병합'],
         icon: '⧉',
         command: ({ editor: ed, range }) => {
-          clearSlash(ed, range).mergeCells().run();
+          runSlashBlock(ed, range, (chain) => chain.mergeCells());
         },
       },
       {
@@ -462,7 +587,7 @@ function buildSlashItems(options, editor) {
         keywords: ['table', 'split', '분할'],
         icon: '⧉',
         command: ({ editor: ed, range }) => {
-          clearSlash(ed, range).splitCell().run();
+          runSlashBlock(ed, range, (chain) => chain.splitCell());
         },
       },
       {
@@ -472,7 +597,7 @@ function buildSlashItems(options, editor) {
         keywords: ['table', 'header', '헤더'],
         icon: '▤',
         command: ({ editor: ed, range }) => {
-          clearSlash(ed, range).toggleHeaderRow().run();
+          runSlashBlock(ed, range, (chain) => chain.toggleHeaderRow());
         },
       },
       {
@@ -482,7 +607,7 @@ function buildSlashItems(options, editor) {
         keywords: ['table', 'delete', '삭제'],
         icon: '✕',
         command: ({ editor: ed, range }) => {
-          clearSlash(ed, range).deleteTable().run();
+          runSlashBlock(ed, range, (chain) => chain.deleteTable());
         },
       },
     );

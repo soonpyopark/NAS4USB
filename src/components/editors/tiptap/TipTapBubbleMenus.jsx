@@ -56,7 +56,7 @@ export default function TipTapBubbleMenus({ editor, readOnly = false, onEditLink
       editor={editor}
       className="tiptap-bubble-menu"
       options={{ placement: 'top' }}
-      shouldShow={({ editor: current, state }) => {
+      shouldShow={({ editor: current, state, from, to }) => {
         const { selection } = state;
         if (!current.isEditable) return false;
         if (selection.empty) return false;
@@ -66,6 +66,9 @@ export default function TipTapBubbleMenus({ editor, readOnly = false, onEditLink
         if (current.isActive('video')) return false;
         if (current.isActive('audio')) return false;
         if (current.isActive('fileAttachment')) return false;
+        // Slash→heading primes a ZWSP caret; ignore ZWSP/BOM-only ranges.
+        const selected = state.doc.textBetween(from, to, '\n', '\0');
+        if (selected.length > 0 && /^[\u200b\uFEFF]+$/.test(selected)) return false;
         return true;
       }}
     >

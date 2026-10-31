@@ -174,6 +174,34 @@ function IconMoveDown() {
   );
 }
 
+function IconMoveToTop() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M5 4h14M12 20V8M7 12l5-5 5 5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function IconMoveToBottom() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M5 20h14M12 4v12M7 12l5 5 5-5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function IconIndentLeft() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -360,8 +388,12 @@ export default function FileList({
   onSort,
   canMoveOrderUp = false,
   canMoveOrderDown = false,
+  canMoveOrderTop = false,
+  canMoveOrderBottom = false,
   onMoveOrderUp,
   onMoveOrderDown,
+  onMoveOrderTop,
+  onMoveOrderBottom,
   showFavoriteLocation = false,
   lockFixedOrder = true,
   fileIndentInfo = {},
@@ -540,6 +572,14 @@ export default function FileList({
                   {canReorder && onMoveOrderUp && onMoveOrderDown ? (
                     <HeaderButtonGroup>
                       <HeaderIconButton
+                        disabled={!canMoveOrderTop}
+                        onClick={onMoveOrderTop}
+                        title="선택한 항목을 맨 위로"
+                      >
+                        <IconMoveToTop />
+                      </HeaderIconButton>
+                      <HeaderButtonDivider />
+                      <HeaderIconButton
                         disabled={!canMoveOrderUp}
                         onClick={onMoveOrderUp}
                         title="선택한 항목을 한 칸 위로"
@@ -553,6 +593,14 @@ export default function FileList({
                         title="선택한 항목을 한 칸 아래로"
                       >
                         <IconMoveDown />
+                      </HeaderIconButton>
+                      <HeaderButtonDivider />
+                      <HeaderIconButton
+                        disabled={!canMoveOrderBottom}
+                        onClick={onMoveOrderBottom}
+                        title="선택한 항목을 맨 아래로"
+                      >
+                        <IconMoveToBottom />
                       </HeaderIconButton>
                     </HeaderButtonGroup>
                   ) : null}

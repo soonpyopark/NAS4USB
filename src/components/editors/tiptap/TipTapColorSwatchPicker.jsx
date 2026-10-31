@@ -156,7 +156,7 @@ export default function TipTapColorSwatchPicker({
     >
       <div
         className="tiptap-swatch__grid"
-        style={{ gridTemplateColumns: `repeat(${columns}, 22px)` }}
+        style={{ gridTemplateColumns: `repeat(${columns}, 32px)` }}
       >
         {colors.map((item) => {
           const selected = item.value === value;

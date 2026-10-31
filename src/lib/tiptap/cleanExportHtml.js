@@ -59,6 +59,13 @@ export function cleanTiptapExportHtml(html) {
   work.querySelectorAll('.column-resize-handle').forEach((el) => el.remove());
   work.querySelectorAll('input[type="file"]').forEach((el) => el.remove());
 
+  // Slash commands may leave a caret ZWSP in otherwise-empty blocks.
+  work.querySelectorAll('p, h1, h2, h3, h4, h5, h6').forEach((el) => {
+    const text = el.textContent || '';
+    if (!text || !/^[\u200b\uFEFF\s]*$/.test(text)) return;
+    el.textContent = '';
+  });
+
   // Drop trailing empty paragraphs TipTap often leaves after tables.
   while (work.lastElementChild?.tagName === 'P' && !work.lastElementChild.textContent?.trim()) {
     work.lastElementChild.remove();
