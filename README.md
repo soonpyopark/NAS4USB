@@ -17,7 +17,13 @@ USB(또는 단일 폴더)만으로 **오프라인 LAN NAS**와 **실시간 공�
 
 ## 화면
 
-스크린샷은 [`docs/screenshots/`](docs/screenshots/)에 둡니다. Windows 실행 화면은 추후 같은 폴더에 추가할 예정입니다.
+스크린샷은 [`docs/screenshots/`](docs/screenshots/)에 둡니다.
+
+### Windows 실행 화면
+
+Electron 앱으로 실행한 탐색기입니다.
+
+![NAS4USB Windows 실행 화면](docs/screenshots/windows-app.png)
 
 ### macOS 실행 화면
 
@@ -30,10 +36,6 @@ Electron 앱으로 실행한 탐색기입니다.
 호스트가 LAN에서 서버를 켠 뒤, 같은 네트워크의 브라우저에서 `https://<호스트IP>:<포트>`로 접속한 모습입니다.
 
 ![NAS4USB 웹 접속 화면](docs/screenshots/web-browser.png)
-
-### Windows 실행 화면
-
-*(준비 중 — `docs/screenshots/windows-app.png`)*
 
 ---
 
