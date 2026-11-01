@@ -7,6 +7,52 @@ import { loadAndApplyAccentColor } from './lib/theme.js';
 import { APP_ICON_URL, APP_NAME } from '../shared/constants.js';
 import './styles/index.css';
 
+const CSS_RELOAD_KEY = 'nas4usb.cssReloadOnce';
+
+/**
+ * Packaged builds load Tailwind via `<link rel="stylesheet" crossorigin>`.
+ * On a cold start the first CSS fetch can fail (server race / CORS cache).
+ * Reload once when an assets stylesheet never becomes available.
+ */
+function ensurePackagedStylesheets() {
+  if (import.meta.env.DEV) return Promise.resolve();
+  const links = [...document.querySelectorAll('link[rel="stylesheet"][href*="assets/"]')];
+  if (links.length === 0) return Promise.resolve();
+
+  return Promise.all(
+    links.map(
+      (link) =>
+        new Promise((resolve) => {
+          if (link.sheet) {
+            resolve(true);
+            return;
+          }
+          const done = (ok) => resolve(ok);
+          link.addEventListener('load', () => done(true), { once: true });
+          link.addEventListener('error', () => done(false), { once: true });
+          window.setTimeout(() => done(Boolean(link.sheet)), 2500);
+        }),
+    ),
+  ).then((results) => {
+    if (results.every(Boolean)) {
+      try {
+        sessionStorage.removeItem(CSS_RELOAD_KEY);
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+    try {
+      if (!sessionStorage.getItem(CSS_RELOAD_KEY)) {
+        sessionStorage.setItem(CSS_RELOAD_KEY, '1');
+        window.location.reload();
+      }
+    } catch {
+      /* ignore */
+    }
+  });
+}
+
 const iconSrc = `${import.meta.env.BASE_URL}${APP_ICON_URL.replace(/^\//, '')}`;
 const root = ReactDOM.createRoot(document.getElementById('root'));
 
@@ -26,7 +72,8 @@ root.render(
   </div>,
 );
 
-initNas4usb()
+void ensurePackagedStylesheets()
+  .then(() => initNas4usb())
   // Bind (or discard) the stored session before App mounts, so the very first
   // data fetch already carries the right identity.
   .then(() => restoreAdminSession().catch(() => null))

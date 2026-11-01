@@ -5,7 +5,7 @@ import { isVideoExtension } from '../lib/media/mediaTypes.js';
 
 /**
  * Same-folder videos in name order (`1` < `2` < `10`), for prev/next and
- * optional continuous play. Series-shaped names are not required.
+ * play modes (연속 / 랜덤 / 한곡 / 안함). Series-shaped names are not required.
  *
  * @param {string} relativePath
  * @param {string} fileName
@@ -45,16 +45,24 @@ export function useVideoSeriesQueue(relativePath, fileName, _extension, enabled 
 
   return useMemo(() => {
     if (!enabled) {
-      return { prefix: null, prev: null, next: null, index: -1, total: 0 };
+      return { prefix: null, prev: null, next: null, siblings: [], index: -1, total: 0 };
     }
     const index = siblings.findIndex((entry) => entry.relativePath === relativePath);
     if (index < 0) {
-      return { prefix: fileName, prev: null, next: null, index: -1, total: siblings.length };
+      return {
+        prefix: fileName,
+        prev: null,
+        next: null,
+        siblings,
+        index: -1,
+        total: siblings.length,
+      };
     }
     return {
       prefix: fileName,
       prev: index > 0 ? siblings[index - 1] : null,
       next: index < siblings.length - 1 ? siblings[index + 1] : null,
+      siblings,
       index,
       total: siblings.length,
     };

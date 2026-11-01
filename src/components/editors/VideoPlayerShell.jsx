@@ -22,16 +22,59 @@ import {
   patchTimelineClockOnMedia,
 } from '../../lib/media/videoJsPlayer.js';
 
-const PLAY_NEXT_STORAGE_KEY = 'nas4usb.videoPlayer.playNextInSeries';
+/** @typedef {'series' | 'random' | 'one' | 'off'} VideoPlayMode */
+
+const PLAY_MODE_STORAGE_KEY = 'nas4usb.videoPlayer.playMode';
+/** Legacy boolean key from the old “연속 재생” checkbox. */
+const PLAY_NEXT_LEGACY_KEY = 'nas4usb.videoPlayer.playNextInSeries';
+
+/** @type {VideoPlayMode[]} */
+const PLAY_MODE_ORDER = ['series', 'random', 'one', 'off'];
+
+const PLAY_MODE_LABEL = {
+  series: '연속',
+  random: '랜덤',
+  one: '한곡',
+  off: '안함',
+};
 
 void loadLocale('ko').catch(() => {});
 
-function loadPlayNextPreference() {
+/**
+ * @returns {VideoPlayMode}
+ */
+function loadPlayModePreference() {
   try {
-    return localStorage.getItem(PLAY_NEXT_STORAGE_KEY) === '1';
+    const raw = localStorage.getItem(PLAY_MODE_STORAGE_KEY);
+    if (raw === 'series' || raw === 'random' || raw === 'one' || raw === 'off') return raw;
+    // Migrate old checkbox preference.
+    if (localStorage.getItem(PLAY_NEXT_LEGACY_KEY) === '1') return 'series';
   } catch {
-    return false;
+    // ignore
   }
+  return 'off';
+}
+
+/**
+ * @param {VideoPlayMode} mode
+ */
+function storePlayModePreference(mode) {
+  try {
+    localStorage.setItem(PLAY_MODE_STORAGE_KEY, mode);
+    localStorage.removeItem(PLAY_NEXT_LEGACY_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * @param {import('../../types/nas4usb.d.ts').FsEntry[]} siblings
+ * @param {string} currentPath
+ */
+function pickRandomSibling(siblings, currentPath) {
+  const others = siblings.filter((entry) => entry.relativePath !== currentPath);
+  if (others.length === 0) return null;
+  return others[Math.floor(Math.random() * others.length)] ?? null;
 }
 
 /**
@@ -87,10 +130,11 @@ export default function VideoPlayerShell({
   const [subtitleTracks, setSubtitleTracks] = useState([]);
   const [subtitleNote, setSubtitleNote] = useState('');
   const [stalled, setStalled] = useState(false);
-  const [playNextInSeries, setPlayNextInSeries] = useState(loadPlayNextPreference);
+  const [playMode, setPlayMode] = useState(loadPlayModePreference);
   const {
     prev: prevInSeries,
     next: nextInSeries,
+    siblings: seriesSiblings,
     index: seriesIndex,
     total: seriesTotal,
   } = useVideoSeriesQueue(relativePath, fileName, extension, Boolean(onOpenSibling));
@@ -103,14 +147,13 @@ export default function VideoPlayerShell({
   const useHlsJs = playerKind === 'hls' && !ios;
   const mediaSrcType = playerKind === 'hls' ? 'application/vnd.apple.mpegurl' : mimeType;
 
-  const togglePlayNext = useCallback((event) => {
-    const enabled = event.target.checked;
-    setPlayNextInSeries(enabled);
-    try {
-      localStorage.setItem(PLAY_NEXT_STORAGE_KEY, enabled ? '1' : '0');
-    } catch {
-      // ignore
-    }
+  const cyclePlayMode = useCallback(() => {
+    setPlayMode((current) => {
+      const index = PLAY_MODE_ORDER.indexOf(current);
+      const next = PLAY_MODE_ORDER[(index + 1) % PLAY_MODE_ORDER.length] ?? 'off';
+      storePlayModePreference(next);
+      return next;
+    });
   }, []);
 
   const openSeriesEntry = useCallback(
@@ -121,11 +164,44 @@ export default function VideoPlayerShell({
     [onOpenSibling],
   );
 
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.loop = playMode === 'one';
+  }, [playMode, streamUrl]);
+
   const handleEnded = useCallback(() => {
     if (isStreamingPreview) return;
-    if (!playNextInSeries || !nextInSeries) return;
-    openSeriesEntry(nextInSeries);
-  }, [isStreamingPreview, nextInSeries, openSeriesEntry, playNextInSeries]);
+    if (playMode === 'off' || playMode === 'one') return;
+    if (playMode === 'series') {
+      if (nextInSeries) openSeriesEntry(nextInSeries);
+      return;
+    }
+    if (playMode === 'random') {
+      const pick = pickRandomSibling(seriesSiblings, relativePath);
+      if (pick) {
+        openSeriesEntry(pick);
+        return;
+      }
+      // Only one file in the folder — replay current.
+      const video = videoRef.current;
+      if (video) {
+        try {
+          video.currentTime = 0;
+          void video.play();
+        } catch {
+          // ignore
+        }
+      }
+    }
+  }, [
+    isStreamingPreview,
+    nextInSeries,
+    openSeriesEntry,
+    playMode,
+    relativePath,
+    seriesSiblings,
+  ]);
   handleEndedRef.current = handleEnded;
 
   useEffect(() => {
@@ -307,41 +383,54 @@ export default function VideoPlayerShell({
     return undefined;
   }, [subtitleTracks, streamUrl]);
 
+  const playModeLabel = PLAY_MODE_LABEL[playMode] ?? PLAY_MODE_LABEL.off;
+  const playModeTitle = {
+    series: '연속: 폴더 순서로 다음 영상 (클릭하면 랜덤)',
+    random: '랜덤: 같은 폴더에서 임의 재생 (클릭하면 한곡)',
+    one: '한곡: 현재 영상 반복 (클릭하면 안함)',
+    off: '안함: 끝나면 정지 (클릭하면 연속)',
+  }[playMode];
+
   const statusBits = [
     `영상 · ${extension.toUpperCase()} · ${mimeType}`,
     subtitleNote ? `자막 ${subtitleNote}` : '',
     usingFfmpegPreview ? 'FFmpeg 호환' : '',
     hasSeries && seriesIndex >= 0 ? `${seriesIndex + 1}/${seriesTotal}` : '',
-    playNextInSeries && nextInSeries ? `다음 ${nextInSeries.name}` : '',
+    playMode === 'series' && nextInSeries ? `다음 ${nextInSeries.name}` : '',
+    playMode === 'random' ? '랜덤 재생' : '',
+    playMode === 'one' ? '한곡 반복' : '',
   ].filter(Boolean);
 
-  const actions = hasSeries ? (
-    <>
-      <label className="flex items-center gap-1.5 whitespace-nowrap text-xs text-[#323130]">
-        <input
-          type="checkbox"
-          className="rounded border-slate-300"
-          checked={playNextInSeries}
-          onChange={togglePlayNext}
-        />
-        연속 재생
-      </label>
-      <AppModalButton
-        disabled={!prevInSeries || loading}
-        title={prevInSeries ? `이전 파일: ${prevInSeries.name} (Shift+←)` : '이전 파일 없음'}
-        onClick={() => openSeriesEntry(prevInSeries)}
-      >
-        이전
-      </AppModalButton>
-      <AppModalButton
-        disabled={!nextInSeries || loading}
-        title={nextInSeries ? `다음 파일: ${nextInSeries.name} (Shift+→)` : '다음 파일 없음'}
-        onClick={() => openSeriesEntry(nextInSeries)}
-      >
-        다음
-      </AppModalButton>
-    </>
-  ) : null;
+  const actions =
+    seriesTotal >= 1 ? (
+      <>
+        <AppModalButton
+          title={playModeTitle}
+          onClick={cyclePlayMode}
+          aria-label={`재생 모드 ${playModeLabel}. 클릭하면 다음 모드`}
+        >
+          {playModeLabel}
+        </AppModalButton>
+        {hasSeries ? (
+          <>
+            <AppModalButton
+              disabled={!prevInSeries || loading}
+              title={prevInSeries ? `이전 파일: ${prevInSeries.name} (Shift+←)` : '이전 파일 없음'}
+              onClick={() => openSeriesEntry(prevInSeries)}
+            >
+              이전
+            </AppModalButton>
+            <AppModalButton
+              disabled={!nextInSeries || loading}
+              title={nextInSeries ? `다음 파일: ${nextInSeries.name} (Shift+→)` : '다음 파일 없음'}
+              onClick={() => openSeriesEntry(nextInSeries)}
+            >
+              다음
+            </AppModalButton>
+          </>
+        ) : null}
+      </>
+    ) : null;
 
   const mediaProps = {
     ref: setMediaRef,

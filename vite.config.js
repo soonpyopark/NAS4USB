@@ -17,7 +17,30 @@ export default defineConfig(({ mode }) => {
     root: path.resolve(__dirname, 'src'),
     publicDir: path.resolve(__dirname, 'public'),
     base: './',
-    plugins: [react()],
+    plugins: [
+      react(),
+      {
+        // Put the main stylesheet before module scripts so Tailwind paints before JS.
+        name: 'nas4usb-css-before-modules',
+        enforce: 'post',
+        transformIndexHtml(html) {
+          const links = [];
+          const withoutCss = html.replace(
+            /<link\b[^>]*\brel=["']stylesheet["'][^>]*>\s*/gi,
+            (tag) => {
+              links.push(tag.trim());
+              return '';
+            },
+          );
+          if (!links.length) return html;
+          const block = `${links.join('\n    ')}\n    `;
+          if (/<\/title>/i.test(withoutCss)) {
+            return withoutCss.replace(/<\/title>/i, `</title>\n    ${block.trimEnd()}`);
+          }
+          return withoutCss.replace(/<head([^>]*)>/i, `<head$1>\n    ${block.trimEnd()}`);
+        },
+      },
+    ],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, 'src'),

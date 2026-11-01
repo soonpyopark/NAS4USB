@@ -120,8 +120,8 @@ function primeEmptyTextblock(tr) {
 }
 
 /**
- * Replace the textblock that contains `/query` with a primed paragraph/heading
- * in one collab-safe transaction (avoids empty-node UniqueID + Yjs desync).
+ * Delete `/query`, convert the current textblock type, and keep existing text.
+ * Only ZWSP-prime when the block is empty afterward (empty-node UniqueID / IME).
  * @param {import('@tiptap/core').Editor} editor
  * @param {{ from: number, to: number }} range
  * @param {string} typeName
@@ -132,32 +132,20 @@ function runSlashTextblock(editor, range, typeName, attrs = {}) {
   if (!type) return false;
 
   const ok = dispatchCollabSafe(editor.view, (state) => {
-    const max = state.doc.content.size;
-    const fromPos = Math.max(0, Math.min(range.from, max));
-    const $from = state.doc.resolve(fromPos);
+    let tr = state.tr.deleteRange(range.from, range.to);
+    const $from = tr.selection.$from;
     let depth = $from.depth;
     while (depth > 0 && !$from.node(depth).isTextblock) depth -= 1;
 
-    if (depth <= 0) {
-      return primeEmptyTextblock(state.tr.deleteRange(range.from, range.to)).scrollIntoView();
-    }
-
-    const block = $from.node(depth);
-    const blockFrom = $from.before(depth);
-    const blockTo = $from.after(depth);
-    /** @type {Record<string, unknown>} */
-    const nextAttrs = { ...attrs };
-    for (const key of ['id', 'indent', 'textAlign']) {
-      if (nextAttrs[key] === undefined && block.attrs[key] != null) {
-        nextAttrs[key] = block.attrs[key];
+    if (depth > 0) {
+      const blockPos = $from.before(depth);
+      const block = tr.doc.nodeAt(blockPos);
+      if (block?.isTextblock) {
+        tr = tr.setNodeMarkup(blockPos, type, { ...block.attrs, ...attrs });
       }
     }
-    const node = type.create(nextAttrs, state.schema.text(SLASH_CARET_ZWSP));
-    let tr = state.tr.replaceWith(blockFrom, blockTo, node);
-    // Collapsed caret after ZWSP — selecting the ZWSP opens the text BubbleMenu.
-    const caret = blockFrom + 1 + SLASH_CARET_ZWSP.length;
-    tr = tr.setSelection(TextSelection.create(tr.doc, caret));
-    return tr.setStoredMarks([]).scrollIntoView();
+
+    return primeEmptyTextblock(tr).scrollIntoView();
   });
 
   restoreSlashCaret(editor);

@@ -100,11 +100,38 @@ export async function startSyncServer(distRoot) {
     });
   });
 
-  syncServer.listen(syncPort, syncHostname, () => {
-    const scheme = syncHttpsEnabled ? 'https' : 'http';
-    console.log(`[sync] Y.js broker listening on ${scheme}://${syncHostname}:${syncPort}`);
-    console.log(`[sync] LAN addresses: ${getLocalIPv4Addresses().join(', ') || 'none'}`);
-  });
+  // Wait until the port is actually bound. Returning early used to race the
+  // first Electron navigation — index.html could load while CSS/JS 404'd.
+  try {
+    await new Promise((resolve, reject) => {
+      const onError = (err) => {
+        syncServer?.removeListener('listening', onListening);
+        reject(err);
+      };
+      const onListening = () => {
+        syncServer?.removeListener('error', onError);
+        resolve();
+      };
+      syncServer.once('error', onError);
+      syncServer.once('listening', onListening);
+      syncServer.listen(syncPort, syncHostname);
+    });
+  } catch (err) {
+    try {
+      syncServer.close();
+    } catch {
+      /* ignore */
+    }
+    syncWss?.close();
+    syncWss = null;
+    syncServer = null;
+    staticDistRoot = null;
+    throw err;
+  }
+
+  const scheme = syncHttpsEnabled ? 'https' : 'http';
+  console.log(`[sync] Y.js broker listening on ${scheme}://${syncHostname}:${syncPort}`);
+  console.log(`[sync] LAN addresses: ${getLocalIPv4Addresses().join(', ') || 'none'}`);
 
   return syncListenInfo();
 }

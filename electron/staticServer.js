@@ -42,6 +42,27 @@ function cacheControlFor(relativePosix, ext) {
 }
 
 /**
+ * Vite emits `crossorigin` on CSS/JS tags. Without ACAO, Chromium can refuse a
+ * CORS-mode stylesheet after a non-CORS cache entry (or on first HTTPS paint).
+ *
+ * @param {import('node:http').IncomingMessage} req
+ * @param {string} ext
+ */
+function corsHeadersFor(req, ext) {
+  if (ext !== '.css' && ext !== '.js' && ext !== '.mjs' && ext !== '.map' && ext !== '.woff' && ext !== '.woff2') {
+    return {};
+  }
+  const origin =
+    typeof req.headers.origin === 'string' && req.headers.origin.trim()
+      ? req.headers.origin.trim()
+      : '*';
+  return {
+    'Access-Control-Allow-Origin': origin,
+    ...(origin !== '*' ? { Vary: 'Origin' } : {}),
+  };
+}
+
+/**
  * @param {import('node:http').IncomingMessage} req
  * @param {import('node:http').ServerResponse} res
  * @param {string} distRoot
@@ -107,6 +128,7 @@ export async function serveStaticDist(req, res, distRoot) {
     res.writeHead(200, {
       'Content-Type': MIME_TYPES[ext] ?? 'application/octet-stream',
       'Cache-Control': cacheControlFor(relativePosix, ext),
+      ...corsHeadersFor(req, ext),
     });
     res.end(content);
     return true;

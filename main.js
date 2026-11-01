@@ -258,11 +258,17 @@ function isLocalAppUrl(url) {
 }
 
 app.on('certificate-error', (event, _webContents, url, _error, certificate, callback) => {
+  // Check local URL first — cert trust helpers can throw before app context is ready,
+  // and a thrown error used to skip this check and block CSS/JS on first paint.
+  if (isLocalAppUrl(url)) {
+    event.preventDefault();
+    callback(true);
+    return;
+  }
   try {
     if (
       isTrustedElectronCertificate(certificate) ||
-      isTrustedServerFingerprint(certificate?.fingerprint256) ||
-      isLocalAppUrl(url)
+      isTrustedServerFingerprint(certificate?.fingerprint256)
     ) {
       event.preventDefault();
       callback(true);
