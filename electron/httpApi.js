@@ -319,14 +319,23 @@ export async function handleHttpApiRequest(req, res) {
       sendJson(
         res,
         200,
-        await searchPersonalDocIndex(getAccessAuth(req), url.searchParams.get('q') ?? ''),
+        await searchPersonalDocIndex(getAccessAuth(req), url.searchParams.get('q') ?? '', {
+          scope: url.searchParams.get('scope') ?? 'all',
+        }),
       );
       return true;
     }
 
     if (method === 'POST' && url.pathname === '/api/docIndex/start') {
       const body = await readJsonBody(req);
-      sendJson(res, 200, await startPersonalDocIndex(getAccessAuth(req), { reset: Boolean(body.reset) }));
+      sendJson(
+        res,
+        200,
+        await startPersonalDocIndex(getAccessAuth(req), {
+          reset: Boolean(body.reset),
+          scopes: Array.isArray(body.scopes) ? body.scopes : undefined,
+        }),
+      );
       return true;
     }
 

@@ -7,9 +7,17 @@ import { AppModalButton } from '../common/AppModal.jsx';
 import ViewerModal from './ViewerModal.jsx';
 import Nas4usbClassicVideoSkin from './Nas4usbClassicVideoSkin.jsx';
 import { useMediaStream } from '../../hooks/useMediaStream.js';
-import { useVideoSeriesQueue } from '../../hooks/useVideoSeriesQueue.js';
+import { useMediaSeriesQueue } from '../../hooks/useMediaSeriesQueue.js';
 import { isIosWebKit } from '../../lib/media/iosPlayback.js';
 import { getVideoMimeType } from '../../lib/media/mediaTypes.js';
+import {
+  MEDIA_PLAY_MODE_LABEL,
+  MEDIA_PLAY_MODE_ORDER,
+  loadMediaPlayMode,
+  mediaPlayModeTitle,
+  pickRandomSibling,
+  storeMediaPlayMode,
+} from '../../lib/media/mediaPlayMode.js';
 import { loadSiblingSubtitleTracks, shiftWebVttCues, vttToTrackUrl } from '../../lib/media/subtitles.js';
 import {
   readShowingSubtitleLabel,
@@ -22,60 +30,11 @@ import {
   patchTimelineClockOnMedia,
 } from '../../lib/media/videoJsPlayer.js';
 
-/** @typedef {'series' | 'random' | 'one' | 'off'} VideoPlayMode */
-
 const PLAY_MODE_STORAGE_KEY = 'nas4usb.videoPlayer.playMode';
 /** Legacy boolean key from the old “연속 재생” checkbox. */
 const PLAY_NEXT_LEGACY_KEY = 'nas4usb.videoPlayer.playNextInSeries';
 
-/** @type {VideoPlayMode[]} */
-const PLAY_MODE_ORDER = ['series', 'random', 'one', 'off'];
-
-const PLAY_MODE_LABEL = {
-  series: '연속',
-  random: '랜덤',
-  one: '한곡',
-  off: '안함',
-};
-
 void loadLocale('ko').catch(() => {});
-
-/**
- * @returns {VideoPlayMode}
- */
-function loadPlayModePreference() {
-  try {
-    const raw = localStorage.getItem(PLAY_MODE_STORAGE_KEY);
-    if (raw === 'series' || raw === 'random' || raw === 'one' || raw === 'off') return raw;
-    // Migrate old checkbox preference.
-    if (localStorage.getItem(PLAY_NEXT_LEGACY_KEY) === '1') return 'series';
-  } catch {
-    // ignore
-  }
-  return 'off';
-}
-
-/**
- * @param {VideoPlayMode} mode
- */
-function storePlayModePreference(mode) {
-  try {
-    localStorage.setItem(PLAY_MODE_STORAGE_KEY, mode);
-    localStorage.removeItem(PLAY_NEXT_LEGACY_KEY);
-  } catch {
-    // ignore
-  }
-}
-
-/**
- * @param {import('../../types/nas4usb.d.ts').FsEntry[]} siblings
- * @param {string} currentPath
- */
-function pickRandomSibling(siblings, currentPath) {
-  const others = siblings.filter((entry) => entry.relativePath !== currentPath);
-  if (others.length === 0) return null;
-  return others[Math.floor(Math.random() * others.length)] ?? null;
-}
 
 /**
  * @param {{
@@ -130,14 +89,16 @@ export default function VideoPlayerShell({
   const [subtitleTracks, setSubtitleTracks] = useState([]);
   const [subtitleNote, setSubtitleNote] = useState('');
   const [stalled, setStalled] = useState(false);
-  const [playMode, setPlayMode] = useState(loadPlayModePreference);
+  const [playMode, setPlayMode] = useState(() =>
+    loadMediaPlayMode(PLAY_MODE_STORAGE_KEY, PLAY_NEXT_LEGACY_KEY),
+  );
   const {
     prev: prevInSeries,
     next: nextInSeries,
     siblings: seriesSiblings,
     index: seriesIndex,
     total: seriesTotal,
-  } = useVideoSeriesQueue(relativePath, fileName, extension, Boolean(onOpenSibling));
+  } = useMediaSeriesQueue(relativePath, fileName, 'video', Boolean(onOpenSibling));
   const hasSeries = seriesTotal > 1;
 
   durationRef.current = durationSeconds;
@@ -149,9 +110,9 @@ export default function VideoPlayerShell({
 
   const cyclePlayMode = useCallback(() => {
     setPlayMode((current) => {
-      const index = PLAY_MODE_ORDER.indexOf(current);
-      const next = PLAY_MODE_ORDER[(index + 1) % PLAY_MODE_ORDER.length] ?? 'off';
-      storePlayModePreference(next);
+      const index = MEDIA_PLAY_MODE_ORDER.indexOf(current);
+      const next = MEDIA_PLAY_MODE_ORDER[(index + 1) % MEDIA_PLAY_MODE_ORDER.length] ?? 'off';
+      storeMediaPlayMode(PLAY_MODE_STORAGE_KEY, next, PLAY_NEXT_LEGACY_KEY);
       return next;
     });
   }, []);
@@ -383,13 +344,8 @@ export default function VideoPlayerShell({
     return undefined;
   }, [subtitleTracks, streamUrl]);
 
-  const playModeLabel = PLAY_MODE_LABEL[playMode] ?? PLAY_MODE_LABEL.off;
-  const playModeTitle = {
-    series: '연속: 폴더 순서로 다음 영상 (클릭하면 랜덤)',
-    random: '랜덤: 같은 폴더에서 임의 재생 (클릭하면 한곡)',
-    one: '한곡: 현재 영상 반복 (클릭하면 안함)',
-    off: '안함: 끝나면 정지 (클릭하면 연속)',
-  }[playMode];
+  const playModeLabel = MEDIA_PLAY_MODE_LABEL[playMode] ?? MEDIA_PLAY_MODE_LABEL.off;
+  const playModeTitle = mediaPlayModeTitle(playMode, 'video');
 
   const statusBits = [
     `영상 · ${extension.toUpperCase()} · ${mimeType}`,

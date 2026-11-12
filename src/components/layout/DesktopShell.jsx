@@ -2,6 +2,13 @@ import { Children, cloneElement, isValidElement, useCallback, useEffect, useRef,
 import Sidebar from './Sidebar.jsx';
 import TopBar from './TopBar.jsx';
 import StatusBar from './StatusBar.jsx';
+import { useFavorites } from '../../hooks/useFavorites.js';
+import {
+  FAVORITES_FILES_FOLDER,
+  FAVORITES_FOLDERS_FOLDER,
+  favoritesViewKind,
+  isFavoritesPath,
+} from '../../lib/favoritesPaths.js';
 
 const SIDEBAR_DEFAULT_WIDTH = 288;
 /** Do not allow shrinking below the initial startup width. */
@@ -19,6 +26,39 @@ function readSidebarCollapsed() {
   }
 }
 
+function FolderTreeIcon() {
+  return (
+    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h5.2l1.8 2H18.5A1.5 1.5 0 0 1 20 7.5v11A1.5 1.5 0 0 1 18.5 20h-13A1.5 1.5 0 0 1 4 18.5Z" />
+    </svg>
+  );
+}
+
+function FilesIcon() {
+  return (
+    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M7 3.5A1.5 1.5 0 0 1 8.5 2H14l5 5v13.5A1.5 1.5 0 0 1 17.5 22h-9A1.5 1.5 0 0 1 7 20.5Zm7 0v4h4" />
+    </svg>
+  );
+}
+
+function FavoriteFoldersIcon() {
+  return (
+    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h3.2l1.8 2h7A1.5 1.5 0 0 1 19 7.5V11h-2V8h-7.3L7.9 6H6v12h5v2H5.5A1.5 1.5 0 0 1 4 18.5Z" />
+      <path d="M17.5 12l1.55 3.14 3.45.5-2.5 2.44.59 3.45-3.09-1.63-3.09 1.63.59-3.45-2.5-2.44 3.45-.5Z" />
+    </svg>
+  );
+}
+
+function FavoriteFilesIcon() {
+  return (
+    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 2.25l2.52 5.11 5.64.82-4.08 3.98.96 5.62L12 15.9l-5.04 2.88.96-5.62-4.08-3.98 5.64-.82L12 2.25z" />
+    </svg>
+  );
+}
+
 export default function DesktopShell({
   children,
   paths,
@@ -33,11 +73,15 @@ export default function DesktopShell({
   onEntryRenamed,
 }) {
   const layoutRef = useRef(null);
+  const lastExplorerPathRef = useRef('.');
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
   const [layoutWidth, setLayoutWidth] = useState(0);
   const [isResizing, setIsResizing] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readSidebarCollapsed);
   const [mobilePane, setMobilePane] = useState(/** @type {'folders' | 'files'} */ ('files'));
+  const { folderFavoritesCount, fileFavoritesCount } = useFavorites();
+  const favoritesView = favoritesViewKind(currentPath);
+  const onFavorites = isFavoritesPath(currentPath);
 
   const isCompact = layoutWidth > 0 && layoutWidth < COMPACT_LAYOUT_MAX;
 
@@ -104,6 +148,12 @@ export default function DesktopShell({
     return () => observer.disconnect();
   }, [clampSidebarWidth]);
 
+  useEffect(() => {
+    if (!isFavoritesPath(currentPath)) {
+      lastExplorerPathRef.current = currentPath || '.';
+    }
+  }, [currentPath]);
+
   const handleNavigate = useCallback(
     (nextPath) => {
       onNavigate?.(nextPath);
@@ -120,8 +170,30 @@ export default function DesktopShell({
     [isCompact, onOpenFile],
   );
 
+  const openFilesPane = useCallback(() => {
+    setMobilePane('files');
+    if (isFavoritesPath(currentPath)) {
+      onNavigate?.(lastExplorerPathRef.current || '.');
+    }
+  }, [currentPath, onNavigate]);
+
+  const openFavoriteFolders = useCallback(() => {
+    setMobilePane('files');
+    onNavigate?.(FAVORITES_FOLDERS_FOLDER);
+  }, [onNavigate]);
+
+  const openFavoriteFiles = useCallback(() => {
+    setMobilePane('files');
+    onNavigate?.(FAVORITES_FILES_FOLDER);
+  }, [onNavigate]);
+
   const showFolders = isCompact ? mobilePane === 'folders' : !sidebarCollapsed;
   const showFiles = !isCompact || mobilePane === 'files';
+  const filesTabActive = mobilePane === 'files' && !onFavorites;
+  const favoriteFoldersActive =
+    mobilePane === 'files' && onFavorites && favoritesView === 'folders';
+  const favoriteFilesActive =
+    mobilePane === 'files' && onFavorites && (favoritesView === 'files' || favoritesView === 'all');
 
   const explorerChildren = Children.map(children, (child) => {
     if (!isValidElement(child)) return child;
@@ -147,25 +219,71 @@ export default function DesktopShell({
         <div
           className="desktop-pane-tabs flex shrink-0 border-b border-nas-border bg-white px-2 py-1.5"
           role="tablist"
-          aria-label="폴더와 파일 전환"
+          aria-label="폴더·파일·즐겨찾기 전환"
         >
           <button
             type="button"
             role="tab"
+            title="폴더"
+            aria-label="폴더"
             aria-selected={mobilePane === 'folders'}
-            className={`desktop-pane-tab ${mobilePane === 'folders' ? 'desktop-pane-tab--active' : ''}`}
+            className={`desktop-pane-tab desktop-pane-tab--icon ${
+              mobilePane === 'folders' ? 'desktop-pane-tab--active' : ''
+            }`}
             onClick={() => setMobilePane('folders')}
           >
-            폴더
+            <FolderTreeIcon />
           </button>
           <button
             type="button"
             role="tab"
-            aria-selected={mobilePane === 'files'}
-            className={`desktop-pane-tab ${mobilePane === 'files' ? 'desktop-pane-tab--active' : ''}`}
-            onClick={() => setMobilePane('files')}
+            title="파일"
+            aria-label="파일"
+            aria-selected={filesTabActive}
+            className={`desktop-pane-tab desktop-pane-tab--icon ${
+              filesTabActive ? 'desktop-pane-tab--active' : ''
+            }`}
+            onClick={openFilesPane}
           >
-            파일
+            <FilesIcon />
+          </button>
+          <button
+            type="button"
+            role="tab"
+            title="폴더 즐겨찾기"
+            aria-label={
+              folderFavoritesCount > 0
+                ? `폴더 즐겨찾기 ${folderFavoritesCount}개`
+                : '폴더 즐겨찾기'
+            }
+            aria-selected={favoriteFoldersActive}
+            className={`desktop-pane-tab desktop-pane-tab--icon ${
+              favoriteFoldersActive ? 'desktop-pane-tab--active' : ''
+            }`}
+            onClick={openFavoriteFolders}
+          >
+            <FavoriteFoldersIcon />
+            {folderFavoritesCount > 0 ? (
+              <span className="desktop-pane-tab__badge">{folderFavoritesCount}</span>
+            ) : null}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            title="파일 즐겨찾기"
+            aria-label={
+              fileFavoritesCount > 0 ? `파일 즐겨찾기 ${fileFavoritesCount}개` : '파일 즐겨찾기'
+            }
+            aria-selected={favoriteFilesActive}
+            className={`desktop-pane-tab desktop-pane-tab--icon ${
+              favoriteFilesActive ? 'desktop-pane-tab--active' : ''
+            }`}
+            onClick={openFavoriteFiles}
+          >
+            <FavoriteFilesIcon />
+            {fileFavoritesCount > 0 ? (
+              <span className="desktop-pane-tab__badge">{fileFavoritesCount}</span>
+            ) : null}
           </button>
         </div>
       ) : null}

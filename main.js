@@ -1142,12 +1142,17 @@ ipcMain.handle('docIndex:status', async (event) =>
   getPersonalDocIndexStatus(getAccessAuthFromEvent(event)),
 );
 
-ipcMain.handle('docIndex:search', async (event, query) =>
-  searchPersonalDocIndex(getAccessAuthFromEvent(event), query ?? ''),
+ipcMain.handle('docIndex:search', async (event, query, options = {}) =>
+  searchPersonalDocIndex(getAccessAuthFromEvent(event), query ?? '', {
+    scope: options?.scope,
+  }),
 );
 
 ipcMain.handle('docIndex:start', async (event, options = {}) =>
-  startPersonalDocIndex(getAccessAuthFromEvent(event), { reset: Boolean(options.reset) }),
+  startPersonalDocIndex(getAccessAuthFromEvent(event), {
+    reset: Boolean(options.reset),
+    scopes: Array.isArray(options.scopes) ? options.scopes : undefined,
+  }),
 );
 
 ipcMain.handle('docIndex:stop', async (event) =>

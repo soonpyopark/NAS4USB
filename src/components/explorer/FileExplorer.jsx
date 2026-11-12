@@ -103,6 +103,12 @@ import { useFsRemoteRefresh } from '../../hooks/useFsRemoteRefresh.js';
 import { useFolderContentSearch } from '../../hooks/useFolderContentSearch.js';
 import { usePersonalDocSearch } from '../../hooks/usePersonalDocSearch.js';
 import { fsEntryFromDocHit, indexHitsInCurrentFolder } from '../../lib/mergeNameAndDocHits.js';
+import {
+  DOC_SEARCH_SCOPE_LABEL,
+  DOC_SEARCH_SCOPE_ORDER,
+  docHitMatchesSearchScope,
+  normalizeDocSearchScope,
+} from '../../../shared/docSearchScope.js';
 import PersonalDocIndexBar from '../layout/PersonalDocIndexBar.jsx';
 import FileDropOverlay from '../common/FileDropOverlay.jsx';
 import TransferStatusBanner from '../common/TransferStatusBanner.jsx';
@@ -200,12 +206,21 @@ function ChromeExpandIcon() {
 }
 
 const FILE_CHROME_COLLAPSED_KEY = 'nas4usb.fileChromeCollapsed';
+const DOC_SEARCH_SCOPE_KEY = 'nas4usb.docSearchScope';
 
 function readFileChromeCollapsed() {
   try {
     return window.localStorage.getItem(FILE_CHROME_COLLAPSED_KEY) === '1';
   } catch {
     return false;
+  }
+}
+
+function readDocSearchScope() {
+  try {
+    return normalizeDocSearchScope(window.localStorage.getItem(DOC_SEARCH_SCOPE_KEY));
+  } catch {
+    return 'all';
   }
 }
 
@@ -294,6 +309,7 @@ export default function FileExplorer({
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchContents, setSearchContents] = useState(true);
+  const [docSearchScope, setDocSearchScopeState] = useState(readDocSearchScope);
   const [starOnly, setStarOnly] = useState(false);
   const [contextMenu, setContextMenu] = useState(null);
   const [propertiesEntry, setPropertiesEntry] = useState(null);
@@ -328,6 +344,16 @@ export default function FileExplorer({
     }
   };
 
+  const setDocSearchScope = (next) => {
+    const scope = normalizeDocSearchScope(next);
+    setDocSearchScopeState(scope);
+    try {
+      window.localStorage.setItem(DOC_SEARCH_SCOPE_KEY, scope);
+    } catch {
+      // ignore
+    }
+  };
+
   const uploadInputRef = useRef(null);
   const onenoteInputRef = useRef(null);
   const uploadTargetPathRef = useRef('.');
@@ -348,11 +374,34 @@ export default function FileExplorer({
   );
   const myHomePath = isAdminLoggedIn ? memberHomeRelativePath(adminId) : null;
   const usePersonalIndex = Boolean(isAdminLoggedIn && searchContents);
-  const contentSearch = useFolderContentSearch(entries, searchQuery, searchContents);
-  const docSearch = usePersonalDocSearch(searchQuery, usePersonalIndex);
+  const currentUnderShare =
+    currentPath === SHARED_FOLDER || currentPath.startsWith(`${SHARED_FOLDER}/`);
+  const currentUnderPersonal =
+    isHomesContainerPath(currentPath) || isUnderHomesFolder(currentPath);
+  const liveContentSearchEnabled =
+    searchContents &&
+    (!usePersonalIndex ||
+      docSearchScope === 'all' ||
+      docSearchScope === 'current' ||
+      (docSearchScope === 'share' && currentUnderShare) ||
+      (docSearchScope === 'personal' && currentUnderPersonal));
+  const contentSearch = useFolderContentSearch(entries, searchQuery, liveContentSearchEnabled);
+  const docSearch = usePersonalDocSearch(searchQuery, usePersonalIndex, docSearchScope);
+  const scopedDocResults = useMemo(() => {
+    if (!usePersonalIndex) return docSearch.results;
+    if (docSearchScope !== 'current') return docSearch.results;
+    return docSearch.results.filter((hit) =>
+      docHitMatchesSearchScope(hit.relativePath, 'current', {
+        currentPath,
+        homePath: myHomePath,
+        parentOf: getParentPath,
+      }),
+    );
+  }, [usePersonalIndex, docSearch.results, docSearchScope, currentPath, myHomePath]);
   const indexFolderHits = useMemo(
-    () => (usePersonalIndex ? indexHitsInCurrentFolder(docSearch.results, currentPath, myHomePath) : new Set()),
-    [usePersonalIndex, docSearch.results, currentPath, myHomePath],
+    () =>
+      usePersonalIndex ? indexHitsInCurrentFolder(scopedDocResults, currentPath, myHomePath) : new Set(),
+    [usePersonalIndex, scopedDocResults, currentPath, myHomePath],
   );
   const orderParentPath = useMemo(
     () => resolveFolderOrderParent(currentPath, adminId, entries[0]?.relativePath),
@@ -399,7 +448,7 @@ export default function FileExplorer({
             const seen = new Set();
             const list = [];
             const firstHitByPath = new Map();
-            for (const hit of docSearch.results) {
+            for (const hit of scopedDocResults) {
               if (!hit.relativePath || firstHitByPath.has(hit.relativePath)) continue;
               firstHitByPath.set(hit.relativePath, hit);
             }
@@ -418,7 +467,7 @@ export default function FileExplorer({
                   : entry,
               );
             }
-            for (const hit of docSearch.results) {
+            for (const hit of scopedDocResults) {
               if (!hit.relativePath || seen.has(hit.relativePath)) continue;
               seen.add(hit.relativePath);
               list.push(fsEntryFromDocHit(hit));
@@ -438,7 +487,7 @@ export default function FileExplorer({
     searchContents,
     contentSearch.matchedPaths,
     indexFolderHits,
-    docSearch.results,
+    scopedDocResults,
     starOnly,
     nameBoldMap,
     listSort,
@@ -1917,6 +1966,41 @@ export default function FileExplorer({
           </div>
         ) : (
           <>
+            {searchContents && isAdminLoggedIn ? (
+              <div
+                className="ml-auto flex shrink-0 items-center gap-0.5 rounded-md border border-nas-border bg-white p-0.5"
+                role="group"
+                aria-label="본문 검색 범위"
+              >
+                {DOC_SEARCH_SCOPE_ORDER.map((scope) => {
+                  const active = docSearchScope === scope;
+                  return (
+                    <button
+                      key={scope}
+                      type="button"
+                      className={
+                        active
+                          ? 'h-7 rounded px-2 text-[10pt] font-medium text-white bg-nas-accent'
+                          : 'h-7 rounded px-2 text-[10pt] text-nas-muted hover:bg-nas-accentSoft hover:text-nas-accentText'
+                      }
+                      aria-pressed={active}
+                      title={
+                        scope === 'all'
+                          ? '개인·공유 색인 전체'
+                          : scope === 'share'
+                            ? '공유폴더 색인만'
+                            : scope === 'personal'
+                              ? '개인폴더 색인만'
+                              : '지금 열린 폴더만'
+                      }
+                      onClick={() => setDocSearchScope(scope)}
+                    >
+                      {DOC_SEARCH_SCOPE_LABEL[scope]}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
             <input
               type="search"
               value={searchQuery}
@@ -1924,11 +2008,19 @@ export default function FileExplorer({
               placeholder={
                 searchContents
                   ? isAdminLoggedIn
-                    ? '본문·개인·공유폴더 색인 검색…'
+                    ? docSearchScope === 'share'
+                      ? '공유폴더 색인 검색…'
+                      : docSearchScope === 'personal'
+                        ? '개인폴더 색인 검색…'
+                        : docSearchScope === 'current'
+                          ? '현재 폴더 본문 검색…'
+                          : '본문·개인·공유폴더 색인 검색…'
                     : '본문 검색…'
                   : '현재 폴더에서 이름 검색…'
               }
-              className="ml-auto h-8 w-[220px] shrink-0 rounded-md border border-nas-border bg-white px-3 text-[10pt] outline-none focus:border-nas-accent focus:ring-1 focus:ring-nas-accent"
+              className={`${
+                searchContents && isAdminLoggedIn ? '' : 'ml-auto '
+              }h-8 w-[220px] shrink-0 rounded-md border border-nas-border bg-white px-3 text-[10pt] outline-none focus:border-nas-accent focus:ring-1 focus:ring-nas-accent`}
             />
             <label
               className="flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap text-[10pt] text-nas-muted"
@@ -1976,15 +2068,24 @@ export default function FileExplorer({
         <div className="shrink-0 rounded-md border border-nas-accentBorder bg-nas-accentSoft px-4 py-1.5 text-xs text-nas-accentText">
           {usePersonalIndex
             ? [
-                docSearch.searching ? '색인 검색 중…' : `색인 일치 ${new Set(docSearch.results.map((hit) => hit.relativePath)).size}개 파일`,
-                contentSearch.searching
-                  ? `현재 폴더 검사 ${contentSearch.scanned}/${contentSearch.total}`
-                  : `현재 폴더 실시간 ${contentSearch.matchedPaths.size}건`,
-              ].join(' · ')
+                docSearch.searching
+                  ? '색인 검색 중…'
+                  : `색인 일치 ${new Set(scopedDocResults.map((hit) => hit.relativePath)).size}개 파일`,
+                liveContentSearchEnabled
+                  ? contentSearch.searching
+                    ? `현재 폴더 검사 ${contentSearch.scanned}/${contentSearch.total}`
+                    : `현재 폴더 실시간 ${contentSearch.matchedPaths.size}건`
+                  : null,
+                `범위 ${DOC_SEARCH_SCOPE_LABEL[docSearchScope]}`,
+              ]
+                .filter(Boolean)
+                .join(' · ')
             : contentSearch.searching
               ? `본문 검색 중… ${contentSearch.scanned}/${contentSearch.total}`
               : `본문 일치 ${contentSearch.matchedPaths.size}건 · ${contentSearch.total}개 파일 검사`}
-          {contentSearch.skipped > 0 && ` · 지원하지 않거나 큰 파일 ${contentSearch.skipped}개 제외`}
+          {liveContentSearchEnabled && contentSearch.skipped > 0
+            ? ` · 지원하지 않거나 큰 파일 ${contentSearch.skipped}개 제외`
+            : ''}
         </div>
       )}
 

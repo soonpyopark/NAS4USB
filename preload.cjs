@@ -257,7 +257,8 @@ contextBridge.exposeInMainWorld('nas4usb', {
 
   docIndex: {
     status: () => ipcRenderer.invoke('docIndex:status'),
-    search: (query) => ipcRenderer.invoke('docIndex:search', query ?? ''),
+    search: (query, options) =>
+      ipcRenderer.invoke('docIndex:search', query ?? '', options ?? {}),
     start: (options) => ipcRenderer.invoke('docIndex:start', options ?? {}),
     stop: () => ipcRenderer.invoke('docIndex:stop'),
   },

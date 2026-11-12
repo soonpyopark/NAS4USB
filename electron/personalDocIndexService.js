@@ -22,6 +22,11 @@ import {
   PERSONAL_DOC_SEARCH_LIMIT,
   SHARE_DOC_INDEX_KEY,
 } from '../shared/personalDocIndex.js';
+import {
+  indexScopesForSearchScope,
+  normalizeDocIndexScopes,
+  normalizeDocSearchScope,
+} from '../shared/docSearchScope.js';
 import { getIndexExcludeMap } from './folderColorsService.js';
 import { PersonalDocIndexDatabase } from './personalDocIndex/database.js';
 import { compileQuery } from './personalDocIndex/query.js';
@@ -212,19 +217,27 @@ function mapRows(rows, toRelativePath) {
 /**
  * @param {{ isLoggedIn?: boolean, loginId?: string | null, role?: string | null }} auth
  * @param {string} query
+ * @param {{ scope?: string, scopes?: string[] }} [options]
  */
-export async function searchPersonalDocIndex(auth, query) {
+export async function searchPersonalDocIndex(auth, query, options = {}) {
   const loginId = requireLoginId(auth);
   const compiled = compileQuery(query);
   if (!compiled) {
-    return { results: [], truncated: false, query: '' };
+    return { results: [], truncated: false, query: '', scope: 'all' };
   }
 
-  const personalDb = await openDatabaseByKey(ownerKey(loginId));
-  const shareDb = await openDatabaseByKey(SHARE_DOC_INDEX_KEY);
+  const scope = normalizeDocSearchScope(options.scope ?? options.scopes?.[0] ?? 'all');
+  const indexScopes = indexScopesForSearchScope(scope);
+  const wantPersonal = indexScopes.has('personal');
+  const wantShare = indexScopes.has('share');
+
   const limit = PERSONAL_DOC_SEARCH_LIMIT + 1;
-  const personalRows = personalDb.search(compiled.sql, compiled.params, limit);
-  const shareRows = shareDb.search(compiled.sql, compiled.params, limit);
+  const [personalDb, shareDb] = await Promise.all([
+    wantPersonal ? openDatabaseByKey(ownerKey(loginId)) : Promise.resolve(null),
+    wantShare ? openDatabaseByKey(SHARE_DOC_INDEX_KEY) : Promise.resolve(null),
+  ]);
+  const personalRows = personalDb ? personalDb.search(compiled.sql, compiled.params, limit) : [];
+  const shareRows = shareDb ? shareDb.search(compiled.sql, compiled.params, limit) : [];
 
   const [accessMap, permissions, excludeMap] = await Promise.all([
     getFileAccessMap(),
@@ -232,14 +245,18 @@ export async function searchPersonalDocIndex(auth, query) {
     getIndexExcludeMap(),
   ]);
   const elevated = Boolean(permissions?.write) || auth?.role === 'super_admin';
-  const personalHits = mapRows(personalRows, (sourcePath) =>
-    workspaceRelativeFromHome(loginId, sourcePath),
-  ).filter((hit) => !isUnderIndexExclude(hit.relativePath, excludeMap));
-  const shareHits = mapRows(shareRows, workspaceRelativeFromShare).filter(
-    (hit) =>
-      canViewFileEntry(hit.relativePath, accessMap, elevated) &&
-      !isUnderIndexExclude(hit.relativePath, excludeMap),
-  );
+  const personalHits = wantPersonal
+    ? mapRows(personalRows, (sourcePath) => workspaceRelativeFromHome(loginId, sourcePath)).filter(
+        (hit) => !isUnderIndexExclude(hit.relativePath, excludeMap),
+      )
+    : [];
+  const shareHits = wantShare
+    ? mapRows(shareRows, workspaceRelativeFromShare).filter(
+        (hit) =>
+          canViewFileEntry(hit.relativePath, accessMap, elevated) &&
+          !isUnderIndexExclude(hit.relativePath, excludeMap),
+      )
+    : [];
 
   const merged = [...personalHits, ...shareHits];
   const truncated =
@@ -248,6 +265,7 @@ export async function searchPersonalDocIndex(auth, query) {
     merged.length > PERSONAL_DOC_SEARCH_LIMIT;
   return {
     query: String(query ?? '').trim(),
+    scope,
     truncated,
     results: merged.slice(0, PERSONAL_DOC_SEARCH_LIMIT),
   };
@@ -321,14 +339,20 @@ async function startScopeIndex(key, root, { reset = false } = {}) {
 
 /**
  * @param {{ isLoggedIn?: boolean, loginId?: string | null }} auth
- * @param {{ reset?: boolean }} [options]
+ * @param {{ reset?: boolean, scopes?: string[] }} [options]
  */
-export async function startPersonalDocIndex(auth, { reset = false } = {}) {
+export async function startPersonalDocIndex(auth, { reset = false, scopes } = {}) {
   const loginId = requireLoginId(auth);
-  await Promise.all([
-    startScopeIndex(ownerKey(loginId), homeAbsolute(loginId), { reset }),
-    startScopeIndex(SHARE_DOC_INDEX_KEY, shareAbsolute(), { reset }),
-  ]);
+  const indexScopes = normalizeDocIndexScopes(scopes);
+  /** @type {Promise<void>[]} */
+  const jobs = [];
+  if (indexScopes.has('personal')) {
+    jobs.push(startScopeIndex(ownerKey(loginId), homeAbsolute(loginId), { reset }));
+  }
+  if (indexScopes.has('share')) {
+    jobs.push(startScopeIndex(SHARE_DOC_INDEX_KEY, shareAbsolute(), { reset }));
+  }
+  await Promise.all(jobs);
   return getPersonalDocIndexStatus(auth);
 }
 

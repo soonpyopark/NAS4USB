@@ -161,6 +161,7 @@ function OpenEditorLayer({
         onClose={onClose}
         allowClose={allowClose}
         fullscreen={fullscreen}
+        onOpenSibling={onOpenFile}
       />
     );
   }

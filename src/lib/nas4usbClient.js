@@ -660,12 +660,19 @@ export function createHttpNas4usbClient() {
 
     docIndex: {
       status: () => apiFetch('/docIndex/status'),
-      search: (query) =>
-        apiFetch(`/docIndex/search?q=${encodeURIComponent(query ?? '')}`),
+      search: (query, options) => {
+        const params = new URLSearchParams();
+        params.set('q', query ?? '');
+        if (options?.scope) params.set('scope', String(options.scope));
+        return apiFetch(`/docIndex/search?${params.toString()}`);
+      },
       start: (options) =>
         apiFetch('/docIndex/start', {
           method: 'POST',
-          body: JSON.stringify({ reset: Boolean(options?.reset) }),
+          body: JSON.stringify({
+            reset: Boolean(options?.reset),
+            scopes: Array.isArray(options?.scopes) ? options.scopes : undefined,
+          }),
         }),
       stop: () => apiFetch('/docIndex/stop', { method: 'POST', body: '{}' }),
     },

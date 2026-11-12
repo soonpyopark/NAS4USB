@@ -193,7 +193,7 @@ window.nas4usb = {
   },
   docIndex: {
     status: () => {},
-    search: (query) => {},
+    search: (query, options) => {},
     start: (options) => {},
     stop: () => {},
   },
