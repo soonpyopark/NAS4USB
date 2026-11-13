@@ -319,18 +319,26 @@ export default function FileExplorerToolbar({
           </button>
         )}
         {onStarOnlyChange ? (
-          <label
-            className="nas-btn-ghost flex cursor-pointer items-center gap-1.5"
-            title="주요 파일만 보여 줍니다. 폴더는 그대로 둡니다."
-          >
-            <input
-              type="checkbox"
-              checked={starOnly}
-              onChange={(event) => onStarOnlyChange(event.target.checked)}
-              className="h-3.5 w-3.5 cursor-pointer accent-nas-accent"
-            />
-            주요 파일만 보기
-          </label>
+          <>
+            <span className="mx-1 hidden h-4 w-px bg-nas-border sm:inline" aria-hidden="true" />
+            <button
+              type="button"
+              className={
+                starOnly
+                  ? 'nas-btn-ghost bg-nas-accentSoft font-semibold text-nas-accentText'
+                  : 'nas-btn-ghost'
+              }
+              aria-pressed={starOnly}
+              title={
+                starOnly
+                  ? '주요 파일만 보기 켜짐 · 다시 누르면 모두 표시'
+                  : '주요 파일만 보여 줍니다. 폴더는 그대로 둡니다.'
+              }
+              onClick={() => onStarOnlyChange(!starOnly)}
+            >
+              주요 파일만 보기
+            </button>
+          </>
         ) : null}
       </div>
     </div>
