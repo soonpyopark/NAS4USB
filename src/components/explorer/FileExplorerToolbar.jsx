@@ -31,6 +31,8 @@ export default function FileExplorerToolbar({
   clearingExternalCaches = false,
   onClearFolderBackups,
   clearingFolderBackups = false,
+  starOnly = false,
+  onStarOnlyChange,
   isInTrashView = false,
   isInFavoritesView = false,
   onEmptyTrash,
@@ -121,6 +123,13 @@ export default function FileExplorerToolbar({
       danger: true,
       disabled: clearingFolderBackups,
       onClick: onClearFolderBackups,
+    });
+  }
+  if (onStarOnlyChange) {
+    overflowItems.push({
+      id: 'star-only',
+      label: starOnly ? '주요 파일만 보기 ✓' : '주요 파일만 보기',
+      onClick: () => onStarOnlyChange(!starOnly),
     });
   }
 
@@ -309,6 +318,20 @@ export default function FileExplorerToolbar({
             {clearingFolderBackups ? '제거 중…' : '백업 일괄 제거'}
           </button>
         )}
+        {onStarOnlyChange ? (
+          <label
+            className="nas-btn-ghost flex cursor-pointer items-center gap-1.5"
+            title="주요 파일만 보여 줍니다. 폴더는 그대로 둡니다."
+          >
+            <input
+              type="checkbox"
+              checked={starOnly}
+              onChange={(event) => onStarOnlyChange(event.target.checked)}
+              className="h-3.5 w-3.5 cursor-pointer accent-nas-accent"
+            />
+            주요 파일만 보기
+          </label>
+        ) : null}
       </div>
     </div>
   );

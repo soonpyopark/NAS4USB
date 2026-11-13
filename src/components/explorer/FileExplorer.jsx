@@ -109,6 +109,7 @@ import {
   docHitMatchesSearchScope,
   normalizeDocSearchScope,
 } from '../../../shared/docSearchScope.js';
+import DocSearchHelpButton from '../layout/DocSearchHelpButton.jsx';
 import PersonalDocIndexBar from '../layout/PersonalDocIndexBar.jsx';
 import FileDropOverlay from '../common/FileDropOverlay.jsx';
 import TransferStatusBanner from '../common/TransferStatusBanner.jsx';
@@ -2038,18 +2039,7 @@ export default function FileExplorer({
               />
               본문 검색
             </label>
-            <label
-              className="flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap text-[10pt] text-nas-muted"
-              title="주요 파일만 보여 줍니다. 폴더는 그대로 둡니다."
-            >
-              <input
-                type="checkbox"
-                checked={starOnly}
-                onChange={(event) => setStarOnly(event.target.checked)}
-                className="h-3.5 w-3.5 cursor-pointer accent-nas-accent"
-              />
-              주요 파일
-            </label>
+            <DocSearchHelpButton />
           </>
         )}
       </div>
@@ -2169,6 +2159,8 @@ export default function FileExplorer({
                 canClearFolderBackups(currentPath) ? handleClearFolderBackups : undefined
               }
               clearingFolderBackups={clearingFolderBackups}
+              starOnly={starOnly}
+              onStarOnlyChange={setStarOnly}
               isAdminLoggedIn={isAdminLoggedIn}
               canWrite={canWrite}
               canEmptyTrash={globalWrite}

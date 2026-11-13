@@ -1,0 +1,35 @@
+---
+description: NAS4USB 배포(태그·버전·리모트·릴리스·이전 삭제) 절차
+alwaysApply: true
+---
+
+# 배포 (= `배포해줘`)
+
+사용자가 **배포**를 요청하면 아래를 **한 번에** 수행한다. 중간에 확인 질문을 하지 않는다.
+
+## 태그 증가 규칙 (`vX.Y.Z-N`)
+
+- `N`은 `0`–`9`만 사용한다.
+- 예: `v1.0.0-0` → `v1.0.0-1`
+- `N`이 `9`이면 패치를 올리고 `N`을 `0`으로: `v1.0.0-9` → `v1.0.1-0`
+- 최신 태그를 `git tag --sort=-v:refname`으로 확인한 뒤 다음 태그를 계산한다.
+
+## 버전 맞추기
+
+- 표시 버전 `APP_VERSION`은 네 자리: `X.Y.Z.N` (예: `1.1.0.5`) → `shared/constants.js`
+- npm/`package.json` 버전은 semver: `X.Y.Z-N` (예: `1.1.0-5`)
+- `node scripts/sync-version.mjs --refresh-stamp`로 `package.json` / lock / 스탬프를 맞춘다.
+
+## 절차 순서
+
+1. 배포에 포함할 소스 변경을 커밋한다 (`.nas4usb-settings.json`, `.nas4usb-login-audit.json` 등 로컬 설정·감사 파일은 제외).
+2. `APP_VERSION` / `package.json` 버전을 새 태그에 맞게 올리고 `sync-version` 실행 후 버전 커밋(또는 1과 합침).
+3. 새 태그 생성: `git tag vX.Y.Z-N`
+4. `main`과 태그를 리모트에 푸시한다.
+5. macOS 산출물이 필요하면 `npm run build:update_all:mac` (또는 이미 있는 산출물)로 빌드한다.
+6. GitHub Release를 새 태그로 등록하고 산출물(DMG/ZIP 등)을 첨부한다 (`gh release create`).
+7. **이전** 태그·릴리스를 삭제한다 (`gh release delete` + `git push origin :refs/tags/…` + 로컬 태그 삭제). 직전 태그 하나만 삭제한다.
+
+## 인증
+
+- `gh` 미로그인 시 먼저 로그인(또는 ConnectScm)을 진행한 뒤 릴리스·삭제를 이어서 한다.
