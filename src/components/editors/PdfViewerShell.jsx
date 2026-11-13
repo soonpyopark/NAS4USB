@@ -3862,11 +3862,20 @@ export default function PdfViewerShell({
           -webkit-backdrop-filter: blur(6px);
           box-shadow: 0 2px 10px rgba(15, 23, 42, 0.12);
           cursor: pointer;
+          opacity: 0.5;
           transition: background 0.15s ease, color 0.15s ease, opacity 0.15s ease;
         }
-        .pdf-page-fab__btn:hover:not(:disabled) {
+        .pdf-page-fab__btn:hover:not(:disabled),
+        .pdf-page-fab__btn:focus-visible:not(:disabled),
+        .pdf-page-fab__btn:active:not(:disabled) {
+          opacity: 1;
           background: rgba(255, 255, 255, 0.7);
           color: rgba(15, 23, 42, 0.92);
+        }
+        @media (hover: hover) and (pointer: fine) {
+          .pdf-page-fab:hover .pdf-page-fab__btn:not(:disabled) {
+            opacity: 1;
+          }
         }
         .pdf-page-fab__btn--active {
           background: rgba(224, 242, 254, 0.95);

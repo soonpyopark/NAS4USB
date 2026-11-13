@@ -26,7 +26,7 @@ alwaysApply: true
 2. `APP_VERSION` / `package.json` 버전을 새 태그에 맞게 올리고 `sync-version` 실행 후 버전 커밋(또는 1과 합침).
 3. 새 태그 생성: `git tag vX.Y.Z-N`
 4. `main`과 태그를 리모트에 푸시한다.
-5. macOS 산출물이 필요하면 `npm run build:update_all:mac` (또는 이미 있는 산출물)로 빌드한다.
+5. macOS 빌드는 항상 `npm run build:update_all:mac`으로 한다 (`build:dist:mac`만 쓰지 않는다).
 6. GitHub Release를 새 태그로 등록하고 산출물(DMG/ZIP 등)을 첨부한다 (`gh release create`).
 7. **이전** 태그·릴리스를 삭제한다 (`gh release delete` + `git push origin :refs/tags/…` + 로컬 태그 삭제). 직전 태그 하나만 삭제한다.
 
