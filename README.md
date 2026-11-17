@@ -280,7 +280,7 @@ NAS4USB/
 │   ├── share/              공유폴더 디스크명
 │   └── private/            개인폴더 디스크명
 ├── build/                  앱 아이콘 (prepare:icons)
-├── LICENSE                 AGPL-3.0-only (+ Third-Party Components)
+├── LICENSE                 AGPL-3.0-only
 ├── THIRD_PARTY_NOTICES.md  사용 오픈소스 고지
 ├── msi/                    MSI·portable zip 산출
 └── exe/                    build:dist:exe 출력
@@ -327,7 +327,7 @@ Electron/Chromium 및 npm 패키지 등 서드파티는 각 라이선스를 따�
 | 문서 편집 | TipTap, CodeMirror, rhwp, FortuneSheet, WhiteBoard4Share | MIT / AGPL-3.0-only |
 | 문서/미디어 | PDF.js, Video.js, hls.js, SheetJS (`xlsx`), JSZip, KaTeX | Apache-2.0 / MIT 등 |
 
-자세한 표와 직접 의존성 목록은 `THIRD_PARTY_NOTICES.md`와 `LICENSE` 하단 **Third-Party Components**를 참고하세요.
+자세한 표와 직접 의존성 목록은 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)를 참고하세요.
 
 ---
 
