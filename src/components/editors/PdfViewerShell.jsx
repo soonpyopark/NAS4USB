@@ -90,6 +90,8 @@ const PDF_SIDE_RAIL_WIDTH_PX = 220;
 const PDF_FAB_SIDE_KEY = 'nas4usb.pdfPageFabSide';
 const PDF_SELECT_MODE_KEY = 'nas4usb.pdfSelectMode';
 const PDF_CHROME_VISIBLE_KEY = 'nas4usb.pdfChromeVisible';
+/** After a FAB click, keep buttons fully opaque this long, then fade to 50%. */
+const PDF_FAB_OPAQUE_MS = 2000;
 
 /**
  * @returns {'left' | 'right'}
@@ -323,6 +325,10 @@ export default function PdfViewerShell({
   const rotation = 0;
   const twoPageView = false;
   const [fabSide, setFabSide] = useState(/** @type {'left' | 'right'} */ (readPdfFabSide));
+  const [fabOpaque, setFabOpaque] = useState(false);
+  const fabOpaqueTimerRef = useRef(0);
+  const [pageBadgeOpaque, setPageBadgeOpaque] = useState(false);
+  const pageBadgeOpaqueTimerRef = useRef(0);
   const [chromeVisible, setChromeVisible] = useState(readPdfChromeVisible);
   const [selectMode, setSelectMode] = useState(readPdfSelectMode);
   const [wordsEpoch, setWordsEpoch] = useState(0);
@@ -1553,6 +1559,40 @@ export default function PdfViewerShell({
     [updateScrollEdges],
   );
 
+  const pulseFabOpaque = useCallback(() => {
+    setFabOpaque(true);
+    if (fabOpaqueTimerRef.current) {
+      window.clearTimeout(fabOpaqueTimerRef.current);
+    }
+    fabOpaqueTimerRef.current = window.setTimeout(() => {
+      fabOpaqueTimerRef.current = 0;
+      setFabOpaque(false);
+    }, PDF_FAB_OPAQUE_MS);
+  }, []);
+
+  const pulsePageBadgeOpaque = useCallback(() => {
+    setPageBadgeOpaque(true);
+    if (pageBadgeOpaqueTimerRef.current) {
+      window.clearTimeout(pageBadgeOpaqueTimerRef.current);
+    }
+    pageBadgeOpaqueTimerRef.current = window.setTimeout(() => {
+      pageBadgeOpaqueTimerRef.current = 0;
+      setPageBadgeOpaque(false);
+    }, PDF_FAB_OPAQUE_MS);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (fabOpaqueTimerRef.current) {
+        window.clearTimeout(fabOpaqueTimerRef.current);
+      }
+      if (pageBadgeOpaqueTimerRef.current) {
+        window.clearTimeout(pageBadgeOpaqueTimerRef.current);
+      }
+    },
+    [],
+  );
+
   const zoomBy = useCallback((direction) => {
     const next = stepZoomScale(displayScaleRef.current, direction);
     setZoomMode('custom');
@@ -2147,6 +2187,7 @@ export default function PdfViewerShell({
       if (target.closest('[data-pdf-selection-menu]')) return;
       if (target.closest('[data-pdf-marks-menu]')) return;
       if (target.closest('.pdf-page-fab')) return;
+      if (target.closest('.pdf-page-badge')) return;
       const pageWrap = target.closest('[data-pdf-page]');
       if (!(pageWrap instanceof HTMLElement) || !scroller.contains(pageWrap)) return;
       if (pageWrap.dataset.pdfReady !== '1') return;
@@ -2410,6 +2451,7 @@ export default function PdfViewerShell({
         if (target.closest('[data-pdf-selection-menu]')) return;
         if (target.closest('[data-pdf-marks-menu]')) return;
         if (target.closest('.pdf-page-fab')) return;
+        if (target.closest('.pdf-page-badge')) return;
       }
       // Capture + preventDefault before WebKit starts the loupe on the canvas.
       if (selectMode && event.cancelable) event.preventDefault();
@@ -2580,6 +2622,7 @@ export default function PdfViewerShell({
       if (target.closest('[data-pdf-selection-menu]')) return;
       if (target.closest('[data-pdf-marks-menu]')) return;
       if (target.closest('.pdf-page-fab')) return;
+      if (target.closest('.pdf-page-badge')) return;
 
       const pageWrap = target.closest('[data-pdf-page]');
       if (!(pageWrap instanceof HTMLElement) || !scroller.contains(pageWrap)) return;
@@ -3618,14 +3661,17 @@ export default function PdfViewerShell({
 
           {docReady && pageCount > 0 && (
             <div
-              className={`pdf-page-fab pdf-page-fab--${fabSide}`}
+              className={`pdf-page-fab pdf-page-fab--${fabSide}${fabOpaque ? ' pdf-page-fab--opaque' : ''}`}
               role="group"
               aria-label="화면 스크롤"
             >
               <button
                 type="button"
                 className={`pdf-page-fab__btn${!chromeVisible ? ' pdf-page-fab__btn--active' : ''}`}
-                onClick={toggleChromeVisible}
+                onClick={() => {
+                  pulseFabOpaque();
+                  toggleChromeVisible();
+                }}
                 title={
                   chromeVisible
                     ? '제목·메뉴 숨기기'
@@ -3642,7 +3688,10 @@ export default function PdfViewerShell({
                 type="button"
                 className="pdf-page-fab__btn"
                 disabled={busy || scrollEdges.atTop}
-                onClick={() => handleFabNavigate('up')}
+                onClick={() => {
+                  pulseFabOpaque();
+                  handleFabNavigate('up');
+                }}
                 title="위로 스크롤 (화면 높이의 1/3)"
                 aria-label="위로 스크롤"
               >
@@ -3652,7 +3701,10 @@ export default function PdfViewerShell({
                 type="button"
                 className="pdf-page-fab__btn"
                 disabled={busy || scrollEdges.atBottom}
-                onClick={() => handleFabNavigate('down')}
+                onClick={() => {
+                  pulseFabOpaque();
+                  handleFabNavigate('down');
+                }}
                 title="아래로 스크롤 (화면 높이의 1/3)"
                 aria-label="아래로 스크롤"
               >
@@ -3660,6 +3712,20 @@ export default function PdfViewerShell({
               </button>
             </div>
           )}
+
+          {docReady && pageCount > 0 ? (
+            <button
+              type="button"
+              className={`pdf-page-badge${pageBadgeOpaque ? ' pdf-page-badge--opaque' : ''}`}
+              onClick={pulsePageBadgeOpaque}
+              title={`현재 ${currentPage} / 전체 ${pageCount}`}
+              aria-label={`현재 페이지 ${currentPage}, 전체 ${pageCount}`}
+            >
+              <span className="tabular-nums">{currentPage}</span>
+              <span aria-hidden="true"> / </span>
+              <span className="tabular-nums">{pageCount}</span>
+            </button>
+          ) : null}
 
           {selectionMenu &&
             createPortal(
@@ -3865,17 +3931,10 @@ export default function PdfViewerShell({
           opacity: 0.5;
           transition: background 0.15s ease, color 0.15s ease, opacity 0.15s ease;
         }
-        .pdf-page-fab__btn:hover:not(:disabled),
-        .pdf-page-fab__btn:focus-visible:not(:disabled),
-        .pdf-page-fab__btn:active:not(:disabled) {
+        .pdf-page-fab--opaque .pdf-page-fab__btn:not(:disabled) {
           opacity: 1;
           background: rgba(255, 255, 255, 0.7);
           color: rgba(15, 23, 42, 0.92);
-        }
-        @media (hover: hover) and (pointer: fine) {
-          .pdf-page-fab:hover .pdf-page-fab__btn:not(:disabled) {
-            opacity: 1;
-          }
         }
         .pdf-page-fab__btn--active {
           background: rgba(224, 242, 254, 0.95);
@@ -3885,6 +3944,38 @@ export default function PdfViewerShell({
         .pdf-page-fab__btn:disabled {
           opacity: 0.35;
           cursor: default;
+        }
+        .pdf-page-badge {
+          position: absolute;
+          right: 14px;
+          bottom: 14px;
+          z-index: 20;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-width: 4.5rem;
+          height: 2rem;
+          padding: 0 0.7rem;
+          border-radius: 9999px;
+          border: 1px solid rgba(15, 23, 42, 0.12);
+          background: rgba(255, 255, 255, 0.42);
+          color: rgba(15, 23, 42, 0.78);
+          font-size: 12px;
+          font-weight: 600;
+          letter-spacing: 0.01em;
+          backdrop-filter: blur(6px);
+          -webkit-backdrop-filter: blur(6px);
+          box-shadow: 0 2px 10px rgba(15, 23, 42, 0.12);
+          cursor: pointer;
+          opacity: 0.5;
+          transition: background 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+          -webkit-user-select: none;
+          user-select: none;
+        }
+        .pdf-page-badge--opaque {
+          opacity: 1;
+          background: rgba(255, 255, 255, 0.82);
+          color: rgba(15, 23, 42, 0.95);
         }
         .pdf-spread-row {
           display: flex;
