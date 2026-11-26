@@ -13,7 +13,7 @@
   Keep package.json ranges; only Electron / electron-builder go to latest.
 
 .PARAMETER SkipCores
-  Skip editor core updates (rhwp, wb4s, fortune-sheet, tiptap).
+  Skip editor core updates (rhwp, wb4s, fortune-sheet, tiptap, comic-reader, kordoc).
 
 .PARAMETER BuildDist
   Run npm run build:dist:exe after updates.

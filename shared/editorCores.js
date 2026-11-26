@@ -1,4 +1,4 @@
-/** @typedef {'rhwp' | 'wb4s' | 'fortune-sheet' | 'tiptap' | 'comic-reader'} EditorCoreId */
+/** @typedef {'rhwp' | 'wb4s' | 'fortune-sheet' | 'tiptap' | 'comic-reader' | 'kordoc'} EditorCoreId */
 
 /** WhiteBoard4Share version shipped with this app (keep in sync with GitHub releases). */
 export const WB4S_BUNDLED_VERSION = '1.0.6';
@@ -76,6 +76,16 @@ export const EDITOR_CORES = [
     repositoryUrl: 'https://github.com/mienaiyami/yomikiru',
     npmPackage: 'epubjs',
     npmPackages: ['epubjs', '7zip-min'],
+  },
+  {
+    id: 'kordoc',
+    label: 'HWPX ↔ Markdown (kordoc)',
+    libDir: 'node_modules/kordoc',
+    submodulePath: 'node_modules/kordoc',
+    updatePackageDir: 'lib/updates/kordoc',
+    repositoryUrl: 'https://github.com/chrisryugj/kordoc',
+    npmPackage: 'kordoc',
+    npmPackages: ['kordoc'],
   },
 ];
 

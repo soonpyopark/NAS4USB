@@ -9,8 +9,9 @@
 | Whiteboard (wb4s) | https://github.com/soonpyopark/WhiteBoard4Share | (git / `lib/updates/wb4s`) |
 | TipTap | https://github.com/ueberdosis/tiptap | `@tiptap/react`, `@tiptap/starter-kit` |
 | Comic Reader | (NAS4USB shell; Yomikiru-inspired) | `epubjs`, `7zip-min` |
+| HWPX ↔ Markdown (kordoc) | https://github.com/chrisryugj/kordoc | `kordoc` |
 
-어댑터 코드: `lib/rhwp/`, `src/lib/xlsx/`, `src/lib/tiptap/`, `src/lib/comicReader/`
+어댑터 코드: `lib/rhwp/`, `src/lib/xlsx/`, `src/lib/tiptap/`, `src/lib/comicReader/`, `electron/kordocConvertService.js`
 
 ## 일괄 업데이트
 

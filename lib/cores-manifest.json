@@ -25,6 +25,11 @@
       "version": "epubjs@0.3.93, 7zip-min@3.0.2",
       "updatedAt": "2026-11-17T13:29:54.816Z",
       "method": "npm"
+    },
+    "kordoc": {
+      "version": "kordoc@4.24.83",
+      "updatedAt": "2026-11-17T13:29:54.816Z",
+      "method": "npm"
     }
   }
 }

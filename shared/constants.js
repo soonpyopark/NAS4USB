@@ -5,14 +5,14 @@ export const DEFAULT_SYNC_PORT = 3009;
 export const DEFAULT_MAC_SYNC_PORT = 3011;
 
 /** Application display version. */
-export const APP_VERSION = '1.1.0.8';
+export const APP_VERSION = '1.1.0.9';
 
 /**
  * Package build id (YYMMDD_HHMMSS) — matches MSI/portable filename suffix.
  * Refreshed by `build:release` / `build:msi` / `build:dist:exe` for update checks
  * when the GitHub tag version is unchanged (same-version republish).
  */
-export const APP_BUILD_STAMP = '261117_223049';
+export const APP_BUILD_STAMP = '261126_233200';
 
 /**
  * Human-readable build time from {@link APP_BUILD_STAMP} (`YYYY-MM-DD HH:MM:SS`).

@@ -60,7 +60,7 @@ Electron 앱으로 실행한 탐색기입니다.
 | 개인폴더 본문 검색 | 탐색기 오른쪽 위 **본문 검색** — 현재 폴더 본문 + 개인·공유폴더 Excel·한글·Word·슬라이드·PDF·TipTap·텍스트 색인. 결과 열면 쪽·셀·문단으로 이동. 휴지통·문서 이력 제외. 왼쪽은 이름만 |
 | 휴지통 | 로그인 회원은 본인 항목 · 비우기는 쓰기 권한 |
 | 게스트 UI | 열람 권한 없을 때 로그인 유도 / 관리자 문의 안내 |
-| 에디터 코어 업데이트 | `update_all.bat` — rhwp / wb4s / fortune-sheet / tiptap / comic-reader + npm + Electron latest |
+| 에디터 코어 업데이트 | `update_all.bat` — rhwp / wb4s / fortune-sheet / tiptap / comic-reader / kordoc + npm + Electron latest |
 
 ### 워크스페이스 경로
 

@@ -247,7 +247,9 @@ async function updateEditorStacks(opts) {
     await clearForcedCaches();
   }
 
-  console.log('[update-all] Updating editor cores (rhwp, wb4s, fortune-sheet, tiptap, comic-reader)…');
+  console.log(
+    '[update-all] Updating editor cores (rhwp, wb4s, fortune-sheet, tiptap, comic-reader, kordoc)…',
+  );
   const result = await updateEditorCores(root);
 
   for (const item of result.results) {
