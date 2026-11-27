@@ -3687,6 +3687,26 @@ export default function PdfViewerShell({
               <button
                 type="button"
                 className="pdf-page-fab__btn"
+                disabled={!canSaveToFile}
+                onClick={() => {
+                  pulseFabOpaque();
+                  void handleSaveToFile();
+                }}
+                title={savingToFile ? '저장 중…' : '저장 (Ctrl+S)'}
+                aria-label={savingToFile ? '저장 중…' : '저장'}
+              >
+                {savingToFile ? (
+                  <span
+                    className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <IconSave />
+                )}
+              </button>
+              <button
+                type="button"
+                className="pdf-page-fab__btn"
                 disabled={busy || scrollEdges.atTop}
                 onClick={() => {
                   pulseFabOpaque();
