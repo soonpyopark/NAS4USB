@@ -1,34 +1,34 @@
 {
-  "updatedAt": "2026-11-26T14:33:50.317Z",
+  "updatedAt": "2026-11-27T07:58:40.636Z",
   "cores": {
     "rhwp": {
       "version": "@rhwp/core@0.9.1, @rhwp/editor@0.9.1",
-      "updatedAt": "2026-11-26T14:33:50.317Z",
+      "updatedAt": "2026-11-27T07:58:40.636Z",
       "method": "npm"
     },
     "wb4s": {
       "version": "1.0.6",
-      "updatedAt": "2026-11-26T14:33:50.317Z",
+      "updatedAt": "2026-11-27T07:58:40.636Z",
       "method": "git-clone+build"
     },
     "fortune-sheet": {
       "version": "@fortune-sheet/react@1.0.4",
-      "updatedAt": "2026-11-26T14:33:50.317Z",
+      "updatedAt": "2026-11-27T07:58:40.636Z",
       "method": "npm"
     },
     "tiptap": {
       "version": "@tiptap/core@3.35.0, @tiptap/pm@3.35.0, @tiptap/react@3.35.0, @tiptap/starter-kit@3.35.0, @tiptap/extension-collaboration@3.35.0, @tiptap/extension-collaboration-caret@3.35.0, @tiptap/extension-bubble-menu@3.35.0",
-      "updatedAt": "2026-11-26T14:33:50.317Z",
+      "updatedAt": "2026-11-27T07:58:40.636Z",
       "method": "npm"
     },
     "comic-reader": {
       "version": "epubjs@0.3.93, 7zip-min@3.0.3",
-      "updatedAt": "2026-11-26T14:33:50.317Z",
+      "updatedAt": "2026-11-27T07:58:40.636Z",
       "method": "npm"
     },
     "kordoc": {
-      "version": "kordoc@4.25.22",
-      "updatedAt": "2026-11-26T14:33:50.317Z",
+      "version": "kordoc@4.25.24",
+      "updatedAt": "2026-11-27T07:58:40.636Z",
       "method": "npm"
     }
   }
